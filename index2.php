@@ -1822,7 +1822,6 @@ function renderLogin(?string $error = null): void
                 </div>
                 <button type="submit" class="btn-login">LOG IN</button>
             </form>
-            <div class="default-creds">Default: <strong>admin</strong> / <strong>admin123!</strong></div>
         </div>
     </div>
     </body>
