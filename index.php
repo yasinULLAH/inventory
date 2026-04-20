@@ -68,7 +68,6 @@ function install_database()
         return false;
     $conn->query("CREATE DATABASE IF NOT EXISTS `$db_name` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
     $conn->select_db($db_name);
-
     $tables = [
         'CREATE TABLE IF NOT EXISTS `settings` (
             `id` INT AUTO_INCREMENT PRIMARY KEY,
@@ -220,14 +219,12 @@ function install_database()
             FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     ];
-
     foreach ($tables as $sql) {
         if (!$conn->query($sql)) {
             $conn->close();
             return false;
         }
     }
-
     $defaults = [
         ['company_name', 'BNI Enterprises'],
         ['branch_name', 'Dera (Ahmed Metro)'],
@@ -244,20 +241,16 @@ function install_database()
         $stmt->execute();
     }
     $stmt->close();
-    // Create default roles and admin user
     $conn->query("INSERT IGNORE INTO roles (id, name, description) VALUES (1,'Administrator','Full access')");
     $conn->query("INSERT IGNORE INTO roles (id, name, description) VALUES (2,'Manager','Limited access')");
     $admin_hash = password_hash('admin123', PASSWORD_DEFAULT);
     $conn->query("INSERT IGNORE INTO users (id, username, password_hash, full_name, role_id, is_active) VALUES (1,'admin','$admin_hash','System Administrator',1,1)");
-    // Grant all permissions to Administrator
     $pages = ['dashboard', 'inventory', 'purchase', 'sale', 'customers', 'suppliers', 'models', 'reports', 'returns', 'cheques', 'settings', 'roles', 'users', 'income_expense'];
     foreach ($pages as $p) {
         $conn->query("INSERT IGNORE INTO role_permissions (role_id, page, can_view, can_add, can_edit, can_delete) VALUES (1,'$p',1,1,1,1)");
     }
     $conn->query("INSERT IGNORE INTO role_permissions (role_id, page, can_view, can_add, can_edit, can_delete) VALUES (2,'dashboard',1,0,0,0)");
-
     $stmt->close();
-
     $models_seed = [
         ['LY SI', 'LY SI Electric Bike', 'Electric Bike', 'LY'],
         ['T9 Sports', 'T9 Sports Electric Bike', 'Electric Bike', 'T9'],
@@ -283,13 +276,11 @@ function install_database()
         }
         $stmt->close();
     }
-
     $r2 = $conn->query('SELECT COUNT(*) as c FROM `suppliers`');
     $row2 = $r2->fetch_assoc();
     if ($row2['c'] == 0) {
         $conn->query("INSERT INTO `suppliers` (`name`,`contact`,`address`) VALUES ('Default Supplier','0300-0000000','Pakistan')");
     }
-
     $r3 = $conn->query('SELECT COUNT(*) as c FROM `customers`');
     $row3 = $r3->fetch_assoc();
     if ($row3['c'] == 0) {
@@ -306,7 +297,6 @@ function install_database()
         }
         $stmt->close();
     }
-
     $conn->close();
     return true;
 }
@@ -361,7 +351,6 @@ if ($test_conn) {
     }
     $test_conn->close();
 }
-
 if (isset($_POST['do_install'])) {
     if (install_database()) {
         $db_exists = true;
@@ -369,10 +358,8 @@ if (isset($_POST['do_install'])) {
         exit;
     }
 }
-
 if ($db_exists) {
     $theme = get_setting('theme') ?? 'dark';
-
     if (!isset($_SESSION['user_id'])) {
         if (isset($_POST['do_login'])) {
             $uname = trim($_POST['username'] ?? '');
@@ -404,7 +391,6 @@ if ($db_exists) {
             exit;
         }
         $_SESSION['last_active'] = time();
-
         if (isset($_GET['logout'])) {
             session_destroy();
             header('Location: index.php');
@@ -412,29 +398,21 @@ if ($db_exists) {
         }
     }
 }
-
 $page = $_GET['page'] ?? 'dashboard';
-
 if (isset($_SESSION['user_id']) && $db_exists) {
     $conn_perm = db_connect();
     if ($page !== 'dashboard' && !in_array($page, ['roles', 'users', 'income_expense', 'settings'])) {
-        // check basic view permission for core pages, skip for now to avoid breaking
     }
-    // Enforce permission for sensitive pages
     $protected = ['purchase', 'inventory', 'sale', 'returns', 'cheques', 'customers', 'suppliers', 'models', 'reports', 'customer_ledger', 'supplier_ledger', 'settings', 'roles', 'users', 'income_expense'];
     if (in_array($page, $protected)) {
-        // permission checked inside each page
     }
     $conn_perm->close();
 }
 $action = $_GET['action'] ?? '';
 $msg = '';
 $err = '';
-
 if ($db_exists && isset($_SESSION['user_id'])) {
     $conn = db_connect();
-
-    // ===== ROLES & USERS & INCOME HANDLERS =====
     if ($page === 'roles' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         require_permission($conn, 'roles', 'edit');
         if (isset($_POST['save_role'])) {
@@ -451,7 +429,6 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $stmt->execute();
                 $id = $conn->insert_id;
             }
-            // save permissions
             $conn->query("DELETE FROM role_permissions WHERE role_id=$id");
             $pages = ['dashboard', 'inventory', 'purchase', 'sale', 'customers', 'suppliers', 'models', 'reports', 'returns', 'cheques', 'settings', 'roles', 'users', 'income_expense'];
             $stmtp = $conn->prepare('INSERT INTO role_permissions (role_id, page, can_view, can_add, can_edit, can_delete) VALUES (?,?,?,?,?,?)');
@@ -469,14 +446,13 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         if (isset($_POST['delete_role'])) {
             require_permission($conn, 'roles', 'delete');
             $id = (int) $_POST['id'];
-            if ($id != 1) {  // protect admin
+            if ($id != 1) {
                 $conn->query("DELETE FROM roles WHERE id=$id");
             }
             header('Location: index.php?page=roles');
             exit;
         }
     }
-
     if ($page === 'users' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         require_permission($conn, 'users', 'edit');
         if (isset($_POST['save_user'])) {
@@ -486,7 +462,6 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $role_id = (int) ($_POST['role_id'] ?? 2);
             $is_active = isset($_POST['is_active']) ? 1 : 0;
             $pass = $_POST['password'] ?? '';
-            // strong password check
             if ($pass && strlen($pass) < 8) {
                 die('Password must be at least 8 characters');
             }
@@ -521,7 +496,6 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             exit;
         }
     }
-
     if ($page === 'income_expense' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         require_permission($conn, 'income_expense', 'add');
         if (isset($_POST['save_entry'])) {
@@ -554,7 +528,6 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             exit;
         }
     }
-
     if (isset($_POST['toggle_theme'])) {
         $new_theme = ($theme === 'dark') ? 'light' : 'dark';
         $stmt = $conn->prepare("UPDATE settings SET setting_value=? WHERE setting_key='theme'");
@@ -564,7 +537,6 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         header('Location: index.php?' . http_build_query($_GET));
         exit;
     }
-
     if ($page === 'purchase' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_purchase'])) {
         $order_date = $_POST['order_date'] ?? date('Y-m-d');
         $inventory_date = $_POST['inventory_date'] ?? date('Y-m-d');
@@ -576,17 +548,14 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         $notes = sanitize($_POST['po_notes'] ?? '');
         $bikes_data = $_POST['bikes'] ?? [];
         $total_units = count($bikes_data);
-
         $po_stmt = $conn->prepare('INSERT INTO purchase_orders (order_date,supplier_id,cheque_number,bank_name,cheque_date,cheque_amount,total_units,notes) VALUES (?,?,?,?,?,?,?,?)');
         $po_stmt->bind_param('sisssdis', $order_date, $supplier_id, $cheque_number, $bank_name, $cheque_date, $cheque_amount, $total_units, $notes);
         $po_stmt->execute();
         $po_id = $conn->insert_id;
         $po_stmt->close();
-
         $tax_rate = (float) (get_setting('tax_rate') ?? 0.1);
         $tax_on = get_setting('tax_on') ?? 'purchase_price';
         $bike_stmt = $conn->prepare("INSERT INTO bikes (purchase_order_id,order_date,inventory_date,chassis_number,motor_number,model_id,color,purchase_price,tax_amount,status,safeguard_notes,accessories,notes) VALUES (?,?,?,?,?,?,?,?,?,'in_stock',?,?,?)");
-
         $saved_count = 0;
         $errors_list = [];
         foreach ($bikes_data as $b) {
@@ -609,7 +578,6 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             }
         }
         $bike_stmt->close();
-
         if (!empty($cheque_number) && $cheque_amount > 0) {
             $sup_r = $conn->query("SELECT name FROM suppliers WHERE id=$supplier_id");
             $sup_row = $sup_r ? $sup_r->fetch_assoc() : null;
@@ -619,14 +587,12 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $chq_stmt->execute();
             $chq_stmt->close();
         }
-
         if (!empty($errors_list)) {
             $err = "Saved $saved_count bikes. Errors: " . implode('; ', $errors_list);
         } else {
             $msg = "Purchase order saved. $saved_count bike(s) added to inventory.";
         }
     }
-
     if ($page === 'suppliers' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'add' || $action === 'edit') {
             $name = sanitize($_POST['name'] ?? '');
@@ -660,7 +626,6 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $msg = 'Supplier deleted.';
         }
     }
-
     if ($page === 'customers' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'add' || $action === 'edit') {
             $name = sanitize($_POST['name'] ?? '');
@@ -695,7 +660,6 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $msg = 'Customer deleted.';
         }
     }
-
     if ($page === 'models' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'add' || $action === 'edit') {
             $mc = sanitize($_POST['model_code'] ?? '');
@@ -730,7 +694,6 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $msg = 'Model deleted.';
         }
     }
-
     if ($page === 'sale' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_sale'])) {
         $bike_id = (int) ($_POST['bike_id'] ?? 0);
         $selling_price = (float) ($_POST['selling_price'] ?? 0);
@@ -743,7 +706,6 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         $cheque_amount = (float) ($_POST['cheque_amount'] ?? 0);
         $sale_notes = sanitize($_POST['sale_notes'] ?? '');
         $accessories = sanitize($_POST['accessories'] ?? '');
-
         if ($bike_id && $selling_price > 0 && $selling_date) {
             $br = $conn->query("SELECT * FROM bikes WHERE id=$bike_id AND status='in_stock'");
             $bike = $br ? $br->fetch_assoc() : null;
@@ -753,34 +715,28 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $base = ($tax_on === 'selling_price') ? $selling_price : $bike['purchase_price'];
                 $tax_amount = ($base * $tax_rate) / 100;
                 $margin = $selling_price - $bike['purchase_price'] - $tax_amount;
-
                 $st = $conn->prepare("UPDATE bikes SET selling_price=?,selling_date=?,customer_id=?,tax_amount=?,margin=?,status='sold',accessories=?,notes=? WHERE id=?");
                 $st->bind_param('dsiddssi', $selling_price, $selling_date, $customer_id, $tax_amount, $margin, $accessories, $sale_notes, $bike_id);
                 $st->execute();
                 $st->close();
-
                 $cust_r = $conn->query("SELECT name FROM customers WHERE id=$customer_id");
                 $cust_row = $cust_r ? $cust_r->fetch_assoc() : null;
                 $party_name = $cust_row ? $cust_row['name'] : 'Cash Customer';
-
                 $pay_st = $conn->prepare("INSERT INTO payments (payment_date,payment_type,amount,reference_type,reference_id,party_name,notes) VALUES (?,?,?,'sale',?,?,?)");
                 $pay_st->bind_param('ssdiss', $selling_date, $payment_type, $selling_price, $bike_id, $party_name, $sale_notes);
                 $pay_st->execute();
                 $pay_st->close();
-
                 if ($payment_type === 'cheque' && !empty($cheque_number)) {
                     $chq_st = $conn->prepare("INSERT INTO cheque_register (cheque_number,bank_name,cheque_date,amount,type,status,reference_type,reference_id,party_name,notes) VALUES (?,?,?,?,'receipt','pending','sale',?,?,?)");
                     $chq_st->bind_param('sssdiss', $cheque_number, $bank_name, $cheque_date, $cheque_amount, $bike_id, $party_name, $sale_notes);
                     $chq_st->execute();
                     $chq_st->close();
                 }
-
                 $led_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'credit',?,'customer',?,?,'sale',?,?)");
                 $desc = 'Sale of Chassis: ' . $bike['chassis_number'];
                 $led_st->bind_param('sdisid', $selling_date, $selling_price, $customer_id, $desc, $bike_id, $selling_price);
                 $led_st->execute();
                 $led_st->close();
-
                 $_SESSION['last_sale_bike_id'] = $bike_id;
                 $msg = 'Sale recorded successfully. Margin: ' . fmt_money($margin);
             } else {
@@ -790,7 +746,6 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $err = 'Please fill all required fields.';
         }
     }
-
     if ($page === 'returns' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_return'])) {
         $bike_id = (int) ($_POST['bike_id'] ?? 0);
         $return_date = !empty($_POST['return_date']) ? $_POST['return_date'] : date('Y-m-d');
@@ -800,10 +755,8 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         $bank_name = sanitize($_POST['bank_name'] ?? '');
         $cheque_date = !empty($_POST['cheque_date']) ? $_POST['cheque_date'] : null;
         $return_notes = sanitize($_POST['return_notes'] ?? '');
-
         if ($bike_id && $return_date) {
             $conn->query("UPDATE bikes SET status='returned', return_date='$return_date', return_amount=$return_amount, return_notes='" . mysqli_real_escape_string($conn, $return_notes) . "' WHERE id=$bike_id AND status='sold'");
-
             if ($refund_method === 'cheque' && !empty($cheque_number)) {
                 $br = $conn->query("SELECT b.*, c.name as cust_name FROM bikes b LEFT JOIN customers c ON b.customer_id=c.id WHERE b.id=$bike_id");
                 $bike = $br ? $br->fetch_assoc() : null;
@@ -813,19 +766,16 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $chq_st->execute();
                 $chq_st->close();
             }
-
             $led_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'debit',?,'customer',0,?,'return',?,?)");
             $desc = "Return for Bike ID: $bike_id";
             $led_st->bind_param('sdsid', $return_date, $return_amount, $desc, $bike_id, $return_amount);
             $led_st->execute();
             $led_st->close();
-
             $msg = 'Return processed successfully.';
         } else {
             $err = 'Please fill all required fields.';
         }
     }
-
     if ($page === 'cheques' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'clear') {
             $cid = (int) ($_POST['id'] ?? 0);
@@ -843,7 +793,6 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $msg = 'Cheque deleted.';
         }
     }
-
     if ($page === 'inventory' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'delete') {
             $bid = (int) ($_POST['id'] ?? 0);
@@ -888,7 +837,6 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             }
         }
     }
-
     if ($page === 'settings' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_settings'])) {
         $fields = ['company_name', 'branch_name', 'tax_rate', 'currency', 'tax_on', 'show_purchase_on_invoice'];
         $st = $conn->prepare('UPDATE settings SET setting_value=? WHERE setting_key=?');
@@ -907,7 +855,6 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         $st->close();
         $msg = 'Settings saved.';
     }
-
     if ($page === 'settings' && isset($_GET['action']) && $_GET['action'] === 'backup') {
         $tables_list = ['settings', 'suppliers', 'customers', 'models', 'purchase_orders', 'bikes', 'cheque_register', 'payments', 'ledger'];
         $sql_dump = "-- BNI Enterprises Database Backup\n-- Generated: " . date('Y-m-d H:i:s') . "\n-- Author: $author\n\n";
@@ -1026,7 +973,6 @@ input,select,textarea,button{font-family:var(--font);font-size:0.9rem}
 button{cursor:pointer}
 table{border-collapse:collapse;width:100%}
 img{display:block;max-width:100%}
-
 .layout{display:flex;min-height:100vh;flex-direction:row}
 .sidebar{width:var(--sidebar-w);background:var(--bg2);border-right:2px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;z-index:100;overflow-y:auto;transition:width 0.2s, transform 0.2s}
 .sidebar-header{padding:12px 10px;border-bottom:2px solid var(--border);text-align:center}
@@ -1040,7 +986,6 @@ img{display:block;max-width:100%}
 .sidebar-footer{margin-top:auto;padding:10px;border-top:2px solid var(--border)}
 .sidebar-footer form{display:inline}
 .sidebar-footer button{background:var(--danger);color:#fff;border:1px solid var(--danger-h);padding:6px 14px;font-size:0.8rem;border-radius:2px;width:100%}
-
 .main-wrap{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-height:100vh;transition:margin-left 0.2s;min-width:0}
 .topbar{height:var(--topbar-h);background:var(--bg2);border-bottom:2px solid var(--border);display:flex;align-items:center;padding:0 16px;position:sticky;top:0;z-index:50;gap:10px}
 .topbar .hamburger{display:flex;background:none;border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:2px;font-size:1.1rem;cursor:pointer}
@@ -1059,9 +1004,7 @@ body.sidebar-collapsed .sidebar-footer form button::after { content: '🚪'; fon
 .topbar .topbar-actions{display:flex;gap:8px;align-items:center}
 .topbar .topbar-actions form button{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:4px 10px;font-size:0.78rem;border-radius:2px}
 .topbar .topbar-actions form button:hover{background:var(--bg3)}
-
 .content{flex:1;padding:16px;overflow-x:hidden;max-width:100%}
-
 .toast-wrap{position:fixed;top:60px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:8px}
 .toast{padding:10px 18px;border-radius:2px;font-size:0.85rem;border:1px solid;min-width:220px;max-width:340px;animation:fadeIn 0.3s;font-weight:600}
 .toast.success{background:#1e4d1e;border-color:var(--success);color:#b8f0b8}
@@ -1069,7 +1012,6 @@ body.sidebar-collapsed .sidebar-footer form button::after { content: '🚪'; fon
 [data-theme="light"] .toast.success{background:#d4f4d4;border-color:var(--success);color:#1a4d1a}
 [data-theme="light"] .toast.error{background:#f4d4d4;border-color:var(--danger);color:#4d1a1a}
 @keyframes fadeIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
-
 .fieldset{border:2px solid var(--border);padding:12px 14px;margin-bottom:14px;border-radius:2px;min-width:0;max-width:100%}
 .fieldset legend{font-size:0.8rem;font-weight:700;padding:0 6px;color:var(--accent);text-transform:uppercase;letter-spacing:0.5px}
 .form-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px}
@@ -1080,7 +1022,6 @@ body.sidebar-collapsed .sidebar-footer form button::after { content: '🚪'; fon
 .form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--accent)}
 .form-group textarea{resize:vertical;min-height:60px}
 .form-group select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;padding-right:26px}
-
 .btn{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border:1px solid;border-radius:2px;font-size:0.83rem;font-weight:600;cursor:pointer;text-decoration:none;white-space:nowrap;min-height:34px;transition:background 0.15s,border-color 0.15s}
 .btn-primary{background:var(--accent);border-color:var(--accent-h);color:#fff}
 .btn-primary:hover{background:var(--accent-h);text-decoration:none;color:#fff}
@@ -1093,7 +1034,6 @@ body.sidebar-collapsed .sidebar-footer form button::after { content: '🚪'; fon
 .btn-warning{background:var(--warning);border-color:#a06000;color:#fff}
 .btn-warning:hover{background:#a06000;text-decoration:none;color:#fff}
 .btn-sm{padding:4px 9px;font-size:0.77rem;min-height:28px}
-
 .card-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
 .card{background:var(--bg2);border:2px solid var(--border);padding:12px 14px;border-radius:2px;display:flex;align-items:center;gap:12px}
 .card .card-icon{font-size:1.8rem;min-width:40px;text-align:center}
@@ -1122,12 +1062,10 @@ body.sidebar-collapsed .sidebar-footer form button::after { content: '🚪'; fon
 [data-theme="light"] .data-table tbody tr.row-reserved{background:#f4f0d4 !important}
 .data-table tfoot tr{background:var(--bg2);font-weight:700}
 .data-table .actions-col{white-space:nowrap;display:flex;gap:4px;flex-wrap:wrap}
-
 .pagination{display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-top:10px}
 .pagination a,.pagination span{padding:5px 10px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.8rem;border-radius:1px;text-decoration:none}
 .pagination a:hover{background:var(--accent);color:#fff;border-color:var(--accent-h)}
 .pagination .active-page{background:var(--accent);color:#fff;border-color:var(--accent-h)}
-
 .badge{display:inline-block;padding:2px 7px;border-radius:1px;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.3px}
 .badge-success{background:#1a4d1a;color:#8af08a}
 .badge-danger{background:#4d1a1a;color:#f08a8a}
@@ -1138,24 +1076,20 @@ body.sidebar-collapsed .sidebar-footer form button::after { content: '🚪'; fon
 [data-theme="light"] .badge-danger{background:#f4d4d4;color:#4d1a1a}
 [data-theme="light"] .badge-warning{background:#f4e8d4;color:#4d2a00}
 [data-theme="light"] .badge-info{background:#d4e8f4;color:#1a2d4d}
-
 .filter-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;padding:10px;background:var(--bg2);border:1px solid var(--border)}
 .filter-bar .form-group{min-width:120px;flex:0 0 auto}
 .filter-bar .form-group label{font-size:0.72rem}
 .filter-bar .form-group input,.filter-bar .form-group select{font-size:0.82rem;padding:5px 7px}
-
 .modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:500;align-items:center;justify-content:center}
 .modal-overlay.open{display:flex}
 .modal{background:var(--bg2);border:2px solid var(--border);padding:18px;width:90%;max-width:500px;max-height:90vh;overflow-y:auto;border-radius:2px;position:relative}
 .modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;border-bottom:1px solid var(--border);padding-bottom:8px}
 .modal-header h3{font-size:0.9rem;font-weight:700;color:var(--accent);text-transform:uppercase}
 .modal-close{background:var(--danger);border:none;color:#fff;padding:3px 8px;font-size:0.9rem;cursor:pointer;border-radius:1px}
-
 .bike-row{background:var(--surface);border:1px solid var(--border);padding:10px;margin-bottom:8px;border-radius:2px;position:relative}
 .bike-row-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
 .bike-row-num{font-size:0.78rem;font-weight:700;color:var(--accent);text-transform:uppercase}
 .bike-row-del{background:var(--danger);border:none;color:#fff;padding:2px 8px;font-size:0.78rem;cursor:pointer;border-radius:1px}
-
 .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg)}
 .login-box{background:var(--bg2);border:2px solid var(--border);padding:30px;width:340px;border-radius:2px}
 .login-box h2{font-size:1.1rem;font-weight:700;color:var(--accent);text-align:center;margin-bottom:4px;text-transform:uppercase}
@@ -1165,19 +1099,16 @@ body.sidebar-collapsed .sidebar-footer form button::after { content: '🚪'; fon
 .login-box .login-btn:hover{background:var(--accent-h)}
 .login-err{color:var(--danger);font-size:0.82rem;text-align:center;margin-bottom:10px;padding:6px;background:#3d1a1a;border:1px solid var(--danger);border-radius:1px}
 [data-theme="light"] .login-err{background:#f4d4d4}
-
 .install-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg)}
 .install-box{background:var(--bg2);border:2px solid var(--accent);padding:30px;width:400px;border-radius:2px;text-align:center}
 .install-box h2{color:var(--accent);font-size:1.1rem;margin-bottom:8px}
 .install-box p{color:var(--text2);font-size:0.83rem;margin-bottom:18px}
-
 .sub-tabs{display:flex;gap:0;margin-bottom:14px;border-bottom:2px solid var(--border);flex-wrap:wrap}
 .sub-tab{padding:7px 14px;background:var(--surface);border:1px solid var(--border);border-bottom:none;color:var(--text);font-size:0.8rem;font-weight:600;cursor:pointer;text-decoration:none;border-radius:2px 2px 0 0;margin-right:2px}
 .sub-tab:hover{background:var(--bg3);text-decoration:none;color:var(--text)}
 .sub-tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .sub-panel{display:none}
 .sub-panel.active{display:block}
-
 .invoice-wrap{background:#fff;color:#111;padding:20px;font-family:Arial,sans-serif;font-size:12px;max-width:700px;margin:0 auto;border:1px solid #ccc}
 .invoice-header{text-align:center;margin-bottom:16px;border-bottom:2px solid #333;padding-bottom:10px}
 .invoice-header h1{font-size:1.3rem;color:#1a1a1a;font-weight:700}
@@ -1189,21 +1120,17 @@ body.sidebar-collapsed .sidebar-footer form button::after { content: '🚪'; fon
 .invoice-table th{background:#f0f0f0;font-weight:700}
 .invoice-total{text-align:right;font-size:0.95rem;font-weight:700;margin-top:10px;padding:8px;background:#f0f0f0;border:1px solid #ccc}
 .invoice-footer{text-align:center;margin-top:16px;border-top:1px solid #ccc;padding-top:8px;font-size:0.75rem;color:#777}
-
 .timeline{list-style:none;padding:0;margin:0}
 .timeline li{display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)}
 .timeline-dot{width:12px;height:12px;border-radius:50%;background:var(--accent);margin-top:4px;flex-shrink:0}
 .timeline-content{flex:1}
 .timeline-date{font-size:0.75rem;color:var(--text3)}
 .timeline-text{font-size:0.83rem;color:var(--text)}
-
 .stats-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
 .stat-box{background:var(--bg2);border:1px solid var(--border);padding:8px 14px;border-radius:1px;flex:1;min-width:100px;text-align:center}
 .stat-box .stat-val{font-size:1.1rem;font-weight:700;color:var(--accent)}
 .stat-box .stat-lbl{font-size:0.72rem;color:var(--text2);text-transform:uppercase}
-
 .sidebar-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:90}
-
 .print-btn-wrap{margin-bottom:10px}
 @media print{
 .sidebar,.topbar,.filter-bar,.pagination,.btn,.actions-col,.print-btn-wrap,.no-print{display:none!important}
@@ -1339,12 +1266,10 @@ else:
 <div class="content">
 <?php if ($msg): ?><div class="toast-wrap" id="toastWrap"><div class="toast success"><?= sanitize($msg) ?></div></div><?php endif; ?>
 <?php if ($err): ?><div class="toast-wrap" id="toastWrap"><div class="toast error"><?= sanitize($err) ?></div></div><?php endif; ?>
-
 <?php
     $per_page = 20;
     $current_pg = max(1, (int) ($_GET['pg'] ?? 1));
     $offset = ($current_pg - 1) * $per_page;
-
     if ($page === 'dashboard'):
         $total_stock = $conn->query("SELECT COUNT(*) as c FROM bikes WHERE status='in_stock'")->fetch_assoc()['c'];
         $total_sold = $conn->query("SELECT COUNT(*) as c FROM bikes WHERE status='sold'")->fetch_assoc()['c'];
@@ -1372,7 +1297,6 @@ else:
 ⚠ <strong><?= $pending_cheques['c'] ?> pending cheque(s)</strong> totaling <?= $currency ?> <?= number_format($pending_cheques['s'] ?? 0) ?> — <a href="index.php?page=cheques">View Cheques →</a>
 </div>
 <?php endif; ?>
-
 <fieldset class="fieldset"><legend>📊 Model-wise Stock Summary</legend>
 <div class="data-table-wrap">
 <table class="data-table">
@@ -1407,7 +1331,6 @@ else:
 </table>
 </div>
 </fieldset>
-
 <div class="split-grid">
 <fieldset class="fieldset"><legend>🛒 Recent 10 Sales</legend>
 <div class="data-table-wrap">
@@ -1430,7 +1353,6 @@ else:
 </table>
 </div>
 </fieldset>
-
 <fieldset class="fieldset"><legend>📦 Recent 10 Purchases</legend>
 <div class="data-table-wrap">
 <table class="data-table">
@@ -1454,7 +1376,6 @@ else:
 </div>
 </fieldset>
 </div>
-
 <?php elseif ($page === 'purchase'): ?>
 <?php
         $suppliers_list = $conn->query('SELECT id, name FROM suppliers ORDER BY name');
@@ -1489,18 +1410,15 @@ else:
 <div class="form-group"><label>Notes</label><textarea name="po_notes" rows="2" placeholder="Any additional notes..."></textarea></div>
 </div>
 </fieldset>
-
 <fieldset class="fieldset"><legend>🚲 Bike Units</legend>
 <div id="bikesList"></div>
 <button type="button" class="btn btn-success" onclick="addBikeRow()" style="margin-top:6px">+ Add Bike</button>
 </fieldset>
-
 <div style="display:flex;gap:8px;flex-wrap:wrap">
 <button type="submit" name="save_purchase" class="btn btn-primary">💾 Save Purchase Order</button>
 <a href="index.php?page=inventory" class="btn btn-default">← Back to Inventory</a>
 </div>
 </form>
-
 <div class="modal-overlay" id="addSupplierModal">
 <div class="modal">
 <div class="modal-header"><h3>Add New Supplier</h3><button class="modal-close" onclick="document.getElementById('addSupplierModal').classList.remove('open')">✕</button></div>
@@ -1512,7 +1430,6 @@ else:
 </form>
 </div>
 </div>
-
 <div class="modal-overlay" id="addModelModal">
 <div class="modal">
 <div class="modal-header"><h3>Add New Model</h3><button class="modal-close" onclick="document.getElementById('addModelModal').classList.remove('open')">✕</button></div>
@@ -1525,7 +1442,6 @@ else:
 </form>
 </div>
 </div>
-
 <script>
 var prefillModelId = <?= (int) ($_GET['model_id'] ?? 0) ?>;
 var bikeCount = 0;
@@ -1584,7 +1500,6 @@ function checkChassis(inp) {
 }
 addBikeRow();
 </script>
-
 <?php
     elseif ($page === 'inventory'):
         $status_f = sanitize($_GET['status_f'] ?? '');
@@ -1593,7 +1508,6 @@ addBikeRow();
         $search_f = sanitize($_GET['search_f'] ?? '');
         $date_from = $_GET['date_from'] ?? '';
         $date_to = $_GET['date_to'] ?? '';
-
         $where_parts = ['1=1'];
         if ($status_f && in_array($status_f, ['in_stock', 'sold', 'returned', 'reserved']))
             $where_parts[] = "b.status='$status_f'";
@@ -1608,11 +1522,9 @@ addBikeRow();
         if ($date_to)
             $where_parts[] = "b.inventory_date <= '" . mysqli_real_escape_string($conn, $date_to) . "'";
         $where = implode(' AND ', $where_parts);
-
         $total_rows_r = $conn->query("SELECT COUNT(*) as c FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE $where");
         $total_rows = $total_rows_r->fetch_assoc()['c'];
         $total_pages = ceil($total_rows / $per_page);
-
         $bikes_result = $conn->query("SELECT b.*, m.model_name, m.model_code, c.name as cust_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id WHERE $where ORDER BY b.created_at DESC LIMIT $per_page OFFSET $offset");
         $models_filter_list = $conn->query('SELECT id, model_code FROM models ORDER BY model_name');
         $sort_col = sanitize($_GET['sort'] ?? 'id');
@@ -1680,7 +1592,6 @@ addBikeRow();
 </ul>
 </fieldset>
 <?php else: ?>
-
 <form method="POST" id="bulkForm" action="index.php?page=inventory&action=bulk_delete">
 <div class="filter-bar no-print">
 <div class="form-group"><label>Search</label><input type="text" name="search_f" value="<?= sanitize($search_f) ?>" placeholder="Chassis, Motor, Model, Color" onchange="this.form.submit()" form="filterForm"></div>
@@ -1712,7 +1623,6 @@ addBikeRow();
 <form method="GET" id="filterForm" action="index.php">
 <input type="hidden" name="page" value="inventory">
 </form>
-
 <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center" class="no-print">
 <span style="font-size:0.8rem;color:var(--text2)">Showing <?= $total_rows ?> record(s)</span>
 <a href="index.php?page=purchase" class="btn btn-success btn-sm">+ New Purchase</a>
@@ -1721,7 +1631,6 @@ addBikeRow();
 <button onclick="window.print()" type="button" class="btn btn-default btn-sm">🖨 Print</button>
 <button type="button" class="btn btn-default btn-sm" onclick="toggleSelectAll()">☑ Select All</button>
 </div>
-
 <div class="data-table-wrap">
 <table class="data-table" id="invTable">
 <thead>
@@ -1797,11 +1706,9 @@ addBikeRow();
 </table>
 </div>
 </form>
-
 <form method="POST" id="bulkExportForm" action="index.php?page=inventory&action=bulk_export">
 <div id="hiddenBikeIds"></div>
 </form>
-
 <?php
             $qstr = http_build_query(['page' => 'inventory', 'status_f' => $status_f, 'model_f' => $model_f, 'color_f' => $color_f, 'search_f' => $search_f, 'date_from' => $date_from, 'date_to' => $date_to]);
             if ($total_pages > 1):
@@ -1815,7 +1722,6 @@ addBikeRow();
 <span>Page <?= $current_pg ?> of <?= $total_pages ?> | Total: <?= $total_rows ?> bikes</span>
 </div>
 <?php endif; ?>
-
 <?php if ($edit_bike): ?>
 <div class="modal-overlay open" id="editBikeModal">
 <div class="modal">
@@ -1839,7 +1745,6 @@ addBikeRow();
 </div>
 </div>
 <?php endif; ?>
-
 <script>
 function toggleSelectAll() {
     var chk = document.getElementById('selectAll').checked;
@@ -1854,25 +1759,8 @@ document.getElementById('bulkExportForm').addEventListener('submit', function(){
         hidden.appendChild(inp);
     });
 });
-function sortTable(col) {
-    var table = document.getElementById('invTable');
-    var tbody = table.tBodies[0];
-    var rows = Array.from(tbody.rows);
-    var asc = table.dataset.sortCol == col && table.dataset.sortDir == 'asc';
-    rows.sort(function(a,b){
-        var av = a.cells[col]?a.cells[col].innerText.replace(/[^0-9.-]/g,''):'';
-        var bv = b.cells[col]?b.cells[col].innerText.replace(/[^0-9.-]/g,''):'';
-        var an = parseFloat(av), bn = parseFloat(bv);
-        if (!isNaN(an) && !isNaN(bn)) return asc ? an-bn : bn-an;
-        return asc ? av.localeCompare(bv) : bv.localeCompare(av);
-    });
-    rows.forEach(function(r){ tbody.appendChild(r); });
-    table.dataset.sortCol = col;
-    table.dataset.sortDir = asc ? 'desc' : 'asc';
-}
 </script>
 <?php endif; ?>
-
 <?php
     elseif ($page === 'sale'):
         $prefill_bike_id = (int) ($_GET['bike_id'] ?? 0);
@@ -1963,13 +1851,11 @@ function sortTable(col) {
 <a href="index.php?page=inventory" class="btn btn-default">← Back to Inventory</a>
 </div>
 </form>
-
 <?php if ($last_sale_bike_id): ?>
 <div style="margin-top:16px">
 <a href="index.php?page=sale&print_invoice=<?= $last_sale_bike_id ?>" class="btn btn-primary" target="_blank">🖨 Print Invoice</a>
 </div>
 <?php endif; ?>
-
 <?php
         $print_inv_id = (int) ($_GET['print_invoice'] ?? 0);
         if ($print_inv_id):
@@ -2025,7 +1911,6 @@ function sortTable(col) {
 <div class="no-print" style="margin-top:10px"><button onclick="window.print()" class="btn btn-primary">🖨 Print Invoice</button></div>
 <?php endif; ?>
 <?php endif; ?>
-
 <div class="modal-overlay" id="addCustModal">
 <div class="modal">
 <div class="modal-header"><h3>Add New Customer</h3><button class="modal-close" onclick="document.getElementById('addCustModal').classList.remove('open')">✕</button></div>
@@ -2038,7 +1923,6 @@ function sortTable(col) {
 </form>
 </div>
 </div>
-
 <script>
 var taxRate = <?= (float) (get_setting('tax_rate') ?? 0.1) ?>;
 var taxOn = '<?= get_setting('tax_on') ?? 'purchase_price' ?>';
@@ -2067,7 +1951,6 @@ window.onload = function() {
     if (sel.value) fillBikeDetails(sel);
 };
 </script>
-
 <?php
     elseif ($page === 'returns'):
         $sold_bikes = $conn->query("SELECT b.id, b.chassis_number, b.color, b.selling_price, b.purchase_price, m.model_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.status='sold' ORDER BY b.selling_date DESC");
@@ -2115,7 +1998,6 @@ function toggleRetCheque(v) {
     document.getElementById('retChequeFields').style.display = v==='cheque'?'block':'none';
 }
 </script>
-
 <?php
     elseif ($page === 'cheques'):
         $chq_status_f = sanitize($_GET['chq_status'] ?? '');
@@ -2232,7 +2114,6 @@ function toggleRetCheque(v) {
 <?php if ($current_pg < $chq_total_pages): ?><a href="index.php?<?= $qstr2 ?>&pg=<?= $current_pg + 1 ?>">Next ›</a><?php endif; ?>
 </div>
 <?php endif; ?>
-
 <?php
     elseif ($page === 'customer_ledger'):
         $sel_cust = (int) ($_GET['cust_id'] ?? 0);
@@ -2326,7 +2207,6 @@ function toggleRetCheque(v) {
 </div>
 </fieldset>
 <?php endif; ?>
-
 <?php
     elseif ($page === 'supplier_ledger'):
         $sel_sup = (int) ($_GET['sup_id'] ?? 0);
@@ -2384,7 +2264,6 @@ function toggleRetCheque(v) {
 </div>
 </fieldset>
 <?php endif; ?>
-
 <?php
     elseif ($page === 'reports'):
         $sub = sanitize($_GET['sub'] ?? 'stock');
@@ -2411,7 +2290,6 @@ function toggleRetCheque(v) {
 <a href="index.php?page=reports&sub=<?= $si[0] ?>&rep_from=<?= $rep_from ?>&rep_to=<?= $rep_to ?>" class="sub-tab <?= $sub === $si[0] ? 'active' : '' ?>"><?= $si[1] ?></a>
 <?php endforeach; ?>
 </div>
-
 <div class="filter-bar no-print">
 <form method="GET" action="index.php" style="display:contents">
 <input type="hidden" name="page" value="reports">
@@ -2430,7 +2308,6 @@ function toggleRetCheque(v) {
 </form>
 <button onclick="window.print()" class="btn btn-default btn-sm" style="align-self:flex-end">🖨 Print</button>
 </div>
-
 <?php
         if ($sub === 'stock'):
             $stock_bikes = $conn->query("SELECT b.*, m.model_name, m.category, m.short_code FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.status='in_stock' ORDER BY m.model_name, b.inventory_date");
@@ -2464,7 +2341,6 @@ function toggleRetCheque(v) {
 </table>
 </div>
 </fieldset>
-
 <?php
         elseif ($sub === 'sold'):
             $sold_bikes_r = $conn->query("SELECT b.*, m.model_name, m.short_code, c.name as cust_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id WHERE b.status='sold' AND b.selling_date BETWEEN '" . mysqli_real_escape_string($conn, $rep_from) . "' AND '" . mysqli_real_escape_string($conn, $rep_to) . "' ORDER BY b.selling_date DESC");
@@ -2512,7 +2388,6 @@ function toggleRetCheque(v) {
 </table>
 </div>
 </fieldset>
-
 <?php
         elseif ($sub === 'model_wise'):
             $mw_result = $conn->query("SELECT m.model_name, m.short_code, m.category,
@@ -2560,7 +2435,6 @@ function toggleRetCheque(v) {
 </table>
 </div>
 </fieldset>
-
 <?php
         elseif ($sub === 'tax'):
             $tax_result = $conn->query("SELECT DATE_FORMAT(selling_date,'%Y-%m') as ym, COUNT(*) as cnt, SUM(tax_amount) as total_tax, SUM(purchase_price) as total_pp FROM bikes WHERE status='sold' AND selling_date BETWEEN '" . mysqli_real_escape_string($conn, $rep_from) . "' AND '" . mysqli_real_escape_string($conn, $rep_to) . "' GROUP BY ym ORDER BY ym DESC");
@@ -2587,7 +2461,6 @@ function toggleRetCheque(v) {
 </table>
 </div>
 </fieldset>
-
 <?php
         elseif ($sub === 'profit'):
             $profit_monthly = $conn->query("SELECT DATE_FORMAT(selling_date,'%Y-%m') as ym, COUNT(*) as cnt, SUM(selling_price) as total_sp, SUM(purchase_price) as total_pp, SUM(margin) as total_margin, SUM(tax_amount) as total_tax FROM bikes WHERE status='sold' AND selling_date BETWEEN '" . mysqli_real_escape_string($conn, $rep_from) . "' AND '" . mysqli_real_escape_string($conn, $rep_to) . "' GROUP BY ym ORDER BY ym DESC");
@@ -2632,7 +2505,6 @@ function toggleRetCheque(v) {
 </table>
 </div>
 </fieldset>
-
 <?php
         elseif ($sub === 'bank'):
             $bank_result = $conn->query('SELECT bank_name, type, status, COUNT(*) as cnt, SUM(amount) as total FROM cheque_register GROUP BY bank_name, type, status ORDER BY bank_name, type');
@@ -2676,7 +2548,6 @@ function toggleRetCheque(v) {
 </table>
 </div>
 </fieldset>
-
 <?php
         elseif ($sub === 'monthly'):
             $monthly_r = $conn->query("SELECT DATE_FORMAT(order_date,'%Y-%m') as ym, COUNT(*) as purchased, SUM(purchase_price) as pp_total FROM bikes WHERE YEAR(order_date)=$rep_year GROUP BY ym");
@@ -2720,7 +2591,6 @@ function toggleRetCheque(v) {
 </table>
 </div>
 </fieldset>
-
 <?php
         elseif ($sub === 'daily'):
             $daily_date = $_GET['daily_date'] ?? date('Y-m-d');
@@ -2767,7 +2637,6 @@ function toggleRetCheque(v) {
 </table>
 </div>
 </fieldset>
-
 <?php
         elseif ($sub === 'purchase_vs_sales'):
             $pvs = $conn->query("SELECT DATE_FORMAT(order_date,'%Y-%m') as ym, COUNT(*) as p_cnt, SUM(purchase_price) as p_val FROM bikes WHERE YEAR(order_date)=$rep_year GROUP BY ym");
@@ -2812,7 +2681,6 @@ function toggleRetCheque(v) {
 </div>
 </fieldset>
 <?php endif; ?>
-
 <?php
     elseif ($page === 'models'):
         $models_result = $conn->query("SELECT m.*, COUNT(b.id) as bike_count, SUM(CASE WHEN b.status='in_stock' THEN 1 ELSE 0 END) as in_stock, SUM(CASE WHEN b.status='sold' THEN 1 ELSE 0 END) as sold_cnt FROM models m LEFT JOIN bikes b ON m.id=b.model_id GROUP BY m.id ORDER BY m.model_name");
@@ -2872,7 +2740,6 @@ function toggleRetCheque(v) {
 </tbody>
 </table>
 </div>
-
 <?php
     elseif ($page === 'customers'):
         $cust_result = $conn->query("SELECT c.*, COUNT(b.id) as bike_count, SUM(CASE WHEN b.status='sold' THEN b.selling_price ELSE 0 END) as total_purchases FROM customers c LEFT JOIN bikes b ON c.id=b.customer_id GROUP BY c.id ORDER BY c.name");
@@ -2942,7 +2809,6 @@ function toggleRetCheque(v) {
 </tbody>
 </table>
 </div>
-
 <?php
     elseif ($page === 'suppliers'):
         $sup_result = $conn->query('SELECT s.*, COUNT(po.id) as order_count, SUM(po.cheque_amount) as total_paid FROM suppliers s LEFT JOIN purchase_orders po ON s.id=po.supplier_id GROUP BY s.id ORDER BY s.name');
@@ -3000,8 +2866,6 @@ function toggleRetCheque(v) {
 </tbody>
 </table>
 </div>
-
-
 <?php
     elseif ($page === 'roles'):
         require_permission($conn, 'roles', 'view');
@@ -3080,7 +2944,6 @@ function toggleRetCheque(v) {
 </tbody>
 </table>
 </div>
-
 <?php
     elseif ($page === 'users'):
         require_permission($conn, 'users', 'view');
@@ -3151,7 +3014,6 @@ function toggleRetCheque(v) {
 </tbody>
 </table>
 </div>
-
 <?php
     elseif ($page === 'income_expense'):
         require_permission($conn, 'income_expense', 'view');
@@ -3247,7 +3109,6 @@ function toggleRetCheque(v) {
 </tbody>
 </table>
 </div>
-
 <?php
     elseif ($page === 'settings'):
         $s_company = get_setting('company_name') ?? 'BNI Enterprises';
@@ -3311,13 +3172,11 @@ function toggleRetCheque(v) {
 </fieldset>
 <button type="submit" name="save_settings" class="btn btn-primary">💾 Save Settings</button>
 </form>
-
 <?php endif; ?>
 </div>
 </div>
 </div>
 <?php endif; ?>
-
 <?php if ($db_exists && isset($_SESSION['user_id'])): ?>
 <script>
 function toggleSidebar() {
@@ -3350,7 +3209,6 @@ setInterval(function() {
 }, 60000);
 </script>
 <?php endif; ?>
-
 <?php
 if (isset($conn) && $conn) {
     if (isset($_SESSION['user_id']) && isset($_GET['ajax']) && $_GET['ajax'] === 'check_chassis') {
@@ -3363,5 +3221,51 @@ if (isset($conn) && $conn) {
     $conn->close();
 }
 ?>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.data-table').forEach(function(table, tableIndex) {
+        var tbody = table.tBodies[0];
+        if (!tbody) return;
+        var headers = table.querySelectorAll('thead th');
+        var storageKey = 'bni_sort_' + window.location.search + '_' + tableIndex;
+        function doSort(colIndex, isAsc, save) {
+            var rows = Array.from(tbody.querySelectorAll('tr'));
+            rows.sort(function(a, b) {
+                var aCell = a.cells[colIndex];
+                var bCell = b.cells[colIndex];
+                if (!aCell || !bCell) return 0;
+                var aVal = aCell.innerText.trim();
+                var bVal = bCell.innerText.trim();
+                var aNum = parseFloat(aVal.replace(/[^0-9.-]/g, ''));
+                var bNum = parseFloat(bVal.replace(/[^0-9.-]/g, ''));
+                var isNum = !isNaN(aNum) && !isNaN(bNum) && aVal.match(/^[0-9.,Rs \-]+$/) && bVal.match(/^[0-9.,Rs \-]+$/);
+                if (isNum) return isAsc ? aNum - bNum : bNum - aNum;
+                return isAsc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+            });
+            rows.forEach(function(r) { tbody.appendChild(r); });
+            headers.forEach(function(th) { th.innerHTML = th.innerHTML.replace(/\s*[▲▼]/g, ''); });
+            headers[colIndex].dataset.sortDir = isAsc ? 'asc' : 'desc';
+            headers[colIndex].innerHTML += isAsc ? ' ▲' : ' ▼';
+            if (save) localStorage.setItem(storageKey, colIndex + '|' + (isAsc ? 'asc' : 'desc'));
+        }
+        var saved = localStorage.getItem(storageKey);
+        if (saved) {
+            var parts = saved.split('|');
+            doSort(parseInt(parts[0]), parts[1] === 'asc', false);
+        }
+        headers.forEach(function(th, colIndex) {
+            if (th.innerText.trim() === 'Actions' || th.querySelector('input')) {
+                th.style.cursor = 'default';
+                return;
+            }
+            th.removeAttribute('onclick');
+            th.addEventListener('click', function() {
+                var isAsc = th.dataset.sortDir !== 'asc';
+                doSort(colIndex, isAsc, true);
+            });
+        });
+    });
+});
+</script>
 </body>
 </html>
