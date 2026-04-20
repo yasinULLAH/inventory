@@ -1,142 +1,157 @@
 # BNI Enterprises: Bike Dealer Management System
-## Official System Documentation & User Manual v2026.3
+## Official Comprehensive Documentation | آفیشل سسٹم دستاویزات اور یوزر مینول
+**Version 2026.3 | ورژن 2026.3**
 
-Welcome to the comprehensive documentation for the **BNI Enterprises Bike Dealer Management System**. This guide provides a deep-dive into every module of the application, designed to help both administrators and clients understand the full functional scope and operational flow of the system.
+Welcome to the full functional guide for the **BNI Enterprises Bike Dealer Management System**. This document is designed for both management and clients to understand every single feature, module, and operational flow within the application.
 
----
-
-## 📑 Table of Contents
-1. [Project Overview](#-project-overview)
-2. [Core Dashboard & Analytics](#-core-dashboard--analytics)
-3. [Purchase & Procurement](#-purchase--procurement)
-4. [Inventory & Stock Management](#-inventory--stock-management)
-5. [Sales & Revenue Capture](#-sales--revenue-capture)
-6. [Returns & Adjustments](#-returns--adjustments)
-7. [Financial Controls (Cheques & Ledgers)](#-financial-controls-cheques--ledgers)
-8. [Reporting & Business Intelligence](#-reporting--business-intelligence)
-9. [Administrative Controls](#-administrative-controls)
-10. [Technical Specifications](#-technical-specifications)
+یہ **بی این آئی انٹرپرائزز بائیک ڈیلر مینجمنٹ سسٹم** کے لیے مکمل فنکشنل گائیڈ ہے۔ یہ دستاویز انتظامیہ اور کلائنٹس دونوں کے لیے ڈیزائن کی گئی ہے تاکہ وہ ایپلی کیشن کے اندر موجود ہر فیچر، ماڈیول اور آپریشنل فلو کو مکمل طور پر سمجھ سکیں۔
 
 ---
 
-## 🚀 Project Overview
-**BNI Enterprises** is a robust, end-to-end management solution specifically tailored for Electric Bike dealerships. It streamlines the lifecycle of inventory from procurement to final sale, including integrated financial tracking, tax calculations (FBR compliant), and comprehensive reporting.
+## 📑 Table of Contents | فہرست
+1. [Introduction | تعارف](#1-introduction--تعارف)
+2. [Dashboard: Central Hub | ڈیش بورڈ: مرکزی مرکز](#2-dashboard-central-hub--ڈیش-بورڈ-مرکزی-مرکز)
+3. [Purchase Management | خریداری کا انتظام](#3-purchase-management--خریداری-کا-انتظام)
+4. [Inventory Control | اسٹاک کنٹرول](#4-inventory-control--اسٹاک-کنٹرول)
+5. [Sales & Invoicing | سیلز اور انوائسنگ](#5-sales--invoicing--سیلز-اور-انوائسنگ)
+6. [Returns & Refunds | واپسی اور ریفنڈ](#6-returns--refunds--واپسی-اور-ریفنڈ)
+7. [Accounting & Ledgers | اکاؤنٹنگ اور کھاتہ جات](#7-accounting--ledgers--اکاؤنٹنگ-اور-کھاتہ-جات)
+8. [Advanced Reporting | ایڈوانس رپورٹنگ](#8-advanced-reporting--ایڈوانس-رپورٹنگ)
+9. [System Settings & Security | سسٹم کی ترتیبات اور سیکیورٹی](#9-system-settings--security--سسٹم-کی-ترتیبات-اور-سیکیورٹی)
 
 ---
 
-## 📊 Core Dashboard & Analytics
-The Dashboard serves as the command center of the application, providing real-time visibility into the health of the business.
+## 1. Introduction | تعارف
+**English:** BNI Enterprises is a specialized ERP solution for Electric Bike dealerships. It handles everything from bulk purchasing and stock maintenance to tax-compliant sales and automated accounting ledgers.
+**Urdu:** بی این آئی انٹرپرائزز الیکٹرک بائیک ڈیلرشپ کے لیے ایک خصوصی ERP حل ہے۔ یہ بلک خریداری اور اسٹاک کی دیکھ بھال سے لے کر ٹیکس کے مطابق سیلز اور خودکار اکاؤنٹنگ لیجرز تک سب کچھ سنبھالتا ہے۔
 
-### Key Features:
-- **Global Statistics**: Real-time counters for Total Stock, Sold Units, Returns, Purchase Value, and Sales Value.
-- **Profit Tracking**: Instant view of total margin and profits generated.
-- **Model Summary**: A categorized breakdown of inventory status (Available vs. Sold) for every bike model.
-- **Activity Feeds**: Quick view of the 10 most recent sales and purchases.
+---
+
+## 2. Dashboard: Central Hub | ڈیش بورڈ: مرکزی مرکز
+The Dashboard provides a 360-degree view of your business health.
+ڈیش بورڈ آپ کے کاروبار کی صحت کا 360 ڈگری منظر فراہم کرتا ہے۔
+
+**Features / خصوصیات:**
+- **Real-time Stats:** Instant counts for Stock, Sold units, and Returns.
+- **Financial Summary:** Total Purchase Value, Sales Value, Tax Paid, and Net Margin.
+- **Model-wise Summary:** Detailed breakdown of inventory status for each specific bike model.
+- **Recent Activities:** Lists the last 10 Sales and 10 Purchases for quick reference.
+
+**اردو:** اسٹاک، فروخت شدہ یونٹس، اور واپسی کے فوری اعدادوشمار۔ کل خریداری کی قیمت، سیلز کی قیمت، ادا شدہ ٹیکس، اور خالص منافع کا خلاصہ۔ ہر بائیک ماڈل کے لیے اسٹاک کی صورتحال کی تفصیلی تفصیل۔ فوری حوالہ کے لیے آخری 10 سیلز اور 10 خریداریوں کی فہرست۔
 
 ![Dashboard Overview](screenshots/dashboard.png)
 
 ---
 
-## 📦 Purchase & Procurement
-This module manages the intake of new inventory. It is designed to handle bulk imports of bike units while simultaneously recording financial liabilities.
+## 3. Purchase Management | خریداری کا انتظام
+This module records the intake of new stock and sets up the financial liability with suppliers.
+یہ ماڈیول نئے اسٹاک کے اندراج کو ریکارڈ کرتا ہے اور سپلائرز کے ساتھ مالی واجبات کو ترتیب دیتا ہے۔
 
-### Functional Scope:
-- **Batch Entry**: Add multiple bike units (Chassis, Motor, Model, Color) in a single transaction.
-- **Supplier Integration**: Link purchases directly to established suppliers.
-- **Financial Linking**: Record cheque details (Number, Bank, Amount) at the time of purchase to update supplier ledgers automatically.
-- **Safeguard Notes**: Document included accessories (Chargers, Helmets, etc.) per unit.
+**Key Functionalities / اہم افعال:**
+- **Order & Inventory Tracking:** Separate dates for when the order was placed vs. when it arrived.
+- **Bulk Unit Entry:** Add multiple bikes in one go (Chassis, Motor, Model, Color, Price).
+- **Chassis Validation:** Built-in check to prevent duplicate Chassis numbers.
+- **Financial Linking:** Record Cheque/Bank details during purchase to update the Supplier Ledger.
+- **Safeguard & Accessories:** Track what comes with the bike (Charger, Helmet, Warranty cards).
+
+**اردو:** آرڈر اور انوینٹری کی تاریخوں کا الگ الگ ٹریکنگ۔ ایک ہی بار میں متعدد بائیکس (چیسس، موٹر، ماڈل، رنگ، قیمت) کا اندراج۔ چیسس نمبر کی نقل کو روکنے کے لیے بلٹ ان چیک۔ سپلائر لیجر کو اپ ڈیٹ کرنے کے لیے خریداری کے دوران چیک/بینک کی تفصیلات کا ریکارڈ۔ چارجر، ہیلمٹ، وارنٹی کارڈز وغیرہ کا اندراج۔
 
 ![Purchase Entry](screenshots/purchase.png)
-*Interface Variation: Modal for adding new suppliers on the fly.*
-![Add Supplier Modal](screenshots/purchase_modal__.png)
+![Add Supplier/Model Modal](screenshots/purchase_modal__.png)
 
 ---
 
-## 📋 Inventory & Stock Management
-The heart of the system, the Inventory module, provides a granular view of every asset owned by the dealership.
+## 4. Inventory Control | اسٹاک کنٹرول
+The master list of every asset in your dealership.
+آپ کی ڈیلرشپ میں موجود ہر اثاثہ کی ماسٹر لسٹ۔
 
-### Features:
-- **Status Tracking**: Visual badges indicating `IN STOCK`, `SOLD`, `RETURNED`, or `RESERVED`.
-- **Advanced Filtering**: Search by Chassis #, Motor #, Model, or Color.
-- **Bulk Actions**: Export selected records to CSV or perform bulk deletions.
-- **History Timeline**: View the complete lifecycle of a specific bike, from purchase date to the final customer sale.
+**Key Features / اہم خصوصیات:**
+- **Status Badges:** Clearly see `In Stock`, `Sold`, `Returned`, or `Reserved`.
+- **Deep Filtering:** Search by any parameter (Dates, Chassis, Color, Model).
+- **History Timeline:** Every bike has its own timeline showing Purchase date -> Sale date -> Return date (if any).
+- **Exporting:** Download your entire stock list as a CSV file for Excel analysis.
+
+**اردو:** ان اسٹاک، فروخت شدہ، واپس یا ریزرو شدہ بائیکس کے لیے واضح بیجز۔ کسی بھی پیرامیٹر (تاریخوں، چیسس، رنگ، ماڈل) کے ذریعے تلاش کریں۔ ہر بائیک کا اپنا ٹائم لائن ہوتا ہے جو خریداری سے لے کر فروخت تک کی تفصیلات دکھاتا ہے۔ ایکسل تجزیہ کے لیے اپنی پوری اسٹاک لسٹ کو بطور CSV فائل ڈاؤن لوڈ کریں۔
 
 ![Inventory Management](screenshots/inventory.png)
 
 ---
 
-## 🛒 Sales & Revenue Capture
-The Sales module facilitates the transition of assets from inventory to revenue.
+## 5. Sales & Invoicing | سیلز اور انوائسنگ
+Streamline the customer journey from inquiry to invoice.
+گاہک کے سفر کو انکوائری سے انوائس تک ہموار بنائیں۔
 
-### Highlights:
-- **Smart Prefill**: Selecting a bike automatically fetches its purchase price and calculates the minimum tax-compliant selling price.
-- **Margin Calculation**: Real-time calculation of profit/margin before the sale is finalized.
-- **Customer Profiling**: Link sales to existing customers or create "Walk-in" records.
-- **Invoice Generation**: Automatically generates professional, printable invoices with custom company branding.
+**Process / طریقہ کار:**
+- **Bike Selection:** Only `In Stock` bikes are available for selection.
+- **Auto-Pricing:** Automatically shows Purchase Price to help you set the Selling Price.
+- **Tax Engine:** Automatically calculates GST/Tax based on your system settings (0.1% etc).
+- **Profit Margin:** Instantly shows the profit you are making on the sale.
+- **Professional Invoice:** Print a clean, branded invoice for the customer with all technical details.
+
+**اردو:** فروخت کے لیے صرف اسٹاک میں موجود بائیکس کا انتخاب۔ فروخت کی قیمت مقرر کرنے میں مدد کے لیے خودکار خریداری کی قیمت۔ سسٹم کی ترتیبات کی بنیاد پر ٹیکس کا خودکار حساب۔ سیل پر ہونے والے منافع کی فوری تفصیل۔ گاہک کے لیے تمام تکنیکی تفصیلات کے ساتھ برانڈڈ انوائس پرنٹ کریں۔
 
 ![Sales Entry](screenshots/sale.png)
-*Interface Variation: Customer selection and quick-add modal.*
-![Add Customer Modal](screenshots/sale_modal__.png)
+![Sales Modal](screenshots/sale_modal__.png)
 
 ---
 
-## ↩ Returns & Adjustments
-Handles the reversal of sales transactions with proper financial auditing.
+## 6. Returns & Refunds | واپسی اور ریفنڈ
+Management of cancellations and product returns.
+منسوخیوں اور مصنوعات کی واپسی کا انتظام۔
 
-### Controls:
-- **Refund Management**: Track whether refunds were issued via Cash or Cheque.
-- **Financial Reversal**: Automatically updates the Customer Ledger to reflect the returned amount and restores the bike unit to inventory status.
+- **Audit Trail:** Links the return back to the original sale.
+- **Refund Tracking:** Track if the money was returned via Cash or Cheque.
+- **Automatic Stock Update:** Returning a bike immediately makes it `Returned` in inventory, ensuring correct counts.
 
-![Returns Module](screenshots/returns.png)
+**اردو:** واپسی کو اصل فروخت کے ساتھ لنک کرنا۔ نقد یا چیک کے ذریعے رقم کی واپسی کا ٹریک۔ بائیک واپس کرنے پر انوینٹری میں اسٹاک کا خودکار اپ ڈیٹ۔
+
+![Returns](screenshots/returns.png)
 
 ---
 
-## 💳 Financial Controls: Cheques & Ledgers
-Integrated accounting ensures that no transaction goes unrecorded.
+## 7. Accounting & Ledgers | اکاؤنٹنگ اور کھاتہ جات
+Complete visibility into your cash flow and liabilities.
+آپ کے کیش فلو اور واجبات کی مکمل تفصیلات۔
 
-### Cheque Register:
-- Track `Pending`, `Cleared`, and `Bounced` cheques for both payments (to suppliers) and receipts (from customers).
+- **Customer Ledger:** View every transaction, payment, and return for a specific customer with a running balance.
+- **Supplier Ledger:** Manage payments to vendors and track balance owed.
+- **Cheque Register:** A dedicated list of all post-dated and current cheques (Pending, Cleared, Bounced, or Cancelled).
+
+**اردو:** رننگ بیلنس کے ساتھ کسی مخصوص گاہک کے لیے ہر لین دین اور ادائیگی دیکھیں۔ وینڈرز کو ادائیگیوں کا انتظام کریں اور واجب الادا بیلنس کو ٹریک کریں۔ تمام چیکس کی ایک وقف شدہ فہرست (زیر التواء، کلیئر، باؤنس، یا منسوخ)۔
+
 ![Cheque Register](screenshots/cheques.png)
-
-### Ledgers:
-- **Customer Ledger**: A chronological statement of all transactions with a specific client, including running balances.
-- **Supplier Ledger**: Detailed tracking of procurement costs and payment history for every vendor.
-![Customer Ledger](screenshots/customer_ledger.png)
-![Supplier Ledger](screenshots/supplier_ledger.png)
+![Ledger View](screenshots/customer_ledger.png)
 
 ---
 
-## 📊 Reporting & Business Intelligence
-Comprehensive reporting tools for data-driven decision making.
+## 8. Advanced Reporting | ایڈوانس رپورٹنگ
+Data-driven insights for business growth.
+کاروبار کی ترقی کے لیے ڈیٹا پر مبنی رپورٹس۔
 
-### Available Reports:
-- **Tax Report**: Monthly breakdown of tax liabilities (GST/Sales Tax).
-- **Monthly Summary**: Comparison of units purchased vs. units sold.
-- **Daily Ledger**: A "Day Book" view of every financial movement.
-- **Profit/Margin Analysis**: Granular view of profitability by model or time period.
+- **Tax Report:** For tax filing compliance.
+- **Profit/Margin Report:** Analyze which models are making the most profit.
+- **Monthly Summary:** High-level overview of monthly growth.
+- **Daily Ledger:** Detailed "Day Book" for daily operations.
+- **Purchase vs Sales:** Visual and tabular comparison of money spent vs money earned.
+
+**اردو:** ٹیکس فائلنگ کی تعمیل کے لیے ٹیکس رپورٹ۔ منافع کا تجزیہ کرنے کے لیے پرافٹ/مارجن رپورٹ۔ ماہانہ ترقی کا جائزہ۔ روزانہ کے آپریشنز کے لیے تفصیلی "ڈے بک"۔ خرچ کی گئی رقم بمقابلہ کمائی گئی رقم کا موازنہ۔
 
 ![Reports Module](screenshots/reports.png)
 
 ---
 
-## ⚙ Administrative Controls
-Manage the core "DNA" of your system.
+## 9. System Settings & Security | سسٹم کی ترتیبات اور سیکیورٹی
+The backbone of the application.
+ایپلی کیشن کی بنیاد۔
 
-- **Model Management**: Define Bike Models, Categories (Scooter/Bike), and Short Codes.
-- **System Settings**: Configure Company Name, Tax Rates, and Currency Symbols.
-- **Security**: Manage admin passwords and system-wide theme preferences (Dark/Light mode).
-- **Data Protection**: Full SQL Backup and Restore functionality to prevent data loss.
+- **Branding:** Set your Company and Branch names for invoices.
+- **Tax Policy:** Define your own tax percentages and calculation methods.
+- **Data Protection:** Full Database Backup and Restore tools are built-in.
+- **Theme Support:** Switch between Dark Mode and Light Mode for user comfort.
 
-![Settings](screenshots/settings.png)
-![Models Management](screenshots/models.png)
+**اردو:** انوائسز کے لیے اپنی کمپنی اور برانچ کے نام سیٹ کریں۔ اپنے ٹیکس فیصد اور حساب کے طریقے خود ترتیب دیں۔ ڈیٹا بیس بیک اپ اور ری اسٹور کے ٹولز۔ بہتر تجربے کے لیے ڈارک موڈ اور لائٹ موڈ کے درمیان سوئچ کریں۔
 
----
-
-## 🛠 Technical Specifications
-- **Architecture**: PHP 8.x / MySQL 8.x
-- **UI/UX**: Vanilla CSS with Mobile-Responsive Grid System.
-- **Standardization**: UTF-8 encoding for multilingual support.
-- **Compliance**: Built-in tax calculation engine based on configurable percentages.
+![Settings Page](screenshots/settings.png)
 
 ---
-*Documentation generated by OMNI Audit Protocol v2026.3*
+*Generated by BNI Enterprises Audit System 2026.3 | بی این آئی انٹرپرائزز آڈٹ سسٹم*
