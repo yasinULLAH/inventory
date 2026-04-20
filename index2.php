@@ -223,6 +223,7 @@ function upgradeDatabase(): void
         `supplier_id` INT UNSIGNED NOT NULL,
         `return_date` DATE NOT NULL,
         `total_amount` DECIMAL(15,2) NOT NULL DEFAULT 0,
+        `created_by` INT UNSIGNED NOT NULL,
         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (`po_id`) REFERENCES `purchase_orders`(`id`)
     ) ENGINE=InnoDB');
@@ -410,6 +411,28 @@ function upgradeDatabase(): void
         `sender_id` VARCHAR(20),
         `is_active` TINYINT(1) NOT NULL DEFAULT 0
     ) ENGINE=InnoDB');
+    try {
+        $pdo->exec('ALTER TABLE `shifts` ADD COLUMN `cash_sales` DECIMAL(15,2) NOT NULL DEFAULT 0 AFTER `opening_float`');
+    } catch (PDOException $e) {
+    }
+    try {
+        $pdo->exec('ALTER TABLE `shifts` ADD COLUMN `card_sales` DECIMAL(15,2) NOT NULL DEFAULT 0 AFTER `cash_sales`');
+    } catch (PDOException $e) {
+    }
+    $pdo->exec('CREATE TABLE IF NOT EXISTS `purchase_return_items` (
+        `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        `return_id` INT UNSIGNED NOT NULL,
+        `product_id` INT UNSIGNED NOT NULL,
+        `quantity` INT NOT NULL,
+        `unit_price` DECIMAL(15,2) NOT NULL,
+        FOREIGN KEY (`return_id`) REFERENCES `purchase_returns`(`id`) ON DELETE CASCADE
+    ) ENGINE=InnoDB');
+    $pdo->exec("CREATE TABLE IF NOT EXISTS `finance_categories` (
+        `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        `name` VARCHAR(100) NOT NULL UNIQUE,
+        `type` ENUM('income','expense') NOT NULL,
+        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB");
     $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
 }
 
@@ -4990,6 +5013,18 @@ function handleAjax(): void
             $invNum = generateInvoiceNumber();
             $pdo->prepare('INSERT INTO invoices (invoice_number,customer_id,invoice_date,subtotal,tax_percent,total_amount,payment_status,payment_method,created_by) VALUES (?,?,CURDATE(),?,?,?,"paid",?,?)')->execute([$invNum, $customerId, $subtotal, $taxPct, $total, $payMethod, (int) $_SESSION['user_id']]);
             $invId = (int) $pdo->lastInsertId();
+            
+            $openShift = $pdo->prepare("SELECT id FROM shifts WHERE user_id=? AND status='open'");
+            $openShift->execute([$_SESSION['user_id']]);
+            $shiftId = $openShift->fetchColumn();
+            if ($shiftId) {
+                if ($payMethod === 'cash') {
+                    $pdo->prepare("UPDATE shifts SET total_sales=total_sales+?, cash_sales=cash_sales+? WHERE id=?")->execute([$total, $total, $shiftId]);
+                } else {
+                    $pdo->prepare("UPDATE shifts SET total_sales=total_sales+?, card_sales=card_sales+? WHERE id=?")->execute([$total, $total, $shiftId]);
+                }
+            }
+
             foreach ($items as $it) {
                 $qty = (int) $it['qty'];
                 $price = (float) $it['price'];
@@ -5003,6 +5038,57 @@ function handleAjax(): void
             $pdo->rollBack();
             echo json_encode(['success' => false, 'msg' => $e->getMessage()]);
         }
+    } elseif ($endpoint === 'get_invoice_details') {
+        $id = (int) ($data['id'] ?? 0);
+        $items = $pdo->prepare('SELECT ii.*, p.name FROM invoice_items ii JOIN products p ON p.id=ii.product_id WHERE ii.invoice_id=?');
+        $items->execute([$id]);
+        echo json_encode(['success' => true, 'items' => $items->fetchAll()]);
+    } elseif ($endpoint === 'get_po_details') {
+        $id = (int) ($data['id'] ?? 0);
+        $items = $pdo->prepare('SELECT poi.*, p.name FROM purchase_order_items poi JOIN products p ON p.id=poi.product_id WHERE poi.po_id=?');
+        $items->execute([$id]);
+        echo json_encode(['success' => true, 'items' => $items->fetchAll()]);
+    } elseif ($endpoint === 'save_requisition_items') {
+        $id = (int) ($data['id'] ?? 0);
+        $items = $data['items'] ?? [];
+        $pdo->prepare('DELETE FROM requisition_items WHERE req_id=?')->execute([$id]);
+        $stmt = $pdo->prepare('INSERT INTO requisition_items (req_id, product_id, quantity) VALUES (?,?,?)');
+        foreach ($items as $it) {
+            $stmt->execute([$id, $it['id'], $it['qty']]);
+        }
+        echo json_encode(['success' => true]);
+    } elseif ($endpoint === 'finalize_audit') {
+        requireRole(['admin', 'manager']);
+        $id = (int) ($data['id'] ?? 0);
+        $counts = $data['counts'] ?? []; // {product_id: qty}
+        $pdo->beginTransaction();
+        try {
+            foreach ($counts as $pid => $qty) {
+                $prod = getProduct((int) $pid);
+                $diff = $qty - $prod['current_stock'];
+                if ($diff != 0) {
+                    $ref = 'AUDIT-' . $id . '-' . $pid;
+                    $type = $diff > 0 ? 'addition' : 'subtraction';
+                    $pdo->prepare('INSERT INTO stock_adjustments (reference_no, product_id, adjustment_type, quantity, before_stock, after_stock, reason, status, requested_by, approved_by, approved_at) VALUES (?,?,?,?,?,?,?,?,?,?,NOW())')
+                        ->execute([$ref, $pid, $type, abs($diff), $prod['current_stock'], $qty, 'Stock Audit Variance', 'approved', $_SESSION['user_id'], $_SESSION['user_id']]);
+                    $pdo->prepare('UPDATE products SET current_stock=?, updated_at=NOW() WHERE id=?')->execute([$qty, $pid]);
+                }
+                $pdo->prepare('UPDATE stock_audit_items SET counted_qty=?, difference=? WHERE audit_id=? AND product_id=?')
+                    ->execute([$qty, $diff, $id, $pid]);
+            }
+            $pdo->prepare("UPDATE stock_audits SET status='closed' WHERE id=?")->execute([$id]);
+            $pdo->commit();
+            logActivity($_SESSION['user_id'], 'UPDATE', 'stock_audit', 'Finalized audit id: ' . $id);
+            echo json_encode(['success' => true]);
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            echo json_encode(['success' => false, 'msg' => $e->getMessage()]);
+        }
+    } elseif ($endpoint === 'get_finance_categories') {
+        $type = $data['type'] ?? 'expense';
+        $stmt = $pdo->prepare('SELECT * FROM finance_categories WHERE type=?');
+        $stmt->execute([$type]);
+        echo json_encode(['success' => true, 'categories' => $stmt->fetchAll()]);
     } else {
         echo json_encode(['success' => false, 'msg' => 'Unknown endpoint']);
     }
@@ -5171,28 +5257,243 @@ if (!empty($_GET['ajax'])) {
     {
         requirePermission('expenses', 'view');
         $pdo = getPDO();
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
+            if (isset($_POST['save_expense'])) {
+                $stmt = $pdo->prepare('INSERT INTO expenses (expense_date, category, amount, payment_method, reference, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)');
+                $stmt->execute([$_POST['expense_date'], $_POST['category'], $_POST['amount'], $_POST['payment_method'], $_POST['reference'], $_POST['notes'], $_SESSION['user_id']]);
+                $_SESSION['flash_msg'] = 'Expense recorded successfully.';
+                $_SESSION['flash_type'] = 'success';
+            } elseif (isset($_POST['save_income'])) {
+                $stmt = $pdo->prepare('INSERT INTO income (income_date, source, amount, payment_method, reference, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)');
+                $stmt->execute([$_POST['income_date'], $_POST['source'], $_POST['amount'], $_POST['payment_method'], $_POST['reference'], $_POST['notes'], $_SESSION['user_id']]);
+                $_SESSION['flash_msg'] = 'Income recorded successfully.';
+                $_SESSION['flash_type'] = 'success';
+            } elseif (isset($_POST['save_finance_category'])) {
+                $stmt = $pdo->prepare('INSERT INTO finance_categories (name, type) VALUES (?, ?)');
+                $stmt->execute([$_POST['name'], $_POST['type']]);
+                $_SESSION['flash_msg'] = 'Finance category saved.';
+                $_SESSION['flash_type'] = 'success';
+            }
+            header('Location: ?page=income_expenses');
+            exit;
+        }
+
+        $summary = $pdo->query("
+            SELECT 
+                DATE_FORMAT(d, '%Y-%m') as month,
+                SUM(income_amt) as total_income,
+                SUM(expense_amt) as total_expense
+            FROM (
+                SELECT income_date as d, amount as income_amt, 0 as expense_amt FROM income
+                UNION ALL
+                SELECT expense_date as d, 0 as income_amt, amount as expense_amt FROM expenses
+            ) t
+            GROUP BY month
+            ORDER BY month DESC
+            LIMIT 12
+        ")->fetchAll();
+
         $expenses = $pdo->query('SELECT * FROM expenses ORDER BY expense_date DESC LIMIT 50')->fetchAll();
         $income = $pdo->query('SELECT * FROM income ORDER BY income_date DESC LIMIT 50')->fetchAll();
+        $categories = $pdo->query('SELECT * FROM finance_categories ORDER BY type, name')->fetchAll();
+
         ob_start();
-        echo '<div class="page-header"><h1>&#128181; Income & Expenses</h1></div>';
-        echo '<div class="cols-2">';
-        echo '<div class="lf"><span class="lf-title">Expenses</span><div style="margin-bottom:10px"><button class="btn btn-danger btn-sm" onclick="alert(\'Active\')">+ Add Expense</button></div>';
-        echo '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Category</th><th class="text-right">Amount</th><th>Method</th></tr></thead><tbody>';
-        foreach ($expenses as $e) {
-            echo '<tr><td>' . $e['expense_date'] . '</td><td>' . h($e['category']) . '</td><td class="text-right">' . formatCurrency($e['amount']) . '</td><td>' . h($e['payment_method']) . '</td></tr>';
-        }
-        if (empty($expenses))
-            echo '<tr><td colspan="4" class="text-center text-muted">No expenses found</td></tr>';
-        echo '</tbody></table></div></div>';
-        echo '<div class="lf"><span class="lf-title">Income</span><div style="margin-bottom:10px"><button class="btn btn-success btn-sm" onclick="alert(\'Active\')">+ Add Income</button></div>';
-        echo '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Source</th><th class="text-right">Amount</th></tr></thead><tbody>';
-        foreach ($income as $i) {
-            echo '<tr><td>' . $i['income_date'] . '</td><td>' . h($i['source']) . '</td><td class="text-right">' . formatCurrency($i['amount']) . '</td></tr>';
-        }
-        if (empty($income))
-            echo '<tr><td colspan="3" class="text-center text-muted">No income found</td></tr>';
-        echo '</tbody></table></div></div>';
-        echo '</div>';
+        ?>
+        <div class="page-header">
+            <h1>&#128181; Income & Expenses</h1>
+            <div class="page-header-actions">
+                <button class="btn btn-success btn-sm" onclick="openModal('incomeModal')">+ Add Income</button>
+                <button class="btn btn-danger btn-sm" onclick="openModal('expenseModal')">+ Add Expense</button>
+                <button class="btn btn-primary btn-sm" onclick="openModal('categoryModal')">Manage Categories</button>
+            </div>
+        </div>
+
+        <?php if (isset($_SESSION['flash_msg'])): ?>
+            <div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div>
+            <?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']); ?>
+        <?php endif; ?>
+
+        <div class="lf">
+            <span class="lf-title">Monthly Summary</span>
+            <div class="tbl-wrap">
+                <table class="tbl">
+                    <thead>
+                        <tr>
+                            <th>Month</th>
+                            <th class="text-right">Total Income</th>
+                            <th class="text-right">Total Expenses</th>
+                            <th class="text-right">Net Profit/Loss</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($summary as $s): 
+                            $net = $s['total_income'] - $s['total_expense'];
+                        ?>
+                            <tr>
+                                <td><?= h($s['month']) ?></td>
+                                <td class="text-right" style="color:green"><?= formatCurrency((float)$s['total_income']) ?></td>
+                                <td class="text-right" style="color:red"><?= formatCurrency((float)$s['total_expense']) ?></td>
+                                <td class="text-right font-weight-bold" style="color:<?= $net >= 0 ? 'green' : 'red' ?>">
+                                    <?= formatCurrency((float)$net) ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        <?php if (empty($summary)): ?>
+                            <tr><td colspan="4" class="text-center text-muted">No data available</td></tr>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="cols-2">
+            <div class="lf">
+                <span class="lf-title">Recent Expenses</span>
+                <div class="tbl-wrap">
+                    <table class="tbl">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Category</th>
+                                <th class="text-right">Amount</th>
+                                <th>Method</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($expenses as $e): ?>
+                                <tr>
+                                    <td><?= h($e['expense_date']) ?></td>
+                                    <td><?= h($e['category']) ?></td>
+                                    <td class="text-right"><?= formatCurrency((float)$e['amount']) ?></td>
+                                    <td><?= h($e['payment_method']) ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                            <?php if (empty($expenses)): ?>
+                                <tr><td colspan="4" class="text-center text-muted">No expenses found</td></tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="lf">
+                <span class="lf-title">Recent Income</span>
+                <div class="tbl-wrap">
+                    <table class="tbl">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Source</th>
+                                <th class="text-right">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($income as $i): ?>
+                                <tr>
+                                    <td><?= h($i['income_date']) ?></td>
+                                    <td><?= h($i['source']) ?></td>
+                                    <td class="text-right"><?= formatCurrency((float)$i['amount']) ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                            <?php if (empty($income)): ?>
+                                <tr><td colspan="3" class="text-center text-muted">No income found</td></tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Expense Modal -->
+        <div id="expenseModal" class="modal-overlay">
+            <div class="modal">
+                <div class="modal-title-bar"><span>Add Expense</span><button class="modal-close-btn" onclick="closeModal('expenseModal')">&times;</button></div>
+                <form method="POST">
+                    <?= csrfField() ?>
+                    <input type="hidden" name="save_expense" value="1">
+                    <div class="modal-body">
+                        <div class="form-group mb-8"><label>Date</label><input type="date" name="expense_date" value="<?= date('Y-m-d') ?>" required></div>
+                        <div class="form-group mb-8"><label>Category</label>
+                            <select name="category" required>
+                                <option value="">-- Select Category --</option>
+                                <?php foreach ($categories as $cat) if ($cat['type'] === 'expense') echo "<option value='".h($cat['name'])."'>".h($cat['name'])."</option>"; ?>
+                            </select>
+                        </div>
+                        <div class="form-group mb-8"><label>Amount</label><input type="number" name="amount" step="0.01" required></div>
+                        <div class="form-group mb-8"><label>Payment Method</label>
+                            <select name="payment_method">
+                                <option value="Cash">Cash</option>
+                                <option value="Bank Transfer">Bank Transfer</option>
+                                <option value="Card">Card</option>
+                                <option value="Cheque">Cheque</option>
+                            </select>
+                        </div>
+                        <div class="form-group mb-8"><label>Reference</label><input type="text" name="reference"></div>
+                        <div class="form-group"><label>Notes</label><textarea name="notes"></textarea></div>
+                    </div>
+                    <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('expenseModal')">Cancel</button><button type="submit" class="btn btn-danger btn-sm">Save Expense</button></div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Income Modal -->
+        <div id="incomeModal" class="modal-overlay">
+            <div class="modal">
+                <div class="modal-title-bar"><span>Add Income</span><button class="modal-close-btn" onclick="closeModal('incomeModal')">&times;</button></div>
+                <form method="POST">
+                    <?= csrfField() ?>
+                    <input type="hidden" name="save_income" value="1">
+                    <div class="modal-body">
+                        <div class="form-group mb-8"><label>Date</label><input type="date" name="income_date" value="<?= date('Y-m-d') ?>" required></div>
+                        <div class="form-group mb-8"><label>Source / Category</label>
+                            <select name="source" required>
+                                <option value="">-- Select Category --</option>
+                                <?php foreach ($categories as $cat) if ($cat['type'] === 'income') echo "<option value='".h($cat['name'])."'>".h($cat['name'])."</option>"; ?>
+                            </select>
+                        </div>
+                        <div class="form-group mb-8"><label>Amount</label><input type="number" name="amount" step="0.01" required></div>
+                        <div class="form-group mb-8"><label>Payment Method</label>
+                            <select name="payment_method">
+                                <option value="Cash">Cash</option>
+                                <option value="Bank Transfer">Bank Transfer</option>
+                                <option value="Card">Card</option>
+                                <option value="Cheque">Cheque</option>
+                            </select>
+                        </div>
+                        <div class="form-group mb-8"><label>Reference</label><input type="text" name="reference"></div>
+                        <div class="form-group"><label>Notes</label><textarea name="notes"></textarea></div>
+                    </div>
+                    <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('incomeModal')">Cancel</button><button type="submit" class="btn btn-success btn-sm">Save Income</button></div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Category Modal -->
+        <div id="categoryModal" class="modal-overlay">
+            <div class="modal">
+                <div class="modal-title-bar"><span>Finance Categories</span><button class="modal-close-btn" onclick="closeModal('categoryModal')">&times;</button></div>
+                <div class="modal-body">
+                    <form method="POST" class="mb-8" style="display:flex;gap:4px;align-items:flex-end">
+                        <?= csrfField() ?>
+                        <input type="hidden" name="save_finance_category" value="1">
+                        <div class="form-group"><label>Name</label><input type="text" name="name" required></div>
+                        <div class="form-group"><label>Type</label><select name="type"><option value="income">Income</option><option value="expense">Expense</option></select></div>
+                        <button type="submit" class="btn btn-primary btn-sm">Add</button>
+                    </form>
+                    <div class="tbl-wrap" style="max-height:200px;overflow-y:auto">
+                        <table class="tbl">
+                            <thead><tr><th>Name</th><th>Type</th></tr></thead>
+                            <tbody>
+                                <?php foreach ($categories as $cat): ?>
+                                    <tr><td><?= h($cat['name']) ?></td><td><span class="badge badge-<?= $cat['type'] === 'income' ? 'success' : 'danger' ?>"><?= strtoupper($cat['type']) ?></span></td></tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <?php
         $content = ob_get_clean();
         renderLayout('Income & Expenses', $content, 'income_expenses');
     }
@@ -5201,71 +5502,250 @@ if (!empty($_GET['ajax'])) {
     {
         requirePermission('quotations', 'view');
         $pdo = getPDO();
+        $action = $_GET['action'] ?? 'list';
+
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
-            $customer_id = (int) $_POST['customer_id'];
-            $valid_until = $_POST['valid_until'];
-            $items = json_decode($_POST['items_json'], true) ?? [];
-            $subtotal = 0;
-            foreach ($items as $it) {
-                $subtotal += $it['price'] * $it['qty'];
-            }
-            $total = $subtotal;
-            $qn = 'QT-' . date('Ymd') . '-' . rand(100, 999);
-            $pdo->beginTransaction();
-            $pdo
-                ->prepare('INSERT INTO quotations (quote_number,customer_id,quote_date,valid_until,subtotal,tax_amount,total_amount,status,created_by) VALUES (?,?,CURDATE(),?,?,?,?,?,?)')
-                ->execute([$qn, $customer_id, $valid_until, $subtotal, 0, $total, 'sent', $_SESSION['user_id']]);
-            $qid = $pdo->lastInsertId();
-            foreach ($items as $it) {
-                $pdo->prepare('INSERT INTO quotation_items (quotation_id,product_id,quantity,unit_price,total_price) VALUES (?,?,?,?,?)')->execute([$qid, $it['id'], $it['qty'], $it['price'], $it['qty'] * $it['price']]);
-            }
-            $pdo->commit();
-            $_SESSION['flash_msg'] = 'Quotation created';
-            $_SESSION['flash_type'] = 'success';
-            header('Location: ?page=quotations');
-            exit;
-        }
-        if (isset($_GET['convert'])) {
-            $id = (int) $_GET['convert'];
-            $q = $pdo->prepare('SELECT * FROM quotations WHERE id=?');
-            $q->execute([$id]);
-            $q = $q->fetch();
-            if ($q) {
-                $pdo->beginTransaction();
-                $invNum = generateInvoiceNumber();
-                $pdo->prepare('INSERT INTO invoices (invoice_number,customer_id,invoice_date,due_date,subtotal,tax_percent,total_amount,payment_status,created_by) VALUES (?,?,?,?,?,?,?,?,?)')->execute([$invNum, $q['customer_id'], date('Y-m-d'), date('Y-m-d', strtotime('+30 days')), $q['subtotal'], 0, $q['total_amount'], 'unpaid', $_SESSION['user_id']]);
-                $invId = $pdo->lastInsertId();
-                $items = $pdo->prepare('SELECT * FROM quotation_items WHERE quotation_id=?');
-                $items->execute([$id]);
-                foreach ($items->fetchAll() as $it) {
-                    $pdo->prepare('INSERT INTO invoice_items (invoice_id,product_id,quantity,unit_price,total_price) VALUES (?,?,?,?,?)')->execute([$invId, $it['product_id'], $it['quantity'], $it['unit_price'], $it['total_price']]);
+            if (isset($_POST['save_quotation'])) {
+                $customerId = (int) $_POST['customer_id'];
+                $validUntil = $_POST['valid_until'];
+                $status = $_POST['status'] ?? 'sent';
+                $items = json_decode($_POST['items_json'], true) ?? [];
+                
+                if (empty($items)) {
+                    $_SESSION['flash_msg'] = 'Error: No items selected.';
+                    $_SESSION['flash_type'] = 'danger';
+                    header('Location: ?page=quotations&action=new');
+                    exit;
                 }
-                $pdo->prepare("UPDATE quotations SET status='accepted' WHERE id=?")->execute([$id]);
-                $pdo->commit();
-                $_SESSION['flash_msg'] = 'Converted to ' . $invNum;
+
+                $subtotal = 0;
+                foreach ($items as $it) {
+                    $subtotal += $it['price'] * $it['qty'];
+                }
+                $total = $subtotal; // Simplify for now (tax could be added)
+                $qn = 'QT-' . date('Ymd') . '-' . rand(1000, 9999);
+
+                $pdo->beginTransaction();
+                try {
+                    $stmt = $pdo->prepare('INSERT INTO quotations (quote_number, customer_id, quote_date, valid_until, subtotal, tax_amount, total_amount, status, created_by) VALUES (?, ?, CURDATE(), ?, ?, ?, ?, ?, ?)');
+                    $stmt->execute([$qn, $customerId, $validUntil, $subtotal, 0, $total, $status, $_SESSION['user_id']]);
+                    $qid = $pdo->lastInsertId();
+
+                    $stmtItem = $pdo->prepare('INSERT INTO quotation_items (quote_id, product_id, quantity, unit_price, total_price) VALUES (?, ?, ?, ?, ?)');
+                    foreach ($items as $it) {
+                        $stmtItem->execute([$qid, $it['id'], $it['qty'], $it['price'], $it['qty'] * $it['price']]);
+                    }
+                    $pdo->commit();
+                    $_SESSION['flash_msg'] = "Quotation $qn created successfully.";
+                    $_SESSION['flash_type'] = 'success';
+                    header('Location: ?page=quotations');
+                    exit;
+                } catch (Exception $e) {
+                    $pdo->rollBack();
+                    $_SESSION['flash_msg'] = 'Error: ' . $e->getMessage();
+                    $_SESSION['flash_type'] = 'danger';
+                }
+            } elseif (isset($_POST['convert_quotation'])) {
+                $id = (int) $_POST['quote_id'];
+                $q = $pdo->prepare('SELECT * FROM quotations WHERE id=? AND status != "converted"');
+                $q->execute([$id]);
+                $quote = $q->fetch();
+                
+                if ($quote) {
+                    $pdo->beginTransaction();
+                    try {
+                        $invNum = generateInvoiceNumber();
+                        $stmtInv = $pdo->prepare('INSERT INTO invoices (invoice_number, customer_id, invoice_date, due_date, subtotal, tax_percent, total_amount, payment_status, created_by) VALUES (?, ?, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 30 DAY), ?, 0, ?, "unpaid", ?)');
+                        $stmtInv->execute([$invNum, $quote['customer_id'], $quote['subtotal'], $quote['total_amount'], $_SESSION['user_id']]);
+                        $invId = $pdo->lastInsertId();
+
+                        $items = $pdo->prepare('SELECT * FROM quotation_items WHERE quote_id=?');
+                        $items->execute([$id]);
+                        $qItems = $items->fetchAll();
+
+                        $stmtInvItem = $pdo->prepare('INSERT INTO invoice_items (invoice_id, product_id, quantity, unit_price, total_price) VALUES (?, ?, ?, ?, ?)');
+                        $stmtUpdateStock = $pdo->prepare('UPDATE products SET current_stock = current_stock - ? WHERE id = ?');
+
+                        foreach ($qItems as $it) {
+                            $stmtInvItem->execute([$invId, $it['product_id'], $it['quantity'], $it['unit_price'], $it['total_price']]);
+                            $stmtUpdateStock->execute([$it['quantity'], $it['product_id']]);
+                        }
+
+                        $pdo->prepare('UPDATE quotations SET status="converted", converted_invoice_id=? WHERE id=?')->execute([$invId, $id]);
+                        
+                        $pdo->commit();
+                        $_SESSION['flash_msg'] = "Quotation converted to Invoice $invNum. Stock levels updated.";
+                        $_SESSION['flash_type'] = 'success';
+                    } catch (Exception $e) {
+                        $pdo->rollBack();
+                        $_SESSION['flash_msg'] = 'Error: ' . $e->getMessage();
+                        $_SESSION['flash_type'] = 'danger';
+                    }
+                }
+                header('Location: ?page=quotations');
+                exit;
             }
-            header('Location: ?page=quotations');
-            exit;
         }
-        $quotes = $pdo->query('SELECT q.*,c.name as customer FROM quotations q LEFT JOIN customers c ON c.id=q.customer_id ORDER BY q.id DESC')->fetchAll();
-        $customers = $pdo->query('SELECT id,name FROM customers')->fetchAll();
-        $products = $pdo->query("SELECT id,name,selling_price FROM products WHERE status='active' LIMIT 200")->fetchAll();
-        ob_start();
-        ?>
-    <div class="page-header"><h1>&#128221; Quotations</h1><div class="page-header-actions"><button class="btn btn-primary btn-sm" onclick="openModal('quoteModal')">+ New Quotation</button></div></div>
-    <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type']) ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
-        endif; ?>
-    <div class="lf"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>#</th><th>Customer</th><th>Date</th><th>Total</th><th>Status</th><th>Action</th></tr></thead><tbody>
-    <?php foreach ($quotes as $q): ?><tr><td><?= h($q['quote_number']) ?></td><td><?= h($q['customer']) ?></td><td><?= $q['quote_date'] ?></td><td><?= formatCurrency($q['total_amount']) ?></td><td><?= h($q['status']) ?></td><td><?php if ($q['status'] != 'accepted'): ?><a class="btn btn-success btn-xs" href="?page=quotations&convert=<?= $q['id'] ?>">Convert</a><?php endif; ?></td></tr><?php endforeach; ?>
-    </tbody></table></div></div>
-    <div id="quoteModal" class="modal-overlay"><div class="modal wide"><div class="modal-title-bar"><span>New Quotation</span><button class="modal-close-btn" onclick="closeModal('quoteModal')">&times;</button></div><div class="modal-body"><form method="POST" id="qForm"><?= csrfField() ?>
-    <div class="form-group"><label>Customer</label><select name="customer_id"><?php foreach ($customers as $c) echo "<option value='{$c['id']}'>" . h($c['name']) . '</option>'; ?></select></div>
-    <div class="form-group"><label>Valid Until</label><input type="date" name="valid_until" value="<?= date('Y-m-d', strtotime('+15 days')) ?>"></div>
-    <div class="form-group"><label>Product</label><select id="qP"><?php foreach ($products as $p) echo "<option value='{$p['id']}' data-price='{$p['selling_price']}'>" . h($p['name']) . '</option>'; ?></select> <button type="button" class="btn btn-xs btn-primary" onclick="qA()">Add</button></div>
-    <table class="tbl" id="qT"><thead><tr><th>Product</th><th>Qty</th><th>Price</th></tr></thead><tbody></tbody></table><input type="hidden" name="items_json" id="qJ">
-    </div><div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('quoteModal')">Cancel</button><button class="btn btn-primary btn-sm" onclick="qS()">Save</button></form></div></div></div>
-    <script>let qc=[];function qA(){let s=document.getElementById('qP');qc.push({id:+s.value,price:+s.options[s.selectedIndex].dataset.price,qty:1,name:s.options[s.selectedIndex].text});qr()}function qr(){let b=document.querySelector('#qT tbody');b.innerHTML='';qc.forEach((i,k)=>b.innerHTML+=`<tr><td>${i.name}</td><td><input type=number value=${i.qty} onchange='qc[${k}].qty=+this.value'></td><td>${i.price}</td></tr>`)}function qS(){document.getElementById('qJ').value=JSON.stringify(qc);document.getElementById('qForm').submit()}</script>
-    <?php $content = ob_get_clean();
+
+        if ($action === 'new') {
+            $customers = $pdo->query('SELECT id,name FROM customers WHERE status="active" ORDER BY name')->fetchAll();
+            $products = $pdo->query("SELECT id,name,sku,selling_price,current_stock FROM products WHERE status='active' ORDER BY name")->fetchAll();
+            ob_start(); ?>
+            <div class="page-header">
+                <h1>&#128221; New Quotation</h1>
+                <div class="page-header-actions"><a href="?page=quotations" class="btn btn-secondary btn-sm">Back to List</a></div>
+            </div>
+            <div class="lf">
+                <form method="POST" id="qForm">
+                    <?= csrfField() ?>
+                    <input type="hidden" name="save_quotation" value="1">
+                    <input type="hidden" name="items_json" id="qJ">
+                    <div class="form-grid form-grid-3">
+                        <div class="form-group" style="grid-column:span 2">
+                            <label>Customer</label>
+                            <select name="customer_id" required>
+                                <option value="">-- Select Customer --</option>
+                                <?php foreach ($customers as $c) echo "<option value='{$c['id']}'>" . h($c['name']) . '</option>'; ?>
+                            </select>
+                        </div>
+                        <div class="form-group"><label>Valid Until</label><input type="date" name="valid_until" value="<?= date('Y-m-d', strtotime('+15 days')) ?>" required></div>
+                        <div class="form-group"><label>Status</label><select name="status"><option value="sent">Sent</option><option value="draft">Draft</option></select></div>
+                    </div>
+                    <div class="lf mt-8">
+                        <span class="lf-title">Select Items</span>
+                        <div class="form-group" style="flex-direction:row;gap:8px;align-items:flex-end">
+                            <div style="flex:1">
+                                <label>Product</label>
+                                <select id="qP">
+                                    <option value="">-- Choose Product --</option>
+                                    <?php foreach ($products as $p) echo "<option value='{$p['id']}' data-price='{$p['selling_price']}' data-sku='{$p['sku']}'>" . h($p['name']) . ' (' . h($p['sku']) . ')</option>'; ?>
+                                </select>
+                            </div>
+                            <div style="width:100px"><label>Qty</label><input type="number" id="qQ" value="1" min="1"></div>
+                            <button type="button" class="btn btn-primary" onclick="qA()">Add Item</button>
+                        </div>
+                        <table class="tbl mt-8" id="qT">
+                            <thead><tr><th>SKU</th><th>Product</th><th class="text-right">Price</th><th class="text-right">Qty</th><th class="text-right">Total</th><th></th></tr></thead>
+                            <tbody></tbody>
+                            <tfoot>
+                                <tr><th colspan="4" class="text-right">Subtotal:</th><th class="text-right" id="qSub">0.00</th><th></th></tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    <div class="mt-8"><button type="submit" class="btn btn-success" onclick="qS(event)">Create Quotation</button></div>
+                </form>
+            </div>
+            <script>
+                let qc = [];
+                function qA() {
+                    let s = document.getElementById('qP');
+                    let q = document.getElementById('qQ');
+                    if(!s.value) return;
+                    let opt = s.options[s.selectedIndex];
+                    let id = +s.value;
+                    let f = qc.find(i => i.id === id);
+                    if(f) {
+                        f.qty += +q.value;
+                    } else {
+                        qc.push({
+                            id: id,
+                            sku: opt.dataset.sku,
+                            name: opt.text,
+                            price: +opt.dataset.price,
+                            qty: +q.value
+                        });
+                    }
+                    qr();
+                }
+                function qr() {
+                    let b = document.querySelector('#qT tbody');
+                    b.innerHTML = '';
+                    let sub = 0;
+                    qc.forEach((i, k) => {
+                        let total = i.price * i.qty;
+                        sub += total;
+                        b.innerHTML += `<tr>
+                            <td>${h(i.sku)}</td>
+                            <td>${h(i.name)}</td>
+                            <td class="text-right">${i.price.toFixed(2)}</td>
+                            <td class="text-right"><input type="number" value="${i.qty}" min="1" style="width:60px" onchange="qc[${k}].qty=+this.value;qr()"></td>
+                            <td class="text-right">${total.toFixed(2)}</td>
+                            <td class="text-center"><button type="button" class="btn btn-danger btn-xs" onclick="qc.splice(${k},1);qr()">×</button></td>
+                        </tr>`;
+                    });
+                    document.getElementById('qSub').textContent = sub.toFixed(2);
+                }
+                function qS(e) {
+                    if (qc.length === 0) {
+                        alert('Please add at least one item.');
+                        e.preventDefault();
+                        return;
+                    }
+                    document.getElementById('qJ').value = JSON.stringify(qc);
+                }
+            </script>
+            <?php
+        } else {
+            $quotes = $pdo->query('SELECT q.*,c.name as customer FROM quotations q LEFT JOIN customers c ON c.id=q.customer_id ORDER BY q.id DESC')->fetchAll();
+            ob_start(); ?>
+            <div class="page-header">
+                <h1>&#128221; Quotations</h1>
+                <div class="page-header-actions"><a href="?page=quotations&action=new" class="btn btn-primary btn-sm">+ New Quotation</a></div>
+            </div>
+            <?php if (isset($_SESSION['flash_msg'])): ?>
+                <div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div>
+                <?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']); ?>
+            <?php endif; ?>
+            <div class="lf">
+                <div class="tbl-wrap">
+                    <table class="tbl">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Customer</th>
+                                <th>Date</th>
+                                <th>Valid Until</th>
+                                <th class="text-right">Total</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($quotes as $q): ?>
+                                <tr>
+                                    <td><?= h($q['quote_number']) ?></td>
+                                    <td><?= h($q['customer']) ?></td>
+                                    <td><?= h($q['quote_date']) ?></td>
+                                    <td><?= h($q['valid_until']) ?></td>
+                                    <td class="text-right"><?= formatCurrency((float)$q['total_amount']) ?></td>
+                                    <td><span class="badge badge-<?= ['draft'=>'secondary','sent'=>'info','accepted'=>'success','rejected'=>'danger','converted'=>'primary'][$q['status']] ?? 'secondary' ?>"><?= strtoupper($q['status']) ?></span></td>
+                                    <td>
+                                        <div class="tbl-actions">
+                                            <?php if ($q['status'] === 'sent' || $q['status'] === 'accepted'): ?>
+                                                <form method="POST" style="display:inline" onsubmit="return confirm('Convert this quotation to an invoice?')">
+                                                    <?= csrfField() ?>
+                                                    <input type="hidden" name="convert_quotation" value="1">
+                                                    <input type="hidden" name="quote_id" value="<?= $q['id'] ?>">
+                                                    <button type="submit" class="btn btn-success btn-xs">Convert to Invoice</button>
+                                                </form>
+                                            <?php endif; ?>
+                                            <?php if ($q['status'] === 'converted' && $q['converted_invoice_id']): ?>
+                                                <a href="?page=sales&action=view&id=<?= $q['converted_invoice_id'] ?>" class="btn btn-info btn-xs">View Invoice</a>
+                                            <?php endif; ?>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                            <?php if (empty($quotes)): ?>
+                                <tr><td colspan="7" class="text-center text-muted">No quotations found</td></tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <?php
+        }
+        $content = ob_get_clean();
         renderLayout('Quotations', $content, 'quotations');
     }
 
@@ -5273,42 +5753,229 @@ if (!empty($_GET['ajax'])) {
     {
         requirePermission('sales', 'return');
         $pdo = getPDO();
-        if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
-            $items = json_decode($_POST['items_json'], true) ?? [];
-            $total = array_sum(array_map(fn($i) => $i['price'] * $i['qty'], $items));
-            $rn = 'SR-' . date('Ymd') . '-' . rand(100, 999);
+        $action = $_GET['action'] ?? 'list';
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_return']) && verifyCsrf()) {
             $pdo->beginTransaction();
-            $pdo
-                ->prepare('INSERT INTO sales_returns (return_number,invoice_id,customer_id,return_date,total_amount,refund_method,reason,created_by) VALUES (?,?,?,?,?,?,?,?)')
-                ->execute([$rn, (int) $_POST['invoice_id'], (int) $_POST['customer_id'], date('Y-m-d'), $total, $_POST['refund_method'], $_POST['reason'], $_SESSION['user_id']]);
-            $rid = $pdo->lastInsertId();
-            foreach ($items as $it) {
-                $pdo->prepare('INSERT INTO sales_return_items (return_id,product_id,quantity,unit_price,total_price) VALUES (?,?,?,?,?)')->execute([$rid, $it['id'], $it['qty'], $it['price'], $it['price'] * $it['qty']]);
-                $pdo->prepare('UPDATE products SET current_stock=current_stock+? WHERE id=?')->execute([$it['qty'], $it['id']]);
+            try {
+                $invoiceId = (int)$_POST['invoice_id'];
+                $customerId = (int)$_POST['customer_id'];
+                $items = json_decode($_POST['items_json'], true) ?? [];
+                $refundMethod = $_POST['refund_method'] ?? 'cash';
+                $reason = $_POST['reason'] ?? '';
+                
+                if (empty($items)) throw new Exception("No items to return.");
+
+                $total = 0;
+                foreach ($items as $it) {
+                    $total += $it['price'] * $it['qty'];
+                }
+
+                $rn = 'SR-' . date('Ymd') . '-' . strtoupper(substr(bin2hex(random_bytes(2)), 0, 4));
+                
+                $stmt = $pdo->prepare('INSERT INTO sales_returns (return_number, invoice_id, customer_id, return_date, total_amount, refund_method, reason, created_by) VALUES (?, ?, ?, CURDATE(), ?, ?, ?, ?)');
+                $stmt->execute([$rn, $invoiceId, $customerId, $total, $refundMethod, $reason, $_SESSION['user_id']]);
+                $returnId = $pdo->lastInsertId();
+
+                $stmtItem = $pdo->prepare('INSERT INTO sales_return_items (return_id, product_id, quantity, unit_price) VALUES (?, ?, ?, ?)');
+                $stmtUpdateStock = $pdo->prepare('UPDATE products SET current_stock = current_stock + ? WHERE id = ?');
+                
+                foreach ($items as $it) {
+                    $stmtItem->execute([$returnId, (int)$it['id'], (int)$it['qty'], (float)$it['price']]);
+                    $stmtUpdateStock->execute([(int)$it['qty'], (int)$it['id']]);
+                }
+
+                logActivity($_SESSION['user_id'], 'CREATE', 'sales', "Processed sales return $rn for invoice ID $invoiceId");
+                $pdo->commit();
+                $_SESSION['flash_msg'] = "Sales return $rn processed successfully.";
+                header('Location: ?page=sales_returns');
+                exit;
+            } catch (Exception $e) {
+                $pdo->rollBack();
+                $error = $e->getMessage();
             }
-            $pdo->commit();
-            $_SESSION['flash_msg'] = 'Return processed';
-            header('Location: ?page=sales_returns');
-            exit;
         }
-        $returns = $pdo->query('SELECT sr.*,c.name customer FROM sales_returns sr LEFT JOIN customers c ON c.id=sr.customer_id ORDER BY id DESC')->fetchAll();
-        $invoices = $pdo->query('SELECT i.id,i.invoice_number,c.id cid,c.name FROM invoices i LEFT JOIN customers c ON c.id=i.customer_id ORDER BY i.id DESC LIMIT 50')->fetchAll();
-        $products = $pdo->query("SELECT id,name,selling_price FROM products WHERE status='active'")->fetchAll();
-        ob_start(); ?>
-    <div class="page-header"><h1>&#8630; Sales Returns</h1><div class="page-header-actions"><button class="btn btn-danger btn-sm" onclick="openModal('srM')">+ Process Return</button></div></div>
-    <div class="lf"><table class="tbl"><thead><tr><th>#</th><th>Customer</th><th>Date</th><th>Amount</th></tr></thead><tbody><?php foreach ($returns as $r): ?><tr><td><?= h($r['return_number']) ?></td><td><?= h($r['customer']) ?></td><td><?= $r['return_date'] ?></td><td><?= formatCurrency($r['total_amount']) ?></td></tr><?php endforeach; ?></tbody></table></div>
-    <div id="srM" class="modal-overlay"><div class="modal wide"><div class="modal-title-bar"><span>Process Return</span><button class="modal-close-btn" onclick="closeModal('srM')">&times;</button></div><div class="modal-body"><form method="POST" id="srF"><?= csrfField() ?>
-    <select name="invoice_id" id="si" onchange="document.getElementById('sc').value=this.options[this.selectedIndex].dataset.cid"><?php foreach ($invoices as $i) echo "<option value='{$i['id']}' data-cid='{$i['cid']}'>{$i['invoice_number']}</option>"; ?></select>
-    <input type="hidden" name="customer_id" id="sc">
-    <select name="refund_method"><option>cash</option><option>credit_note</option></select>
-    <input name="reason" placeholder="Reason" required>
-    <select id="sp"><?php foreach ($products as $p) echo "<option value='{$p['id']}' data-p='{$p['selling_price']}'>" . h($p['name']) . '</option>'; ?></select><button type="button" onclick="srA()">Add</button>
-    <table class="tbl" id="srT"><tbody></tbody></table><input type="hidden" name="items_json" id="srJ">
-    </div><div class="modal-footer"><button type="button" onclick="closeModal('srM')">Cancel</button><button onclick="srS()">Save</button></form></div></div></div>
-    <script>let src=[];function srA(){let s=document.getElementById('sp');src.push({id:+s.value,price:+s.options[s.selectedIndex].dataset.p,qty:1});srR()}function srR(){document.querySelector('#srT tbody').innerHTML=src.map(i=>`<tr><td>${i.id}</td><td>${i.qty}</td></tr>`).join('')}function srS(){document.getElementById('srJ').value=JSON.stringify(src);document.getElementById('srF').submit()}</script>
-    <?php
-        $c = ob_get_clean();
-        renderLayout('Sales Returns', $c, 'sales_returns');
+
+        if ($action === 'new') {
+            $invoices = $pdo->query("SELECT i.id, i.invoice_number, i.customer_id, c.name as customer_name FROM invoices i JOIN customers c ON i.customer_id = c.id WHERE i.payment_status IN ('paid', 'partial') ORDER BY i.id DESC")->fetchAll();
+            ob_start(); ?>
+            <div class="page-header">
+                <h1>&#8630; Process Sales Return</h1>
+                <div class="page-header-actions"><a href="?page=sales_returns" class="btn btn-secondary btn-sm">Back to List</a></div>
+            </div>
+            <div class="lf">
+                <?php if (isset($error)): ?><div class="alert alert-danger"><?= h($error) ?></div><?php endif; ?>
+                <form method="POST" id="srForm">
+                    <?= csrfField() ?>
+                    <input type="hidden" name="save_return" value="1">
+                    <input type="hidden" name="items_json" id="items_json">
+                    <div class="grid grid-2">
+                        <div class="form-group">
+                            <label>Select Invoice</label>
+                            <select name="invoice_id" id="invoice_id" required onchange="loadInvoiceItems(this.value)">
+                                <option value="">-- Select Invoice --</option>
+                                <?php foreach ($invoices as $inv): ?>
+                                    <option value="<?= $inv['id'] ?>" data-customer-id="<?= $inv['customer_id'] ?>"><?= h($inv['invoice_number']) ?> - <?= h($inv['customer_name']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <input type="hidden" name="customer_id" id="customer_id">
+                        </div>
+                        <div class="form-group">
+                            <label>Refund Method</label>
+                            <select name="refund_method" required>
+                                <option value="cash">Cash</option>
+                                <option value="card">Card</option>
+                                <option value="bank_transfer">Bank Transfer</option>
+                                <option value="credit_note">Credit Note</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Reason for Return</label>
+                        <textarea name="reason" rows="2" class="form-control" placeholder="Optional reason..."></textarea>
+                    </div>
+
+                    <div id="items-container" style="display:none; margin-top:20px;">
+                        <h3>Invoice Items</h3>
+                        <table class="tbl" id="items-table">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Bought Qty</th>
+                                    <th>Unit Price</th>
+                                    <th>Return Qty</th>
+                                    <th>Total</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                            <tfoot>
+                                <tr>
+                                    <th colspan="4" class="text-right">Return Total:</th>
+                                    <th id="return-total"><?= formatCurrency(0) ?></th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                        <div class="mt-4">
+                            <button type="submit" class="btn btn-primary" onclick="prepareSubmit(event)">Submit Return</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <script>
+                let invoiceItems = [];
+                function loadInvoiceItems(invId) {
+                    if (!invId) {
+                        document.getElementById('items-container').style.display = 'none';
+                        return;
+                    }
+                    const sel = document.getElementById('invoice_id');
+                    document.getElementById('customer_id').value = sel.options[sel.selectedIndex].dataset.customerId;
+
+                    fetch('?ajax=get_invoice_details', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: invId })
+                    })
+                    .then(r => r.json())
+                    .then(res => {
+                        if (res.success) {
+                            invoiceItems = res.items;
+                            renderItems();
+                            document.getElementById('items-container').style.display = 'block';
+                        } else {
+                            alert('Error loading items: ' + (res.msg || 'Unknown error'));
+                        }
+                    });
+                }
+
+                function renderItems() {
+                    const tbody = document.querySelector('#items-table tbody');
+                    tbody.innerHTML = '';
+                    invoiceItems.forEach((it, idx) => {
+                        tbody.innerHTML += `
+                            <tr>
+                                <td>${h(it.name)}</td>
+                                <td>${it.quantity}</td>
+                                <td>${it.unit_price}</td>
+                                <td><input type="number" class="form-control" style="width:80px" min="0" max="${it.quantity}" value="0" onchange="updateTotal(${idx}, this.value)"></td>
+                                <td id="total-${idx}">${(0).toFixed(2)}</td>
+                            </tr>
+                        `;
+                    });
+                    calculateGrandTotal();
+                }
+
+                function updateTotal(idx, qty) {
+                    invoiceItems[idx].return_qty = parseFloat(qty) || 0;
+                    document.getElementById('total-' + idx).textContent = (invoiceItems[idx].return_qty * invoiceItems[idx].unit_price).toFixed(2);
+                    calculateGrandTotal();
+                }
+
+                function calculateGrandTotal() {
+                    let total = 0;
+                    invoiceItems.forEach(it => {
+                        total += (it.return_qty || 0) * it.unit_price;
+                    });
+                    document.getElementById('return-total').textContent = total.toFixed(2);
+                }
+
+                function prepareSubmit(e) {
+                    const returns = invoiceItems.filter(it => (it.return_qty || 0) > 0).map(it => ({
+                        id: it.product_id,
+                        qty: it.return_qty,
+                        price: it.unit_price
+                    }));
+                    if (returns.length === 0) {
+                        alert('Please select at least one item to return.');
+                        e.preventDefault();
+                        return;
+                    }
+                    document.getElementById('items_json').value = JSON.stringify(returns);
+                }
+            </script>
+            <?php
+            $c = ob_get_clean();
+            renderLayout('Process Sales Return', $c, 'sales_returns');
+        } else {
+            $returns = $pdo->query("SELECT sr.*, c.name as customer FROM sales_returns sr JOIN customers c ON sr.customer_id = c.id ORDER BY sr.id DESC")->fetchAll();
+            ob_start(); ?>
+            <div class="page-header">
+                <h1>&#8630; Sales Returns</h1>
+                <div class="page-header-actions"><a href="?page=sales_returns&action=new" class="btn btn-primary btn-sm">+ Process Return</a></div>
+            </div>
+            <div class="lf">
+                <table class="tbl">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Return No.</th>
+                            <th>Customer</th>
+                            <th>Date</th>
+                            <th>Total Amount</th>
+                            <th>Method</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($returns)): ?>
+                            <tr><td colspan="6" class="text-center">No sales returns found.</td></tr>
+                        <?php endif; ?>
+                        <?php foreach ($returns as $idx => $r): ?>
+                            <tr>
+                                <td><?= $idx + 1 ?></td>
+                                <td><?= h($r['return_number']) ?></td>
+                                <td><?= h($r['customer']) ?></td>
+                                <td><?= h($r['return_date']) ?></td>
+                                <td><?= formatCurrency((float)$r['total_amount']) ?></td>
+                                <td><span class="badge badge-info"><?= h(ucfirst($r['refund_method'])) ?></span></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php
+            $c = ob_get_clean();
+            renderLayout('Sales Returns', $c, 'sales_returns');
+        }
     }
 
     function renderCustomerLedgers(): void
@@ -5344,63 +6011,741 @@ if (!empty($_GET['ajax'])) {
     {
         requirePermission('purchases', 'view');
         $pdo = getPDO();
-        if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
-            $items = json_decode($_POST['items_json'], true) ?? [];
-            $total = array_sum(array_map(fn($i) => $i['price'] * $i['qty'], $items));
-            $rn = 'PR-' . date('Ymd') . rand(100, 999);
-            $pdo->prepare('INSERT INTO purchase_returns (return_number,po_id,supplier_id,return_date,total_amount,created_by) VALUES (?,?,?,?,?,?)')->execute([$rn, (int) $_POST['po_id'], (int) $_POST['supplier_id'], date('Y-m-d'), $total, $_SESSION['user_id']]);
-            header('Location: ?page=purchase_returns');
-            exit;
+        $action = $_GET['action'] ?? 'list';
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_return']) && verifyCsrf()) {
+            $pdo->beginTransaction();
+            try {
+                $poId = (int)$_POST['po_id'];
+                $supplierId = (int)$_POST['supplier_id'];
+                $items = json_decode($_POST['items_json'], true) ?? [];
+                
+                if (empty($items)) throw new Exception("No items to return.");
+
+                $total = 0;
+                foreach ($items as $it) {
+                    $total += $it['price'] * $it['qty'];
+                }
+
+                $rn = 'PR-' . date('Ymd') . '-' . strtoupper(substr(bin2hex(random_bytes(2)), 0, 4));
+                
+                // Add created_by if missing in table but used in code
+                $stmt = $pdo->prepare('INSERT INTO purchase_returns (return_number, po_id, supplier_id, return_date, total_amount, created_by) VALUES (?, ?, ?, CURDATE(), ?, ?)');
+                $stmt->execute([$rn, $poId, $supplierId, $total, $_SESSION['user_id']]);
+                $returnId = $pdo->lastInsertId();
+
+                $stmtItem = $pdo->prepare('INSERT INTO purchase_return_items (return_id, product_id, quantity, unit_price) VALUES (?, ?, ?, ?)');
+                $stmtUpdateStock = $pdo->prepare('UPDATE products SET current_stock = current_stock - ? WHERE id = ?');
+                
+                foreach ($items as $it) {
+                    $stmtItem->execute([$returnId, (int)$it['id'], (int)$it['qty'], (float)$it['price']]);
+                    $stmtUpdateStock->execute([(int)$it['qty'], (int)$it['id']]);
+                }
+
+                logActivity($_SESSION['user_id'], 'CREATE', 'purchases', "Processed purchase return $rn for PO ID $poId");
+                $pdo->commit();
+                $_SESSION['flash_msg'] = "Purchase return $rn processed successfully.";
+                header('Location: ?page=purchase_returns');
+                exit;
+            } catch (Exception $e) {
+                $pdo->rollBack();
+                $error = $e->getMessage();
+            }
         }
-        $r = $pdo->query('SELECT * FROM purchase_returns ORDER BY id DESC')->fetchAll();
-        ob_start();
-    ?>
-    <div class="page-header"><h1>Purchase Returns</h1><div class="page-header-actions"><button class="btn btn-warning btn-sm" onclick="openModal('prM')">+ New Return</button></div></div>
-    <div class="lf"><table class="tbl"><thead><tr><th>#</th><th>Date</th><th>Amount</th></tr></thead><tbody><?php foreach ($r as $x): ?><tr><td><?= h($x['return_number']) ?></td><td><?= $x['return_date'] ?></td><td><?= formatCurrency($x['total_amount']) ?></td></tr><?php endforeach; ?></tbody></table></div>
-    <div id="prM" class="modal-overlay"><div class="modal"><div class="modal-body"><form method="POST"><?= csrfField() ?><input name="po_id" placeholder="PO ID" required><input name="supplier_id" placeholder="Supplier ID" required><input type="hidden" name="items_json" value="[]"><button>Save</button></form></div></div></div>
-    <?php renderLayout('Purchase Returns', ob_get_clean(), 'purchase_returns');
+
+        if ($action === 'new') {
+            $pos = $pdo->query("SELECT po.id, po.po_number, po.supplier_id, s.name as supplier_name FROM purchase_orders po JOIN suppliers s ON po.supplier_id = s.id WHERE po.order_status = 'Received' ORDER BY po.id DESC")->fetchAll();
+            ob_start(); ?>
+            <div class="page-header">
+                <h1>&#8630; New Purchase Return</h1>
+                <div class="page-header-actions"><a href="?page=purchase_returns" class="btn btn-secondary btn-sm">Back to List</a></div>
+            </div>
+            <div class="lf">
+                <?php if (isset($error)): ?><div class="alert alert-danger"><?= h($error) ?></div><?php endif; ?>
+                <form method="POST" id="prForm">
+                    <?= csrfField() ?>
+                    <input type="hidden" name="save_return" value="1">
+                    <input type="hidden" name="items_json" id="items_json">
+                    <div class="form-group">
+                        <label>Select Purchase Order</label>
+                        <select name="po_id" id="po_id" required onchange="loadPoItems(this.value)">
+                            <option value="">-- Select PO --</option>
+                            <?php foreach ($pos as $po): ?>
+                                <option value="<?= $po['id'] ?>" data-supplier-id="<?= $po['supplier_id'] ?>"><?= h($po['po_number']) ?> - <?= h($po['supplier_name']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <input type="hidden" name="supplier_id" id="supplier_id">
+                    </div>
+
+                    <div id="items-container" style="display:none; margin-top:20px;">
+                        <h3>PO Items</h3>
+                        <table class="tbl" id="items-table">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Received Qty</th>
+                                    <th>Unit Price</th>
+                                    <th>Return Qty</th>
+                                    <th>Total</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                            <tfoot>
+                                <tr>
+                                    <th colspan="4" class="text-right">Return Total:</th>
+                                    <th id="return-total"><?= formatCurrency(0) ?></th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                        <div class="mt-4">
+                            <button type="submit" class="btn btn-primary" onclick="prepareSubmit(event)">Submit Return</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <script>
+                let poItems = [];
+                function loadPoItems(poId) {
+                    if (!poId) {
+                        document.getElementById('items-container').style.display = 'none';
+                        return;
+                    }
+                    const sel = document.getElementById('po_id');
+                    document.getElementById('supplier_id').value = sel.options[sel.selectedIndex].dataset.supplierId;
+
+                    fetch('?ajax=get_po_details', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: poId })
+                    })
+                    .then(r => r.json())
+                    .then(res => {
+                        if (res.success) {
+                            poItems = res.items;
+                            renderItems();
+                            document.getElementById('items-container').style.display = 'block';
+                        } else {
+                            alert('Error loading items: ' + (res.msg || 'Unknown error'));
+                        }
+                    });
+                }
+
+                function renderItems() {
+                    const tbody = document.querySelector('#items-table tbody');
+                    tbody.innerHTML = '';
+                    poItems.forEach((it, idx) => {
+                        tbody.innerHTML += `
+                            <tr>
+                                <td>${h(it.name)}</td>
+                                <td>${it.received_qty}</td>
+                                <td>${it.unit_price}</td>
+                                <td><input type="number" class="form-control" style="width:80px" min="0" max="${it.received_qty}" value="0" onchange="updateTotal(${idx}, this.value)"></td>
+                                <td id="total-${idx}">${(0).toFixed(2)}</td>
+                            </tr>
+                        `;
+                    });
+                    calculateGrandTotal();
+                }
+
+                function updateTotal(idx, qty) {
+                    poItems[idx].return_qty = parseFloat(qty) || 0;
+                    document.getElementById('total-' + idx).textContent = (poItems[idx].return_qty * poItems[idx].unit_price).toFixed(2);
+                    calculateGrandTotal();
+                }
+
+                function calculateGrandTotal() {
+                    let total = 0;
+                    poItems.forEach(it => {
+                        total += (it.return_qty || 0) * it.unit_price;
+                    });
+                    document.getElementById('return-total').textContent = total.toFixed(2);
+                }
+
+                function prepareSubmit(e) {
+                    const returns = poItems.filter(it => (it.return_qty || 0) > 0).map(it => ({
+                        id: it.product_id,
+                        qty: it.return_qty,
+                        price: it.unit_price
+                    }));
+                    if (returns.length === 0) {
+                        alert('Please select at least one item to return.');
+                        e.preventDefault();
+                        return;
+                    }
+                    document.getElementById('items_json').value = JSON.stringify(returns);
+                }
+            </script>
+            <?php
+            renderLayout('Purchase Returns', ob_get_clean(), 'purchase_returns');
+        } else {
+            $returns = $pdo->query("SELECT pr.*, s.name as supplier FROM purchase_returns pr JOIN suppliers s ON pr.supplier_id = s.id ORDER BY pr.id DESC")->fetchAll();
+            ob_start(); ?>
+            <div class="page-header">
+                <h1>&#8630; Purchase Returns</h1>
+                <div class="page-header-actions"><a href="?page=purchase_returns&action=new" class="btn btn-primary btn-sm">+ New Return</a></div>
+            </div>
+            <div class="lf">
+                <table class="tbl">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Return No.</th>
+                            <th>Supplier</th>
+                            <th>Date</th>
+                            <th>Total Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($returns)): ?>
+                            <tr><td colspan="5" class="text-center">No purchase returns found.</td></tr>
+                        <?php endif; ?>
+                        <?php foreach ($returns as $idx => $r): ?>
+                            <tr>
+                                <td><?= $idx + 1 ?></td>
+                                <td><?= h($r['return_number']) ?></td>
+                                <td><?= h($r['supplier']) ?></td>
+                                <td><?= h($r['return_date']) ?></td>
+                                <td><?= formatCurrency((float)$r['total_amount']) ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php renderLayout('Purchase Returns', ob_get_clean(), 'purchase_returns');
+        }
     }
 
     function renderRequisitions(): void
     {
-        requirePermission('purchases', 'create');
+        requirePermission('purchases', 'view');
         $pdo = getPDO();
+        $action = $_GET['action'] ?? 'list';
+
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
-            $rn = 'RQ-' . date('Ymd') . rand(100, 999);
-            $pdo->prepare('INSERT INTO requisitions (req_number,requested_by,status,notes) VALUES (?,?,?,?)')->execute([$rn, $_SESSION['user_id'], 'pending', $_POST['notes']]);
-            header('Location: ?page=requisitions');
-            exit;
+            if (isset($_POST['save_requisition'])) {
+                $notes = trim($_POST['notes'] ?? '');
+                $items = json_decode($_POST['items_json'], true) ?? [];
+
+                if (empty($items)) {
+                    $_SESSION['flash_msg'] = 'Error: No items selected.';
+                    $_SESSION['flash_type'] = 'danger';
+                    header('Location: ?page=requisitions&action=new');
+                    exit;
+                }
+
+                $rn = 'RQ-' . date('Ymd') . '-' . rand(1000, 9999);
+                $pdo->beginTransaction();
+                try {
+                    $stmt = $pdo->prepare('INSERT INTO requisitions (req_number, requested_by, status, notes) VALUES (?, ?, "pending", ?)');
+                    $stmt->execute([$rn, $_SESSION['user_id'], $notes]);
+                    $reqId = $pdo->lastInsertId();
+
+                    $stmtItem = $pdo->prepare('INSERT INTO requisition_items (req_id, product_id, quantity) VALUES (?, ?, ?)');
+                    foreach ($items as $it) {
+                        $stmtItem->execute([$reqId, $it['id'], $it['qty']]);
+                    }
+                    $pdo->commit();
+                    $_SESSION['flash_msg'] = "Requisition $rn submitted successfully.";
+                    $_SESSION['flash_type'] = 'success';
+                    header('Location: ?page=requisitions');
+                    exit;
+                } catch (Exception $e) {
+                    $pdo->rollBack();
+                    $_SESSION['flash_msg'] = 'Error: ' . $e->getMessage();
+                    $_SESSION['flash_type'] = 'danger';
+                }
+            } elseif (isset($_POST['update_status'])) {
+                $id = (int) $_POST['req_id'];
+                $status = $_POST['status'];
+                if (in_array($status, ['approved', 'rejected'])) {
+                    $pdo->prepare('UPDATE requisitions SET status=? WHERE id=?')->execute([$status, $id]);
+                    $_SESSION['flash_msg'] = "Requisition status updated to " . ucfirst($status) . ".";
+                    $_SESSION['flash_type'] = 'success';
+                }
+                header('Location: ?page=requisitions');
+                exit;
+            } elseif (isset($_POST['create_po'])) {
+                $id = (int) $_POST['req_id'];
+                $supplierId = (int) $_POST['supplier_id'];
+                
+                $req = $pdo->prepare('SELECT * FROM requisitions WHERE id=? AND status="approved"');
+                $req->execute([$id]);
+                $requisition = $req->fetch();
+
+                if ($requisition && $supplierId) {
+                    $pdo->beginTransaction();
+                    try {
+                        $poNum = generatePoNumber();
+                        $items = $pdo->prepare('SELECT ri.*, p.purchase_price FROM requisition_items ri JOIN products p ON p.id=ri.product_id WHERE ri.req_id=?');
+                        $items->execute([$id]);
+                        $reqItems = $items->fetchAll();
+
+                        $subtotal = 0;
+                        foreach($reqItems as $it) {
+                            $subtotal += $it['purchase_price'] * $it['quantity'];
+                        }
+                        $taxPct = (float)getSetting('default_tax_percent');
+                        $taxAmt = $subtotal * ($taxPct / 100);
+                        $total = $subtotal + $taxAmt;
+
+                        $stmtPO = $pdo->prepare('INSERT INTO purchase_orders (po_number, supplier_id, po_date, subtotal, tax_percent, total_amount, payment_status, order_status, notes, created_by) VALUES (?, ?, CURDATE(), ?, ?, ?, "unpaid", "pending", ?, ?)');
+                        $stmtPO->execute([$poNum, $supplierId, $subtotal, $taxPct, $total, "Created from Requisition " . $requisition['req_number'], $_SESSION['user_id']]);
+                        $poId = $pdo->lastInsertId();
+
+                        $stmtPOItem = $pdo->prepare('INSERT INTO purchase_order_items (po_id, product_id, quantity, unit_price, total_price) VALUES (?, ?, ?, ?, ?)');
+                        foreach ($reqItems as $it) {
+                            $stmtPOItem->execute([$poId, $it['product_id'], $it['quantity'], $it['purchase_price'], $it['quantity'] * $it['purchase_price']]);
+                        }
+
+                        $pdo->prepare('UPDATE requisitions SET status="ordered" WHERE id=?')->execute([$id]);
+                        $pdo->commit();
+                        $_SESSION['flash_msg'] = "Draft Purchase Order $poNum created successfully.";
+                        $_SESSION['flash_type'] = 'success';
+                        header('Location: ?page=purchases&action=view&id=' . $poId);
+                        exit;
+                    } catch (Exception $e) {
+                        $pdo->rollBack();
+                        $_SESSION['flash_msg'] = 'Error: ' . $e->getMessage();
+                        $_SESSION['flash_type'] = 'danger';
+                    }
+                }
+                header('Location: ?page=requisitions');
+                exit;
+            }
         }
-        if (isset($_GET['approve'])) {
-            $pdo->prepare("UPDATE requisitions SET status='approved' WHERE id=?")->execute([(int) $_GET['approve']]);
-            header('Location: ?page=requisitions');
-            exit;
+
+        if ($action === 'new') {
+            $products = $pdo->query("SELECT id,name,sku,current_stock FROM products WHERE status='active' ORDER BY name")->fetchAll();
+            ob_start(); ?>
+            <div class="page-header">
+                <h1>&#128227; New Requisition</h1>
+                <div class="page-header-actions"><a href="?page=requisitions" class="btn btn-secondary btn-sm">Back to List</a></div>
+            </div>
+            <div class="lf">
+                <form method="POST" id="rqForm">
+                    <?= csrfField() ?>
+                    <input type="hidden" name="save_requisition" value="1">
+                    <input type="hidden" name="items_json" id="rqJ">
+                    <div class="form-group mb-8">
+                        <label>Notes / Reason</label>
+                        <textarea name="notes" placeholder="Why is this being requested?"></textarea>
+                    </div>
+                    <div class="lf">
+                        <span class="lf-title">Request Items</span>
+                        <div class="form-group" style="flex-direction:row;gap:8px;align-items:flex-end">
+                            <div style="flex:1">
+                                <label>Product</label>
+                                <select id="rqP">
+                                    <option value="">-- Choose Product --</option>
+                                    <?php foreach ($products as $p) echo "<option value='{$p['id']}' data-sku='{$p['sku']}'>" . h($p['name']) . ' (' . h($p['sku']) . ')</option>'; ?>
+                                </select>
+                            </div>
+                            <div style="width:100px"><label>Qty</label><input type="number" id="rqQ" value="1" min="1"></div>
+                            <button type="button" class="btn btn-primary" onclick="rqA()">Add Item</button>
+                        </div>
+                        <table class="tbl mt-8" id="rqT">
+                            <thead><tr><th>SKU</th><th>Product</th><th class="text-right">Qty</th><th></th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <div class="mt-8"><button type="submit" class="btn btn-success" onclick="rqS(event)">Submit Requisition</button></div>
+                </form>
+            </div>
+            <script>
+                let rqc = [];
+                function rqA() {
+                    let s = document.getElementById('rqP');
+                    let q = document.getElementById('rqQ');
+                    if(!s.value) return;
+                    let opt = s.options[s.selectedIndex];
+                    let id = +s.value;
+                    let f = rqc.find(i => i.id === id);
+                    if(f) {
+                        f.qty += +q.value;
+                    } else {
+                        rqc.push({
+                            id: id,
+                            sku: opt.dataset.sku,
+                            name: opt.text,
+                            qty: +q.value
+                        });
+                    }
+                    rqr();
+                }
+                function rqr() {
+                    let b = document.querySelector('#rqT tbody');
+                    b.innerHTML = '';
+                    rqc.forEach((i, k) => {
+                        b.innerHTML += `<tr>
+                            <td>${h(i.sku)}</td>
+                            <td>${h(i.name)}</td>
+                            <td class="text-right"><input type="number" value="${i.qty}" min="1" style="width:60px" onchange="rqc[${k}].qty=+this.value;rqr()"></td>
+                            <td class="text-center"><button type="button" class="btn btn-danger btn-xs" onclick="rqc.splice(${k},1);rqr()">×</button></td>
+                        </tr>`;
+                    });
+                }
+                function rqS(e) {
+                    if (rqc.length === 0) {
+                        alert('Please add at least one item.');
+                        e.preventDefault();
+                        return;
+                    }
+                    document.getElementById('rqJ').value = JSON.stringify(rqc);
+                }
+            </script>
+            <?php
+        } else {
+            $reqs = $pdo->query('SELECT r.*, u.full_name as requester FROM requisitions r JOIN users u ON u.id=r.requested_by ORDER BY r.id DESC')->fetchAll();
+            $suppliers = $pdo->query('SELECT id, company_name FROM suppliers WHERE status="active"')->fetchAll();
+            ob_start(); ?>
+            <div class="page-header">
+                <h1>&#128227; Requisitions</h1>
+                <div class="page-header-actions"><a href="?page=requisitions&action=new" class="btn btn-primary btn-sm">+ New Requisition</a></div>
+            </div>
+            <?php if (isset($_SESSION['flash_msg'])): ?>
+                <div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div>
+                <?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']); ?>
+            <?php endif; ?>
+            <div class="lf">
+                <div class="tbl-wrap">
+                    <table class="tbl">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Requester</th>
+                                <th>Date</th>
+                                <th>Status</th>
+                                <th>Notes</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($reqs as $r): ?>
+                                <tr>
+                                    <td><?= h($r['req_number']) ?></td>
+                                    <td><?= h($r['requester']) ?></td>
+                                    <td><?= h($r['created_at']) ?></td>
+                                    <td><span class="badge badge-<?= ['pending'=>'warning','approved'=>'success','rejected'=>'danger','ordered'=>'primary'][$r['status']] ?? 'secondary' ?>"><?= strtoupper($r['status']) ?></span></td>
+                                    <td><?= h($r['notes']) ?></td>
+                                    <td>
+                                        <div class="tbl-actions">
+                                            <?php if ($r['status'] === 'pending' && canAccess(['admin', 'manager'])): ?>
+                                                <form method="POST" style="display:inline">
+                                                    <?= csrfField() ?>
+                                                    <input type="hidden" name="update_status" value="1">
+                                                    <input type="hidden" name="req_id" value="<?= $r['id'] ?>">
+                                                    <input type="hidden" name="status" value="approved">
+                                                    <button type="submit" class="btn btn-success btn-xs">Approve</button>
+                                                </form>
+                                                <form method="POST" style="display:inline">
+                                                    <?= csrfField() ?>
+                                                    <input type="hidden" name="update_status" value="1">
+                                                    <input type="hidden" name="req_id" value="<?= $r['id'] ?>">
+                                                    <input type="hidden" name="status" value="rejected">
+                                                    <button type="submit" class="btn btn-danger btn-xs">Reject</button>
+                                                </form>
+                                            <?php endif; ?>
+                                            <?php if ($r['status'] === 'approved'): ?>
+                                                <button class="btn btn-primary btn-xs" onclick="openPoModal(<?= $r['id'] ?>, '<?= h($r['req_number']) ?>')">Create PO</button>
+                                            <?php endif; ?>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                            <?php if (empty($reqs)): ?>
+                                <tr><td colspan="6" class="text-center text-muted">No requisitions found</td></tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="poModal" class="modal-overlay">
+                <div class="modal">
+                    <div class="modal-title-bar"><span>Create PO from Requisition</span><button class="modal-close-btn" onclick="closeModal('poModal')">&times;</button></div>
+                    <form method="POST">
+                        <?= csrfField() ?>
+                        <input type="hidden" name="create_po" value="1">
+                        <input type="hidden" name="req_id" id="modal_req_id">
+                        <div class="modal-body">
+                            <p>Select a supplier to create a draft Purchase Order for Requisition <strong id="modal_req_num"></strong>.</p>
+                            <div class="form-group mt-8">
+                                <label>Supplier</label>
+                                <select name="supplier_id" required>
+                                    <option value="">-- Select Supplier --</option>
+                                    <?php foreach ($suppliers as $s) echo "<option value='{$s['id']}'>" . h($s['company_name']) . "</option>"; ?>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('poModal')">Cancel</button>
+                            <button type="submit" class="btn btn-primary btn-sm">Generate PO</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <script>
+                function openPoModal(id, num) {
+                    document.getElementById('modal_req_id').value = id;
+                    document.getElementById('modal_req_num').textContent = num;
+                    openModal('poModal');
+                }
+            </script>
+            <?php
         }
-        $r = $pdo->query('SELECT * FROM requisitions ORDER BY id DESC')->fetchAll();
-        ob_start(); ?>
-    <div class="page-header"><h1>Requisitions</h1><div class="page-header-actions"><button class="btn btn-primary btn-sm" onclick="openModal('rqM')">+ New</button></div></div>
-    <div class="lf"><table class="tbl"><thead><tr><th>#</th><th>Status</th><th>Action</th></tr></thead><tbody><?php foreach ($r as $x): ?><tr><td><?= h($x['req_number']) ?></td><td><?= h($x['status']) ?></td><td><?php if ($x['status'] == 'pending'): ?><a href="?page=requisitions&approve=<?= $x['id'] ?>">Approve</a><?php endif; ?></td></tr><?php endforeach; ?></tbody></table></div>
-    <div id="rqM" class="modal-overlay"><div class="modal"><form method="POST"><?= csrfField() ?><textarea name="notes" placeholder="Notes"></textarea><button>Submit</button></form></div></div>
-    <?php renderLayout('Requisitions', ob_get_clean(), 'requisitions');
+        $content = ob_get_clean();
+        renderLayout('Requisitions', $content, 'requisitions');
     }
 
     function renderStockAudit(): void
     {
         requirePermission('stock_audit', 'view');
         $pdo = getPDO();
+        $id = isset($_GET['id']) ? (int) $_GET['id'] : 0;
+
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
-            $an = 'AUD-' . date('Ymd') . rand(100, 999);
-            $pdo->prepare('INSERT INTO stock_audits (audit_number,warehouse_id,audit_date,status,created_by) VALUES (?,?,?, ?,?)')->execute([$an, 1, date('Y-m-d'), 'closed', $_SESSION['user_id']]);
-            $_SESSION['flash_msg'] = 'Audit saved';
-            header('Location: ?page=stock_audit');
-            exit;
+            $action = $_POST['action'] ?? '';
+
+            if ($action === 'start_audit') {
+                requirePermission('stock_audit', 'manage');
+                $an = 'AUD-' . date('Ymd') . '-' . strtoupper(substr(bin2hex(random_bytes(2)), 0, 4));
+                $pdo->beginTransaction();
+                try {
+                    $stmt = $pdo->prepare('INSERT INTO stock_audits (audit_number, warehouse_id, audit_date, status, created_by) VALUES (?, ?, ?, ?, ?)');
+                    $stmt->execute([$an, 1, date('Y-m-d'), 'open', $_SESSION['user_id']]);
+                    $auditId = $pdo->lastInsertId();
+
+                    $products = $pdo->query("SELECT id, current_stock FROM products WHERE status='active'")->fetchAll();
+                    $stmtItem = $pdo->prepare('INSERT INTO stock_audit_items (audit_id, product_id, system_qty, counted_qty, difference) VALUES (?, ?, ?, ?, ?)');
+                    foreach ($products as $p) {
+                        $stmtItem->execute([$auditId, $p['id'], (int) $p['current_stock'], (int) $p['current_stock'], 0]);
+                    }
+                    $pdo->commit();
+                    $_SESSION['flash_msg'] = 'New stock audit started: ' . $an;
+                    $_SESSION['flash_type'] = 'success';
+                    header("Location: ?page=stock_audit&id=$auditId");
+                    exit;
+                } catch (Exception $e) {
+                    $pdo->rollBack();
+                    $_SESSION['flash_msg'] = 'Error starting audit: ' . $e->getMessage();
+                    $_SESSION['flash_type'] = 'danger';
+                    header('Location: ?page=stock_audit');
+                    exit;
+                }
+            } elseif ($action === 'save_counts' || $action === 'finalize_audit') {
+                requirePermission('stock_audit', 'manage');
+                $auditId = (int) ($_POST['audit_id'] ?? 0);
+                $stmtA = $pdo->prepare("SELECT * FROM stock_audits WHERE id=? AND status='open'");
+                $stmtA->execute([$auditId]);
+                $audit = $stmtA->fetch();
+
+                if ($audit) {
+                    $pdo->beginTransaction();
+                    try {
+                        $counts = $_POST['counts'] ?? [];
+                        $stmtUpdate = $pdo->prepare('UPDATE stock_audit_items SET counted_qty=?, difference=? WHERE audit_id=? AND product_id=?');
+                        foreach ($counts as $productId => $countedQty) {
+                            $productId = (int) $productId;
+                            $countedQty = (int) $countedQty;
+
+                            $stmtSys = $pdo->prepare('SELECT system_qty FROM stock_audit_items WHERE audit_id=? AND product_id=?');
+                            $stmtSys->execute([$auditId, $productId]);
+                            $systemQty = (int) $stmtSys->fetchColumn();
+
+                            $diff = $countedQty - $systemQty;
+                            $stmtUpdate->execute([$countedQty, $diff, $auditId, $productId]);
+                        }
+
+                        if ($action === 'finalize_audit') {
+                            $stmtItems = $pdo->prepare('SELECT * FROM stock_audit_items WHERE audit_id=?');
+                            $stmtItems->execute([$auditId]);
+                            $items = $stmtItems->fetchAll();
+
+                            foreach ($items as $item) {
+                                if ((int) $item['difference'] !== 0) {
+                                    $diff = (int) $item['difference'];
+                                    $absDiff = abs($diff);
+                                    $type = ($diff > 0) ? 'addition' : 'subtraction';
+                                    $ref = 'ADJ-' . $audit['audit_number'] . '-' . $item['product_id'];
+
+                                    $stmtProd = $pdo->prepare('SELECT current_stock FROM products WHERE id=?');
+                                    $stmtProd->execute([$item['product_id']]);
+                                    $before = (int) $stmtProd->fetchColumn();
+                                    $after = (int) $item['counted_qty'];
+
+                                    $stmtAdj = $pdo->prepare('INSERT INTO stock_adjustments (reference_no, product_id, adjustment_type, quantity, before_stock, after_stock, reason, status, requested_by, approved_by, approved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())');
+                                    $stmtAdj->execute([$ref, $item['product_id'], $type, $absDiff, $before, $after, 'Stock Audit Variance: ' . $audit['audit_number'], 'approved', $_SESSION['user_id'], $_SESSION['user_id']]);
+
+                                    $pdo->prepare('UPDATE products SET current_stock=?, updated_at=NOW() WHERE id=?')->execute([$after, $item['product_id']]);
+                                }
+                            }
+                            $pdo->prepare("UPDATE stock_audits SET status='closed' WHERE id=?")->execute([$auditId]);
+                            $_SESSION['flash_msg'] = 'Audit finalized and stock levels updated.';
+                            $_SESSION['flash_type'] = 'success';
+                        } else {
+                            $_SESSION['flash_msg'] = 'Audit counts saved.';
+                            $_SESSION['flash_type'] = 'info';
+                        }
+
+                        $pdo->commit();
+                        header("Location: ?page=stock_audit&id=$auditId");
+                        exit;
+                    } catch (Exception $e) {
+                        $pdo->rollBack();
+                        $_SESSION['flash_msg'] = 'Error: ' . $e->getMessage();
+                        $_SESSION['flash_type'] = 'danger';
+                        header("Location: ?page=stock_audit&id=$auditId");
+                        exit;
+                    }
+                }
+            }
         }
-        $a = $pdo->query('SELECT * FROM stock_audits ORDER BY id DESC')->fetchAll();
-        ob_start(); ?>
-    <div class="page-header"><h1>Stock Audit</h1><div class="page-header-actions"><button class="btn btn-primary btn-sm" onclick="if(confirm('Start audit?')){fetch('?page=stock_audit',{method:'POST',body:new FormData(document.getElementById('af'))}).then(()=>location.reload())}">+ Start Count</button></div></div>
-    <form id="af" style="display:none"><?= csrfField() ?></form>
-    <div class="lf"><table class="tbl"><thead><tr><th>#</th><th>Date</th></tr></thead><tbody><?php foreach ($a as $x): ?><tr><td><?= h($x['audit_number']) ?></td><td><?= $x['audit_date'] ?></td></tr><?php endforeach; ?></tbody></table></div>
-    <?php renderLayout('Stock Audit', ob_get_clean(), 'stock_audit');
+
+        ob_start();
+        if ($id):
+            $stmt = $pdo->prepare('SELECT a.*, u.full_name as creator FROM stock_audits a JOIN users u ON u.id=a.created_by WHERE a.id=?');
+            $stmt->execute([$id]);
+            $audit = $stmt->fetch();
+            if (!$audit) {
+                header('Location: ?page=stock_audit');
+                exit;
+            }
+            $stmtItems = $pdo->prepare('SELECT sai.*, p.name as product_name, p.sku, p.unit FROM stock_audit_items sai JOIN products p ON p.id=sai.product_id WHERE sai.audit_id=? ORDER BY p.name');
+            $stmtItems->execute([$id]);
+            $items = $stmtItems->fetchAll();
+            ?>
+            <div class="page-header">
+                <h1>&#128269; Stock Audit: <?= h($audit['audit_number']) ?></h1>
+                <div class="page-header-actions">
+                    <a href="?page=stock_audit" class="btn btn-secondary btn-sm">Back to List</a>
+                    <button class="btn btn-primary btn-sm no-print" onclick="window.print()">Print List</button>
+                </div>
+            </div>
+
+            <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
+            endif; ?>
+
+            <div class="lf">
+                <span class="lf-title">Audit Info</span>
+                <div style="display:flex; gap:30px; padding:5px;">
+                    <div>Date: <strong><?= formatDate($audit['audit_date']) ?></strong></div>
+                    <div>Status: <span class="badge badge-<?= $audit['status'] === 'open' ? 'warning' : 'success' ?>"><?= strtoupper($audit['status']) ?></span></div>
+                    <div>Created By: <strong><?= h($audit['creator']) ?></strong></div>
+                </div>
+            </div>
+
+            <form method="POST">
+                <?= csrfField() ?>
+                <input type="hidden" name="audit_id" value="<?= $id ?>">
+                <div class="tbl-wrap">
+                    <table class="tbl">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th class="text-right">System Qty</th>
+                                <th class="text-right">Counted Qty</th>
+                                <th class="text-right">Difference</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($items as $x):
+                                $diff = (int) $x['difference'];
+                                $diffClass = '';
+                                if ($diff > 0)
+                                    $diffClass = 'stock-ok';
+                                elseif ($diff < 0)
+                                    $diffClass = 'stock-critical';
+                                ?>
+                                <tr>
+                                    <td><strong><?= h($x['product_name']) ?></strong><br><small style="color:#666"><?= h($x['sku']) ?></small></td>
+                                    <td class="text-right"><?= number_format($x['system_qty']) ?> <small><?= h($x['unit']) ?></small></td>
+                                    <td class="text-right">
+                                        <?php if ($audit['status'] === 'open'): ?>
+                                            <input type="number" name="counts[<?= $x['product_id'] ?>]" value="<?= (int) $x['counted_qty'] ?>" class="text-right" style="width:100px; padding:4px;" onchange="updDiff(this, <?= (int) $x['system_qty'] ?>)">
+                                        <?php else: ?>
+                                            <strong><?= number_format($x['counted_qty']) ?></strong>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="text-right diff-val <?= $diffClass ?>" style="font-weight:700">
+                                        <?= $diff > 0 ? '+' : '' ?><?= number_format($diff) ?>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+
+                <?php if ($audit['status'] === 'open'): ?>
+                    <div class="mt-8 no-print" style="display:flex; justify-content:flex-end; gap:10px; padding:10px 0;">
+                        <button type="submit" name="action" value="save_counts" class="btn btn-primary">Save Counts</button>
+                        <button type="submit" name="action" value="finalize_audit" class="btn btn-success" onclick="return confirm('Are you sure you want to finalize this audit? Product stock levels will be updated immediately.')">Finalize & Post Variance</button>
+                    </div>
+                <?php endif; ?>
+            </form>
+
+            <script>
+            function updDiff(inp, sys) {
+                var c = parseInt(inp.value) || 0;
+                var d = c - sys;
+                var cell = inp.closest('tr').querySelector('.diff-val');
+                cell.textContent = (d > 0 ? '+' : '') + d;
+                cell.className = 'text-right diff-val ' + (d > 0 ? 'stock-ok' : (d < 0 ? 'stock-critical' : ''));
+            }
+            </script>
+
+        <?php else:
+            $a = $pdo->query('SELECT a.*, u.full_name as creator FROM stock_audits a JOIN users u ON u.id=a.created_by ORDER BY a.id DESC')->fetchAll();
+            ?>
+            <div class="page-header">
+                <h1>&#128269; Stock Audits</h1>
+                <div class="page-header-actions">
+                    <form method="POST" onsubmit="return confirm('Start a new warehouse-wide stock audit? This will capture all current system stock levels.')">
+                        <?= csrfField() ?>
+                        <input type="hidden" name="action" value="start_audit">
+                        <button type="submit" class="btn btn-primary btn-sm">+ Start New Audit</button>
+                    </form>
+                </div>
+            </div>
+
+            <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
+            endif; ?>
+
+            <div class="lf">
+                <table class="tbl">
+                    <thead>
+                        <tr>
+                            <th>Ref #</th>
+                            <th>Date</th>
+                            <th>Items</th>
+                            <th>Created By</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($a)): ?><tr><td colspan="6" class="text-center" style="padding:20px; color:#888;">No stock audits found.</td></tr><?php endif; ?>
+                        <?php foreach ($a as $x):
+                            $count = $pdo->prepare('SELECT COUNT(*) FROM stock_audit_items WHERE audit_id=?');
+                            $count->execute([$x['id']]);
+                            $numItems = $count->fetchColumn();
+                            ?>
+                            <tr>
+                                <td><code><?= h($x['audit_number']) ?></code></td>
+                                <td><?= formatDate($x['audit_date']) ?></td>
+                                <td><?= $numItems ?> items</td>
+                                <td><?= h($x['creator']) ?></td>
+                                <td><span class="badge badge-<?= $x['status'] === 'open' ? 'warning' : 'success' ?>"><?= strtoupper($x['status']) ?></span></td>
+                                <td>
+                                    <a href="?page=stock_audit&id=<?= $x['id'] ?>" class="btn btn-xs btn-secondary">View Details</a>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif;
+        $content = ob_get_clean();
+        renderLayout('Stock Audit', $content, 'stock_audit');
     }
 
     function renderTaxes(): void
@@ -5445,17 +6790,123 @@ if (!empty($_GET['ajax'])) {
 
     function renderShifts(): void
     {
-        requireRole(['admin', 'manager']);
+        requireRole(['admin', 'manager', 'staff']);
         $pdo = getPDO();
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
+            if (isset($_POST['action'])) {
+                if ($_POST['action'] === 'open_shift') {
+                    $float = (float) ($_POST['opening_float'] ?? 0);
+                    $pdo->prepare("INSERT INTO shifts (user_id, open_time, opening_float, status) VALUES (?, NOW(), ?, 'open')")
+                        ->execute([$_SESSION['user_id'], $float]);
+                    $_SESSION['flash_msg'] = 'Shift opened successfully.';
+                    $_SESSION['flash_type'] = 'success';
+                } elseif ($_POST['action'] === 'close_shift') {
+                    $shiftId = (int) $_POST['shift_id'];
+                    $closingCash = (float) ($_POST['closing_cash'] ?? 0);
+                    $pdo->prepare("UPDATE shifts SET close_time=NOW(), closing_cash=?, status='closed' WHERE id=?")
+                        ->execute([$closingCash, $shiftId]);
+                    $_SESSION['flash_msg'] = 'Shift closed successfully.';
+                    $_SESSION['flash_type'] = 'success';
+                }
+                header('Location: ?page=shifts');
+                exit;
+            }
+        }
+
         $s = $pdo->query('SELECT s.*,u.full_name FROM shifts s LEFT JOIN users u ON u.id=s.user_id ORDER BY s.id DESC LIMIT 50')->fetchAll();
+        $openShift = $pdo->prepare("SELECT * FROM shifts WHERE user_id=? AND status='open' LIMIT 1");
+        $openShift->execute([$_SESSION['user_id']]);
+        $myOpenShift = $openShift->fetch();
+
         ob_start();
     ?>
     <div class="page-header"><h1>&#128336; POS Shifts / Registers</h1></div>
-    <div class="lf"><span class="lf-title">Recent Shifts</span>
-    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Cashier (User)</th><th>Opened</th><th>Closed</th><th class="text-right">Opening Float</th><th class="text-right">Total Sales</th><th>Status</th></tr></thead><tbody>
-    <?php if (empty($s)): ?><tr><td colspan="6" class="text-center text-muted">No shifts recorded</td></tr><?php endif; ?>
-    <?php foreach ($s as $x): ?><tr><td><?= h($x['full_name']) ?></td><td><?= $x['open_time'] ?></td><td><?= $x['close_time'] ?: '-' ?></td><td class="text-right"><?= formatCurrency($x['opening_float']) ?></td><td class="text-right"><?= formatCurrency($x['total_sales']) ?></td><td><span class="badge badge-<?= $x['status'] === 'open' ? 'success' : 'secondary' ?>"><?= strtoupper($x['status']) ?></span></td></tr><?php endforeach; ?>
-    </tbody></table></div></div>
+    
+    <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']); endif; ?>
+
+    <div class="cols-2">
+        <div>
+            <div class="lf"><span class="lf-title">My Current Shift</span>
+            <?php if ($myOpenShift): 
+                $expectedCash = $myOpenShift['opening_float'] + $myOpenShift['cash_sales'];
+            ?>
+                <div style="padding:15px; background:#f9f9f9; border:1px solid #ddd; border-radius:4px;">
+                    <div style="margin-bottom:10px;">Opened at: <strong><?= $myOpenShift['open_time'] ?></strong></div>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:15px;">
+                        <div>Opening Float:<br><strong><?= formatCurrency($myOpenShift['opening_float']) ?></strong></div>
+                        <div>Cash Sales:<br><strong><?= formatCurrency($myOpenShift['cash_sales']) ?></strong></div>
+                        <div>Card Sales:<br><strong><?= formatCurrency($myOpenShift['card_sales']) ?></strong></div>
+                        <div>Total Sales:<br><strong><?= formatCurrency($myOpenShift['total_sales']) ?></strong></div>
+                        <div style="grid-column: span 2; padding-top:10px; border-top:1px solid #eee;">
+                            Expected Cash in Drawer:<br><strong style="font-size:1.4em; color:var(--primary);"><?= formatCurrency($expectedCash) ?></strong>
+                        </div>
+                    </div>
+                    <button class="btn btn-danger btn-block" onclick="openModal('closeShiftModal')">Close Shift & Reconcile</button>
+                </div>
+            <?php else: ?>
+                <div style="padding:20px; text-align:center; background:#f0f0f0; border:2px dashed #ccc; color:#666;">
+                    <p style="margin-bottom:15px;">No open shift found for your user account.</p>
+                    <button class="btn btn-success" onclick="openModal('openShiftModal')">Open New Shift</button>
+                </div>
+            <?php endif; ?>
+            </div>
+        </div>
+        <div>
+            <div class="lf"><span class="lf-title">Recent Shifts</span>
+            <div class="tbl-wrap"><table class="tbl"><thead><tr><th>User</th><th>Opened</th><th>Closed</th><th class="text-right">Expected</th><th class="text-right">Actual</th><th>Status</th></tr></thead><tbody>
+            <?php if (empty($s)): ?><tr><td colspan="6" class="text-center text-muted">No shifts recorded</td></tr><?php endif; ?>
+            <?php foreach ($s as $x): 
+                $exp = $x['opening_float'] + $x['total_sales'];
+                $diff = ($x['closing_cash'] !== null) ? ($x['closing_cash'] - $exp) : 0;
+            ?>
+                <tr>
+                    <td><?= h($x['full_name']) ?></td>
+                    <td><?= date('d M H:i', strtotime($x['open_time'])) ?></td>
+                    <td><?= $x['close_time'] ? date('d M H:i', strtotime($x['close_time'])) : '-' ?></td>
+                    <td class="text-right"><?= formatCurrency($exp) ?></td>
+                    <td class="text-right">
+                        <?= ($x['closing_cash'] !== null) ? formatCurrency($x['closing_cash']) : '-' ?>
+                        <?php if ($x['status'] === 'closed'): ?>
+                            <br><small style="color:<?= $diff >= 0 ? 'green' : 'red' ?>"><?= $diff >= 0 ? '+' : '' ?><?= formatCurrency($diff) ?></small>
+                        <?php endif; ?>
+                    </td>
+                    <td><span class="badge badge-<?= $x['status'] === 'open' ? 'success' : 'secondary' ?>"><?= strtoupper($x['status']) ?></span></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody></table></div></div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="openShiftModal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-title-bar"><span>Open New Shift</span><button class="modal-close-btn" onclick="closeModal('openShiftModal')">&times;</button></div>
+            <form method="POST"><?= csrfField() ?><input type="hidden" name="action" value="open_shift">
+                <div class="modal-body">
+                    <div class="form-group"><label>Opening Cash Float</label><input type="number" name="opening_float" step="0.01" value="0.00" class="form-control" autofocus></div>
+                </div>
+                <div class="modal-footer"><button type="submit" class="btn btn-primary">Start Shift</button></div>
+            </form>
+        </div>
+    </div>
+
+    <div id="closeShiftModal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-title-bar"><span>Close Shift & Reconcile</span><button class="modal-close-btn" onclick="closeModal('closeShiftModal')">&times;</button></div>
+            <form method="POST"><?= csrfField() ?><input type="hidden" name="action" value="close_shift">
+                <input type="hidden" name="shift_id" value="<?= $myOpenShift['id'] ?? '' ?>">
+                <div class="modal-body">
+                    <div style="margin-bottom:15px; padding:10px; background:#eef; border:1px solid #ccd; border-radius:4px;">
+                        Expected Cash: <strong><?= formatCurrency($expectedCash ?? 0) ?></strong>
+                    </div>
+                    <div class="form-group"><label>Actual Cash in Drawer</label><input type="number" name="closing_cash" step="0.01" class="form-control" required autofocus></div>
+                </div>
+                <div class="modal-footer"><button type="submit" class="btn btn-danger">Finalize & Close</button></div>
+            </form>
+        </div>
+    </div>
+
     <?php
         $content = ob_get_clean();
         renderLayout('Shifts', $content, 'shifts');
