@@ -1575,51 +1575,185 @@ function renderLogin(?string $error = null): void
     <!DOCTYPE html>
     <html lang="en">
     <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= h(APP_NAME) ?> - Login</title>
-    <style>
-    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Segoe UI',Arial,sans-serif;background:#e0e0e0;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:16px}
-    .login-wrap{background:#f0f0f0;border:2px solid #a0a0a0;border-style:ridge;width:100%;max-width:380px;padding:0}
-    .login-title-bar{background:#4a90d9;color:#fff;padding:8px 12px;display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;letter-spacing:0.5px}
-    .login-title-bar svg{width:18px;height:18px;fill:#fff}
-    .login-body{padding:24px}
-    .app-title{text-align:center;font-size:22px;font-weight:700;color:#2c3e50;margin-bottom:4px}
-    .app-sub{text-align:center;font-size:12px;color:#666;margin-bottom:20px}
-    .field-group{margin-bottom:14px}
-    .field-group label{display:block;font-size:12px;font-weight:600;color:#333;margin-bottom:4px}
-    .field-group input{width:100%;padding:6px 8px;border:2px inset #a0a0a0;background:#fff;font-size:13px;font-family:inherit;color:#222;outline:none}
-    .field-group input:focus{border-color:#4a90d9}
-    .captcha-box{background:#fff;border:2px inset #a0a0a0;padding:10px;text-align:center;margin-bottom:8px;font-size:18px;font-weight:700;color:#2c3e50;letter-spacing:4px;position:relative;overflow:hidden}
-    .captcha-noise{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
-    .btn-login{width:100%;padding:8px;background:#4a90d9;color:#fff;border:2px outset #6aaae9;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;letter-spacing:0.5px}
-    .btn-login:hover{background:#357abd}
-    .btn-login:active{border-style:inset;background:#2a6099}
-    .alert{padding:8px 12px;margin-bottom:14px;font-size:12px;border:1px solid}
-    .alert-danger{background:#f8d7da;border-color:#f5c6cb;color:#721c24}
-    .alert-success{background:#d4edda;border-color:#c3e6cb;color:#155724}
-    .alert-info{background:#d1ecf1;border-color:#bee5eb;color:#0c5460}
-    .default-creds{margin-top:12px;padding:8px;background:#fff3cd;border:1px solid #ffc107;font-size:11px;color:#856404;text-align:center}
-    @media(max-width:400px){.login-wrap{max-width:100%}}
-    </style>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title><?= h(APP_NAME) ?> - Login</title>
+        <style>
+            *, *::before, *::after {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0
+            }
+            body {
+                font-family: 'Segoe UI', Arial, sans-serif;
+                background: #e0e0e0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 100vh;
+                padding: 16px
+            }
+            .login-wrap {
+                background: #f0f0f0;
+                border: 2px solid #a0a0a0;
+                border-style: ridge;
+                width: 100%;
+                max-width: 380px;
+                padding: 0
+            }
+            .login-title-bar {
+                background: #4a90d9;
+                color: #fff;
+                padding: 8px 12px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                font-size: 14px;
+                font-weight: 700;
+                letter-spacing: 0.5px
+            }
+            .login-title-bar svg {
+                width: 18px;
+                height: 18px;
+                fill: #fff
+            }
+            .login-body {
+                padding: 24px
+            }
+            .app-title {
+                text-align: center;
+                font-size: 22px;
+                font-weight: 700;
+                color: #2c3e50;
+                margin-bottom: 4px
+            }
+            .app-sub {
+                text-align: center;
+                font-size: 12px;
+                color: #666;
+                margin-bottom: 20px
+            }
+            .field-group {
+                margin-bottom: 14px
+            }
+            .field-group label {
+                display: block;
+                font-size: 12px;
+                font-weight: 600;
+                color: #333;
+                margin-bottom: 4px
+            }
+            .field-group input {
+                width: 100%;
+                padding: 6px 8px;
+                border: 2px inset #a0a0a0;
+                background: #fff;
+                font-size: 13px;
+                font-family: inherit;
+                color: #222;
+                outline: none
+            }
+            .field-group input:focus {
+                border-color: #4a90d9
+            }
+            .captcha-box {
+                background: #fff;
+                border: 2px inset #a0a0a0;
+                padding: 10px;
+                text-align: center;
+                margin-bottom: 8px;
+                font-size: 18px;
+                font-weight: 700;
+                color: #2c3e50;
+                letter-spacing: 4px;
+                position: relative;
+                overflow: hidden
+            }
+            .captcha-noise {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                pointer-events: none
+            }
+            .btn-login {
+                width: 100%;
+                padding: 8px;
+                background: #4a90d9;
+                color: #fff;
+                border: 2px outset #6aaae9;
+                font-size: 14px;
+                font-weight: 700;
+                cursor: pointer;
+                font-family: inherit;
+                letter-spacing: 0.5px
+            }
+            .btn-login:hover {
+                background: #357abd
+            }
+            .btn-login:active {
+                border-style: inset;
+                background: #2a6099
+            }
+            .alert {
+                padding: 8px 12px;
+                margin-bottom: 14px;
+                font-size: 12px;
+                border: 1px solid
+            }
+            .alert-danger {
+                background: #f8d7da;
+                border-color: #f5c6cb;
+                color: #721c24
+            }
+            .alert-success {
+                background: #d4edda;
+                border-color: #c3e6cb;
+                color: #155724
+            }
+            .alert-info {
+                background: #d1ecf1;
+                border-color: #bee5eb;
+                color: #0c5460
+            }
+            .default-creds {
+                margin-top: 12px;
+                padding: 8px;
+                background: #fff3cd;
+                border: 1px solid #ffc107;
+                font-size: 11px;
+                color: #856404;
+                text-align: center
+            }
+            @media (max-width: 400px) {
+                .login-wrap {
+                    max-width: 100%
+                }
+            }
+        </style>
     </head>
     <body>
     <div class="login-wrap">
         <div class="login-title-bar">
-            <svg viewBox="0 0 24 24"><path d="M20 7H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2zm-9 8H9v2H7v-2H5v-2h2v-2h2v2h2v2zm4.5 1c-.83 0-1.5-.67-1.5-1.5S14.67 13 15.5 13s1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm3-3c-.83 0-1.5-.67-1.5-1.5S17.67 10 18.5 10s1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM7 3h2v3H7zm8 0h2v3h-2z"/></svg>
+            <svg viewBox="0 0 24 24">
+                <path d="M20 7H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2zm-9 8H9v2H7v-2H5v-2h2v-2h2v2h2v2zm4.5 1c-.83 0-1.5-.67-1.5-1.5S14.67 13 15.5 13s1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm3-3c-.83 0-1.5-.67-1.5-1.5S17.67 10 18.5 10s1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM7 3h2v3H7zm8 0h2v3h-2z"/>
+            </svg>
             <?= h(APP_NAME) ?> - Sign In
         </div>
         <div class="login-body">
             <div class="app-title"><?= h(APP_NAME) ?></div>
             <div class="app-sub">Inventory Management System v<?= APP_VERSION ?></div>
-            <?php if ($reasonMsg): ?><div class="alert alert-info"><?= h($reasonMsg) ?></div><?php endif; ?>
-            <?php if ($error): ?><div class="alert alert-danger"><?= h($error) ?></div><?php endif; ?>
+            <?php if ($reasonMsg): ?>
+                <div class="alert alert-info"><?= h($reasonMsg) ?></div><?php endif; ?>
+            <?php if ($error): ?>
+                <div class="alert alert-danger"><?= h($error) ?></div><?php endif; ?>
             <form method="POST" action="?page=login">
                 <?= csrfField() ?>
                 <div class="field-group">
                     <label>Username</label>
-                    <input type="text" name="username" value="<?= h($_POST['username'] ?? '') ?>" autocomplete="username" required>
+                    <input type="text" name="username" value="<?= h($_POST['username'] ?? '') ?>"
+                           autocomplete="username" required>
                 </div>
                 <div class="field-group">
                     <label>Password</label>
@@ -1634,12 +1768,13 @@ function renderLogin(?string $error = null): void
                                 $y1 = rand(0, 50);
                                 $x2 = rand(0, 340);
                                 $y2 = rand(0, 50); ?>
-                            <line x1="<?= $x1 ?>" y1="<?= $y1 ?>" x2="<?= $x2 ?>" y2="<?= $y2 ?>" stroke="#ccc" stroke-width="1" opacity="0.6"/>
+                                <line x1="<?= $x1 ?>" y1="<?= $y1 ?>" x2="<?= $x2 ?>" y2="<?= $y2 ?>" stroke="#ccc"
+                                      stroke-width="1" opacity="0.6"/>
                             <?php endfor; ?>
                             <?php for ($ci = 0; $ci < 30; $ci++):
                                 $cx = rand(0, 340);
                                 $cy = rand(0, 50); ?>
-                            <circle cx="<?= $cx ?>" cy="<?= $cy ?>" r="1.5" fill="#bbb" opacity="0.5"/>
+                                <circle cx="<?= $cx ?>" cy="<?= $cy ?>" r="1.5" fill="#bbb" opacity="0.5"/>
                             <?php endfor; ?>
                         </svg>
                         <?= h($captcha['question']) ?> = ?
@@ -1651,7 +1786,8 @@ function renderLogin(?string $error = null): void
             <div class="default-creds">Default: <strong>admin</strong> / <strong>admin123!</strong></div>
         </div>
     </div>
-    </body></html>
+    </body>
+    </html>
     <?php
 }
 
@@ -1666,259 +1802,1238 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
     <!DOCTYPE html>
     <html lang="en">
     <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= h($pageTitle) ?> - <?= h(APP_NAME) ?></title>
-    <style>
-    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    :root{--bg:#e0e0e0;--surface:#f0f0f0;--surface2:#f8f8f8;--border:#a0a0a0;--border-dark:#707070;--text:#1a1a1a;--text-muted:#555;--text-faint:#888;--primary:#4a90d9;--primary-dark:#357abd;--primary-darker:#2a6099;--danger:#d9534f;--danger-dark:#c9302c;--success:#5cb85c;--success-dark:#449d44;--warning:#f0ad4e;--warning-dark:#ec971f;--sidebar-w:220px;--sidebar-collapsed-w:42px;--header-h:42px;--status-h:28px;--font:'Segoe UI',Arial,sans-serif}
-    body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:13px;min-height:100vh;overflow-x:hidden}
-    a{color:var(--primary);text-decoration:none}
-    a:hover{color:var(--primary-dark);text-decoration:underline}
-    button,input,select,textarea{font-family:var(--font);font-size:13px}
-    table{border-collapse:collapse;width:100%}
-    svg{display:inline-block;vertical-align:middle}
-    /* HEADER */
-    #header{position:fixed;top:0;left:0;right:0;height:var(--header-h);background:#4a90d9;border-bottom:2px solid #357abd;z-index:1000;display:flex;align-items:center;padding:0 8px;gap:8px}
-    #hamburger{display:none;background:#357abd;border:1px outset #6aaae9;color:#fff;padding:4px 8px;cursor:pointer;font-size:16px;line-height:1}
-    #header-title{color:#fff;font-size:15px;font-weight:700;letter-spacing:0.5px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    #header-title span{font-size:11px;font-weight:400;opacity:0.85;margin-left:6px}
-    .header-actions{display:flex;align-items:center;gap:6px}
-    .notif-btn{position:relative;background:#357abd;border:1px outset #6aaae9;color:#fff;padding:4px 8px;cursor:pointer;font-size:13px;line-height:1}
-    .notif-btn:hover{background:#2a6099}
-    .notif-badge{position:absolute;top:-4px;right:-4px;background:#d9534f;color:#fff;border-radius:50%;width:16px;height:16px;font-size:10px;display:flex;align-items:center;justify-content:center;font-weight:700}
-    .user-menu-wrap{position:relative}
-    .user-btn{background:#357abd;border:1px outset #6aaae9;color:#fff;padding:4px 10px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:4px}
-    .user-btn:hover{background:#2a6099}
-    .user-dropdown{display:none;position:absolute;right:0;top:100%;background:#f0f0f0;border:2px solid #a0a0a0;border-style:ridge;min-width:160px;z-index:2000}
-    .user-dropdown.open{display:block}
-    .user-dropdown-header{padding:8px 12px;background:#e0e0e0;border-bottom:1px solid #a0a0a0;font-size:11px}
-    .user-dropdown-header strong{display:block;font-size:13px;color:#1a1a1a}
-    .user-dropdown a,.user-dropdown button{display:block;width:100%;text-align:left;padding:7px 12px;color:#1a1a1a;text-decoration:none;background:none;border:none;cursor:pointer;font-size:12px;border-bottom:1px solid #e0e0e0}
-    .user-dropdown a:hover,.user-dropdown button:hover{background:#4a90d9;color:#fff}
-    /* SIDEBAR */
-    #sidebar{position:fixed;top:var(--header-h);left:0;bottom:var(--status-h);width:var(--sidebar-w);background:#f0f0f0;border-right:2px solid #a0a0a0;overflow-y:auto;overflow-x:hidden;z-index:900;transition:width 0.2s ease,transform 0.2s ease}
-    #sidebar.collapsed{width:var(--sidebar-collapsed-w);overflow:visible}
-    #sidebar.collapsed .nav-section-title{display:none}
-    #sidebar.collapsed .nav-item{justify-content:center;padding:7px 0;position:relative}
-    #sidebar.collapsed .nav-item span.nav-icon{margin:0}
-    #sidebar.collapsed .nav-item .nav-label{display:none}
-    #sidebar.collapsed .nav-item:hover::after{content:attr(data-label);position:absolute;left:calc(var(--sidebar-collapsed-w) + 4px);top:50%;transform:translateY(-50%);background:#333;color:#fff;padding:3px 8px;font-size:11px;white-space:nowrap;border-radius:3px;z-index:9999;pointer-events:none}
-    #sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:890}
-    .nav-section{padding:4px 0;border-bottom:1px solid #c8c8c8}
-    .nav-section-title{padding:6px 10px;font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.8px;background:#e8e8e8;border-bottom:1px solid #d0d0d0}
-    .nav-item{display:flex;align-items:center;gap:8px;padding:7px 12px;color:#1a1a1a;text-decoration:none;font-size:12px;font-weight:500;border-bottom:1px solid #e0e0e0;cursor:pointer;transition:none}
-.nav-label{flex:1;white-space:nowrap;overflow:hidden}
-    .nav-item:hover{background:#d0d0d0;color:#1a1a1a;text-decoration:none}
-    .nav-item.active{background:#4a90d9;color:#fff}
-    .nav-item.active:hover{background:#357abd}
-    .nav-icon{width:16px;height:16px;flex-shrink:0}
-    /* MAIN CONTENT */
-    #main{margin-left:var(--sidebar-w);margin-top:var(--header-h);margin-bottom:var(--status-h);padding:12px;min-height:calc(100vh - var(--header-h) - var(--status-h));background:var(--bg)}
-    /* STATUS BAR */
-    #statusbar{position:fixed;bottom:0;left:0;right:0;height:var(--status-h);background:#e8e8e8;border-top:1px solid #a0a0a0;display:flex;align-items:center;padding:0 10px;gap:16px;font-size:11px;color:#555;z-index:1000}
-    .sb-item{display:flex;align-items:center;gap:4px}
-    .sb-sep{color:#a0a0a0}
-    #clock{margin-left:auto;font-weight:600;color:#333}
-    /* PAGE HEADER */
-    .page-header{background:#f0f0f0;border:2px solid #a0a0a0;border-style:ridge;padding:8px 14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
-    .page-header h1{font-size:16px;font-weight:700;color:#1a1a1a;display:flex;align-items:center;gap:8px}
-    .page-header-actions{display:flex;gap:6px;flex-wrap:wrap}
-    /* LABELFRAME */
-    .lf{border:2px solid #a0a0a0;border-style:groove;padding:12px 14px;margin-bottom:12px;position:relative}
-    .lf-title{position:absolute;top:-10px;left:10px;background:#f0f0f0;padding:0 6px;font-size:11px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.5px}
-    /* BUTTONS */
-    .btn{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;font-size:12px;font-weight:600;border:2px outset;cursor:pointer;text-decoration:none;font-family:var(--font);line-height:1.4;white-space:nowrap;min-height:28px}
-    .btn:hover{text-decoration:none}
-    .btn:active{border-style:inset}
-    .btn-primary{background:var(--primary);color:#fff;border-color:#6aaae9}
-    .btn-primary:hover{background:var(--primary-dark);color:#fff}
-    .btn-primary:active{background:var(--primary-darker)}
-    .btn-danger{background:var(--danger);color:#fff;border-color:#e87773}
-    .btn-danger:hover{background:var(--danger-dark);color:#fff}
-    .btn-success{background:var(--success);color:#fff;border-color:#7dcc7d}
-    .btn-success:hover{background:var(--success-dark);color:#fff}
-    .btn-warning{background:var(--warning);color:#1a1a1a;border-color:#f5c97e}
-    .btn-warning:hover{background:var(--warning-dark)}
-    .btn-secondary{background:#c0c0c0;color:#1a1a1a;border-color:#d8d8d8}
-    .btn-secondary:hover{background:#a8a8a8}
-    .btn-sm{padding:3px 8px;font-size:11px;min-height:24px}
-    .btn-xs{padding:2px 6px;font-size:10px;min-height:20px}
-    /* FORMS */
-    .form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
-    .form-grid-2{grid-template-columns:repeat(2,1fr)}
-    .form-grid-3{grid-template-columns:repeat(3,1fr)}
-    .form-group{display:flex;flex-direction:column;gap:3px}
-    .form-group label{font-size:11px;font-weight:700;color:#333;text-transform:uppercase;letter-spacing:0.3px}
-    .form-group input,.form-group select,.form-group textarea{padding:5px 7px;border:2px inset #a0a0a0;background:#fff;color:#222;font-size:12px;font-family:var(--font);outline:none}
-    .form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:#4a90d9;border-style:solid}
-    .form-group textarea{resize:vertical;min-height:70px}
-    .form-group select{appearance:auto;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23555'/%3E%3C/svg%3E") no-repeat right 6px center}
-    .form-group.full{grid-column:1/-1}
-    .form-error{font-size:11px;color:var(--danger)}
-    .required-mark{color:var(--danger)}
-    /* ALERTS */
-    .alert{padding:8px 12px;margin-bottom:10px;font-size:12px;border:1px solid;display:flex;align-items:flex-start;gap:6px}
-    .alert-danger{background:#f8d7da;border-color:#f5c6cb;color:#721c24}
-    .alert-success{background:#d4edda;border-color:#c3e6cb;color:#155724}
-    .alert-warning{background:#fff3cd;border-color:#ffeeba;color:#856404}
-    .alert-info{background:#d1ecf1;border-color:#bee5eb;color:#0c5460}
-    .alert ul{margin:4px 0 0 16px}
-    .alert li{margin-bottom:2px}
-    /* TABLES */
-    .tbl-wrap{overflow-x:auto;border:2px solid #a0a0a0}
-    .tbl{width:100%;border-collapse:collapse;font-size:12px}
-    .tbl thead th{background:#d0d0d0;color:#1a1a1a;padding:7px 10px;text-align:left;font-weight:700;border-right:1px solid #a0a0a0;border-bottom:2px solid #a0a0a0;white-space:nowrap}
-    .tbl thead th:last-child{border-right:none}
-    .tbl tbody tr:nth-child(odd){background:#f8f8f8}
-    .tbl tbody tr:nth-child(even){background:#f0f0f0}
-    .tbl tbody tr:hover{background:#dde8f5}
-    .tbl tbody td{padding:6px 10px;border-right:1px solid #d8d8d8;border-bottom:1px solid #e0e0e0;vertical-align:middle}
-    .tbl tbody td:last-child{border-right:none}
-    .tbl-actions{display:flex;gap:4px;flex-wrap:wrap}
-    .sort-link{color:#1a1a1a;text-decoration:none;display:flex;align-items:center;gap:3px}
-    .sort-link:hover{color:#4a90d9}
-    /* BADGES */
-    .badge{display:inline-block;padding:2px 7px;font-size:10px;font-weight:700;border:1px solid;text-transform:uppercase;letter-spacing:0.3px}
-    .badge-success{background:#d4edda;border-color:#c3e6cb;color:#155724}
-    .badge-danger{background:#f8d7da;border-color:#f5c6cb;color:#721c24}
-    .badge-warning{background:#fff3cd;border-color:#ffeeba;color:#856404}
-    .badge-info{background:#d1ecf1;border-color:#bee5eb;color:#0c5460}
-    .badge-secondary{background:#e2e3e5;border-color:#d6d8db;color:#383d41}
-    .badge-primary{background:#cce5ff;border-color:#b8daff;color:#004085}
-    /* STATS CARDS */
-    .stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:12px}
-    .stat-card{background:#f0f0f0;border:2px solid #a0a0a0;border-style:ridge;padding:12px;cursor:pointer}
-    .stat-card:hover{background:#e8e8e8}
-    .stat-card-title{font-size:10px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px}
-    .stat-card-value{font-size:22px;font-weight:700;color:#1a1a1a;line-height:1;margin-bottom:4px}
-    .stat-card-sub{font-size:10px;color:#888}
-    .stat-card.primary .stat-card-value{color:#4a90d9}
-    .stat-card.danger .stat-card-value{color:#d9534f}
-    .stat-card.success .stat-card-value{color:#5cb85c}
-    .stat-card.warning .stat-card-value{color:#f0ad4e}
-    /* DASHBOARD CHARTS */
-    .chart-bars{display:flex;align-items:flex-end;gap:6px;height:100px;padding:4px 0}
-    .chart-bar-wrap{display:flex;flex-direction:column;align-items:center;gap:3px;flex:1}
-    .chart-bar{background:#4a90d9;min-height:4px;width:100%;border:1px solid #357abd;transition:height 0.3s}
-    .chart-bar:hover{background:#357abd}
-    .chart-bar-label{font-size:9px;color:#666;text-align:center}
-    .chart-bar-val{font-size:9px;color:#333;font-weight:600}
-    /* FILTERS */
-    .filter-bar{background:#f0f0f0;border:2px solid #a0a0a0;border-style:ridge;padding:10px 14px;margin-bottom:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
-    .filter-bar .form-group{min-width:140px}
-    .filter-bar .form-group label{text-transform:none;letter-spacing:0}
-    /* MODAL */
-    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:5000;align-items:center;justify-content:center;padding:10px}
-    .modal-overlay.open{display:flex}
-    .modal{background:#f0f0f0;border:2px solid #a0a0a0;border-style:ridge;width:100%;max-width:560px;max-height:90vh;display:flex;flex-direction:column}
-    .modal-title-bar{background:#4a90d9;color:#fff;padding:7px 12px;display:flex;align-items:center;justify-content:space-between;font-weight:700;font-size:13px;flex-shrink:0}
-    .modal-close-btn{background:none;border:none;color:#fff;font-size:18px;cursor:pointer;line-height:1;padding:0 4px}
-    .modal-close-btn:hover{color:#ffd}
-    .modal-body{padding:16px;overflow-y:auto;flex:1}
-    .modal-footer{padding:10px 16px;border-top:1px solid #c0c0c0;display:flex;gap:8px;justify-content:flex-end;flex-shrink:0;background:#e8e8e8}
-    .modal.wide{max-width:800px}
-    .modal.xl{max-width:1000px}
-    /* PAGINATION */
-    .pagination{display:flex;flex-wrap:wrap;gap:4px;padding:10px 0;align-items:center}
-    .page-btn{padding:4px 10px;background:#f0f0f0;border:1px solid #a0a0a0;color:#1a1a1a;font-size:12px;text-decoration:none;display:inline-block}
-    .page-btn:hover{background:#d0d0d0;text-decoration:none;color:#1a1a1a}
-    .page-btn.active{background:#4a90d9;color:#fff;border-color:#357abd}
-    .page-info{margin-left:8px;font-size:11px;color:#666}
-    /* TOAST */
-    #toast-container{position:fixed;bottom:36px;right:12px;z-index:9999;display:flex;flex-direction:column;gap:6px}
-    .toast{padding:10px 14px;font-size:12px;border:1px solid;min-width:200px;max-width:320px;animation:toastIn 0.2s ease}
-    .toast-success{background:#d4edda;border-color:#c3e6cb;color:#155724}
-    .toast-error{background:#f8d7da;border-color:#f5c6cb;color:#721c24}
-    .toast-info{background:#d1ecf1;border-color:#bee5eb;color:#0c5460}
-    @keyframes toastIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
-    /* MISC */
-    .stock-ok{color:var(--success);font-weight:700}
-    .stock-low{color:var(--warning);font-weight:700}
-    .stock-critical{color:var(--danger);font-weight:700}
-    .text-right{text-align:right}
-    .text-center{text-align:center}
-    .mt-8{margin-top:8px}
-    .mb-8{margin-bottom:8px}
-    .flex{display:flex}
-    .flex-wrap{flex-wrap:wrap}
-    .gap-6{gap:6px}
-    .gap-10{gap:10px}
-    .align-center{align-items:center}
-    .justify-between{justify-content:space-between}
-    .w-100{width:100%}
-    .cols-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-    .cols-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
-    .notif-panel{position:fixed;top:var(--header-h);right:0;width:320px;max-height:400px;overflow-y:auto;background:#f0f0f0;border:2px solid #a0a0a0;border-style:ridge;z-index:3000;display:none}
-    .notif-panel.open{display:block}
-    .notif-item{padding:8px 12px;border-bottom:1px solid #e0e0e0;font-size:12px;cursor:pointer}
-    .notif-item:hover{background:#e8e8e8}
-    .notif-item.unread{background:#e8f0fb;font-weight:600}
-    .notif-item-title{color:#1a1a1a;font-weight:700;font-size:11px}
-    .notif-item-msg{color:#555;font-size:11px;margin-top:2px}
-    .notif-item-time{color:#888;font-size:10px;margin-top:2px}
-    .notif-panel-header{background:#4a90d9;color:#fff;padding:7px 12px;font-weight:700;font-size:12px;display:flex;justify-content:space-between;align-items:center}
-    .notif-mark-all{font-size:11px;background:none;border:none;color:#cce;cursor:pointer;text-decoration:underline}
-    .confirm-dialog{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:8000;align-items:center;justify-content:center}
-    .confirm-dialog.open{display:flex}
-    .confirm-box{background:#f0f0f0;border:2px solid #a0a0a0;border-style:ridge;padding:0;min-width:300px;max-width:400px}
-    .confirm-title{background:#d9534f;color:#fff;padding:7px 12px;font-weight:700;font-size:13px}
-    .confirm-body{padding:16px;font-size:13px}
-    .confirm-footer{padding:10px 16px;background:#e8e8e8;border-top:1px solid #c0c0c0;display:flex;gap:8px;justify-content:flex-end}
-    .loading-overlay{display:none;position:fixed;inset:0;background:rgba(240,240,240,0.7);z-index:9000;align-items:center;justify-content:center}
-    .loading-overlay.open{display:flex}
-    .loading-spinner{background:#f0f0f0;border:2px ridge #a0a0a0;padding:20px 30px;font-weight:700;font-size:14px;color:#4a90d9}
-    .barcode-svg-wrap{font-family:'Courier New',monospace;text-align:center;border:1px solid #a0a0a0;padding:8px;background:#fff;display:inline-block}
-    .barcode-bars{display:flex;align-items:flex-end;justify-content:center;gap:0;height:50px}
-    .barcode-bar{background:#000;height:100%}
-    .barcode-bar.t{height:70%}
-    .barcode-text{font-size:10px;letter-spacing:2px;margin-top:4px}
-    .quick-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
-    .recent-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
-    .dashboard-row{display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:12px}
-    .print-only{display:none}
-    @media print{
-        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-        #header,#sidebar,#statusbar,#toast-container,.no-print,button.no-print,.page-header-actions{display:none!important}
-        #main{margin:0;padding:0}
-        .print-only{display:block}
-        body{font-size:11px}
-        .tbl{font-size:10px}
-    }
-    @media(max-width:900px){
-        :root{--sidebar-w:220px}
-        #sidebar{transform:translateX(-100%)}
-        body.sidebar-collapsed #main-content{margin-left:0}
-        #sidebar.collapsed{width:var(--sidebar-w)}
-        #sidebar.collapsed .nav-label{display:inline}
-        #sidebar.collapsed .nav-item{justify-content:flex-start;padding:7px 12px}
-        #sidebar.collapsed .nav-section-title{display:block}
-        #sidebar.collapsed .nav-item:hover::after{display:none}
-        #sidebar{transform:translateX(-220px);width:220px}
-        #sidebar.open{transform:translateX(0)}
-body.sidebar-collapsed #main-content{margin-left:var(--sidebar-collapsed-w)}
-        #sidebar-overlay.open{display:block}
-        #hamburger{display:block}
-        #main{margin-left:0}
-        .stats-grid{grid-template-columns:repeat(2,1fr)}
-        .recent-grid,.dashboard-row{grid-template-columns:1fr}
-        .form-grid-2,.form-grid-3{grid-template-columns:1fr}
-        .cols-2,.cols-3{grid-template-columns:1fr}
-        .modal{max-width:100%;max-height:100vh}
-        .notif-panel{width:100%;right:0}
-    }
-    @media(max-width:500px){
-        .stats-grid{grid-template-columns:repeat(2,1fr)}
-        .page-header{flex-direction:column;align-items:flex-start}
-        .filter-bar .form-group{min-width:100%;width:100%}
-        .filter-bar{flex-direction:column}
-        .tbl-wrap{font-size:11px}
-        #header-title span{display:none}
-    }
-    </style>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title><?= h($pageTitle) ?> - <?= h(APP_NAME) ?></title>
+        <style>
+            *, *::before, *::after {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0
+            }
+            :root {
+                --bg: #e0e0e0;
+                --surface: #f0f0f0;
+                --surface2: #f8f8f8;
+                --border: #a0a0a0;
+                --border-dark: #707070;
+                --text: #1a1a1a;
+                --text-muted: #555;
+                --text-faint: #888;
+                --primary: #4a90d9;
+                --primary-dark: #357abd;
+                --primary-darker: #2a6099;
+                --danger: #d9534f;
+                --danger-dark: #c9302c;
+                --success: #5cb85c;
+                --success-dark: #449d44;
+                --warning: #f0ad4e;
+                --warning-dark: #ec971f;
+                --sidebar-w: 220px;
+                --sidebar-collapsed-w: 42px;
+                --header-h: 42px;
+                --status-h: 28px;
+                --font: 'Segoe UI', Arial, sans-serif
+            }
+            body {
+                font-family: var(--font);
+                background: var(--bg);
+                color: var(--text);
+                font-size: 13px;
+                min-height: 100vh;
+                overflow-x: hidden
+            }
+            a {
+                color: var(--primary);
+                text-decoration: none
+            }
+            a:hover {
+                color: var(--primary-dark);
+                text-decoration: underline
+            }
+            button, input, select, textarea {
+                font-family: var(--font);
+                font-size: 13px
+            }
+            table {
+                border-collapse: collapse;
+                width: 100%
+            }
+            svg {
+                display: inline-block;
+                vertical-align: middle
+            }
+            /* HEADER */
+            #header {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: var(--header-h);
+                background: #4a90d9;
+                border-bottom: 2px solid #357abd;
+                z-index: 1000;
+                display: flex;
+                align-items: center;
+                padding: 0 8px;
+                gap: 8px
+            }
+            #hamburger {
+                display: none;
+                background: #357abd;
+                border: 1px outset #6aaae9;
+                color: #fff;
+                padding: 4px 8px;
+                cursor: pointer;
+                font-size: 16px;
+                line-height: 1
+            }
+            #header-title {
+                color: #fff;
+                font-size: 15px;
+                font-weight: 700;
+                letter-spacing: 0.5px;
+                flex: 1;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis
+            }
+            #header-title span {
+                font-size: 11px;
+                font-weight: 400;
+                opacity: 0.85;
+                margin-left: 6px
+            }
+            .header-actions {
+                display: flex;
+                align-items: center;
+                gap: 6px
+            }
+            .notif-btn {
+                position: relative;
+                background: #357abd;
+                border: 1px outset #6aaae9;
+                color: #fff;
+                padding: 4px 8px;
+                cursor: pointer;
+                font-size: 13px;
+                line-height: 1
+            }
+            .notif-btn:hover {
+                background: #2a6099
+            }
+            .notif-badge {
+                position: absolute;
+                top: -4px;
+                right: -4px;
+                background: #d9534f;
+                color: #fff;
+                border-radius: 50%;
+                width: 16px;
+                height: 16px;
+                font-size: 10px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: 700
+            }
+            .user-menu-wrap {
+                position: relative
+            }
+            .user-btn {
+                background: #357abd;
+                border: 1px outset #6aaae9;
+                color: #fff;
+                padding: 4px 10px;
+                cursor: pointer;
+                font-size: 12px;
+                display: flex;
+                align-items: center;
+                gap: 4px
+            }
+            .user-btn:hover {
+                background: #2a6099
+            }
+            .user-dropdown {
+                display: none;
+                position: absolute;
+                right: 0;
+                top: 100%;
+                background: #f0f0f0;
+                border: 2px solid #a0a0a0;
+                border-style: ridge;
+                min-width: 160px;
+                z-index: 2000
+            }
+            .user-dropdown.open {
+                display: block
+            }
+            .user-dropdown-header {
+                padding: 8px 12px;
+                background: #e0e0e0;
+                border-bottom: 1px solid #a0a0a0;
+                font-size: 11px
+            }
+            .user-dropdown-header strong {
+                display: block;
+                font-size: 13px;
+                color: #1a1a1a
+            }
+            .user-dropdown a, .user-dropdown button {
+                display: block;
+                width: 100%;
+                text-align: left;
+                padding: 7px 12px;
+                color: #1a1a1a;
+                text-decoration: none;
+                background: none;
+                border: none;
+                cursor: pointer;
+                font-size: 12px;
+                border-bottom: 1px solid #e0e0e0
+            }
+            .user-dropdown a:hover, .user-dropdown button:hover {
+                background: #4a90d9;
+                color: #fff
+            }
+            /* SIDEBAR */
+            #sidebar {
+                position: fixed;
+                top: var(--header-h);
+                left: 0;
+                bottom: var(--status-h);
+                width: var(--sidebar-w);
+                background: #f0f0f0;
+                border-right: 2px solid #a0a0a0;
+                overflow-y: auto;
+                overflow-x: hidden;
+                z-index: 900;
+                transition: width 0.2s ease, transform 0.2s ease
+            }
+            #sidebar.collapsed {
+                width: var(--sidebar-collapsed-w);
+                overflow: visible
+            }
+            #sidebar.collapsed .nav-section-title {
+                display: none
+            }
+            #sidebar.collapsed .nav-item {
+                justify-content: center;
+                padding: 7px 0;
+                position: relative
+            }
+            #sidebar.collapsed .nav-item span.nav-icon {
+                margin: 0
+            }
+            #sidebar.collapsed .nav-item .nav-label {
+                display: none
+            }
+            #sidebar.collapsed .nav-item:hover::after {
+                content: attr(data-label);
+                position: absolute;
+                left: calc(var(--sidebar-collapsed-w) + 4px);
+                top: 50%;
+                transform: translateY(-50%);
+                background: #333;
+                color: #fff;
+                padding: 3px 8px;
+                font-size: 11px;
+                white-space: nowrap;
+                border-radius: 3px;
+                z-index: 9999;
+                pointer-events: none
+            }
+            #sidebar-overlay {
+                display: none;
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.4);
+                z-index: 890
+            }
+            .nav-section {
+                padding: 4px 0;
+                border-bottom: 1px solid #c8c8c8
+            }
+            .nav-section-title {
+                padding: 6px 10px;
+                font-size: 10px;
+                font-weight: 700;
+                color: #888;
+                text-transform: uppercase;
+                letter-spacing: 0.8px;
+                background: #e8e8e8;
+                border-bottom: 1px solid #d0d0d0
+            }
+            .nav-item {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 7px 12px;
+                color: #1a1a1a;
+                text-decoration: none;
+                font-size: 12px;
+                font-weight: 500;
+                border-bottom: 1px solid #e0e0e0;
+                cursor: pointer;
+                transition: none
+            }
+            .nav-label {
+                flex: 1;
+                white-space: nowrap;
+                overflow: hidden
+            }
+            .nav-item:hover {
+                background: #d0d0d0;
+                color: #1a1a1a;
+                text-decoration: none
+            }
+            .nav-item.active {
+                background: #4a90d9;
+                color: #fff
+            }
+            .nav-item.active:hover {
+                background: #357abd
+            }
+            .nav-icon {
+                width: 16px;
+                height: 16px;
+                flex-shrink: 0
+            }
+            /* MAIN CONTENT */
+            #main {
+                margin-left: var(--sidebar-w);
+                margin-top: var(--header-h);
+                margin-bottom: var(--status-h);
+                padding: 12px;
+                min-height: calc(100vh - var(--header-h) - var(--status-h));
+                background: var(--bg)
+            }
+            /* STATUS BAR */
+            #statusbar {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                height: var(--status-h);
+                background: #e8e8e8;
+                border-top: 1px solid #a0a0a0;
+                display: flex;
+                align-items: center;
+                padding: 0 10px;
+                gap: 16px;
+                font-size: 11px;
+                color: #555;
+                z-index: 1000
+            }
+            .sb-item {
+                display: flex;
+                align-items: center;
+                gap: 4px
+            }
+            .sb-sep {
+                color: #a0a0a0
+            }
+            #clock {
+                margin-left: auto;
+                font-weight: 600;
+                color: #333
+            }
+            /* PAGE HEADER */
+            .page-header {
+                background: #f0f0f0;
+                border: 2px solid #a0a0a0;
+                border-style: ridge;
+                padding: 8px 14px;
+                margin-bottom: 12px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                flex-wrap: wrap;
+                gap: 8px
+            }
+            .page-header h1 {
+                font-size: 16px;
+                font-weight: 700;
+                color: #1a1a1a;
+                display: flex;
+                align-items: center;
+                gap: 8px
+            }
+            .page-header-actions {
+                display: flex;
+                gap: 6px;
+                flex-wrap: wrap
+            }
+            /* LABELFRAME */
+            .lf {
+                border: 2px solid #a0a0a0;
+                border-style: groove;
+                padding: 12px 14px;
+                margin-bottom: 12px;
+                position: relative
+            }
+            .lf-title {
+                position: absolute;
+                top: -10px;
+                left: 10px;
+                background: #f0f0f0;
+                padding: 0 6px;
+                font-size: 11px;
+                font-weight: 700;
+                color: #555;
+                text-transform: uppercase;
+                letter-spacing: 0.5px
+            }
+            /* BUTTONS */
+            .btn {
+                display: inline-flex;
+                align-items: center;
+                gap: 5px;
+                padding: 5px 12px;
+                font-size: 12px;
+                font-weight: 600;
+                border: 2px outset;
+                cursor: pointer;
+                text-decoration: none;
+                font-family: var(--font);
+                line-height: 1.4;
+                white-space: nowrap;
+                min-height: 28px
+            }
+            .btn:hover {
+                text-decoration: none
+            }
+            .btn:active {
+                border-style: inset
+            }
+            .btn-primary {
+                background: var(--primary);
+                color: #fff;
+                border-color: #6aaae9
+            }
+            .btn-primary:hover {
+                background: var(--primary-dark);
+                color: #fff
+            }
+            .btn-primary:active {
+                background: var(--primary-darker)
+            }
+            .btn-danger {
+                background: var(--danger);
+                color: #fff;
+                border-color: #e87773
+            }
+            .btn-danger:hover {
+                background: var(--danger-dark);
+                color: #fff
+            }
+            .btn-success {
+                background: var(--success);
+                color: #fff;
+                border-color: #7dcc7d
+            }
+            .btn-success:hover {
+                background: var(--success-dark);
+                color: #fff
+            }
+            .btn-warning {
+                background: var(--warning);
+                color: #1a1a1a;
+                border-color: #f5c97e
+            }
+            .btn-warning:hover {
+                background: var(--warning-dark)
+            }
+            .btn-secondary {
+                background: #c0c0c0;
+                color: #1a1a1a;
+                border-color: #d8d8d8
+            }
+            .btn-secondary:hover {
+                background: #a8a8a8
+            }
+            .btn-sm {
+                padding: 3px 8px;
+                font-size: 11px;
+                min-height: 24px
+            }
+            .btn-xs {
+                padding: 2px 6px;
+                font-size: 10px;
+                min-height: 20px
+            }
+            /* FORMS */
+            .form-grid {
+                display: grid;
+                grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));
+                gap: 10px
+            }
+            .form-grid-2 {
+                grid-template-columns:repeat(2, 1fr)
+            }
+            .form-grid-3 {
+                grid-template-columns:repeat(3, 1fr)
+            }
+            .form-group {
+                display: flex;
+                flex-direction: column;
+                gap: 3px
+            }
+            .form-group label {
+                font-size: 11px;
+                font-weight: 700;
+                color: #333;
+                text-transform: uppercase;
+                letter-spacing: 0.3px
+            }
+            .form-group input, .form-group select, .form-group textarea {
+                padding: 5px 7px;
+                border: 2px inset #a0a0a0;
+                background: #fff;
+                color: #222;
+                font-size: 12px;
+                font-family: var(--font);
+                outline: none
+            }
+            .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+                border-color: #4a90d9;
+                border-style: solid
+            }
+            .form-group textarea {
+                resize: vertical;
+                min-height: 70px
+            }
+            .form-group select {
+                appearance: auto;
+                background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23555'/%3E%3C/svg%3E") no-repeat right 6px center
+            }
+            .form-group.full {
+                grid-column: 1/-1
+            }
+            .form-error {
+                font-size: 11px;
+                color: var(--danger)
+            }
+            .required-mark {
+                color: var(--danger)
+            }
+            /* ALERTS */
+            .alert {
+                padding: 8px 12px;
+                margin-bottom: 10px;
+                font-size: 12px;
+                border: 1px solid;
+                display: flex;
+                align-items: flex-start;
+                gap: 6px
+            }
+            .alert-danger {
+                background: #f8d7da;
+                border-color: #f5c6cb;
+                color: #721c24
+            }
+            .alert-success {
+                background: #d4edda;
+                border-color: #c3e6cb;
+                color: #155724
+            }
+            .alert-warning {
+                background: #fff3cd;
+                border-color: #ffeeba;
+                color: #856404
+            }
+            .alert-info {
+                background: #d1ecf1;
+                border-color: #bee5eb;
+                color: #0c5460
+            }
+            .alert ul {
+                margin: 4px 0 0 16px
+            }
+            .alert li {
+                margin-bottom: 2px
+            }
+            /* TABLES */
+            .tbl-wrap {
+                overflow-x: auto;
+                border: 2px solid #a0a0a0
+            }
+            .tbl {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 12px
+            }
+            .tbl thead th {
+                background: #d0d0d0;
+                color: #1a1a1a;
+                padding: 7px 10px;
+                text-align: left;
+                font-weight: 700;
+                border-right: 1px solid #a0a0a0;
+                border-bottom: 2px solid #a0a0a0;
+                white-space: nowrap
+            }
+            .tbl thead th:last-child {
+                border-right: none
+            }
+            .tbl tbody tr:nth-child(odd) {
+                background: #f8f8f8
+            }
+            .tbl tbody tr:nth-child(even) {
+                background: #f0f0f0
+            }
+            .tbl tbody tr:hover {
+                background: #dde8f5
+            }
+            .tbl tbody td {
+                padding: 6px 10px;
+                border-right: 1px solid #d8d8d8;
+                border-bottom: 1px solid #e0e0e0;
+                vertical-align: middle
+            }
+            .tbl tbody td:last-child {
+                border-right: none
+            }
+            .tbl-actions {
+                display: flex;
+                gap: 4px;
+                flex-wrap: wrap
+            }
+            .sort-link {
+                color: #1a1a1a;
+                text-decoration: none;
+                display: flex;
+                align-items: center;
+                gap: 3px
+            }
+            .sort-link:hover {
+                color: #4a90d9
+            }
+            /* BADGES */
+            .badge {
+                display: inline-block;
+                padding: 2px 7px;
+                font-size: 10px;
+                font-weight: 700;
+                border: 1px solid;
+                text-transform: uppercase;
+                letter-spacing: 0.3px
+            }
+            .badge-success {
+                background: #d4edda;
+                border-color: #c3e6cb;
+                color: #155724
+            }
+            .badge-danger {
+                background: #f8d7da;
+                border-color: #f5c6cb;
+                color: #721c24
+            }
+            .badge-warning {
+                background: #fff3cd;
+                border-color: #ffeeba;
+                color: #856404
+            }
+            .badge-info {
+                background: #d1ecf1;
+                border-color: #bee5eb;
+                color: #0c5460
+            }
+            .badge-secondary {
+                background: #e2e3e5;
+                border-color: #d6d8db;
+                color: #383d41
+            }
+            .badge-primary {
+                background: #cce5ff;
+                border-color: #b8daff;
+                color: #004085
+            }
+            /* STATS CARDS */
+            .stats-grid {
+                display: grid;
+                grid-template-columns:repeat(auto-fill, minmax(160px, 1fr));
+                gap: 10px;
+                margin-bottom: 12px
+            }
+            .stat-card {
+                background: #f0f0f0;
+                border: 2px solid #a0a0a0;
+                border-style: ridge;
+                padding: 12px;
+                cursor: pointer
+            }
+            .stat-card:hover {
+                background: #e8e8e8
+            }
+            .stat-card-title {
+                font-size: 10px;
+                font-weight: 700;
+                color: #666;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                margin-bottom: 6px
+            }
+            .stat-card-value {
+                font-size: 22px;
+                font-weight: 700;
+                color: #1a1a1a;
+                line-height: 1;
+                margin-bottom: 4px
+            }
+            .stat-card-sub {
+                font-size: 10px;
+                color: #888
+            }
+            .stat-card.primary .stat-card-value {
+                color: #4a90d9
+            }
+            .stat-card.danger .stat-card-value {
+                color: #d9534f
+            }
+            .stat-card.success .stat-card-value {
+                color: #5cb85c
+            }
+            .stat-card.warning .stat-card-value {
+                color: #f0ad4e
+            }
+            /* DASHBOARD CHARTS */
+            .chart-bars {
+                display: flex;
+                align-items: flex-end;
+                gap: 6px;
+                height: 100px;
+                padding: 4px 0
+            }
+            .chart-bar-wrap {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 3px;
+                flex: 1
+            }
+            .chart-bar {
+                background: #4a90d9;
+                min-height: 4px;
+                width: 100%;
+                border: 1px solid #357abd;
+                transition: height 0.3s
+            }
+            .chart-bar:hover {
+                background: #357abd
+            }
+            .chart-bar-label {
+                font-size: 9px;
+                color: #666;
+                text-align: center
+            }
+            .chart-bar-val {
+                font-size: 9px;
+                color: #333;
+                font-weight: 600
+            }
+            /* FILTERS */
+            .filter-bar {
+                background: #f0f0f0;
+                border: 2px solid #a0a0a0;
+                border-style: ridge;
+                padding: 10px 14px;
+                margin-bottom: 10px;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                align-items: flex-end
+            }
+            .filter-bar .form-group {
+                min-width: 140px
+            }
+            .filter-bar .form-group label {
+                text-transform: none;
+                letter-spacing: 0
+            }
+            /* MODAL */
+            .modal-overlay {
+                display: none;
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 5000;
+                align-items: center;
+                justify-content: center;
+                padding: 10px
+            }
+            .modal-overlay.open {
+                display: flex
+            }
+            .modal {
+                background: #f0f0f0;
+                border: 2px solid #a0a0a0;
+                border-style: ridge;
+                width: 100%;
+                max-width: 560px;
+                max-height: 90vh;
+                display: flex;
+                flex-direction: column
+            }
+            .modal-title-bar {
+                background: #4a90d9;
+                color: #fff;
+                padding: 7px 12px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                font-weight: 700;
+                font-size: 13px;
+                flex-shrink: 0
+            }
+            .modal-close-btn {
+                background: none;
+                border: none;
+                color: #fff;
+                font-size: 18px;
+                cursor: pointer;
+                line-height: 1;
+                padding: 0 4px
+            }
+            .modal-close-btn:hover {
+                color: #ffd
+            }
+            .modal-body {
+                padding: 16px;
+                overflow-y: auto;
+                flex: 1
+            }
+            .modal-footer {
+                padding: 10px 16px;
+                border-top: 1px solid #c0c0c0;
+                display: flex;
+                gap: 8px;
+                justify-content: flex-end;
+                flex-shrink: 0;
+                background: #e8e8e8
+            }
+            .modal.wide {
+                max-width: 800px
+            }
+            .modal.xl {
+                max-width: 1000px
+            }
+            /* PAGINATION */
+            .pagination {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 4px;
+                padding: 10px 0;
+                align-items: center
+            }
+            .page-btn {
+                padding: 4px 10px;
+                background: #f0f0f0;
+                border: 1px solid #a0a0a0;
+                color: #1a1a1a;
+                font-size: 12px;
+                text-decoration: none;
+                display: inline-block
+            }
+            .page-btn:hover {
+                background: #d0d0d0;
+                text-decoration: none;
+                color: #1a1a1a
+            }
+            .page-btn.active {
+                background: #4a90d9;
+                color: #fff;
+                border-color: #357abd
+            }
+            .page-info {
+                margin-left: 8px;
+                font-size: 11px;
+                color: #666
+            }
+            /* TOAST */
+            #toast-container {
+                position: fixed;
+                bottom: 36px;
+                right: 12px;
+                z-index: 9999;
+                display: flex;
+                flex-direction: column;
+                gap: 6px
+            }
+            .toast {
+                padding: 10px 14px;
+                font-size: 12px;
+                border: 1px solid;
+                min-width: 200px;
+                max-width: 320px;
+                animation: toastIn 0.2s ease
+            }
+            .toast-success {
+                background: #d4edda;
+                border-color: #c3e6cb;
+                color: #155724
+            }
+            .toast-error {
+                background: #f8d7da;
+                border-color: #f5c6cb;
+                color: #721c24
+            }
+            .toast-info {
+                background: #d1ecf1;
+                border-color: #bee5eb;
+                color: #0c5460
+            }
+            @keyframes toastIn {
+                from {
+                    opacity: 0;
+                    transform: translateX(20px)
+                }
+                to {
+                    opacity: 1;
+                    transform: translateX(0)
+                }
+            }
+            /* MISC */
+            .stock-ok {
+                color: var(--success);
+                font-weight: 700
+            }
+            .stock-low {
+                color: var(--warning);
+                font-weight: 700
+            }
+            .stock-critical {
+                color: var(--danger);
+                font-weight: 700
+            }
+            .text-right {
+                text-align: right
+            }
+            .text-center {
+                text-align: center
+            }
+            .mt-8 {
+                margin-top: 8px
+            }
+            .mb-8 {
+                margin-bottom: 8px
+            }
+            .flex {
+                display: flex
+            }
+            .flex-wrap {
+                flex-wrap: wrap
+            }
+            .gap-6 {
+                gap: 6px
+            }
+            .gap-10 {
+                gap: 10px
+            }
+            .align-center {
+                align-items: center
+            }
+            .justify-between {
+                justify-content: space-between
+            }
+            .w-100 {
+                width: 100%
+            }
+            .cols-2 {
+                display: grid;
+                grid-template-columns:1fr 1fr;
+                gap: 10px
+            }
+            .cols-3 {
+                display: grid;
+                grid-template-columns:1fr 1fr 1fr;
+                gap: 10px
+            }
+            .notif-panel {
+                position: fixed;
+                top: var(--header-h);
+                right: 0;
+                width: 320px;
+                max-height: 400px;
+                overflow-y: auto;
+                background: #f0f0f0;
+                border: 2px solid #a0a0a0;
+                border-style: ridge;
+                z-index: 3000;
+                display: none
+            }
+            .notif-panel.open {
+                display: block
+            }
+            .notif-item {
+                padding: 8px 12px;
+                border-bottom: 1px solid #e0e0e0;
+                font-size: 12px;
+                cursor: pointer
+            }
+            .notif-item:hover {
+                background: #e8e8e8
+            }
+            .notif-item.unread {
+                background: #e8f0fb;
+                font-weight: 600
+            }
+            .notif-item-title {
+                color: #1a1a1a;
+                font-weight: 700;
+                font-size: 11px
+            }
+            .notif-item-msg {
+                color: #555;
+                font-size: 11px;
+                margin-top: 2px
+            }
+            .notif-item-time {
+                color: #888;
+                font-size: 10px;
+                margin-top: 2px
+            }
+            .notif-panel-header {
+                background: #4a90d9;
+                color: #fff;
+                padding: 7px 12px;
+                font-weight: 700;
+                font-size: 12px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center
+            }
+            .notif-mark-all {
+                font-size: 11px;
+                background: none;
+                border: none;
+                color: #cce;
+                cursor: pointer;
+                text-decoration: underline
+            }
+            .confirm-dialog {
+                display: none;
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 8000;
+                align-items: center;
+                justify-content: center
+            }
+            .confirm-dialog.open {
+                display: flex
+            }
+            .confirm-box {
+                background: #f0f0f0;
+                border: 2px solid #a0a0a0;
+                border-style: ridge;
+                padding: 0;
+                min-width: 300px;
+                max-width: 400px
+            }
+            .confirm-title {
+                background: #d9534f;
+                color: #fff;
+                padding: 7px 12px;
+                font-weight: 700;
+                font-size: 13px
+            }
+            .confirm-body {
+                padding: 16px;
+                font-size: 13px
+            }
+            .confirm-footer {
+                padding: 10px 16px;
+                background: #e8e8e8;
+                border-top: 1px solid #c0c0c0;
+                display: flex;
+                gap: 8px;
+                justify-content: flex-end
+            }
+            .loading-overlay {
+                display: none;
+                position: fixed;
+                inset: 0;
+                background: rgba(240, 240, 240, 0.7);
+                z-index: 9000;
+                align-items: center;
+                justify-content: center
+            }
+            .loading-overlay.open {
+                display: flex
+            }
+            .loading-spinner {
+                background: #f0f0f0;
+                border: 2px ridge #a0a0a0;
+                padding: 20px 30px;
+                font-weight: 700;
+                font-size: 14px;
+                color: #4a90d9
+            }
+            .barcode-svg-wrap {
+                font-family: 'Courier New', monospace;
+                text-align: center;
+                border: 1px solid #a0a0a0;
+                padding: 8px;
+                background: #fff;
+                display: inline-block
+            }
+            .barcode-bars {
+                display: flex;
+                align-items: flex-end;
+                justify-content: center;
+                gap: 0;
+                height: 50px
+            }
+            .barcode-bar {
+                background: #000;
+                height: 100%
+            }
+            .barcode-bar.t {
+                height: 70%
+            }
+            .barcode-text {
+                font-size: 10px;
+                letter-spacing: 2px;
+                margin-top: 4px
+            }
+            .quick-actions {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                margin-bottom: 12px
+            }
+            .recent-grid {
+                display: grid;
+                grid-template-columns:1fr 1fr;
+                gap: 10px;
+                margin-bottom: 12px
+            }
+            .dashboard-row {
+                display: grid;
+                grid-template-columns:2fr 1fr;
+                gap: 10px;
+                margin-bottom: 12px
+            }
+            .print-only {
+                display: none
+            }
+            @media print {
+                * {
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                }
+                #header, #sidebar, #statusbar, #toast-container, .no-print, button.no-print, .page-header-actions {
+                    display: none !important
+                }
+                #main {
+                    margin: 0;
+                    padding: 0
+                }
+                .print-only {
+                    display: block
+                }
+                body {
+                    font-size: 11px
+                }
+                .tbl {
+                    font-size: 10px
+                }
+            }
+            @media (max-width: 900px) {
+                :root {
+                    --sidebar-w: 220px
+                }
+                #sidebar {
+                    transform: translateX(-100%)
+                }
+                body.sidebar-collapsed #main-content {
+                    margin-left: 0
+                }
+                #sidebar.collapsed {
+                    width: var(--sidebar-w)
+                }
+                #sidebar.collapsed .nav-label {
+                    display: inline
+                }
+                #sidebar.collapsed .nav-item {
+                    justify-content: flex-start;
+                    padding: 7px 12px
+                }
+                #sidebar.collapsed .nav-section-title {
+                    display: block
+                }
+                #sidebar.collapsed .nav-item:hover::after {
+                    display: none
+                }
+                #sidebar {
+                    transform: translateX(-220px);
+                    width: 220px
+                }
+                #sidebar.open {
+                    transform: translateX(0)
+                }
+                body.sidebar-collapsed #main-content {
+                    margin-left: var(--sidebar-collapsed-w)
+                }
+                #sidebar-overlay.open {
+                    display: block
+                }
+                #hamburger {
+                    display: block
+                }
+                #main {
+                    margin-left: 0
+                }
+                .stats-grid {
+                    grid-template-columns:repeat(2, 1fr)
+                }
+                .recent-grid, .dashboard-row {
+                    grid-template-columns:1fr
+                }
+                .form-grid-2, .form-grid-3 {
+                    grid-template-columns:1fr
+                }
+                .cols-2, .cols-3 {
+                    grid-template-columns:1fr
+                }
+                .modal {
+                    max-width: 100%;
+                    max-height: 100vh
+                }
+                .notif-panel {
+                    width: 100%;
+                    right: 0
+                }
+            }
+            @media (max-width: 500px) {
+                .stats-grid {
+                    grid-template-columns:repeat(2, 1fr)
+                }
+                .page-header {
+                    flex-direction: column;
+                    align-items: flex-start
+                }
+                .filter-bar .form-group {
+                    min-width: 100%;
+                    width: 100%
+                }
+                .filter-bar {
+                    flex-direction: column
+                }
+                .tbl-wrap {
+                    font-size: 11px
+                }
+                #header-title span {
+                    display: none
+                }
+            }
+        </style>
     </head>
     <body>
-    <div id="loading-overlay" class="loading-overlay"><div class="loading-spinner">⏳ Processing...</div></div>
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="loading-spinner">⏳ Processing...</div>
+    </div>
     <div id="confirm-dialog" class="confirm-dialog">
         <div class="confirm-box">
             <div class="confirm-title" id="confirm-title">Confirm Action</div>
@@ -1937,7 +3052,8 @@ body.sidebar-collapsed #main-content{margin-left:var(--sidebar-collapsed-w)}
             <div style="position:relative">
                 <button class="notif-btn" onclick="toggleNotifPanel()" title="Notifications">
                     &#128276;
-                    <?php if ($unreadCount > 0): ?><span class="notif-badge"><?= $unreadCount > 9 ? '9+' : $unreadCount ?></span><?php endif; ?>
+                    <?php if ($unreadCount > 0): ?><span
+                            class="notif-badge"><?= $unreadCount > 9 ? '9+' : $unreadCount ?></span><?php endif; ?>
                 </button>
                 <div id="notif-panel" class="notif-panel">
                     <div class="notif-panel-header">
@@ -1945,15 +3061,16 @@ body.sidebar-collapsed #main-content{margin-left:var(--sidebar-collapsed-w)}
                         <button class="notif-mark-all" onclick="markAllNotifRead()">Mark all read</button>
                     </div>
                     <?php if (empty($notifications)): ?>
-                    <div style="padding:16px;text-align:center;color:#888;font-size:12px;">No notifications</div>
+                        <div style="padding:16px;text-align:center;color:#888;font-size:12px;">No notifications</div>
                     <?php else:
         foreach ($notifications as $n): ?>
-                    <div class="notif-item <?= $n['is_read'] ? '' : 'unread' ?>" onclick="markNotifRead(<?= $n['id'] ?>)">
-                        <div class="notif-item-title"><?= h($n['title']) ?></div>
-                        <div class="notif-item-msg"><?= h(substr($n['message'], 0, 80)) ?>...</div>
-                        <div class="notif-item-time"><?= h($n['created_at']) ?></div>
-                    </div>
-                    <?php endforeach;
+                            <div class="notif-item <?= $n['is_read'] ? '' : 'unread' ?>"
+                                 onclick="markNotifRead(<?= $n['id'] ?>)">
+                                <div class="notif-item-title"><?= h($n['title']) ?></div>
+                                <div class="notif-item-msg"><?= h(substr($n['message'], 0, 80)) ?>...</div>
+                                <div class="notif-item-time"><?= h($n['created_at']) ?></div>
+                            </div>
+                        <?php endforeach;
     endif; ?>
                 </div>
             </div>
@@ -2018,18 +3135,19 @@ body.sidebar-collapsed #main-content{margin-left:var(--sidebar-collapsed-w)}
         foreach ($navItems as $item):
             if (isset($item['section'])):
                 ?>
-        <div class="nav-section-title"><?= h($item['section']) ?></div>
-        <?php elseif (canAccess($item['roles'])):
+                <div class="nav-section-title"><?= h($item['section']) ?></div>
+            <?php elseif (canAccess($item['roles'])):
                 $isActive = ($activePage === $item['page']); ?>
-        <a href="?page=<?= h($item['page']) ?>" class="nav-item <?= $isActive ? 'active' : '' ?>" data-label="<?= h($item['label']) ?>">
-            <span class="nav-icon"><?= $item['icon'] ?></span>
-            <span class="nav-label"><?= h($item['label']) ?></span>
-        </a>
-        <?php endif;
+                <a href="?page=<?= h($item['page']) ?>" class="nav-item <?= $isActive ? 'active' : '' ?>"
+                   data-label="<?= h($item['label']) ?>">
+                    <span class="nav-icon"><?= $item['icon'] ?></span>
+                    <span class="nav-label"><?= h($item['label']) ?></span>
+                </a>
+            <?php endif;
         endforeach; ?>
     </nav>
     <main id="main">
-    <?= $pageContent ?>
+        <?= $pageContent ?>
     </main>
     <footer id="statusbar">
         <span class="sb-item">&#128100; <?= h($user['name']) ?></span>
@@ -2040,98 +3158,150 @@ body.sidebar-collapsed #main-content{margin-left:var(--sidebar-collapsed-w)}
         <span id="clock" class="sb-item"></span>
     </footer>
     <script>
-    var CSRF_TOKEN = <?= json_encode(csrf()) ?>;
-    var CURRENCY = <?= json_encode(getSetting('currency_symbol') ?: 'Rs.') ?>;
-    var TAX_PCT = <?= json_encode((float) getSetting('default_tax_percent') / 100) ?>;
-    function toggleSidebar(){
-        const isMobile = window.innerWidth <= 900;
-        if(isMobile){
-            document.getElementById('sidebar').classList.toggle('open');
-            document.getElementById('sidebar-overlay').classList.toggle('open');
-        } else {
-            const sidebar = document.getElementById('sidebar');
-            const collapsed = sidebar.classList.toggle('collapsed');
-            document.body.classList.toggle('sidebar-collapsed', collapsed);
-            localStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0');
-        }
-    }
-    function initSidebar(){
-        const isMobile = window.innerWidth <= 900;
-        if(isMobile){
-            document.getElementById('sidebar').classList.remove('collapsed');
-            document.body.classList.remove('sidebar-collapsed');
-        } else {
-            const saved = localStorage.getItem('sidebarCollapsed');
-            if(saved === '1'){
-                document.getElementById('sidebar').classList.add('collapsed');
-                document.body.classList.add('sidebar-collapsed');
+        var CSRF_TOKEN = <?= json_encode(csrf()) ?>;
+        var CURRENCY = <?= json_encode(getSetting('currency_symbol') ?: 'Rs.') ?>;
+        var TAX_PCT = <?= json_encode((float) getSetting('default_tax_percent') / 100) ?>;
+        function toggleSidebar() {
+            const isMobile = window.innerWidth <= 900;
+            if (isMobile) {
+                document.getElementById('sidebar').classList.toggle('open');
+                document.getElementById('sidebar-overlay').classList.toggle('open');
+            } else {
+                const sidebar = document.getElementById('sidebar');
+                const collapsed = sidebar.classList.toggle('collapsed');
+                document.body.classList.toggle('sidebar-collapsed', collapsed);
+                localStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0');
             }
         }
-    }
-    initSidebar();
-    function toggleUserMenu(){
-        document.getElementById('user-dropdown').classList.toggle('open');
-    }
-    function toggleNotifPanel(){
-        document.getElementById('notif-panel').classList.toggle('open');
-        document.getElementById('user-dropdown').classList.remove('open');
-    }
-    document.addEventListener('click', function(e){
-        if (!e.target.closest('.user-menu-wrap')) document.getElementById('user-dropdown').classList.remove('open');
-        if (!e.target.closest('.notif-btn') && !e.target.closest('#notif-panel')) document.getElementById('notif-panel').classList.remove('open');
-    });
-    function showToast(msg, type){
-        type = type || 'info';
-        var c = document.getElementById('toast-container');
-        var t = document.createElement('div');
-        t.className = 'toast toast-' + type;
-        t.textContent = msg;
-        c.appendChild(t);
-        setTimeout(function(){ t.style.opacity='0'; t.style.transition='opacity 0.5s'; setTimeout(function(){ if(t.parentNode)t.parentNode.removeChild(t); }, 500); }, 3500);
-    }
-    function showLoading(){ document.getElementById('loading-overlay').classList.add('open'); }
-    function hideLoading(){ document.getElementById('loading-overlay').classList.remove('open'); }
-    var _confirmCb = null;
-    function confirmAction(msg, cb, title){
-        title = title || 'Confirm Delete';
-        document.getElementById('confirm-msg').textContent = msg || 'Are you sure you want to proceed? This action cannot be undone.';
-        document.getElementById('confirm-title').textContent = title;
-        document.getElementById('confirm-dialog').classList.add('open');
-        _confirmCb = cb;
-    }
-    function closeConfirm(){ document.getElementById('confirm-dialog').classList.remove('open'); _confirmCb = null; }
-    document.getElementById('confirm-yes').onclick = function(){ if(_confirmCb){ _confirmCb(); } closeConfirm(); };
-    function openModal(id){ document.getElementById(id).classList.add('open'); }
-    function closeModal(id){ document.getElementById(id).classList.remove('open'); }
-    document.querySelectorAll('.modal-overlay').forEach(function(m){
-        m.addEventListener('click', function(e){ if(e.target===m) m.classList.remove('open'); });
-    });
-    function apiPost(url, data, onSuccess, onError){
-        showLoading();
-        data['csrf_token'] = CSRF_TOKEN;
-        fetch(url, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded','X-Requested-With':'XMLHttpRequest'}, body: new URLSearchParams(data) })
-        .then(function(r){ return r.json(); })
-        .then(function(d){ hideLoading(); if(d.success){ if(onSuccess) onSuccess(d); } else { if(onError) onError(d); else showToast(d.error||'An error occurred.','error'); } })
-        .catch(function(e){ hideLoading(); showToast('Network error. Please try again.','error'); });
-    }
-    function markNotifRead(id){
-        fetch('?ajax=mark_notif_read&id='+id, {method:'POST', headers:{'X-Requested-With':'XMLHttpRequest','X-CSRF-Token': CSRF_TOKEN}});
-    }
-    function markAllNotifRead(){
-        fetch('?ajax=mark_all_notif_read', {method:'POST', headers:{'X-Requested-With':'XMLHttpRequest','X-CSRF-Token': CSRF_TOKEN}});
-        document.querySelectorAll('.notif-item.unread').forEach(function(n){ n.classList.remove('unread'); });
-        var badge = document.querySelector('.notif-badge');
-        if(badge) badge.remove();
-        document.getElementById('notif-panel').querySelector('.notif-panel-header').textContent = 'Notifications (0 unread)';
-    }
-    (function clock(){
-        var el = document.getElementById('clock');
-        function tick(){ var now = new Date(); el.textContent = now.toLocaleDateString() + ' ' + now.toLocaleTimeString(); }
-        tick(); setInterval(tick, 1000);
-    })();
-    <?php if (isset($_SESSION['toast_msg'])): ?>
-    showToast(<?= json_encode($_SESSION['toast_msg']) ?>, <?= json_encode($_SESSION['toast_type'] ?? 'info') ?>);
-    <?php unset($_SESSION['toast_msg'], $_SESSION['toast_type']);
+        function initSidebar() {
+            const isMobile = window.innerWidth <= 900;
+            if (isMobile) {
+                document.getElementById('sidebar').classList.remove('collapsed');
+                document.body.classList.remove('sidebar-collapsed');
+            } else {
+                const saved = localStorage.getItem('sidebarCollapsed');
+                if (saved === '1') {
+                    document.getElementById('sidebar').classList.add('collapsed');
+                    document.body.classList.add('sidebar-collapsed');
+                }
+            }
+        }
+        initSidebar();
+        function toggleUserMenu() {
+            document.getElementById('user-dropdown').classList.toggle('open');
+        }
+        function toggleNotifPanel() {
+            document.getElementById('notif-panel').classList.toggle('open');
+            document.getElementById('user-dropdown').classList.remove('open');
+        }
+        document.addEventListener('click', function (e) {
+            if (!e.target.closest('.user-menu-wrap')) document.getElementById('user-dropdown').classList.remove('open');
+            if (!e.target.closest('.notif-btn') && !e.target.closest('#notif-panel')) document.getElementById('notif-panel').classList.remove('open');
+        });
+        function showToast(msg, type) {
+            type = type || 'info';
+            var c = document.getElementById('toast-container');
+            var t = document.createElement('div');
+            t.className = 'toast toast-' + type;
+            t.textContent = msg;
+            c.appendChild(t);
+            setTimeout(function () {
+                t.style.opacity = '0';
+                t.style.transition = 'opacity 0.5s';
+                setTimeout(function () {
+                    if (t.parentNode) t.parentNode.removeChild(t);
+                }, 500);
+            }, 3500);
+        }
+        function showLoading() {
+            document.getElementById('loading-overlay').classList.add('open');
+        }
+        function hideLoading() {
+            document.getElementById('loading-overlay').classList.remove('open');
+        }
+        var _confirmCb = null;
+        function confirmAction(msg, cb, title) {
+            title = title || 'Confirm Delete';
+            document.getElementById('confirm-msg').textContent = msg || 'Are you sure you want to proceed? This action cannot be undone.';
+            document.getElementById('confirm-title').textContent = title;
+            document.getElementById('confirm-dialog').classList.add('open');
+            _confirmCb = cb;
+        }
+        function closeConfirm() {
+            document.getElementById('confirm-dialog').classList.remove('open');
+            _confirmCb = null;
+        }
+        document.getElementById('confirm-yes').onclick = function () {
+            if (_confirmCb) {
+                _confirmCb();
+            }
+            closeConfirm();
+        };
+        function openModal(id) {
+            document.getElementById(id).classList.add('open');
+        }
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('open');
+        }
+        document.querySelectorAll('.modal-overlay').forEach(function (m) {
+            m.addEventListener('click', function (e) {
+                if (e.target === m) m.classList.remove('open');
+            });
+        });
+        function apiPost(url, data, onSuccess, onError) {
+            showLoading();
+            data['csrf_token'] = CSRF_TOKEN;
+            fetch(url, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
+                body: new URLSearchParams(data)
+            })
+                .then(function (r) {
+                    return r.json();
+                })
+                .then(function (d) {
+                    hideLoading();
+                    if (d.success) {
+                        if (onSuccess) onSuccess(d);
+                    } else {
+                        if (onError) onError(d); else showToast(d.error || 'An error occurred.', 'error');
+                    }
+                })
+                .catch(function (e) {
+                    hideLoading();
+                    showToast('Network error. Please try again.', 'error');
+                });
+        }
+        function markNotifRead(id) {
+            fetch('?ajax=mark_notif_read&id=' + id, {
+                method: 'POST',
+                headers: {'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': CSRF_TOKEN}
+            });
+        }
+        function markAllNotifRead() {
+            fetch('?ajax=mark_all_notif_read', {
+                method: 'POST',
+                headers: {'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': CSRF_TOKEN}
+            });
+            document.querySelectorAll('.notif-item.unread').forEach(function (n) {
+                n.classList.remove('unread');
+            });
+            var badge = document.querySelector('.notif-badge');
+            if (badge) badge.remove();
+            document.getElementById('notif-panel').querySelector('.notif-panel-header').textContent = 'Notifications (0 unread)';
+        }
+        (function clock() {
+            var el = document.getElementById('clock');
+            function tick() {
+                var now = new Date();
+                el.textContent = now.toLocaleDateString() + ' ' + now.toLocaleTimeString();
+            }
+            tick();
+            setInterval(tick, 1000);
+        })();
+        <?php if (isset($_SESSION['toast_msg'])): ?>
+        showToast(<?= json_encode($_SESSION['toast_msg']) ?>, <?= json_encode($_SESSION['toast_type'] ?? 'info') ?>);
+        <?php unset($_SESSION['toast_msg'], $_SESSION['toast_type']);
     endif; ?>
     </script>
     <?php
@@ -2161,8 +3331,10 @@ function renderDashboard(): void
         <a href="?page=sales&action=new" class="btn btn-success btn-sm">+ New Invoice</a>
         <a href="?page=purchases&action=new" class="btn btn-primary btn-sm">+ New PO</a>
         <a href="?page=products&action=new" class="btn btn-secondary btn-sm">+ New Product</a>
-        <a href="?page=customers&action=new" class="btn btn-sm" style="background:#17a2b8;color:#fff;border-color:#117a8b">+ New Customer</a>
-        <a href="?page=suppliers&action=new" class="btn btn-sm" style="background:#343a40;color:#fff;border-color:#23272b">+ New Supplier</a>
+        <a href="?page=customers&action=new" class="btn btn-sm"
+           style="background:#17a2b8;color:#fff;border-color:#117a8b">+ New Customer</a>
+        <a href="?page=suppliers&action=new" class="btn btn-sm"
+           style="background:#343a40;color:#fff;border-color:#23272b">+ New Supplier</a>
         <a href="?page=adjustments&action=new" class="btn btn-warning btn-sm">+ Stock Adjustment</a>
         <a href="?page=transfers&action=new" class="btn btn-warning btn-sm">+ Stock Transfer</a>
         <a href="?page=quotations&action=new" class="btn btn-primary btn-sm">+ New Quotation</a>
@@ -2170,9 +3342,11 @@ function renderDashboard(): void
         <a href="?page=purchase_returns&action=new" class="btn btn-danger btn-sm">+ Purchase Return</a>
         <a href="?page=income_expenses" class="btn btn-success btn-sm">+ Add Income</a>
         <a href="?page=income_expenses" class="btn btn-danger btn-sm">+ Add Expense</a>
-        <a href="?page=pos" class="btn btn-primary btn-sm" style="background:#6f42c1;border-color:#6f42c1">&#128722; POS Checkout</a>
+        <a href="?page=pos" class="btn btn-primary btn-sm" style="background:#6f42c1;border-color:#6f42c1">&#128722; POS
+            Checkout</a>
         <a href="?page=stock_audit" class="btn btn-secondary btn-sm">&#128269; Stock Audit</a>
-        <a href="?page=reports" class="btn btn-sm" style="background:#e83e8c;color:#fff;border-color:#e83e8c">&#128202; Reports</a>
+        <a href="?page=reports" class="btn btn-sm" style="background:#e83e8c;color:#fff;border-color:#e83e8c">&#128202;
+            Reports</a>
     </div>
     <div class="stats-grid" style="grid-template-columns: repeat(auto-fill,minmax(200px,1fr)); margin-bottom:16px;">
         <div class="stat-card primary" onclick="window.location='?page=products'">
@@ -2212,7 +3386,8 @@ function renderDashboard(): void
         </div>
         <div class="stat-card warning" onclick="window.location='?page=sales&payment_status=unpaid'">
             <div class="stat-card-title">Unpaid Invoices</div>
-            <div class="stat-card-value" style="font-size:18px"><?= formatCurrency($stats['unpaid_invoices_amt']) ?></div>
+            <div class="stat-card-value"
+                 style="font-size:18px"><?= formatCurrency($stats['unpaid_invoices_amt']) ?></div>
             <div class="stat-card-sub"><?= $stats['unpaid_invoices'] ?> invoices</div>
         </div>
         <div class="stat-card primary" onclick="window.location='?page=purchases'">
@@ -2222,7 +3397,8 @@ function renderDashboard(): void
         </div>
         <div class="stat-card primary" onclick="window.location='?page=purchases'">
             <div class="stat-card-title">This Month Purchases</div>
-            <div class="stat-card-value" style="font-size:18px"><?= formatCurrency($stats['this_month_purchases']) ?></div>
+            <div class="stat-card-value"
+                 style="font-size:18px"><?= formatCurrency($stats['this_month_purchases']) ?></div>
             <div class="stat-card-sub">Procurement this month</div>
         </div>
         <div class="stat-card warning" onclick="window.location='?page=purchases&order_status=pending'">
@@ -2247,170 +3423,272 @@ function renderDashboard(): void
         </div>
         <div class="stat-card secondary" onclick="window.location='?page=sales_returns'">
             <div class="stat-card-title">Total Sales Returns</div>
-            <div class="stat-card-value" style="font-size:18px"><?= formatCurrency($stats['total_sales_returns']) ?></div>
+            <div class="stat-card-value"
+                 style="font-size:18px"><?= formatCurrency($stats['total_sales_returns']) ?></div>
             <div class="stat-card-sub">Amount refunded</div>
         </div>
         <div class="stat-card secondary" onclick="window.location='?page=purchase_returns'">
             <div class="stat-card-title">Purchase Returns</div>
-            <div class="stat-card-value" style="font-size:18px"><?= formatCurrency($stats['total_purchase_returns']) ?></div>
+            <div class="stat-card-value"
+                 style="font-size:18px"><?= formatCurrency($stats['total_purchase_returns']) ?></div>
             <div class="stat-card-sub">Returned to suppliers</div>
         </div>
     </div>
     <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 16px; margin-bottom: 16px;">
         <div class="lf"><span class="lf-title">Sales & Cost (Last 7 Days)</span>
-            <div style="height:250px;"><canvas id="chartSalesCost"></canvas></div>
+            <div style="height:250px;">
+                <canvas id="chartSalesCost"></canvas>
+            </div>
         </div>
         <div class="lf"><span class="lf-title">Inventory Value by Category</span>
-            <div style="height:250px;"><canvas id="chartStockCat"></canvas></div>
+            <div style="height:250px;">
+                <canvas id="chartStockCat"></canvas>
+            </div>
         </div>
         <div class="lf"><span class="lf-title">Top 5 Selling Products</span>
-            <div style="height:250px; display:flex; justify-content:center;"><canvas id="chartTopProducts"></canvas></div>
+            <div style="height:250px; display:flex; justify-content:center;">
+                <canvas id="chartTopProducts"></canvas>
+            </div>
         </div>
         <div class="lf"><span class="lf-title">Customers by Type</span>
-            <div style="height:250px; display:flex; justify-content:center;"><canvas id="chartCustType"></canvas></div>
+            <div style="height:250px; display:flex; justify-content:center;">
+                <canvas id="chartCustType"></canvas>
+            </div>
         </div>
         <div class="lf"><span class="lf-title">PO Status Distribution</span>
-            <div style="height:250px; display:flex; justify-content:center;"><canvas id="chartPoStatus"></canvas></div>
+            <div style="height:250px; display:flex; justify-content:center;">
+                <canvas id="chartPoStatus"></canvas>
+            </div>
         </div>
         <div class="lf"><span class="lf-title">Sales Revenue (Last 7 Days)</span>
-            <div style="height:250px;"><canvas id="chartSalesBar"></canvas></div>
+            <div style="height:250px;">
+                <canvas id="chartSalesBar"></canvas>
+            </div>
         </div>
     </div>
     <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 16px;">
         <div class="lf"><span class="lf-title">Recent Invoices</span>
-            <div class="tbl-wrap"><table class="tbl">
-                <thead><tr><th>Invoice#</th><th>Customer</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead>
-                <tbody>
-                <?php if (empty($stats['recent_invoices'])): ?>
-                <tr><td colspan="5" class="text-center" style="color:#888;padding:16px">No invoices yet</td></tr>
-                <?php else:
+            <div class="tbl-wrap">
+                <table class="tbl">
+                    <thead>
+                    <tr>
+                        <th>Invoice#</th>
+                        <th>Customer</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Date</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php if (empty($stats['recent_invoices'])): ?>
+                        <tr>
+                            <td colspan="5" class="text-center" style="color:#888;padding:16px">No invoices yet</td>
+                        </tr>
+                    <?php else:
         foreach ($stats['recent_invoices'] as $inv): ?>
-                <tr>
-                    <td><a href="?page=sales&action=view&id=<?= $inv['id'] ?>"><?= h($inv['invoice_number']) ?></a></td>
-                    <td><?= h($inv['customer_name']) ?></td>
-                    <td class="text-right"><?= formatCurrency((float) $inv['total_amount']) ?></td>
-                    <td><?php $ps = $inv['payment_status'];
+                            <tr>
+                                <td>
+                                    <a href="?page=sales&action=view&id=<?= $inv['id'] ?>"><?= h($inv['invoice_number']) ?></a>
+                                </td>
+                                <td><?= h($inv['customer_name']) ?></td>
+                                <td class="text-right"><?= formatCurrency((float) $inv['total_amount']) ?></td>
+                                <td><?php $ps = $inv['payment_status'];
             echo '<span class="badge badge-' . ($ps === 'paid' ? 'success' : ($ps === 'partial' ? 'warning' : 'danger')) . '">' . h(strtoupper($ps)) . '</span>'; ?></td>
-                    <td><?= h($inv['invoice_date']) ?></td>
-                </tr>
-                <?php endforeach;
+                                <td><?= h($inv['invoice_date']) ?></td>
+                            </tr>
+                        <?php endforeach;
     endif; ?>
-                </tbody>
-            </table></div>
-            <div class="mt-8 text-right"><a href="?page=sales" class="btn btn-secondary btn-xs">View All Invoices</a></div>
+                    </tbody>
+                </table>
+            </div>
+            <div class="mt-8 text-right"><a href="?page=sales" class="btn btn-secondary btn-xs">View All Invoices</a>
+            </div>
         </div>
         <div class="lf"><span class="lf-title">Recent Purchase Orders</span>
-            <div class="tbl-wrap"><table class="tbl">
-                <thead><tr><th>PO#</th><th>Supplier</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead>
-                <tbody>
-                <?php if (empty($stats['recent_purchases'])): ?>
-                <tr><td colspan="5" class="text-center" style="color:#888;padding:16px">No purchase orders yet</td></tr>
-                <?php else:
+            <div class="tbl-wrap">
+                <table class="tbl">
+                    <thead>
+                    <tr>
+                        <th>PO#</th>
+                        <th>Supplier</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Date</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php if (empty($stats['recent_purchases'])): ?>
+                        <tr>
+                            <td colspan="5" class="text-center" style="color:#888;padding:16px">No purchase orders yet
+                            </td>
+                        </tr>
+                    <?php else:
         foreach ($stats['recent_purchases'] as $po): ?>
-                <tr>
-                    <td><a href="?page=purchases&action=view&id=<?= $po['id'] ?>"><?= h($po['po_number']) ?></a></td>
-                    <td><?= h($po['supplier_name']) ?></td>
-                    <td class="text-right"><?= formatCurrency((float) $po['total_amount']) ?></td>
-                    <td><?php $os = $po['order_status'];
+                            <tr>
+                                <td>
+                                    <a href="?page=purchases&action=view&id=<?= $po['id'] ?>"><?= h($po['po_number']) ?></a>
+                                </td>
+                                <td><?= h($po['supplier_name']) ?></td>
+                                <td class="text-right"><?= formatCurrency((float) $po['total_amount']) ?></td>
+                                <td><?php $os = $po['order_status'];
             echo '<span class="badge badge-' . ($os === 'received' ? 'success' : ($os === 'cancelled' ? 'danger' : ($os === 'partial' ? 'warning' : 'info'))) . '">' . h(strtoupper($os)) . '</span>'; ?></td>
-                    <td><?= h($po['po_date']) ?></td>
-                </tr>
-                <?php endforeach;
+                                <td><?= h($po['po_date']) ?></td>
+                            </tr>
+                        <?php endforeach;
     endif; ?>
-                </tbody>
-            </table></div>
-            <div class="mt-8 text-right"><a href="?page=purchases" class="btn btn-secondary btn-xs">View All POs</a></div>
+                    </tbody>
+                </table>
+            </div>
+            <div class="mt-8 text-right"><a href="?page=purchases" class="btn btn-secondary btn-xs">View All POs</a>
+            </div>
         </div>
         <div class="lf"><span class="lf-title">Low Stock Products</span>
-            <div class="tbl-wrap"><table class="tbl">
-                <thead><tr><th>SKU</th><th>Product</th><th class="text-right">Stock</th><th class="text-right">Min</th></tr></thead>
-                <tbody>
-                <?php if (empty($stats['low_stock_products'])): ?>
-                <tr><td colspan="4" class="text-center" style="color:#5cb85c;padding:16px">&#10003; All stock levels OK</td></tr>
-                <?php else:
+            <div class="tbl-wrap">
+                <table class="tbl">
+                    <thead>
+                    <tr>
+                        <th>SKU</th>
+                        <th>Product</th>
+                        <th class="text-right">Stock</th>
+                        <th class="text-right">Min</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php if (empty($stats['low_stock_products'])): ?>
+                        <tr>
+                            <td colspan="4" class="text-center" style="color:#5cb85c;padding:16px">&#10003; All stock
+                                levels OK
+                            </td>
+                        </tr>
+                    <?php else:
         foreach ($stats['low_stock_products'] as $p):
             $cls = $p['current_stock'] == 0 ? 'critical' : 'low'; ?>
-                <tr>
-                    <td><code style="font-size:10px"><?= h($p['sku']) ?></code></td>
-                    <td><?= h($p['name']) ?></td>
-                    <td class="text-right stock-<?= $cls ?>"><?= number_format((int) $p['current_stock']) ?></td>
-                    <td class="text-right"><?= number_format((int) $p['min_stock_level']) ?></td>
-                </tr>
-                <?php endforeach;
+                            <tr>
+                                <td><code style="font-size:10px"><?= h($p['sku']) ?></code></td>
+                                <td><?= h($p['name']) ?></td>
+                                <td class="text-right stock-<?= $cls ?>"><?= number_format((int) $p['current_stock']) ?></td>
+                                <td class="text-right"><?= number_format((int) $p['min_stock_level']) ?></td>
+                            </tr>
+                        <?php endforeach;
     endif; ?>
-                </tbody>
-            </table></div>
-            <div class="mt-8 text-right"><a href="?page=products&stock_level=low" class="btn btn-warning btn-xs">View All Low Stock</a></div>
+                    </tbody>
+                </table>
+            </div>
+            <div class="mt-8 text-right"><a href="?page=products&stock_level=low" class="btn btn-warning btn-xs">View
+                    All Low Stock</a></div>
         </div>
         <div class="lf"><span class="lf-title">Inventory Snapshot</span>
             <div style="font-size:13px;display:flex;flex-direction:column;gap:8px">
-                <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #e8e8e8"><span>Total Inventory Value:</span><span style="font-weight:700;color:#5cb85c"><?= formatCurrency($stats['inventory_value']) ?></span></div>
-                <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #e8e8e8"><span>Unpaid Invoices (Receivable):</span><span style="font-weight:700;color:#4a90d9"><?= formatCurrency($stats['unpaid_invoices_amt']) ?></span></div>
-                <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #e8e8e8"><span>Unpaid POs (Payable):</span><span style="font-weight:700;color:#d9534f"><?= formatCurrency($stats['unpaid_pos_amt']) ?></span></div>
-                <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #e8e8e8"><span>System Users:</span><span style="font-weight:700;color:#555"><?= number_format($stats['total_users']) ?></span></div>
-                <div style="display:flex;justify-content:space-between;padding:8px 0"><span>Registered Warehouses:</span><span style="font-weight:700;color:#555"><?= number_format($stats['total_warehouses']) ?></span></div>
+                <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #e8e8e8">
+                    <span>Total Inventory Value:</span><span
+                            style="font-weight:700;color:#5cb85c"><?= formatCurrency($stats['inventory_value']) ?></span>
+                </div>
+                <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #e8e8e8">
+                    <span>Unpaid Invoices (Receivable):</span><span
+                            style="font-weight:700;color:#4a90d9"><?= formatCurrency($stats['unpaid_invoices_amt']) ?></span>
+                </div>
+                <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #e8e8e8">
+                    <span>Unpaid POs (Payable):</span><span
+                            style="font-weight:700;color:#d9534f"><?= formatCurrency($stats['unpaid_pos_amt']) ?></span>
+                </div>
+                <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #e8e8e8">
+                    <span>System Users:</span><span
+                            style="font-weight:700;color:#555"><?= number_format($stats['total_users']) ?></span></div>
+                <div style="display:flex;justify-content:space-between;padding:8px 0">
+                    <span>Registered Warehouses:</span><span
+                            style="font-weight:700;color:#555"><?= number_format($stats['total_warehouses']) ?></span>
+                </div>
             </div>
         </div>
     </div>
     <script>
-    document.addEventListener("DOMContentLoaded", function() {
-        Chart.defaults.font.family = "'Segoe UI', Arial, sans-serif";
-        const dates7 = <?= json_encode($dates7) ?>;
-        const sales7 = <?= json_encode($sales7) ?>;
-        const cost7 = <?= json_encode($cost7) ?>;
-        const colors =['#4a90d9', '#5cb85c', '#f0ad4e', '#d9534f', '#6f42c1', '#17a2b8', '#fd7e14', '#e83e8c'];
-        new Chart(document.getElementById('chartSalesCost'), {
-            type: 'line',
-            data: {
-                labels: dates7,
-                datasets:[
-                    { label: 'Revenue', data: sales7, borderColor: '#5cb85c', backgroundColor: 'rgba(92,184,92,0.1)', fill: true, tension: 0.3 },
-                    { label: 'Cost', data: cost7, borderColor: '#d9534f', backgroundColor: 'transparent', borderDash: [5,5], tension: 0.3 }
-                ]
-            },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+        document.addEventListener("DOMContentLoaded", function () {
+            Chart.defaults.font.family = "'Segoe UI', Arial, sans-serif";
+            const dates7 = <?= json_encode($dates7) ?>;
+            const sales7 = <?= json_encode($sales7) ?>;
+            const cost7 = <?= json_encode($cost7) ?>;
+            const colors = ['#4a90d9', '#5cb85c', '#f0ad4e', '#d9534f', '#6f42c1', '#17a2b8', '#fd7e14', '#e83e8c'];
+            new Chart(document.getElementById('chartSalesCost'), {
+                type: 'line',
+                data: {
+                    labels: dates7,
+                    datasets: [
+                        {
+                            label: 'Revenue',
+                            data: sales7,
+                            borderColor: '#5cb85c',
+                            backgroundColor: 'rgba(92,184,92,0.1)',
+                            fill: true,
+                            tension: 0.3
+                        },
+                        {
+                            label: 'Cost',
+                            data: cost7,
+                            borderColor: '#d9534f',
+                            backgroundColor: 'transparent',
+                            borderDash: [5, 5],
+                            tension: 0.3
+                        }
+                    ]
+                },
+                options: {responsive: true, maintainAspectRatio: false, plugins: {legend: {position: 'bottom'}}}
+            });
+            new Chart(document.getElementById('chartSalesBar'), {
+                type: 'bar',
+                data: {
+                    labels: dates7,
+                    datasets: [{label: 'Sales Revenue', data: sales7, backgroundColor: '#4a90d9'}]
+                },
+                options: {responsive: true, maintainAspectRatio: false, plugins: {legend: {display: false}}}
+            });
+            new Chart(document.getElementById('chartTopProducts'), {
+                type: 'doughnut',
+                data: {
+                    labels: <?= json_encode($topProdLabels) ?>,
+                    datasets: [{data: <?= json_encode($topProdData) ?>, backgroundColor: colors}]
+                },
+                options: {responsive: true, maintainAspectRatio: false, plugins: {legend: {position: 'right'}}}
+            });
+            new Chart(document.getElementById('chartCustType'), {
+                type: 'pie',
+                data: {
+                    labels: <?= json_encode($custTypeLabels) ?>,
+                    datasets: [{
+                        data: <?= json_encode($custTypeData) ?>,
+                        backgroundColor: ['#17a2b8', '#ffc107', '#28a745', '#e83e8c']
+                    }]
+                },
+                options: {responsive: true, maintainAspectRatio: false, plugins: {legend: {position: 'right'}}}
+            });
+            new Chart(document.getElementById('chartPoStatus'), {
+                type: 'polarArea',
+                data: {
+                    labels: <?= json_encode($poStatusLabels) ?>,
+                    datasets: [{
+                        data: <?= json_encode($poStatusData) ?>,
+                        backgroundColor: ['#f0ad4e', '#5bc0de', '#5cb85c', '#d9534f']
+                    }]
+                },
+                options: {responsive: true, maintainAspectRatio: false, plugins: {legend: {position: 'right'}}}
+            });
+            new Chart(document.getElementById('chartStockCat'), {
+                type: 'bar',
+                data: {
+                    labels: <?= json_encode($catStockLabels) ?>,
+                    datasets: [{
+                        label: 'Stock Value',
+                        data: <?= json_encode($catStockData) ?>,
+                        backgroundColor: '#6f42c1'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: {legend: {display: false}}
+                }
+            });
         });
-        new Chart(document.getElementById('chartSalesBar'), {
-            type: 'bar',
-            data: {
-                labels: dates7,
-                datasets:[{ label: 'Sales Revenue', data: sales7, backgroundColor: '#4a90d9' }]
-            },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
-        });
-        new Chart(document.getElementById('chartTopProducts'), {
-            type: 'doughnut',
-            data: {
-                labels: <?= json_encode($topProdLabels) ?>,
-                datasets:[{ data: <?= json_encode($topProdData) ?>, backgroundColor: colors }]
-            },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
-        });
-        new Chart(document.getElementById('chartCustType'), {
-            type: 'pie',
-            data: {
-                labels: <?= json_encode($custTypeLabels) ?>,
-                datasets:[{ data: <?= json_encode($custTypeData) ?>, backgroundColor:['#17a2b8', '#ffc107', '#28a745', '#e83e8c'] }]
-            },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
-        });
-        new Chart(document.getElementById('chartPoStatus'), {
-            type: 'polarArea',
-            data: {
-                labels: <?= json_encode($poStatusLabels) ?>,
-                datasets:[{ data: <?= json_encode($poStatusData) ?>, backgroundColor:['#f0ad4e', '#5bc0de', '#5cb85c', '#d9534f'] }]
-            },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
-        });
-        new Chart(document.getElementById('chartStockCat'), {
-            type: 'bar',
-            data: {
-                labels: <?= json_encode($catStockLabels) ?>,
-                datasets:[{ label: 'Stock Value', data: <?= json_encode($catStockData) ?>, backgroundColor: '#6f42c1' }]
-            },
-            options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } }
-        });
-    });
     </script>
     <?php
     $content = ob_get_clean();
@@ -2441,105 +3719,171 @@ function renderProducts(): void
         <form method="GET" action="">
             <input type="hidden" name="page" value="products">
             <div class="filter-bar">
-                <div class="form-group"><label>Search</label><input type="text" name="search" value="<?= h($filters['search']) ?>" placeholder="Name, SKU, brand, barcode..."></div>
+                <div class="form-group"><label>Search</label><input type="text" name="search"
+                                                                    value="<?= h($filters['search']) ?>"
+                                                                    placeholder="Name, SKU, brand, barcode..."></div>
                 <div class="form-group"><label>Category</label>
-                    <select name="category_id"><option value="">All Categories</option>
-                    <?php foreach ($categories as $cat): ?><option value="<?= $cat['id'] ?>" <?= $filters['category_id'] == $cat['id'] ? 'selected' : '' ?>><?= h(($cat['parent_name'] ? '-- ' : '') . $cat['name']) ?></option><?php endforeach; ?>
+                    <select name="category_id">
+                        <option value="">All Categories</option>
+                        <?php foreach ($categories as $cat): ?>
+                            <option
+                            value="<?= $cat['id'] ?>" <?= $filters['category_id'] == $cat['id'] ? 'selected' : '' ?>><?= h(($cat['parent_name'] ? '-- ' : '') . $cat['name']) ?></option><?php endforeach; ?>
                     </select>
                 </div>
                 <div class="form-group"><label>Status</label>
-                    <select name="status"><option value="">All</option><option value="active" <?= $filters['status'] === 'active' ? 'selected' : '' ?>>Active</option><option value="inactive" <?= $filters['status'] === 'inactive' ? 'selected' : '' ?>>Inactive</option></select>
+                    <select name="status">
+                        <option value="">All</option>
+                        <option value="active" <?= $filters['status'] === 'active' ? 'selected' : '' ?>>Active</option>
+                        <option value="inactive" <?= $filters['status'] === 'inactive' ? 'selected' : '' ?>>Inactive
+                        </option>
+                    </select>
                 </div>
                 <div class="form-group"><label>Stock Level</label>
-                    <select name="stock_level"><option value="">All</option><option value="ok" <?= $filters['stock_level'] === 'ok' ? 'selected' : '' ?>>OK</option><option value="low" <?= $filters['stock_level'] === 'low' ? 'selected' : '' ?>>Low</option><option value="out" <?= $filters['stock_level'] === 'out' ? 'selected' : '' ?>>Out of Stock</option></select>
+                    <select name="stock_level">
+                        <option value="">All</option>
+                        <option value="ok" <?= $filters['stock_level'] === 'ok' ? 'selected' : '' ?>>OK</option>
+                        <option value="low" <?= $filters['stock_level'] === 'low' ? 'selected' : '' ?>>Low</option>
+                        <option value="out" <?= $filters['stock_level'] === 'out' ? 'selected' : '' ?>>Out of Stock
+                        </option>
+                    </select>
                 </div>
-                <div class="form-group" style="justify-content:flex-end;flex-direction:row;align-items:flex-end;gap:6px">
+                <div class="form-group"
+                     style="justify-content:flex-end;flex-direction:row;align-items:flex-end;gap:6px">
                     <button type="submit" class="btn btn-primary btn-sm">Filter</button>
                     <a href="?page=products" class="btn btn-secondary btn-sm">Reset</a>
                 </div>
             </div>
         </form>
-        <?php if (isset($_SESSION['flash_msg'])): ?>
+    <?php if (isset($_SESSION['flash_msg'])): ?>
         <div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div>
-        <?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
+    <?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
         <div class="tbl-wrap">
-        <table class="tbl">
-            <thead><tr>
-                <th><input type="checkbox" id="chk-all" onchange="toggleAllCheckboxes(this)"></th>
-                <th><a class="sort-link" href="?page=products&sort=sku&dir=<?= $filters['sort'] === 'sku' && $filters['dir'] === 'ASC' ? 'DESC' : 'ASC' ?>&search=<?= h($filters['search']) ?>&category_id=<?= h($filters['category_id']) ?>&status=<?= h($filters['status']) ?>">SKU <?= $filters['sort'] === 'sku' ? ($filters['dir'] === 'ASC' ? '&#9650;' : '&#9660;') : '' ?></a></th>
-                <th><a class="sort-link" href="?page=products&sort=name&dir=<?= $filters['sort'] === 'name' && $filters['dir'] === 'ASC' ? 'DESC' : 'ASC' ?>&search=<?= h($filters['search']) ?>">Product Name <?= $filters['sort'] === 'name' ? ($filters['dir'] === 'ASC' ? '&#9650;' : '&#9660;') : '' ?></a></th>
-                <th>Category</th>
-                <th>Brand</th>
-                <th>Unit</th>
-                <th class="text-right"><a class="sort-link" href="?page=products&sort=purchase_price&dir=<?= $filters['sort'] === 'purchase_price' && $filters['dir'] === 'ASC' ? 'DESC' : 'ASC' ?>">Buy Price</a></th>
-                <th class="text-right"><a class="sort-link" href="?page=products&sort=selling_price&dir=<?= $filters['sort'] === 'selling_price' && $filters['dir'] === 'ASC' ? 'DESC' : 'ASC' ?>">Sell Price</a></th>
-                <th class="text-right"><a class="sort-link" href="?page=products&sort=current_stock&dir=<?= $filters['sort'] === 'current_stock' && $filters['dir'] === 'ASC' ? 'DESC' : 'ASC' ?>">Stock</a></th>
-                <th>Status</th>
-                <th>Actions</th>
-            </tr></thead>
-            <tbody>
-            <?php if (empty($products)): ?>
-            <tr><td colspan="11" class="text-center" style="padding:20px;color:#888">No products found. <a href="?page=products&action=new">Add your first product</a></td></tr>
-            <?php
+            <table class="tbl">
+                <thead>
+                <tr>
+                    <th><input type="checkbox" id="chk-all" onchange="toggleAllCheckboxes(this)"></th>
+                    <th><a class="sort-link"
+                           href="?page=products&sort=sku&dir=<?= $filters['sort'] === 'sku' && $filters['dir'] === 'ASC' ? 'DESC' : 'ASC' ?>&search=<?= h($filters['search']) ?>&category_id=<?= h($filters['category_id']) ?>&status=<?= h($filters['status']) ?>">SKU <?= $filters['sort'] === 'sku' ? ($filters['dir'] === 'ASC' ? '&#9650;' : '&#9660;') : '' ?></a>
+                    </th>
+                    <th><a class="sort-link"
+                           href="?page=products&sort=name&dir=<?= $filters['sort'] === 'name' && $filters['dir'] === 'ASC' ? 'DESC' : 'ASC' ?>&search=<?= h($filters['search']) ?>">Product
+                            Name <?= $filters['sort'] === 'name' ? ($filters['dir'] === 'ASC' ? '&#9650;' : '&#9660;') : '' ?></a>
+                    </th>
+                    <th>Category</th>
+                    <th>Brand</th>
+                    <th>Unit</th>
+                    <th class="text-right"><a class="sort-link"
+                                              href="?page=products&sort=purchase_price&dir=<?= $filters['sort'] === 'purchase_price' && $filters['dir'] === 'ASC' ? 'DESC' : 'ASC' ?>">Buy
+                            Price</a></th>
+                    <th class="text-right"><a class="sort-link"
+                                              href="?page=products&sort=selling_price&dir=<?= $filters['sort'] === 'selling_price' && $filters['dir'] === 'ASC' ? 'DESC' : 'ASC' ?>">Sell
+                            Price</a></th>
+                    <th class="text-right"><a class="sort-link"
+                                              href="?page=products&sort=current_stock&dir=<?= $filters['sort'] === 'current_stock' && $filters['dir'] === 'ASC' ? 'DESC' : 'ASC' ?>">Stock</a>
+                    </th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php if (empty($products)): ?>
+                    <tr>
+                        <td colspan="11" class="text-center" style="padding:20px;color:#888">No products found. <a
+                                    href="?page=products&action=new">Add your first product</a></td>
+                    </tr>
+                <?php
         else:
             foreach ($products as $p):
                 $stockClass = $p['current_stock'] == 0 ? 'stock-critical' : ($p['current_stock'] <= $p['min_stock_level'] ? 'stock-low' : 'stock-ok');
                 ?>
-            <tr>
-                <td><input type="checkbox" class="row-chk" value="<?= $p['id'] ?>"></td>
-                <td><code style="font-size:11px"><?= h($p['sku']) ?></code></td>
-                <td><strong><?= h($p['name']) ?></strong><?php if ($p['brand']): ?><br><small style="color:#888"><?= h($p['brand']) ?></small><?php endif; ?></td>
-                <td><?= h($p['category_name'] ?? '-') ?></td>
-                <td><?= h($p['brand'] ?: '-') ?></td>
-                <td><?= h($p['unit']) ?></td>
-                <td class="text-right"><?= formatCurrency((float) $p['purchase_price']) ?></td>
-                <td class="text-right"><?= formatCurrency((float) $p['selling_price']) ?></td>
-                <td class="text-right <?= $stockClass ?>"><?= number_format((int) $p['current_stock']) ?> <small><?= h($p['unit']) ?></small></td>
-                <td><span class="badge badge-<?= $p['status'] === 'active' ? 'success' : 'secondary' ?>"><?= h(strtoupper($p['status'])) ?></span></td>
-                <td>
-                    <div class="tbl-actions">
-                        <a href="?page=products&action=view&id=<?= $p['id'] ?>" class="btn btn-primary btn-xs" title="View">&#128065;</a>
-                        <a href="?page=products&action=edit&id=<?= $p['id'] ?>" class="btn btn-warning btn-xs" title="Edit">&#9998;</a>
-                        <a href="?page=adjustments&action=new&product_id=<?= $p['id'] ?>" class="btn btn-secondary btn-xs" title="Adjust Stock">&#9881;</a>
-                        <?php if (canAccess(['admin', 'manager'])): ?>
-                        <button onclick="deleteProduct(<?= $p['id'] ?>, '<?= h(addslashes($p['name'])) ?>')" class="btn btn-danger btn-xs" title="Delete">&#128465;</button>
-                        <?php endif; ?>
-                    </div>
-                </td>
-            </tr>
-            <?php endforeach;
+                        <tr>
+                            <td><input type="checkbox" class="row-chk" value="<?= $p['id'] ?>"></td>
+                            <td><code style="font-size:11px"><?= h($p['sku']) ?></code></td>
+                            <td><strong><?= h($p['name']) ?></strong><?php if ($p['brand']): ?><br><small
+                                        style="color:#888"><?= h($p['brand']) ?></small><?php endif; ?></td>
+                            <td><?= h($p['category_name'] ?? '-') ?></td>
+                            <td><?= h($p['brand'] ?: '-') ?></td>
+                            <td><?= h($p['unit']) ?></td>
+                            <td class="text-right"><?= formatCurrency((float) $p['purchase_price']) ?></td>
+                            <td class="text-right"><?= formatCurrency((float) $p['selling_price']) ?></td>
+                            <td class="text-right <?= $stockClass ?>"><?= number_format((int) $p['current_stock']) ?>
+                                <small><?= h($p['unit']) ?></small></td>
+                            <td>
+                                <span class="badge badge-<?= $p['status'] === 'active' ? 'success' : 'secondary' ?>"><?= h(strtoupper($p['status'])) ?></span>
+                            </td>
+                            <td>
+                                <div class="tbl-actions">
+                                    <a href="?page=products&action=view&id=<?= $p['id'] ?>"
+                                       class="btn btn-primary btn-xs" title="View">&#128065;</a>
+                                    <a href="?page=products&action=edit&id=<?= $p['id'] ?>"
+                                       class="btn btn-warning btn-xs" title="Edit">&#9998;</a>
+                                    <a href="?page=adjustments&action=new&product_id=<?= $p['id'] ?>"
+                                       class="btn btn-secondary btn-xs" title="Adjust Stock">&#9881;</a>
+                                    <?php if (canAccess(['admin', 'manager'])): ?>
+                                        <button onclick="deleteProduct(<?= $p['id'] ?>, '<?= h(addslashes($p['name'])) ?>')"
+                                                class="btn btn-danger btn-xs" title="Delete">&#128465;
+                                        </button>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach;
         endif; ?>
-            </tbody>
-        </table>
+                </tbody>
+            </table>
         </div>
-        <?php if (!empty($products)): ?>
+    <?php if (!empty($products)): ?>
         <div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap">
             <div style="font-size:12px;color:#666">Bulk action on selected:</div>
             <button onclick="bulkAction('activate')" class="btn btn-success btn-sm">Activate</button>
             <button onclick="bulkAction('deactivate')" class="btn btn-warning btn-sm">Deactivate</button>
-            <?php if (canAccess(['admin'])): ?><button onclick="bulkAction('delete')" class="btn btn-danger btn-sm">Delete</button><?php endif; ?>
+            <?php if (canAccess(['admin'])): ?>
+                <button onclick="bulkAction('delete')" class="btn btn-danger btn-sm">Delete</button><?php endif; ?>
         </div>
-        <?php endif; ?>
-        <?= paginationHtml($pag, '?page=products&search=' . urlencode($filters['search']) . '&category_id=' . urlencode($filters['category_id']) . '&status=' . urlencode($filters['status']) . '&stock_level=' . urlencode($filters['stock_level'])) ?>
+    <?php endif; ?>
+    <?= paginationHtml($pag, '?page=products&search=' . urlencode($filters['search']) . '&category_id=' . urlencode($filters['category_id']) . '&status=' . urlencode($filters['status']) . '&stock_level=' . urlencode($filters['stock_level'])) ?>
         <script>
-        function toggleAllCheckboxes(src){ document.querySelectorAll('.row-chk').forEach(function(c){ c.checked=src.checked; }); }
-        function getCheckedIds(){ var ids=[]; document.querySelectorAll('.row-chk:checked').forEach(function(c){ ids.push(c.value); }); return ids; }
-        function bulkAction(act){
-            var ids = getCheckedIds();
-            if(!ids.length){ showToast('Please select at least one product.','error'); return; }
-            var msg = act==='delete' ? 'Delete '+ids.length+' selected product(s)? This cannot be undone.' : (act==='activate'?'Activate':'Deactivate')+' '+ids.length+' selected product(s)?';
-            confirmAction(msg, function(){
-                apiPost('?ajax=bulk_products', {action:act, ids:ids.join(',')}, function(d){ showToast(d.message||'Done','success'); setTimeout(function(){ location.reload(); },800); });
-            }, act==='delete'?'Confirm Delete':'Confirm Action');
-        }
-        function deleteProduct(id, name){
-            confirmAction('Delete product "'+name+'"? This cannot be undone.', function(){
-                apiPost('?ajax=delete_product', {id:id}, function(d){ showToast('Product deleted.','success'); setTimeout(function(){ location.reload(); },800); });
-            });
-        }
+            function toggleAllCheckboxes(src) {
+                document.querySelectorAll('.row-chk').forEach(function (c) {
+                    c.checked = src.checked;
+                });
+            }
+            function getCheckedIds() {
+                var ids = [];
+                document.querySelectorAll('.row-chk:checked').forEach(function (c) {
+                    ids.push(c.value);
+                });
+                return ids;
+            }
+            function bulkAction(act) {
+                var ids = getCheckedIds();
+                if (!ids.length) {
+                    showToast('Please select at least one product.', 'error');
+                    return;
+                }
+                var msg = act === 'delete' ? 'Delete ' + ids.length + ' selected product(s)? This cannot be undone.' : (act === 'activate' ? 'Activate' : 'Deactivate') + ' ' + ids.length + ' selected product(s)?';
+                confirmAction(msg, function () {
+                    apiPost('?ajax=bulk_products', {action: act, ids: ids.join(',')}, function (d) {
+                        showToast(d.message || 'Done', 'success');
+                        setTimeout(function () {
+                            location.reload();
+                        }, 800);
+                    });
+                }, act === 'delete' ? 'Confirm Delete' : 'Confirm Action');
+            }
+            function deleteProduct(id, name) {
+                confirmAction('Delete product "' + name + '"? This cannot be undone.', function () {
+                    apiPost('?ajax=delete_product', {id: id}, function (d) {
+                        showToast('Product deleted.', 'success');
+                        setTimeout(function () {
+                            location.reload();
+                        }, 800);
+                    });
+                });
+            }
         </script>
-        <?php
+    <?php
         $content = ob_get_clean();
         renderLayout('Products', $content, 'products');
     } elseif ($action === 'new' || $action === 'edit') {
@@ -2565,9 +3909,13 @@ function renderProducts(): void
         ?>
         <div class="page-header">
             <h1><?= $editId ? '&#9998; Edit Product' : '&#43; New Product' ?></h1>
-            <div class="page-header-actions"><a href="?page=products" class="btn btn-secondary btn-sm">&#8592; Back to Products</a></div>
+            <div class="page-header-actions"><a href="?page=products" class="btn btn-secondary btn-sm">&#8592; Back to
+                    Products</a></div>
         </div>
-        <?php if (!empty($errors)): ?><div class="alert alert-danger"><ul><?php foreach ($errors as $e): ?><li><?= h($e) ?></li><?php endforeach; ?></ul></div><?php endif; ?>
+        <?php if (!empty($errors)): ?>
+    <div class="alert alert-danger">
+        <ul><?php foreach ($errors as $e): ?>
+                <li><?= h($e) ?></li><?php endforeach; ?></ul></div><?php endif; ?>
         <form method="POST" action="?page=products&action=<?= $editId ? 'edit&id=' . $editId : 'new' ?>">
             <?= csrfField() ?>
             <div class="lf"><span class="lf-title">Basic Information</span>
@@ -2584,7 +3932,9 @@ function renderProducts(): void
                         <label>Category</label>
                         <select name="category_id">
                             <option value="">-- Select Category --</option>
-                            <?php foreach ($categories as $cat): ?><option value="<?= $cat['id'] ?>" <?= ($d['category_id'] ?? '') == $cat['id'] ? 'selected' : '' ?>><?= h(($cat['parent_name'] ? '-- ' : '') . $cat['name']) ?></option><?php endforeach; ?>
+                            <?php foreach ($categories as $cat): ?>
+                                <option
+                                value="<?= $cat['id'] ?>" <?= ($d['category_id'] ?? '') == $cat['id'] ? 'selected' : '' ?>><?= h(($cat['parent_name'] ? '-- ' : '') . $cat['name']) ?></option><?php endforeach; ?>
                         </select>
                     </div>
                     <div class="form-group">
@@ -2595,7 +3945,7 @@ function renderProducts(): void
                         <label>Unit</label>
                         <select name="unit">
                             <?php foreach (['pcs', 'kg', 'ltr', 'box', 'bag', 'carton', 'dozen', 'meter', 'set', 'pair'] as $u): ?>
-                            <option value="<?= $u ?>" <?= ($d['unit'] ?? 'pcs') === $u ? 'selected' : '' ?>><?= $u ?></option>
+                                <option value="<?= $u ?>" <?= ($d['unit'] ?? 'pcs') === $u ? 'selected' : '' ?>><?= $u ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
@@ -2609,15 +3959,18 @@ function renderProducts(): void
                 <div class="form-grid form-grid-3">
                     <div class="form-group">
                         <label>Purchase Price <span class="required-mark">*</span></label>
-                        <input type="number" name="purchase_price" step="0.01" min="0" value="<?= h($d['purchase_price'] ?? '0.00') ?>" required>
+                        <input type="number" name="purchase_price" step="0.01" min="0"
+                               value="<?= h($d['purchase_price'] ?? '0.00') ?>" required>
                     </div>
                     <div class="form-group">
                         <label>Selling Price <span class="required-mark">*</span></label>
-                        <input type="number" name="selling_price" step="0.01" min="0" value="<?= h($d['selling_price'] ?? '0.00') ?>" required>
+                        <input type="number" name="selling_price" step="0.01" min="0"
+                               value="<?= h($d['selling_price'] ?? '0.00') ?>" required>
                     </div>
                     <div class="form-group">
                         <label>Margin</label>
-                        <input type="text" id="margin-display" readonly style="background:#f0f0f0;color:#5cb85c;font-weight:700">
+                        <input type="text" id="margin-display" readonly
+                               style="background:#f0f0f0;color:#5cb85c;font-weight:700">
                     </div>
                 </div>
             </div>
@@ -2629,17 +3982,21 @@ function renderProducts(): void
                     </div>
                     <div class="form-group">
                         <label>Minimum Stock Level</label>
-                        <input type="number" name="min_stock_level" min="0" value="<?= h($d['min_stock_level'] ?? '5') ?>">
+                        <input type="number" name="min_stock_level" min="0"
+                               value="<?= h($d['min_stock_level'] ?? '5') ?>">
                     </div>
                     <div class="form-group">
                         <label>Maximum Stock Level</label>
-                        <input type="number" name="max_stock_level" min="0" value="<?= h($d['max_stock_level'] ?? '1000') ?>">
+                        <input type="number" name="max_stock_level" min="0"
+                               value="<?= h($d['max_stock_level'] ?? '1000') ?>">
                     </div>
                     <div class="form-group">
                         <label>Warehouse / Location</label>
                         <select name="warehouse_id">
                             <option value="">-- No Specific Location --</option>
-                            <?php foreach ($warehouses as $w): ?><option value="<?= $w['id'] ?>" <?= ($d['warehouse_id'] ?? '') == $w['id'] ? 'selected' : '' ?>><?= h($w['name']) ?></option><?php endforeach; ?>
+                            <?php foreach ($warehouses as $w): ?>
+                                <option
+                                value="<?= $w['id'] ?>" <?= ($d['warehouse_id'] ?? '') == $w['id'] ? 'selected' : '' ?>><?= h($w['name']) ?></option><?php endforeach; ?>
                         </select>
                     </div>
                     <div class="form-group">
@@ -2649,35 +4006,48 @@ function renderProducts(): void
                     <div class="form-group">
                         <label>Status</label>
                         <select name="status">
-                            <option value="active" <?= ($d['status'] ?? 'active') === 'active' ? 'selected' : '' ?>>Active</option>
-                            <option value="inactive" <?= ($d['status'] ?? '') === 'inactive' ? 'selected' : '' ?>>Inactive</option>
+                            <option value="active" <?= ($d['status'] ?? 'active') === 'active' ? 'selected' : '' ?>>
+                                Active
+                            </option>
+                            <option value="inactive" <?= ($d['status'] ?? '') === 'inactive' ? 'selected' : '' ?>>
+                                Inactive
+                            </option>
                         </select>
                     </div>
                     <div class="form-group full">
                         <label>Image URL</label>
-                        <input type="url" name="image_url" value="<?= h($d['image_url'] ?? '') ?>" placeholder="https://...">
+                        <input type="url" name="image_url" value="<?= h($d['image_url'] ?? '') ?>"
+                               placeholder="https://...">
                     </div>
                 </div>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
-                <button type="submit" class="btn btn-success"><?= $editId ? '&#10003; Update Product' : '&#43; Create Product' ?></button>
+                <button type="submit"
+                        class="btn btn-success"><?= $editId ? '&#10003; Update Product' : '&#43; Create Product' ?></button>
                 <a href="?page=products" class="btn btn-secondary">Cancel</a>
             </div>
         </form>
         <script>
-        (function(){
-            var bp = document.querySelector('[name=purchase_price]');
-            var sp = document.querySelector('[name=selling_price]');
-            var md = document.getElementById('margin-display');
-            function calcMargin(){
-                var b=parseFloat(bp.value)||0, s=parseFloat(sp.value)||0;
-                if(b>0){ var m=((s-b)/b*100).toFixed(1); md.value=m+'% ('+CURRENCY+' '+(s-b).toFixed(2)+')'; md.style.color=m>=0?'#5cb85c':'#d9534f'; }
-                else { md.value='N/A'; }
-            }
-            bp.addEventListener('input',calcMargin); sp.addEventListener('input',calcMargin); calcMargin();
-        })();
+            (function () {
+                var bp = document.querySelector('[name=purchase_price]');
+                var sp = document.querySelector('[name=selling_price]');
+                var md = document.getElementById('margin-display');
+                function calcMargin() {
+                    var b = parseFloat(bp.value) || 0, s = parseFloat(sp.value) || 0;
+                    if (b > 0) {
+                        var m = ((s - b) / b * 100).toFixed(1);
+                        md.value = m + '% (' + CURRENCY + ' ' + (s - b).toFixed(2) + ')';
+                        md.style.color = m >= 0 ? '#5cb85c' : '#d9534f';
+                    } else {
+                        md.value = 'N/A';
+                    }
+                }
+                bp.addEventListener('input', calcMargin);
+                sp.addEventListener('input', calcMargin);
+                calcMargin();
+            })();
         </script>
-        <?php
+    <?php
         $content = ob_get_clean();
         renderLayout(($editId ? 'Edit' : 'New') . ' Product', $content, 'products');
     } elseif ($action === 'view') {
@@ -2702,72 +4072,177 @@ function renderProducts(): void
             <h1>&#128065; Product Detail</h1>
             <div class="page-header-actions">
                 <a href="?page=products&action=edit&id=<?= $id ?>" class="btn btn-warning btn-sm">&#9998; Edit</a>
-                <a href="?page=adjustments&action=new&product_id=<?= $id ?>" class="btn btn-primary btn-sm">&#9881; Adjust Stock</a>
-                <a href="?page=barcodes&product_id=<?= $id ?>" class="btn btn-secondary btn-sm">&#9644; Print Barcode</a>
+                <a href="?page=adjustments&action=new&product_id=<?= $id ?>" class="btn btn-primary btn-sm">&#9881;
+                    Adjust Stock</a>
+                <a href="?page=barcodes&product_id=<?= $id ?>" class="btn btn-secondary btn-sm">&#9644; Print
+                    Barcode</a>
                 <a href="?page=products" class="btn btn-secondary btn-sm">&#8592; Back</a>
             </div>
         </div>
         <div class="cols-2">
             <div class="lf"><span class="lf-title">Product Information</span>
-                <table style="width:100%;font-size:12px"><tbody>
-                    <tr><td style="padding:5px 0;color:#666;width:40%">SKU:</td><td><code><?= h($prod['sku']) ?></code></td></tr>
-                    <tr><td style="padding:5px 0;color:#666">Name:</td><td><strong><?= h($prod['name']) ?></strong></td></tr>
-                    <tr><td style="padding:5px 0;color:#666">Category:</td><td><?= h($prod['category_name'] ?? '-') ?></td></tr>
-                    <tr><td style="padding:5px 0;color:#666">Brand:</td><td><?= h($prod['brand'] ?? '-') ?></td></tr>
-                    <tr><td style="padding:5px 0;color:#666">Unit:</td><td><?= h($prod['unit']) ?></td></tr>
-                    <tr><td style="padding:5px 0;color:#666">Barcode:</td><td><?= h($prod['barcode'] ?? '-') ?></td></tr>
-                    <tr><td style="padding:5px 0;color:#666">Warehouse:</td><td><?= h($prod['warehouse_name'] ?? '-') ?></td></tr>
-                    <tr><td style="padding:5px 0;color:#666">Status:</td><td><span class="badge badge-<?= $prod['status'] === 'active' ? 'success' : 'secondary' ?>"><?= h(strtoupper($prod['status'])) ?></span></td></tr>
-                    <tr><td style="padding:5px 0;color:#666">Description:</td><td><?= h($prod['description'] ?? '-') ?></td></tr>
-                </tbody></table>
+                <table style="width:100%;font-size:12px">
+                    <tbody>
+                    <tr>
+                        <td style="padding:5px 0;color:#666;width:40%">SKU:</td>
+                        <td><code><?= h($prod['sku']) ?></code></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:5px 0;color:#666">Name:</td>
+                        <td><strong><?= h($prod['name']) ?></strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:5px 0;color:#666">Category:</td>
+                        <td><?= h($prod['category_name'] ?? '-') ?></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:5px 0;color:#666">Brand:</td>
+                        <td><?= h($prod['brand'] ?? '-') ?></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:5px 0;color:#666">Unit:</td>
+                        <td><?= h($prod['unit']) ?></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:5px 0;color:#666">Barcode:</td>
+                        <td><?= h($prod['barcode'] ?? '-') ?></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:5px 0;color:#666">Warehouse:</td>
+                        <td><?= h($prod['warehouse_name'] ?? '-') ?></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:5px 0;color:#666">Status:</td>
+                        <td>
+                            <span class="badge badge-<?= $prod['status'] === 'active' ? 'success' : 'secondary' ?>"><?= h(strtoupper($prod['status'])) ?></span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:5px 0;color:#666">Description:</td>
+                        <td><?= h($prod['description'] ?? '-') ?></td>
+                    </tr>
+                    </tbody>
+                </table>
             </div>
             <div>
                 <div class="lf"><span class="lf-title">Pricing & Stock</span>
-                    <table style="width:100%;font-size:12px"><tbody>
-                        <tr><td style="padding:5px 0;color:#666;width:50%">Purchase Price:</td><td><?= formatCurrency((float) $prod['purchase_price']) ?></td></tr>
-                        <tr><td style="padding:5px 0;color:#666">Selling Price:</td><td><?= formatCurrency((float) $prod['selling_price']) ?></td></tr>
-                        <tr><td style="padding:5px 0;color:#666">Profit Margin:</td><td><?php $pp = (float) $prod['purchase_price'];
+                    <table style="width:100%;font-size:12px">
+                        <tbody>
+                        <tr>
+                            <td style="padding:5px 0;color:#666;width:50%">Purchase Price:</td>
+                            <td><?= formatCurrency((float) $prod['purchase_price']) ?></td>
+                        </tr>
+                        <tr>
+                            <td style="padding:5px 0;color:#666">Selling Price:</td>
+                            <td><?= formatCurrency((float) $prod['selling_price']) ?></td>
+                        </tr>
+                        <tr>
+                            <td style="padding:5px 0;color:#666">Profit Margin:</td>
+                            <td><?php $pp = (float) $prod['purchase_price'];
         $sp = (float) $prod['selling_price'];
-        echo $pp > 0 ? number_format(($sp - $pp) / $pp * 100, 1) . '%' : '-'; ?></td></tr>
-                        <tr><td style="padding:5px 0;color:#666">Current Stock:</td>
+        echo $pp > 0 ? number_format(($sp - $pp) / $pp * 100, 1) . '%' : '-'; ?></td>
+                        </tr>
+                        <tr>
+                            <td style="padding:5px 0;color:#666">Current Stock:</td>
                             <td><?php $sc = $prod['current_stock'] <= 0 ? 'critical' : ($prod['current_stock'] <= $prod['min_stock_level'] ? 'low' : 'ok'); ?>
-                            <span class="stock-<?= $sc ?>" style="font-size:18px;font-weight:700"><?= number_format((int) $prod['current_stock']) ?></span> <?= h($prod['unit']) ?>
+                                <span class="stock-<?= $sc ?>"
+                                      style="font-size:18px;font-weight:700"><?= number_format((int) $prod['current_stock']) ?></span> <?= h($prod['unit']) ?>
                             </td>
                         </tr>
-                        <tr><td style="padding:5px 0;color:#666">Min Stock Level:</td><td><?= number_format((int) $prod['min_stock_level']) ?></td></tr>
-                        <tr><td style="padding:5px 0;color:#666">Max Stock Level:</td><td><?= number_format((int) $prod['max_stock_level']) ?></td></tr>
-                        <tr><td style="padding:5px 0;color:#666">Stock Value:</td><td><?= formatCurrency((float) $prod['current_stock'] * (float) $prod['purchase_price']) ?></td></tr>
-                    </tbody></table>
+                        <tr>
+                            <td style="padding:5px 0;color:#666">Min Stock Level:</td>
+                            <td><?= number_format((int) $prod['min_stock_level']) ?></td>
+                        </tr>
+                        <tr>
+                            <td style="padding:5px 0;color:#666">Max Stock Level:</td>
+                            <td><?= number_format((int) $prod['max_stock_level']) ?></td>
+                        </tr>
+                        <tr>
+                            <td style="padding:5px 0;color:#666">Stock Value:</td>
+                            <td><?= formatCurrency((float) $prod['current_stock'] * (float) $prod['purchase_price']) ?></td>
+                        </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
         <div class="lf"><span class="lf-title">Recent Sales History</span>
-            <div class="tbl-wrap"><table class="tbl">
-                <thead><tr><th>Invoice#</th><th>Customer</th><th>Qty</th><th>Unit Price</th><th>Total</th><th>Date</th></tr></thead>
-                <tbody>
-                <?php if (empty($salesHistory)): ?><tr><td colspan="6" class="text-center" style="padding:12px;color:#888">No sales history</td></tr>
-                <?php else:
+            <div class="tbl-wrap">
+                <table class="tbl">
+                    <thead>
+                    <tr>
+                        <th>Invoice#</th>
+                        <th>Customer</th>
+                        <th>Qty</th>
+                        <th>Unit Price</th>
+                        <th>Total</th>
+                        <th>Date</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php if (empty($salesHistory)): ?>
+                        <tr>
+                            <td colspan="6" class="text-center" style="padding:12px;color:#888">No sales history</td>
+                        </tr>
+                    <?php else:
             foreach ($salesHistory as $sh): ?>
-                <tr><td><?= h($sh['invoice_number']) ?></td><td><?= h($sh['customer_name']) ?></td><td><?= number_format((int) $sh['quantity']) ?></td><td><?= formatCurrency((float) $sh['unit_price']) ?></td><td><?= formatCurrency((float) $sh['total_price']) ?></td><td><?= h($sh['invoice_date']) ?></td></tr>
-                <?php endforeach;
+                            <tr>
+                                <td><?= h($sh['invoice_number']) ?></td>
+                                <td><?= h($sh['customer_name']) ?></td>
+                                <td><?= number_format((int) $sh['quantity']) ?></td>
+                                <td><?= formatCurrency((float) $sh['unit_price']) ?></td>
+                                <td><?= formatCurrency((float) $sh['total_price']) ?></td>
+                                <td><?= h($sh['invoice_date']) ?></td>
+                            </tr>
+                        <?php endforeach;
         endif; ?>
-                </tbody>
-            </table></div>
+                    </tbody>
+                </table>
+            </div>
         </div>
         <div class="lf"><span class="lf-title">Stock Adjustment History</span>
-            <div class="tbl-wrap"><table class="tbl">
-                <thead><tr><th>Ref#</th><th>Type</th><th>Qty</th><th>Before</th><th>After</th><th>Reason</th><th>By</th><th>Status</th><th>Date</th></tr></thead>
-                <tbody>
-                <?php if (empty($adjustHistory)): ?><tr><td colspan="9" class="text-center" style="padding:12px;color:#888">No adjustments</td></tr>
-                <?php else:
+            <div class="tbl-wrap">
+                <table class="tbl">
+                    <thead>
+                    <tr>
+                        <th>Ref#</th>
+                        <th>Type</th>
+                        <th>Qty</th>
+                        <th>Before</th>
+                        <th>After</th>
+                        <th>Reason</th>
+                        <th>By</th>
+                        <th>Status</th>
+                        <th>Date</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php if (empty($adjustHistory)): ?>
+                        <tr>
+                            <td colspan="9" class="text-center" style="padding:12px;color:#888">No adjustments</td>
+                        </tr>
+                    <?php else:
             foreach ($adjustHistory as $ah): ?>
-                <tr><td><code style="font-size:10px"><?= h($ah['reference_no']) ?></code></td><td><?= h(str_replace('_', ' ', strtoupper($ah['adjustment_type']))) ?></td><td><?= number_format((int) $ah['quantity']) ?></td><td><?= number_format((int) $ah['before_stock']) ?></td><td><?= number_format((int) $ah['after_stock']) ?></td><td><?= h(substr($ah['reason'] ?? '-', 0, 30)) ?></td><td><?= h($ah['requested_by_name']) ?></td><td><span class="badge badge-<?= $ah['status'] === 'approved' ? 'success' : ($ah['status'] === 'rejected' ? 'danger' : 'warning') ?>"><?= h(strtoupper($ah['status'])) ?></span></td><td><?= h(substr($ah['created_at'], 0, 10)) ?></td></tr>
-                <?php endforeach;
+                            <tr>
+                                <td><code style="font-size:10px"><?= h($ah['reference_no']) ?></code></td>
+                                <td><?= h(str_replace('_', ' ', strtoupper($ah['adjustment_type']))) ?></td>
+                                <td><?= number_format((int) $ah['quantity']) ?></td>
+                                <td><?= number_format((int) $ah['before_stock']) ?></td>
+                                <td><?= number_format((int) $ah['after_stock']) ?></td>
+                                <td><?= h(substr($ah['reason'] ?? '-', 0, 30)) ?></td>
+                                <td><?= h($ah['requested_by_name']) ?></td>
+                                <td>
+                                    <span class="badge badge-<?= $ah['status'] === 'approved' ? 'success' : ($ah['status'] === 'rejected' ? 'danger' : 'warning') ?>"><?= h(strtoupper($ah['status'])) ?></span>
+                                </td>
+                                <td><?= h(substr($ah['created_at'], 0, 10)) ?></td>
+                            </tr>
+                        <?php endforeach;
         endif; ?>
-                </tbody>
-            </table></div>
+                    </tbody>
+                </table>
+            </div>
         </div>
-        <?php
+    <?php
         $content = ob_get_clean();
         renderLayout('Product Detail', $content, 'products');
     } elseif ($action === 'export') {
@@ -2816,9 +4291,16 @@ function renderProducts(): void
         }
         ob_start();
         ?>
-        <div class="page-header"><h1>&#8593; Import Products CSV</h1><div class="page-header-actions"><a href="?page=products" class="btn btn-secondary btn-sm">&#8592; Back</a></div></div>
-        <?php if ($importSuccess): ?><div class="alert alert-success"><?= $importSuccess ?> product(s) imported successfully.</div><?php endif; ?>
-        <?php if (!empty($importErrors)): ?><div class="alert alert-danger"><ul><?php foreach (array_slice($importErrors, 0, 10) as $e): ?><li><?= h($e) ?></li><?php endforeach; ?></ul></div><?php endif; ?>
+        <div class="page-header"><h1>&#8593; Import Products CSV</h1>
+            <div class="page-header-actions"><a href="?page=products" class="btn btn-secondary btn-sm">&#8592; Back</a>
+            </div>
+        </div>
+        <?php if ($importSuccess): ?>
+    <div class="alert alert-success"><?= $importSuccess ?> product(s) imported successfully.</div><?php endif; ?>
+        <?php if (!empty($importErrors)): ?>
+    <div class="alert alert-danger">
+        <ul><?php foreach (array_slice($importErrors, 0, 10) as $e): ?>
+                <li><?= h($e) ?></li><?php endforeach; ?></ul></div><?php endif; ?>
         <div class="lf"><span class="lf-title">Import CSV File</span>
             <form method="POST" enctype="multipart/form-data" action="?page=products&action=import">
                 <?= csrfField() ?>
@@ -2828,10 +4310,12 @@ function renderProducts(): void
                 </div>
                 <div style="margin:12px 0;padding:10px;background:#fff3cd;border:1px solid #ffc107;font-size:12px">
                     <strong>CSV Format (columns in order):</strong><br>
-                    SKU, Name, Description, Category, Brand, Unit, Purchase Price, Selling Price, Current Stock, Min Stock, Max Stock, Warehouse, Barcode, Status
+                    SKU, Name, Description, Category, Brand, Unit, Purchase Price, Selling Price, Current Stock, Min
+                    Stock, Max Stock, Warehouse, Barcode, Status
                 </div>
                 <button type="submit" class="btn btn-primary">&#8593; Import Now</button>
-                <a href="?page=products&action=export" class="btn btn-secondary" style="margin-left:8px">&#8595; Download Sample CSV</a>
+                <a href="?page=products&action=export" class="btn btn-secondary" style="margin-left:8px">&#8595;
+                    Download Sample CSV</a>
             </form>
         </div>
         <?php
@@ -2890,65 +4374,107 @@ function renderCategories(): void
     ?>
     <div class="page-header">
         <h1>&#128193; Categories</h1>
-        <div class="page-header-actions"><a href="?page=categories&action=new" class="btn btn-success btn-sm">+ Add Category</a></div>
+        <div class="page-header-actions"><a href="?page=categories&action=new" class="btn btn-success btn-sm">+ Add
+                Category</a></div>
     </div>
-    <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
+    <?php if (isset($_SESSION['flash_msg'])): ?>
+    <div
+    class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
     endif; ?>
     <div class="cols-2">
-        <div class="lf"><span class="lf-title"><?= ($action === 'edit' && $editCat) ? 'Edit Category' : 'Add New Category' ?></span>
-            <form method="POST" action="?page=categories&action=<?= ($action === 'edit' && $editCat) ? 'edit&id=' . (int) $_GET['id'] : 'new' ?>">
+        <div class="lf"><span
+                    class="lf-title"><?= ($action === 'edit' && $editCat) ? 'Edit Category' : 'Add New Category' ?></span>
+            <form method="POST"
+                  action="?page=categories&action=<?= ($action === 'edit' && $editCat) ? 'edit&id=' . (int) $_GET['id'] : 'new' ?>">
                 <?= csrfField() ?>
                 <div class="form-grid" style="grid-template-columns:1fr">
-                    <div class="form-group"><label>Category Name <span class="required-mark">*</span></label><input type="text" name="name" value="<?= h($editCat['name'] ?? $_POST['name'] ?? '') ?>" required></div>
+                    <div class="form-group"><label>Category Name <span class="required-mark">*</span></label><input
+                                type="text" name="name" value="<?= h($editCat['name'] ?? $_POST['name'] ?? '') ?>"
+                                required></div>
                     <div class="form-group"><label>Parent Category</label>
-                        <select name="parent_id"><option value="">-- Top Level --</option>
-                        <?php foreach ($categories as $c):
-                            if ($editCat && $c['id'] == (int) $_GET['id'])
-                                continue; ?><option value="<?= $c['id'] ?>" <?= ($editCat['parent_id'] ?? $_POST['parent_id'] ?? '') == $c['id'] ? 'selected' : '' ?>><?= h(($c['parent_name'] ? '-- ' : '') . $c['name']) ?></option><?php endforeach; ?>
+                        <select name="parent_id">
+                            <option value="">-- Top Level --</option>
+                            <?php foreach ($categories as $c):
+                                if ($editCat && $c['id'] == (int) $_GET['id'])
+                                    continue; ?>
+                                <option
+                                value="<?= $c['id'] ?>" <?= ($editCat['parent_id'] ?? $_POST['parent_id'] ?? '') == $c['id'] ? 'selected' : '' ?>><?= h(($c['parent_name'] ? '-- ' : '') . $c['name']) ?></option><?php endforeach; ?>
                         </select>
                     </div>
-                    <div class="form-group"><label>Description</label><textarea name="description"><?= h($editCat['description'] ?? $_POST['description'] ?? '') ?></textarea></div>
+                    <div class="form-group"><label>Description</label><textarea
+                                name="description"><?= h($editCat['description'] ?? $_POST['description'] ?? '') ?></textarea>
+                    </div>
                     <div class="form-group"><label>Status</label>
-                        <select name="status"><option value="active" <?= ($editCat['status'] ?? 'active') === 'active' ? 'selected' : '' ?>>Active</option><option value="inactive" <?= ($editCat['status'] ?? '') === 'inactive' ? 'selected' : '' ?>>Inactive</option></select>
+                        <select name="status">
+                            <option value="active" <?= ($editCat['status'] ?? 'active') === 'active' ? 'selected' : '' ?>>
+                                Active
+                            </option>
+                            <option value="inactive" <?= ($editCat['status'] ?? '') === 'inactive' ? 'selected' : '' ?>>
+                                Inactive
+                            </option>
+                        </select>
                     </div>
                 </div>
                 <div style="display:flex;gap:8px;margin-top:10px">
-                    <button type="submit" class="btn btn-success btn-sm"><?= ($action === 'edit' && $editCat) ? '&#10003; Update' : '+ Create' ?></button>
-                    <?php if ($action === 'edit'): ?><a href="?page=categories" class="btn btn-secondary btn-sm">Cancel</a><?php endif; ?>
+                    <button type="submit"
+                            class="btn btn-success btn-sm"><?= ($action === 'edit' && $editCat) ? '&#10003; Update' : '+ Create' ?></button>
+                    <?php if ($action === 'edit'): ?><a href="?page=categories"
+                                                        class="btn btn-secondary btn-sm">Cancel</a><?php endif; ?>
                 </div>
             </form>
         </div>
         <div class="lf"><span class="lf-title">All Categories (<?= count($categories) ?>)</span>
-            <div class="tbl-wrap"><table class="tbl">
-                <thead><tr><th>Name</th><th>Parent</th><th>Products</th><th>Status</th><th>Actions</th></tr></thead>
-                <tbody>
-                <?php if (empty($categories)): ?><tr><td colspan="5" class="text-center" style="padding:12px;color:#888">No categories yet</td></tr>
-                <?php else:
+            <div class="tbl-wrap">
+                <table class="tbl">
+                    <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Parent</th>
+                        <th>Products</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php if (empty($categories)): ?>
+                        <tr>
+                            <td colspan="5" class="text-center" style="padding:12px;color:#888">No categories yet</td>
+                        </tr>
+                    <?php else:
         foreach ($categories as $c): ?>
-                <tr>
-                    <td><?= $c['parent_id'] ? '&nbsp;&nbsp;&nbsp;↳ ' : '' ?><strong><?= h($c['name']) ?></strong></td>
-                    <td><?= h($c['parent_name'] ?? '-') ?></td>
-                    <td class="text-right"><?= number_format((int) $c['product_count']) ?></td>
-                    <td><span class="badge badge-<?= $c['status'] === 'active' ? 'success' : 'secondary' ?>"><?= h(strtoupper($c['status'])) ?></span></td>
-                    <td>
-                        <div class="tbl-actions">
-                            <a href="?page=categories&action=edit&id=<?= $c['id'] ?>" class="btn btn-warning btn-xs">&#9998;</a>
-                            <?php if (canAccess(['admin', 'manager'])): ?>
-                            <button onclick="confirmDeleteCat(<?= $c['id'] ?>,'<?= h(addslashes($c['name'])) ?>')" class="btn btn-danger btn-xs">&#128465;</button>
-                            <?php endif; ?>
-                        </div>
-                    </td>
-                </tr>
-                <?php endforeach;
+                            <tr>
+                                <td><?= $c['parent_id'] ? '&nbsp;&nbsp;&nbsp;↳ ' : '' ?>
+                                    <strong><?= h($c['name']) ?></strong></td>
+                                <td><?= h($c['parent_name'] ?? '-') ?></td>
+                                <td class="text-right"><?= number_format((int) $c['product_count']) ?></td>
+                                <td>
+                                    <span class="badge badge-<?= $c['status'] === 'active' ? 'success' : 'secondary' ?>"><?= h(strtoupper($c['status'])) ?></span>
+                                </td>
+                                <td>
+                                    <div class="tbl-actions">
+                                        <a href="?page=categories&action=edit&id=<?= $c['id'] ?>"
+                                           class="btn btn-warning btn-xs">&#9998;</a>
+                                        <?php if (canAccess(['admin', 'manager'])): ?>
+                                            <button onclick="confirmDeleteCat(<?= $c['id'] ?>,'<?= h(addslashes($c['name'])) ?>')"
+                                                    class="btn btn-danger btn-xs">&#128465;
+                                            </button>
+                                        <?php endif; ?>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach;
     endif; ?>
-                </tbody>
-            </table></div>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
     <script>
-    function confirmDeleteCat(id,name){
-        confirmAction('Delete category "'+name+'"?',function(){ window.location='?page=categories&action=delete&id='+id+'&confirm=yes'; });
-    }
+        function confirmDeleteCat(id, name) {
+            confirmAction('Delete category "' + name + '"?', function () {
+                window.location = '?page=categories&action=delete&id=' + id + '&confirm=yes';
+            });
+        }
     </script>
     <?php
     $content = ob_get_clean();
@@ -2984,44 +4510,89 @@ function renderSuppliers(): void
         $result = getSuppliers($filters, $page);
         ob_start();
         ?>
-        <div class="page-header"><h1>&#128667; Suppliers</h1><div class="page-header-actions"><a href="?page=suppliers&action=new" class="btn btn-success btn-sm">+ Add Supplier</a></div></div>
-        <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
+        <div class="page-header"><h1>&#128667; Suppliers</h1>
+            <div class="page-header-actions"><a href="?page=suppliers&action=new" class="btn btn-success btn-sm">+ Add
+                    Supplier</a></div>
+        </div>
+        <?php if (isset($_SESSION['flash_msg'])): ?>
+        <div
+        class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
         <form method="GET"><input type="hidden" name="page" value="suppliers">
             <div class="filter-bar">
-                <div class="form-group"><label>Search</label><input type="text" name="search" value="<?= h($filters['search']) ?>" placeholder="Name, contact, email..."></div>
-                <div class="form-group"><label>Status</label><select name="status"><option value="">All</option><option value="active" <?= $filters['status'] === 'active' ? 'selected' : '' ?>>Active</option><option value="inactive" <?= $filters['status'] === 'inactive' ? 'selected' : '' ?>>Inactive</option></select></div>
-                <div class="form-group" style="justify-content:flex-end;flex-direction:row;align-items:flex-end;gap:6px"><button type="submit" class="btn btn-primary btn-sm">Filter</button><a href="?page=suppliers" class="btn btn-secondary btn-sm">Reset</a></div>
+                <div class="form-group"><label>Search</label><input type="text" name="search"
+                                                                    value="<?= h($filters['search']) ?>"
+                                                                    placeholder="Name, contact, email..."></div>
+                <div class="form-group"><label>Status</label><select name="status">
+                        <option value="">All</option>
+                        <option value="active" <?= $filters['status'] === 'active' ? 'selected' : '' ?>>Active</option>
+                        <option value="inactive" <?= $filters['status'] === 'inactive' ? 'selected' : '' ?>>Inactive
+                        </option>
+                    </select></div>
+                <div class="form-group"
+                     style="justify-content:flex-end;flex-direction:row;align-items:flex-end;gap:6px">
+                    <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+                    <a href="?page=suppliers" class="btn btn-secondary btn-sm">Reset</a></div>
             </div>
         </form>
-        <div class="tbl-wrap"><table class="tbl">
-            <thead><tr><th>Company</th><th>Contact</th><th>Email</th><th>Phone</th><th>City</th><th>Balance</th><th>Status</th><th>Actions</th></tr></thead>
-            <tbody>
-            <?php if (empty($result['suppliers'])): ?><tr><td colspan="8" class="text-center" style="padding:16px;color:#888">No suppliers found</td></tr>
-            <?php else:
+        <div class="tbl-wrap">
+            <table class="tbl">
+                <thead>
+                <tr>
+                    <th>Company</th>
+                    <th>Contact</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th>City</th>
+                    <th>Balance</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php if (empty($result['suppliers'])): ?>
+                    <tr>
+                        <td colspan="8" class="text-center" style="padding:16px;color:#888">No suppliers found</td>
+                    </tr>
+                <?php else:
             foreach ($result['suppliers'] as $s): ?>
-            <tr>
-                <td><strong><?= h($s['company_name']) ?></strong></td>
-                <td><?= h($s['contact_person'] ?? '-') ?></td>
-                <td><?= h($s['email'] ?? '-') ?></td>
-                <td><?= h($s['phone'] ?? '-') ?></td>
-                <td><?= h($s['city'] ?? '-') ?></td>
-                <td class="text-right <?= $s['current_balance'] > 0 ? 'stock-critical' : '' ?>"><?= formatCurrency((float) $s['current_balance']) ?></td>
-                <td><span class="badge badge-<?= $s['status'] === 'active' ? 'success' : 'secondary' ?>"><?= h(strtoupper($s['status'])) ?></span></td>
-                <td><div class="tbl-actions">
-                    <a href="?page=suppliers&action=view&id=<?= $s['id'] ?>" class="btn btn-primary btn-xs">&#128065;</a>
-                    <a href="?page=suppliers&action=edit&id=<?= $s['id'] ?>" class="btn btn-warning btn-xs">&#9998;</a>
-                    <a href="?page=purchases&action=new&supplier_id=<?= $s['id'] ?>" class="btn btn-success btn-xs" title="New PO">+PO</a>
-                    <?php if (canAccess(['admin'])): ?><button onclick="confirmDelSupplier(<?= $s['id'] ?>,'<?= h(addslashes($s['company_name'])) ?>')" class="btn btn-danger btn-xs">&#128465;</button><?php endif; ?>
-                </div></td>
-            </tr>
-            <?php endforeach;
+                        <tr>
+                            <td><strong><?= h($s['company_name']) ?></strong></td>
+                            <td><?= h($s['contact_person'] ?? '-') ?></td>
+                            <td><?= h($s['email'] ?? '-') ?></td>
+                            <td><?= h($s['phone'] ?? '-') ?></td>
+                            <td><?= h($s['city'] ?? '-') ?></td>
+                            <td class="text-right <?= $s['current_balance'] > 0 ? 'stock-critical' : '' ?>"><?= formatCurrency((float) $s['current_balance']) ?></td>
+                            <td>
+                                <span class="badge badge-<?= $s['status'] === 'active' ? 'success' : 'secondary' ?>"><?= h(strtoupper($s['status'])) ?></span>
+                            </td>
+                            <td>
+                                <div class="tbl-actions">
+                                    <a href="?page=suppliers&action=view&id=<?= $s['id'] ?>"
+                                       class="btn btn-primary btn-xs">&#128065;</a>
+                                    <a href="?page=suppliers&action=edit&id=<?= $s['id'] ?>"
+                                       class="btn btn-warning btn-xs">&#9998;</a>
+                                    <a href="?page=purchases&action=new&supplier_id=<?= $s['id'] ?>"
+                                       class="btn btn-success btn-xs" title="New PO">+PO</a>
+                                    <?php if (canAccess(['admin'])): ?>
+                                        <button
+                                        onclick="confirmDelSupplier(<?= $s['id'] ?>,'<?= h(addslashes($s['company_name'])) ?>')"
+                                        class="btn btn-danger btn-xs">&#128465;</button><?php endif; ?>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach;
         endif; ?>
-            </tbody>
-        </table></div>
-        <?= paginationHtml($result['pagination'], '?page=suppliers&search=' . urlencode($filters['search']) . '&status=' . urlencode($filters['status'])) ?>
-        <script>function confirmDelSupplier(id,n){ confirmAction('Delete supplier "'+n+'"?',function(){ window.location='?page=suppliers&action=delete&id='+id; }); }</script>
-        <?php
+                </tbody>
+            </table>
+        </div>
+    <?= paginationHtml($result['pagination'], '?page=suppliers&search=' . urlencode($filters['search']) . '&status=' . urlencode($filters['status'])) ?>
+        <script>function confirmDelSupplier(id, n) {
+                confirmAction('Delete supplier "' + n + '"?', function () {
+                    window.location = '?page=suppliers&action=delete&id=' + id;
+                });
+            }</script>
+    <?php
         $content = ob_get_clean();
         renderLayout('Suppliers', $content, 'suppliers');
     } elseif ($action === 'new' || $action === 'edit') {
@@ -3030,27 +4601,54 @@ function renderSuppliers(): void
         $d = $sup ?? [];
         ob_start();
         ?>
-        <div class="page-header"><h1><?= $editId ? '&#9998; Edit Supplier' : '+ New Supplier' ?></h1><div class="page-header-actions"><a href="?page=suppliers" class="btn btn-secondary btn-sm">&#8592; Back</a></div></div>
+        <div class="page-header"><h1><?= $editId ? '&#9998; Edit Supplier' : '+ New Supplier' ?></h1>
+            <div class="page-header-actions"><a href="?page=suppliers" class="btn btn-secondary btn-sm">&#8592; Back</a>
+            </div>
+        </div>
         <form method="POST" action="?page=suppliers&action=<?= $editId ? 'edit&id=' . $editId : 'new' ?>">
             <?= csrfField() ?>
             <div class="lf"><span class="lf-title">Supplier Details</span>
                 <div class="form-grid form-grid-3">
-                    <div class="form-group" style="grid-column:span 2"><label>Company Name <span class="required-mark">*</span></label><input type="text" name="company_name" value="<?= h($d['company_name'] ?? '') ?>" required></div>
-                    <div class="form-group"><label>Contact Person</label><input type="text" name="contact_person" value="<?= h($d['contact_person'] ?? '') ?>"></div>
-                    <div class="form-group"><label>Email</label><input type="email" name="email" value="<?= h($d['email'] ?? '') ?>"></div>
-                    <div class="form-group"><label>Phone</label><input type="text" name="phone" value="<?= h($d['phone'] ?? '') ?>"></div>
-                    <div class="form-group"><label>Tax ID</label><input type="text" name="tax_id" value="<?= h($d['tax_id'] ?? '') ?>"></div>
-                    <div class="form-group"><label>Payment Terms</label><input type="text" name="payment_terms" value="<?= h($d['payment_terms'] ?? 'Net 30') ?>" placeholder="e.g. Net 30"></div>
-                    <div class="form-group"><label>City</label><input type="text" name="city" value="<?= h($d['city'] ?? '') ?>"></div>
-                    <div class="form-group"><label>Country</label><input type="text" name="country" value="<?= h($d['country'] ?? 'Pakistan') ?>"></div>
-                    <div class="form-group"><label>Status</label><select name="status"><option value="active" <?= ($d['status'] ?? 'active') === 'active' ? 'selected' : '' ?>>Active</option><option value="inactive" <?= ($d['status'] ?? '') === 'inactive' ? 'selected' : '' ?>>Inactive</option></select></div>
-                    <div class="form-group full"><label>Address</label><textarea name="address"><?= h($d['address'] ?? '') ?></textarea></div>
-                    <div class="form-group full"><label>Notes</label><textarea name="notes"><?= h($d['notes'] ?? '') ?></textarea></div>
+                    <div class="form-group" style="grid-column:span 2"><label>Company Name <span
+                                    class="required-mark">*</span></label><input type="text" name="company_name"
+                                                                                 value="<?= h($d['company_name'] ?? '') ?>"
+                                                                                 required></div>
+                    <div class="form-group"><label>Contact Person</label><input type="text" name="contact_person"
+                                                                                value="<?= h($d['contact_person'] ?? '') ?>">
+                    </div>
+                    <div class="form-group"><label>Email</label><input type="email" name="email"
+                                                                       value="<?= h($d['email'] ?? '') ?>"></div>
+                    <div class="form-group"><label>Phone</label><input type="text" name="phone"
+                                                                       value="<?= h($d['phone'] ?? '') ?>"></div>
+                    <div class="form-group"><label>Tax ID</label><input type="text" name="tax_id"
+                                                                        value="<?= h($d['tax_id'] ?? '') ?>"></div>
+                    <div class="form-group"><label>Payment Terms</label><input type="text" name="payment_terms"
+                                                                               value="<?= h($d['payment_terms'] ?? 'Net 30') ?>"
+                                                                               placeholder="e.g. Net 30"></div>
+                    <div class="form-group"><label>City</label><input type="text" name="city"
+                                                                      value="<?= h($d['city'] ?? '') ?>"></div>
+                    <div class="form-group"><label>Country</label><input type="text" name="country"
+                                                                         value="<?= h($d['country'] ?? 'Pakistan') ?>">
+                    </div>
+                    <div class="form-group"><label>Status</label><select name="status">
+                            <option value="active" <?= ($d['status'] ?? 'active') === 'active' ? 'selected' : '' ?>>
+                                Active
+                            </option>
+                            <option value="inactive" <?= ($d['status'] ?? '') === 'inactive' ? 'selected' : '' ?>>
+                                Inactive
+                            </option>
+                        </select></div>
+                    <div class="form-group full"><label>Address</label><textarea
+                                name="address"><?= h($d['address'] ?? '') ?></textarea></div>
+                    <div class="form-group full"><label>Notes</label><textarea
+                                name="notes"><?= h($d['notes'] ?? '') ?></textarea></div>
                 </div>
             </div>
-            <div style="display:flex;gap:8px"><button type="submit" class="btn btn-success"><?= $editId ? '&#10003; Update' : '+ Create' ?></button><a href="?page=suppliers" class="btn btn-secondary">Cancel</a></div>
+            <div style="display:flex;gap:8px">
+                <button type="submit" class="btn btn-success"><?= $editId ? '&#10003; Update' : '+ Create' ?></button>
+                <a href="?page=suppliers" class="btn btn-secondary">Cancel</a></div>
         </form>
-        <?php
+    <?php
         $content = ob_get_clean();
         renderLayout(($editId ? 'Edit' : 'New') . ' Supplier', $content, 'suppliers');
     } elseif ($action === 'view') {
@@ -3066,35 +4664,101 @@ function renderSuppliers(): void
         $poHistory = $poHistory->fetchAll();
         ob_start();
         ?>
-        <div class="page-header"><h1>&#128065; Supplier: <?= h($sup['company_name']) ?></h1><div class="page-header-actions"><a href="?page=suppliers&action=edit&id=<?= $id ?>" class="btn btn-warning btn-sm">&#9998; Edit</a><a href="?page=purchases&action=new&supplier_id=<?= $id ?>" class="btn btn-success btn-sm">+ New PO</a><a href="?page=suppliers" class="btn btn-secondary btn-sm">&#8592; Back</a></div></div>
+        <div class="page-header"><h1>&#128065; Supplier: <?= h($sup['company_name']) ?></h1>
+            <div class="page-header-actions"><a href="?page=suppliers&action=edit&id=<?= $id ?>"
+                                                class="btn btn-warning btn-sm">&#9998; Edit</a><a
+                        href="?page=purchases&action=new&supplier_id=<?= $id ?>" class="btn btn-success btn-sm">+ New
+                    PO</a><a href="?page=suppliers" class="btn btn-secondary btn-sm">&#8592; Back</a></div>
+        </div>
         <div class="cols-2">
             <div class="lf"><span class="lf-title">Supplier Information</span>
-                <table style="width:100%;font-size:12px"><tbody>
-                    <tr><td style="padding:4px 0;color:#666;width:40%">Company:</td><td><strong><?= h($sup['company_name']) ?></strong></td></tr>
-                    <tr><td style="padding:4px 0;color:#666">Contact:</td><td><?= h($sup['contact_person'] ?? '-') ?></td></tr>
-                    <tr><td style="padding:4px 0;color:#666">Email:</td><td><?= h($sup['email'] ?? '-') ?></td></tr>
-                    <tr><td style="padding:4px 0;color:#666">Phone:</td><td><?= h($sup['phone'] ?? '-') ?></td></tr>
-                    <tr><td style="padding:4px 0;color:#666">Address:</td><td><?= h($sup['address'] ?? '-') ?>, <?= h($sup['city'] ?? '') ?>, <?= h($sup['country'] ?? '') ?></td></tr>
-                    <tr><td style="padding:4px 0;color:#666">Tax ID:</td><td><?= h($sup['tax_id'] ?? '-') ?></td></tr>
-                    <tr><td style="padding:4px 0;color:#666">Payment Terms:</td><td><?= h($sup['payment_terms'] ?? '-') ?></td></tr>
-                    <tr><td style="padding:4px 0;color:#666">Outstanding Balance:</td><td><strong style="color:<?= $sup['current_balance'] > 0 ? '#d9534f' : '#5cb85c' ?>"><?= formatCurrency((float) $sup['current_balance']) ?></strong></td></tr>
-                    <tr><td style="padding:4px 0;color:#666">Status:</td><td><span class="badge badge-<?= $sup['status'] === 'active' ? 'success' : 'secondary' ?>"><?= h(strtoupper($sup['status'])) ?></span></td></tr>
-                    <?php if ($sup['notes']): ?><tr><td style="padding:4px 0;color:#666">Notes:</td><td><?= h($sup['notes']) ?></td></tr><?php endif; ?>
-                </tbody></table>
+                <table style="width:100%;font-size:12px">
+                    <tbody>
+                    <tr>
+                        <td style="padding:4px 0;color:#666;width:40%">Company:</td>
+                        <td><strong><?= h($sup['company_name']) ?></strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:4px 0;color:#666">Contact:</td>
+                        <td><?= h($sup['contact_person'] ?? '-') ?></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:4px 0;color:#666">Email:</td>
+                        <td><?= h($sup['email'] ?? '-') ?></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:4px 0;color:#666">Phone:</td>
+                        <td><?= h($sup['phone'] ?? '-') ?></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:4px 0;color:#666">Address:</td>
+                        <td><?= h($sup['address'] ?? '-') ?>, <?= h($sup['city'] ?? '') ?>
+                            , <?= h($sup['country'] ?? '') ?></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:4px 0;color:#666">Tax ID:</td>
+                        <td><?= h($sup['tax_id'] ?? '-') ?></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:4px 0;color:#666">Payment Terms:</td>
+                        <td><?= h($sup['payment_terms'] ?? '-') ?></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:4px 0;color:#666">Outstanding Balance:</td>
+                        <td>
+                            <strong style="color:<?= $sup['current_balance'] > 0 ? '#d9534f' : '#5cb85c' ?>"><?= formatCurrency((float) $sup['current_balance']) ?></strong>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:4px 0;color:#666">Status:</td>
+                        <td>
+                            <span class="badge badge-<?= $sup['status'] === 'active' ? 'success' : 'secondary' ?>"><?= h(strtoupper($sup['status'])) ?></span>
+                        </td>
+                    </tr>
+                    <?php if ($sup['notes']): ?>
+                        <tr>
+                        <td style="padding:4px 0;color:#666">Notes:</td>
+                        <td><?= h($sup['notes']) ?></td></tr><?php endif; ?>
+                    </tbody>
+                </table>
             </div>
             <div class="lf"><span class="lf-title">Purchase History</span>
-                <div class="tbl-wrap"><table class="tbl">
-                    <thead><tr><th>PO#</th><th>Date</th><th>Amount</th><th>Status</th><th>Payment</th></tr></thead>
-                    <tbody>
-                    <?php if (empty($poHistory)): ?><tr><td colspan="5" class="text-center" style="padding:12px;color:#888">No POs yet</td></tr>
-                    <?php else:
+                <div class="tbl-wrap">
+                    <table class="tbl">
+                        <thead>
+                        <tr>
+                            <th>PO#</th>
+                            <th>Date</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                            <th>Payment</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php if (empty($poHistory)): ?>
+                            <tr>
+                                <td colspan="5" class="text-center" style="padding:12px;color:#888">No POs yet</td>
+                            </tr>
+                        <?php else:
             foreach ($poHistory as $po): ?>
-                    <tr><td><a href="?page=purchases&action=view&id=<?php $pid = $pdo->query("SELECT id FROM purchase_orders WHERE po_number='" . $po['po_number'] . "'")->fetchColumn();
-                echo $pid; ?>"><?= h($po['po_number']) ?></a></td><td><?= h($po['po_date']) ?></td><td class="text-right"><?= formatCurrency((float) $po['total_amount']) ?></td><td><span class="badge badge-<?= $po['order_status'] === 'received' ? 'success' : ($po['order_status'] === 'cancelled' ? 'danger' : 'warning') ?>"><?= h(strtoupper($po['order_status'])) ?></span></td><td><span class="badge badge-<?= $po['payment_status'] === 'paid' ? 'success' : ($po['payment_status'] === 'partial' ? 'warning' : 'danger') ?>"><?= h(strtoupper($po['payment_status'])) ?></span></td></tr>
-                    <?php endforeach;
+                                <tr>
+                                    <td>
+                                        <a href="?page=purchases&action=view&id=<?php $pid = $pdo->query("SELECT id FROM purchase_orders WHERE po_number='" . $po['po_number'] . "'")->fetchColumn();
+                echo $pid; ?>"><?= h($po['po_number']) ?></a></td>
+                                    <td><?= h($po['po_date']) ?></td>
+                                    <td class="text-right"><?= formatCurrency((float) $po['total_amount']) ?></td>
+                                    <td>
+                                        <span class="badge badge-<?= $po['order_status'] === 'received' ? 'success' : ($po['order_status'] === 'cancelled' ? 'danger' : 'warning') ?>"><?= h(strtoupper($po['order_status'])) ?></span>
+                                    </td>
+                                    <td>
+                                        <span class="badge badge-<?= $po['payment_status'] === 'paid' ? 'success' : ($po['payment_status'] === 'partial' ? 'warning' : 'danger') ?>"><?= h(strtoupper($po['payment_status'])) ?></span>
+                                    </td>
+                                </tr>
+                            <?php endforeach;
         endif; ?>
-                    </tbody>
-                </table></div>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
         <?php
@@ -3132,46 +4796,99 @@ function renderCustomers(): void
         $result = getCustomers($filters, $page);
         ob_start();
         ?>
-        <div class="page-header"><h1>&#128101; Customers</h1><div class="page-header-actions"><a href="?page=customers&action=new" class="btn btn-success btn-sm">+ Add Customer</a></div></div>
-        <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
+        <div class="page-header"><h1>&#128101; Customers</h1>
+            <div class="page-header-actions"><a href="?page=customers&action=new" class="btn btn-success btn-sm">+ Add
+                    Customer</a></div>
+        </div>
+        <?php if (isset($_SESSION['flash_msg'])): ?>
+        <div
+        class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
         <form method="GET"><input type="hidden" name="page" value="customers">
             <div class="filter-bar">
-                <div class="form-group"><label>Search</label><input type="text" name="search" value="<?= h($filters['search']) ?>" placeholder="Name, email, phone..."></div>
-                <div class="form-group"><label>Type</label><select name="type"><option value="">All</option><option value="walk-in" <?= $filters['type'] === 'walk-in' ? 'selected' : '' ?>>Walk-in</option><option value="regular" <?= $filters['type'] === 'regular' ? 'selected' : '' ?>>Regular</option><option value="wholesale" <?= $filters['type'] === 'wholesale' ? 'selected' : '' ?>>Wholesale</option></select></div>
-                <div class="form-group"><label>Status</label><select name="status"><option value="">All</option><option value="active" <?= $filters['status'] === 'active' ? 'selected' : '' ?>>Active</option><option value="inactive" <?= $filters['status'] === 'inactive' ? 'selected' : '' ?>>Inactive</option></select></div>
-                <div class="form-group" style="justify-content:flex-end;flex-direction:row;align-items:flex-end;gap:6px"><button type="submit" class="btn btn-primary btn-sm">Filter</button><a href="?page=customers" class="btn btn-secondary btn-sm">Reset</a></div>
+                <div class="form-group"><label>Search</label><input type="text" name="search"
+                                                                    value="<?= h($filters['search']) ?>"
+                                                                    placeholder="Name, email, phone..."></div>
+                <div class="form-group"><label>Type</label><select name="type">
+                        <option value="">All</option>
+                        <option value="walk-in" <?= $filters['type'] === 'walk-in' ? 'selected' : '' ?>>Walk-in</option>
+                        <option value="regular" <?= $filters['type'] === 'regular' ? 'selected' : '' ?>>Regular</option>
+                        <option value="wholesale" <?= $filters['type'] === 'wholesale' ? 'selected' : '' ?>>Wholesale
+                        </option>
+                    </select></div>
+                <div class="form-group"><label>Status</label><select name="status">
+                        <option value="">All</option>
+                        <option value="active" <?= $filters['status'] === 'active' ? 'selected' : '' ?>>Active</option>
+                        <option value="inactive" <?= $filters['status'] === 'inactive' ? 'selected' : '' ?>>Inactive
+                        </option>
+                    </select></div>
+                <div class="form-group"
+                     style="justify-content:flex-end;flex-direction:row;align-items:flex-end;gap:6px">
+                    <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+                    <a href="?page=customers" class="btn btn-secondary btn-sm">Reset</a></div>
             </div>
         </form>
-        <div class="tbl-wrap"><table class="tbl">
-            <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Type</th><th>Credit Limit</th><th>Balance</th><th>Status</th><th>Actions</th></tr></thead>
-            <tbody>
-            <?php if (empty($result['customers'])): ?><tr><td colspan="8" class="text-center" style="padding:16px;color:#888">No customers found</td></tr>
-            <?php else:
+        <div class="tbl-wrap">
+            <table class="tbl">
+                <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th>Type</th>
+                    <th>Credit Limit</th>
+                    <th>Balance</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php if (empty($result['customers'])): ?>
+                    <tr>
+                        <td colspan="8" class="text-center" style="padding:16px;color:#888">No customers found</td>
+                    </tr>
+                <?php else:
             foreach ($result['customers'] as $c):
                 $typeBadge = ['walk-in' => 'secondary', 'regular' => 'info', 'wholesale' => 'primary'][$c['customer_type']] ?? 'secondary'; ?>
-            <tr>
-                <td><strong><?= h($c['name']) ?></strong></td>
-                <td><?= h($c['email'] ?? '-') ?></td>
-                <td><?= h($c['phone'] ?? '-') ?></td>
-                <td><span class="badge badge-<?= $typeBadge ?>"><?= h(strtoupper($c['customer_type'])) ?></span></td>
-                <td class="text-right"><?= formatCurrency((float) $c['credit_limit']) ?></td>
-                <td class="text-right <?= $c['current_balance'] > 0 ? 'stock-critical' : '' ?>"><?= formatCurrency((float) $c['current_balance']) ?></td>
-                <td><span class="badge badge-<?= $c['status'] === 'active' ? 'success' : 'secondary' ?>"><?= h(strtoupper($c['status'])) ?></span></td>
-                <td><div class="tbl-actions">
-                    <a href="?page=customers&action=view&id=<?= $c['id'] ?>" class="btn btn-primary btn-xs">&#128065;</a>
-                    <a href="?page=customers&action=edit&id=<?= $c['id'] ?>" class="btn btn-warning btn-xs">&#9998;</a>
-                    <a href="?page=sales&action=new&customer_id=<?= $c['id'] ?>" class="btn btn-success btn-xs" title="New Invoice">+INV</a>
-                    <?php if (canAccess(['admin'])): ?><button onclick="confirmDelCust(<?= $c['id'] ?>,'<?= h(addslashes($c['name'])) ?>')" class="btn btn-danger btn-xs">&#128465;</button><?php endif; ?>
-                </div></td>
-            </tr>
-            <?php endforeach;
+                        <tr>
+                            <td><strong><?= h($c['name']) ?></strong></td>
+                            <td><?= h($c['email'] ?? '-') ?></td>
+                            <td><?= h($c['phone'] ?? '-') ?></td>
+                            <td>
+                                <span class="badge badge-<?= $typeBadge ?>"><?= h(strtoupper($c['customer_type'])) ?></span>
+                            </td>
+                            <td class="text-right"><?= formatCurrency((float) $c['credit_limit']) ?></td>
+                            <td class="text-right <?= $c['current_balance'] > 0 ? 'stock-critical' : '' ?>"><?= formatCurrency((float) $c['current_balance']) ?></td>
+                            <td>
+                                <span class="badge badge-<?= $c['status'] === 'active' ? 'success' : 'secondary' ?>"><?= h(strtoupper($c['status'])) ?></span>
+                            </td>
+                            <td>
+                                <div class="tbl-actions">
+                                    <a href="?page=customers&action=view&id=<?= $c['id'] ?>"
+                                       class="btn btn-primary btn-xs">&#128065;</a>
+                                    <a href="?page=customers&action=edit&id=<?= $c['id'] ?>"
+                                       class="btn btn-warning btn-xs">&#9998;</a>
+                                    <a href="?page=sales&action=new&customer_id=<?= $c['id'] ?>"
+                                       class="btn btn-success btn-xs" title="New Invoice">+INV</a>
+                                    <?php if (canAccess(['admin'])): ?>
+                                        <button
+                                        onclick="confirmDelCust(<?= $c['id'] ?>,'<?= h(addslashes($c['name'])) ?>')"
+                                        class="btn btn-danger btn-xs">&#128465;</button><?php endif; ?>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach;
         endif; ?>
-            </tbody>
-        </table></div>
-        <?= paginationHtml($result['pagination'], '?page=customers&search=' . urlencode($filters['search']) . '&status=' . urlencode($filters['status']) . '&type=' . urlencode($filters['type'])) ?>
-        <script>function confirmDelCust(id,n){ confirmAction('Delete customer "'+n+'"?',function(){ window.location='?page=customers&action=delete&id='+id; }); }</script>
-        <?php
+                </tbody>
+            </table>
+        </div>
+    <?= paginationHtml($result['pagination'], '?page=customers&search=' . urlencode($filters['search']) . '&status=' . urlencode($filters['status']) . '&type=' . urlencode($filters['type'])) ?>
+        <script>function confirmDelCust(id, n) {
+                confirmAction('Delete customer "' + n + '"?', function () {
+                    window.location = '?page=customers&action=delete&id=' + id;
+                });
+            }</script>
+    <?php
         $content = ob_get_clean();
         renderLayout('Customers', $content, 'customers');
     } elseif ($action === 'new' || $action === 'edit') {
@@ -3180,26 +4897,61 @@ function renderCustomers(): void
         $d = $cust ?? [];
         ob_start();
         ?>
-        <div class="page-header"><h1><?= $editId ? '&#9998; Edit Customer' : '+ New Customer' ?></h1><div class="page-header-actions"><a href="?page=customers" class="btn btn-secondary btn-sm">&#8592; Back</a></div></div>
+        <div class="page-header"><h1><?= $editId ? '&#9998; Edit Customer' : '+ New Customer' ?></h1>
+            <div class="page-header-actions"><a href="?page=customers" class="btn btn-secondary btn-sm">&#8592; Back</a>
+            </div>
+        </div>
         <form method="POST" action="?page=customers&action=<?= $editId ? 'edit&id=' . $editId : 'new' ?>">
             <?= csrfField() ?>
             <div class="lf"><span class="lf-title">Customer Details</span>
                 <div class="form-grid form-grid-3">
-                    <div class="form-group" style="grid-column:span 2"><label>Full Name <span class="required-mark">*</span></label><input type="text" name="name" value="<?= h($d['name'] ?? '') ?>" required></div>
-                    <div class="form-group"><label>Customer Type</label><select name="customer_type"><option value="walk-in" <?= ($d['customer_type'] ?? 'walk-in') === 'walk-in' ? 'selected' : '' ?>>Walk-in</option><option value="regular" <?= ($d['customer_type'] ?? '') === 'regular' ? 'selected' : '' ?>>Regular</option><option value="wholesale" <?= ($d['customer_type'] ?? '') === 'wholesale' ? 'selected' : '' ?>>Wholesale</option></select></div>
-                    <div class="form-group"><label>Email</label><input type="email" name="email" value="<?= h($d['email'] ?? '') ?>"></div>
-                    <div class="form-group"><label>Phone</label><input type="text" name="phone" value="<?= h($d['phone'] ?? '') ?>"></div>
-                    <div class="form-group"><label>Credit Limit</label><input type="number" name="credit_limit" step="0.01" min="0" value="<?= h($d['credit_limit'] ?? '0') ?>"></div>
-                    <div class="form-group"><label>City</label><input type="text" name="city" value="<?= h($d['city'] ?? '') ?>"></div>
-                    <div class="form-group"><label>Country</label><input type="text" name="country" value="<?= h($d['country'] ?? 'Pakistan') ?>"></div>
-                    <div class="form-group"><label>Status</label><select name="status"><option value="active" <?= ($d['status'] ?? 'active') === 'active' ? 'selected' : '' ?>>Active</option><option value="inactive" <?= ($d['status'] ?? '') === 'inactive' ? 'selected' : '' ?>>Inactive</option></select></div>
-                    <div class="form-group full"><label>Address</label><textarea name="address"><?= h($d['address'] ?? '') ?></textarea></div>
-                    <div class="form-group full"><label>Notes</label><textarea name="notes"><?= h($d['notes'] ?? '') ?></textarea></div>
+                    <div class="form-group" style="grid-column:span 2"><label>Full Name <span
+                                    class="required-mark">*</span></label><input type="text" name="name"
+                                                                                 value="<?= h($d['name'] ?? '') ?>"
+                                                                                 required></div>
+                    <div class="form-group"><label>Customer Type</label><select name="customer_type">
+                            <option value="walk-in" <?= ($d['customer_type'] ?? 'walk-in') === 'walk-in' ? 'selected' : '' ?>>
+                                Walk-in
+                            </option>
+                            <option value="regular" <?= ($d['customer_type'] ?? '') === 'regular' ? 'selected' : '' ?>>
+                                Regular
+                            </option>
+                            <option value="wholesale" <?= ($d['customer_type'] ?? '') === 'wholesale' ? 'selected' : '' ?>>
+                                Wholesale
+                            </option>
+                        </select></div>
+                    <div class="form-group"><label>Email</label><input type="email" name="email"
+                                                                       value="<?= h($d['email'] ?? '') ?>"></div>
+                    <div class="form-group"><label>Phone</label><input type="text" name="phone"
+                                                                       value="<?= h($d['phone'] ?? '') ?>"></div>
+                    <div class="form-group"><label>Credit Limit</label><input type="number" name="credit_limit"
+                                                                              step="0.01" min="0"
+                                                                              value="<?= h($d['credit_limit'] ?? '0') ?>">
+                    </div>
+                    <div class="form-group"><label>City</label><input type="text" name="city"
+                                                                      value="<?= h($d['city'] ?? '') ?>"></div>
+                    <div class="form-group"><label>Country</label><input type="text" name="country"
+                                                                         value="<?= h($d['country'] ?? 'Pakistan') ?>">
+                    </div>
+                    <div class="form-group"><label>Status</label><select name="status">
+                            <option value="active" <?= ($d['status'] ?? 'active') === 'active' ? 'selected' : '' ?>>
+                                Active
+                            </option>
+                            <option value="inactive" <?= ($d['status'] ?? '') === 'inactive' ? 'selected' : '' ?>>
+                                Inactive
+                            </option>
+                        </select></div>
+                    <div class="form-group full"><label>Address</label><textarea
+                                name="address"><?= h($d['address'] ?? '') ?></textarea></div>
+                    <div class="form-group full"><label>Notes</label><textarea
+                                name="notes"><?= h($d['notes'] ?? '') ?></textarea></div>
                 </div>
             </div>
-            <div style="display:flex;gap:8px"><button type="submit" class="btn btn-success"><?= $editId ? '&#10003; Update' : '+ Create' ?></button><a href="?page=customers" class="btn btn-secondary">Cancel</a></div>
+            <div style="display:flex;gap:8px">
+                <button type="submit" class="btn btn-success"><?= $editId ? '&#10003; Update' : '+ Create' ?></button>
+                <a href="?page=customers" class="btn btn-secondary">Cancel</a></div>
         </form>
-        <?php
+    <?php
         $content = ob_get_clean();
         renderLayout(($editId ? 'Edit' : 'New') . ' Customer', $content, 'customers');
     } elseif ($action === 'view') {
@@ -3215,33 +4967,90 @@ function renderCustomers(): void
         $totalSpent = (float) $pdo->query("SELECT COALESCE(SUM(total_amount),0) FROM invoices WHERE customer_id=$id")->fetchColumn();
         ob_start();
         ?>
-        <div class="page-header"><h1>&#128065; Customer: <?= h($cust['name']) ?></h1><div class="page-header-actions"><a href="?page=customers&action=edit&id=<?= $id ?>" class="btn btn-warning btn-sm">&#9998; Edit</a><a href="?page=sales&action=new&customer_id=<?= $id ?>" class="btn btn-success btn-sm">+ New Invoice</a><a href="?page=customers" class="btn btn-secondary btn-sm">&#8592; Back</a></div></div>
+        <div class="page-header"><h1>&#128065; Customer: <?= h($cust['name']) ?></h1>
+            <div class="page-header-actions"><a href="?page=customers&action=edit&id=<?= $id ?>"
+                                                class="btn btn-warning btn-sm">&#9998; Edit</a><a
+                        href="?page=sales&action=new&customer_id=<?= $id ?>" class="btn btn-success btn-sm">+ New
+                    Invoice</a><a href="?page=customers" class="btn btn-secondary btn-sm">&#8592; Back</a></div>
+        </div>
         <div class="cols-2">
             <div class="lf"><span class="lf-title">Customer Information</span>
-                <table style="width:100%;font-size:12px"><tbody>
-                    <tr><td style="padding:4px 0;color:#666;width:40%">Name:</td><td><strong><?= h($cust['name']) ?></strong></td></tr>
-                    <tr><td style="padding:4px 0;color:#666">Email:</td><td><?= h($cust['email'] ?? '-') ?></td></tr>
-                    <tr><td style="padding:4px 0;color:#666">Phone:</td><td><?= h($cust['phone'] ?? '-') ?></td></tr>
-                    <tr><td style="padding:4px 0;color:#666">Type:</td><td><?= h(strtoupper($cust['customer_type'])) ?></td></tr>
-                    <tr><td style="padding:4px 0;color:#666">Address:</td><td><?= h($cust['address'] ?? '-') ?>, <?= h($cust['city'] ?? '') ?></td></tr>
-                    <tr><td style="padding:4px 0;color:#666">Credit Limit:</td><td><?= formatCurrency((float) $cust['credit_limit']) ?></td></tr>
-                    <tr><td style="padding:4px 0;color:#666">Outstanding Balance:</td><td><strong style="color:<?= $cust['current_balance'] > 0 ? '#d9534f' : '#5cb85c' ?>"><?= formatCurrency((float) $cust['current_balance']) ?></strong></td></tr>
-                    <tr><td style="padding:4px 0;color:#666">Total Spent:</td><td><strong style="color:#5cb85c"><?= formatCurrency($totalSpent) ?></strong></td></tr>
-                    <tr><td style="padding:4px 0;color:#666">Status:</td><td><span class="badge badge-<?= $cust['status'] === 'active' ? 'success' : 'secondary' ?>"><?= h(strtoupper($cust['status'])) ?></span></td></tr>
-                </tbody></table>
+                <table style="width:100%;font-size:12px">
+                    <tbody>
+                    <tr>
+                        <td style="padding:4px 0;color:#666;width:40%">Name:</td>
+                        <td><strong><?= h($cust['name']) ?></strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:4px 0;color:#666">Email:</td>
+                        <td><?= h($cust['email'] ?? '-') ?></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:4px 0;color:#666">Phone:</td>
+                        <td><?= h($cust['phone'] ?? '-') ?></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:4px 0;color:#666">Type:</td>
+                        <td><?= h(strtoupper($cust['customer_type'])) ?></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:4px 0;color:#666">Address:</td>
+                        <td><?= h($cust['address'] ?? '-') ?>, <?= h($cust['city'] ?? '') ?></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:4px 0;color:#666">Credit Limit:</td>
+                        <td><?= formatCurrency((float) $cust['credit_limit']) ?></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:4px 0;color:#666">Outstanding Balance:</td>
+                        <td>
+                            <strong style="color:<?= $cust['current_balance'] > 0 ? '#d9534f' : '#5cb85c' ?>"><?= formatCurrency((float) $cust['current_balance']) ?></strong>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:4px 0;color:#666">Total Spent:</td>
+                        <td><strong style="color:#5cb85c"><?= formatCurrency($totalSpent) ?></strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:4px 0;color:#666">Status:</td>
+                        <td>
+                            <span class="badge badge-<?= $cust['status'] === 'active' ? 'success' : 'secondary' ?>"><?= h(strtoupper($cust['status'])) ?></span>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
             </div>
             <div class="lf"><span class="lf-title">Purchase History</span>
-                <div class="tbl-wrap"><table class="tbl">
-                    <thead><tr><th>Invoice#</th><th>Date</th><th>Amount</th><th>Payment</th></tr></thead>
-                    <tbody>
-                    <?php if (empty($invHistory)): ?><tr><td colspan="4" class="text-center" style="padding:12px;color:#888">No invoices yet</td></tr>
-                    <?php else:
+                <div class="tbl-wrap">
+                    <table class="tbl">
+                        <thead>
+                        <tr>
+                            <th>Invoice#</th>
+                            <th>Date</th>
+                            <th>Amount</th>
+                            <th>Payment</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php if (empty($invHistory)): ?>
+                            <tr>
+                                <td colspan="4" class="text-center" style="padding:12px;color:#888">No invoices yet</td>
+                            </tr>
+                        <?php else:
             foreach ($invHistory as $inv): ?>
-                    <tr><td><?= h($inv['invoice_number']) ?></td><td><?= h($inv['invoice_date']) ?></td><td class="text-right"><?= formatCurrency((float) $inv['total_amount']) ?></td><td><span class="badge badge-<?= $inv['payment_status'] === 'paid' ? 'success' : ($inv['payment_status'] === 'partial' ? 'warning' : 'danger') ?>"><?= h(strtoupper($inv['payment_status'])) ?></span></td></tr>
-                    <?php endforeach;
+                                <tr>
+                                    <td><?= h($inv['invoice_number']) ?></td>
+                                    <td><?= h($inv['invoice_date']) ?></td>
+                                    <td class="text-right"><?= formatCurrency((float) $inv['total_amount']) ?></td>
+                                    <td>
+                                        <span class="badge badge-<?= $inv['payment_status'] === 'paid' ? 'success' : ($inv['payment_status'] === 'partial' ? 'warning' : 'danger') ?>"><?= h(strtoupper($inv['payment_status'])) ?></span>
+                                    </td>
+                                </tr>
+                            <?php endforeach;
         endif; ?>
-                    </tbody>
-                </table></div>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
         <?php
@@ -3288,38 +5097,70 @@ function renderUsers(): void
         $result = getUsers($page);
         ob_start();
         ?>
-        <div class="page-header"><h1>&#128101; User Management</h1><div class="page-header-actions"><a href="?page=users&action=new" class="btn btn-success btn-sm">+ Add User</a></div></div>
-        <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
+        <div class="page-header"><h1>&#128101; User Management</h1>
+            <div class="page-header-actions"><a href="?page=users&action=new" class="btn btn-success btn-sm">+ Add
+                    User</a></div>
+        </div>
+        <?php if (isset($_SESSION['flash_msg'])): ?>
+        <div
+        class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
-        <div class="tbl-wrap"><table class="tbl">
-            <thead><tr><th>Username</th><th>Full Name</th><th>Email</th><th>Role</th><th>Status</th><th>Last Login</th><th>Actions</th></tr></thead>
-            <tbody>
-            <?php if (empty($result['users'])): ?><tr><td colspan="7" class="text-center" style="padding:16px;color:#888">No users</td></tr>
-            <?php else:
+        <div class="tbl-wrap">
+            <table class="tbl">
+                <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Full Name</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>Last Login</th>
+                    <th>Actions</th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php if (empty($result['users'])): ?>
+                    <tr>
+                        <td colspan="7" class="text-center" style="padding:16px;color:#888">No users</td>
+                    </tr>
+                <?php else:
             foreach ($result['users'] as $u):
                 $roleBadge = ['admin' => 'danger', 'manager' => 'warning', 'staff' => 'info'][$u['role']] ?? 'secondary'; ?>
-            <tr>
-                <td><strong><?= h($u['username']) ?></strong></td>
-                <td><?= h($u['full_name']) ?></td>
-                <td><?= h($u['email']) ?></td>
-                <td><span class="badge badge-<?= $roleBadge ?>"><?= h(strtoupper($u['role'])) ?></span></td>
-                <td><span class="badge badge-<?= $u['status'] === 'active' ? 'success' : 'secondary' ?>"><?= h(strtoupper($u['status'])) ?></span></td>
-                <td><?= h($u['last_login'] ?? 'Never') ?></td>
-                <td><div class="tbl-actions">
-                    <a href="?page=users&action=edit&id=<?= $u['id'] ?>" class="btn btn-warning btn-xs">&#9998;</a>
-                    <?php if ($u['id'] != $_SESSION['user_id']): ?>
-                    <button onclick="confirmDelUser(<?= $u['id'] ?>,'<?= h(addslashes($u['username'])) ?>')" class="btn btn-danger btn-xs">&#128465;</button>
-                    <?php endif; ?>
-                </div></td>
-            </tr>
-            <?php endforeach;
+                        <tr>
+                            <td><strong><?= h($u['username']) ?></strong></td>
+                            <td><?= h($u['full_name']) ?></td>
+                            <td><?= h($u['email']) ?></td>
+                            <td><span class="badge badge-<?= $roleBadge ?>"><?= h(strtoupper($u['role'])) ?></span></td>
+                            <td>
+                                <span class="badge badge-<?= $u['status'] === 'active' ? 'success' : 'secondary' ?>"><?= h(strtoupper($u['status'])) ?></span>
+                            </td>
+                            <td><?= h($u['last_login'] ?? 'Never') ?></td>
+                            <td>
+                                <div class="tbl-actions">
+                                    <a href="?page=users&action=edit&id=<?= $u['id'] ?>" class="btn btn-warning btn-xs">&#9998;</a>
+                                    <?php if ($u['id'] != $_SESSION['user_id']): ?>
+                                        <button onclick="confirmDelUser(<?= $u['id'] ?>,'<?= h(addslashes($u['username'])) ?>')"
+                                                class="btn btn-danger btn-xs">&#128465;
+                                        </button>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach;
         endif; ?>
-            </tbody>
-        </table></div>
-        <?= paginationHtml($result['pagination'], '?page=users') ?>
-        <form id="del-user-form" method="POST" action="?page=users&action=delete" style="display:none"><?= csrfField() ?><input type="hidden" name="id" id="del-user-id"></form>
-        <script>function confirmDelUser(id,n){ confirmAction('Delete user "'+n+'"? All their activity logs will be removed.',function(){ document.getElementById('del-user-id').value=id; document.getElementById('del-user-form').submit(); }); }</script>
-        <?php
+                </tbody>
+            </table>
+        </div>
+    <?= paginationHtml($result['pagination'], '?page=users') ?>
+        <form id="del-user-form" method="POST" action="?page=users&action=delete"
+              style="display:none"><?= csrfField() ?><input type="hidden" name="id" id="del-user-id"></form>
+        <script>function confirmDelUser(id, n) {
+                confirmAction('Delete user "' + n + '"? All their activity logs will be removed.', function () {
+                    document.getElementById('del-user-id').value = id;
+                    document.getElementById('del-user-form').submit();
+                });
+            }</script>
+    <?php
         $content = ob_get_clean();
         renderLayout('Users', $content, 'users');
     } elseif ($action === 'new' || $action === 'edit') {
@@ -3328,23 +5169,56 @@ function renderUsers(): void
         $d = $usr ?? [];
         ob_start();
         ?>
-        <div class="page-header"><h1><?= $editId ? '&#9998; Edit User' : '+ New User' ?></h1><div class="page-header-actions"><a href="?page=users" class="btn btn-secondary btn-sm">&#8592; Back</a></div></div>
-        <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
+        <div class="page-header"><h1><?= $editId ? '&#9998; Edit User' : '+ New User' ?></h1>
+            <div class="page-header-actions"><a href="?page=users" class="btn btn-secondary btn-sm">&#8592; Back</a>
+            </div>
+        </div>
+        <?php if (isset($_SESSION['flash_msg'])): ?>
+        <div
+        class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
         <form method="POST" action="?page=users&action=<?= $editId ? 'edit&id=' . $editId : 'new' ?>">
             <?= csrfField() ?>
             <div class="lf"><span class="lf-title">User Account</span>
                 <div class="form-grid form-grid-3">
-                    <div class="form-group"><label>Username <span class="required-mark">*</span></label><input type="text" name="username" value="<?= h($d['username'] ?? '') ?>" required></div>
-                    <div class="form-group" style="grid-column:span 2"><label>Full Name <span class="required-mark">*</span></label><input type="text" name="full_name" value="<?= h($d['full_name'] ?? '') ?>" required></div>
-                    <div class="form-group" style="grid-column:span 2"><label>Email <span class="required-mark">*</span></label><input type="email" name="email" value="<?= h($d['email'] ?? '') ?>" required></div>
-                    <div class="form-group"><label>Role</label><select name="role"><option value="staff" <?= ($d['role'] ?? 'staff') === 'staff' ? 'selected' : '' ?>>Staff</option><option value="manager" <?= ($d['role'] ?? '') === 'manager' ? 'selected' : '' ?>>Manager</option><option value="admin" <?= ($d['role'] ?? '') === 'admin' ? 'selected' : '' ?>>Admin</option></select></div>
-                    <div class="form-group"><label><?= $editId ? 'New Password (leave blank to keep)' : 'Password' ?> <?php if (!$editId): ?><span class="required-mark">*</span><?php endif; ?></label><input type="password" name="password" <?= !$editId ? 'required' : '' ?> autocomplete="new-password" placeholder="Min 8 chars, 1 special char"></div>
-                    <div class="form-group"><label>Confirm Password</label><input type="password" name="password_confirm" autocomplete="new-password"></div>
-                    <div class="form-group"><label>Status</label><select name="status"><option value="active" <?= ($d['status'] ?? 'active') === 'active' ? 'selected' : '' ?>>Active</option><option value="inactive" <?= ($d['status'] ?? '') === 'inactive' ? 'selected' : '' ?>>Inactive</option></select></div>
+                    <div class="form-group"><label>Username <span class="required-mark">*</span></label><input
+                                type="text" name="username" value="<?= h($d['username'] ?? '') ?>" required></div>
+                    <div class="form-group" style="grid-column:span 2"><label>Full Name <span
+                                    class="required-mark">*</span></label><input type="text" name="full_name"
+                                                                                 value="<?= h($d['full_name'] ?? '') ?>"
+                                                                                 required></div>
+                    <div class="form-group" style="grid-column:span 2"><label>Email <span class="required-mark">*</span></label><input
+                                type="email" name="email" value="<?= h($d['email'] ?? '') ?>" required></div>
+                    <div class="form-group"><label>Role</label><select name="role">
+                            <option value="staff" <?= ($d['role'] ?? 'staff') === 'staff' ? 'selected' : '' ?>>Staff
+                            </option>
+                            <option value="manager" <?= ($d['role'] ?? '') === 'manager' ? 'selected' : '' ?>>Manager
+                            </option>
+                            <option value="admin" <?= ($d['role'] ?? '') === 'admin' ? 'selected' : '' ?>>Admin</option>
+                        </select></div>
+                    <div class="form-group">
+                        <label><?= $editId ? 'New Password (leave blank to keep)' : 'Password' ?> <?php if (!$editId): ?>
+                                <span class="required-mark">*</span><?php endif; ?></label><input type="password"
+                                                                                                  name="password" <?= !$editId ? 'required' : '' ?>
+                                                                                                  autocomplete="new-password"
+                                                                                                  placeholder="Min 8 chars, 1 special char">
+                    </div>
+                    <div class="form-group"><label>Confirm Password</label><input type="password"
+                                                                                  name="password_confirm"
+                                                                                  autocomplete="new-password"></div>
+                    <div class="form-group"><label>Status</label><select name="status">
+                            <option value="active" <?= ($d['status'] ?? 'active') === 'active' ? 'selected' : '' ?>>
+                                Active
+                            </option>
+                            <option value="inactive" <?= ($d['status'] ?? '') === 'inactive' ? 'selected' : '' ?>>
+                                Inactive
+                            </option>
+                        </select></div>
                 </div>
             </div>
-            <div style="display:flex;gap:8px"><button type="submit" class="btn btn-success"><?= $editId ? '&#10003; Update' : '+ Create' ?></button><a href="?page=users" class="btn btn-secondary">Cancel</a></div>
+            <div style="display:flex;gap:8px">
+                <button type="submit" class="btn btn-success"><?= $editId ? '&#10003; Update' : '+ Create' ?></button>
+                <a href="?page=users" class="btn btn-secondary">Cancel</a></div>
         </form>
         <?php
         $content = ob_get_clean();
@@ -3392,17 +5266,30 @@ function renderProfile(): void
     ob_start();
     ?>
     <div class="page-header"><h1>&#128100; My Profile</h1></div>
-    <?php if ($msg): ?><div class="alert alert-<?= h($msgType) ?>"><?= h($msg) ?></div><?php endif; ?>
+    <?php if ($msg): ?>
+    <div class="alert alert-<?= h($msgType) ?>"><?= h($msg) ?></div><?php endif; ?>
     <div class="cols-2">
         <div class="lf"><span class="lf-title">Profile Information</span>
             <form method="POST" action="?page=profile&action=update">
                 <?= csrfField() ?>
                 <div class="form-grid" style="grid-template-columns:1fr">
-                    <div class="form-group"><label>Username</label><input type="text" value="<?= h($user['username']) ?>" readonly style="background:#e8e8e8;color:#666"></div>
-                    <div class="form-group"><label>Full Name <span class="required-mark">*</span></label><input type="text" name="full_name" value="<?= h($user['full_name']) ?>" required></div>
-                    <div class="form-group"><label>Email <span class="required-mark">*</span></label><input type="email" name="email" value="<?= h($user['email']) ?>" required></div>
-                    <div class="form-group"><label>Role</label><input type="text" value="<?= h(ucfirst($user['role'])) ?>" readonly style="background:#e8e8e8;color:#666"></div>
-                    <div class="form-group"><label>Last Login</label><input type="text" value="<?= h($user['last_login'] ?? 'Never') ?>" readonly style="background:#e8e8e8;color:#666"></div>
+                    <div class="form-group"><label>Username</label><input type="text"
+                                                                          value="<?= h($user['username']) ?>" readonly
+                                                                          style="background:#e8e8e8;color:#666"></div>
+                    <div class="form-group"><label>Full Name <span class="required-mark">*</span></label><input
+                                type="text" name="full_name" value="<?= h($user['full_name']) ?>" required></div>
+                    <div class="form-group"><label>Email <span class="required-mark">*</span></label><input type="email"
+                                                                                                            name="email"
+                                                                                                            value="<?= h($user['email']) ?>"
+                                                                                                            required>
+                    </div>
+                    <div class="form-group"><label>Role</label><input type="text"
+                                                                      value="<?= h(ucfirst($user['role'])) ?>" readonly
+                                                                      style="background:#e8e8e8;color:#666"></div>
+                    <div class="form-group"><label>Last Login</label><input type="text"
+                                                                            value="<?= h($user['last_login'] ?? 'Never') ?>"
+                                                                            readonly
+                                                                            style="background:#e8e8e8;color:#666"></div>
                 </div>
                 <button type="submit" class="btn btn-primary" style="margin-top:10px">&#10003; Update Profile</button>
             </form>
@@ -3411,11 +5298,19 @@ function renderProfile(): void
             <form method="POST" action="?page=profile&action=change_password">
                 <?= csrfField() ?>
                 <div class="form-grid" style="grid-template-columns:1fr">
-                    <div class="form-group"><label>Current Password <span class="required-mark">*</span></label><input type="password" name="current_password" required autocomplete="current-password"></div>
-                    <div class="form-group"><label>New Password <span class="required-mark">*</span></label><input type="password" name="new_password" required autocomplete="new-password" placeholder="Min 8 chars, 1 special char"></div>
-                    <div class="form-group"><label>Confirm New Password <span class="required-mark">*</span></label><input type="password" name="new_password_confirm" required autocomplete="new-password"></div>
+                    <div class="form-group"><label>Current Password <span class="required-mark">*</span></label><input
+                                type="password" name="current_password" required autocomplete="current-password"></div>
+                    <div class="form-group"><label>New Password <span class="required-mark">*</span></label><input
+                                type="password" name="new_password" required autocomplete="new-password"
+                                placeholder="Min 8 chars, 1 special char"></div>
+                    <div class="form-group"><label>Confirm New Password <span
+                                    class="required-mark">*</span></label><input type="password"
+                                                                                 name="new_password_confirm" required
+                                                                                 autocomplete="new-password"></div>
                 </div>
-                <div style="font-size:11px;color:#666;margin:6px 0">Requirements: min 8 characters, at least 1 special character (!@#$%^&*)</div>
+                <div style="font-size:11px;color:#666;margin:6px 0">Requirements: min 8 characters, at least 1 special
+                    character (!@#$%^&*)
+                </div>
                 <button type="submit" class="btn btn-warning" style="margin-top:6px">&#128274; Change Password</button>
             </form>
         </div>
@@ -3506,57 +5401,136 @@ function renderPurchases(): void
         $suppliers = $pdo->query("SELECT id,company_name FROM suppliers WHERE status='active' ORDER BY company_name")->fetchAll();
         ob_start();
         ?>
-        <div class="page-header"><h1>&#128722; Purchase Orders</h1><div class="page-header-actions"><?php if (canAccess(['admin', 'manager', 'staff'])): ?><a href="?page=purchases&action=new" class="btn btn-success btn-sm">+ New PO</a><?php endif; ?></div></div>
-        <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
+        <div class="page-header"><h1>&#128722; Purchase Orders</h1>
+            <div class="page-header-actions"><?php if (canAccess(['admin', 'manager', 'staff'])): ?><a
+                        href="?page=purchases&action=new" class="btn btn-success btn-sm">+ New PO</a><?php endif; ?>
+            </div>
+        </div>
+        <?php if (isset($_SESSION['flash_msg'])): ?>
+        <div
+        class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
         <form method="GET"><input type="hidden" name="page" value="purchases">
             <div class="filter-bar">
-                <div class="form-group"><label>Search</label><input type="text" name="search" value="<?= h($filters['search']) ?>" placeholder="PO#, supplier..."></div>
-                <div class="form-group"><label>Supplier</label><select name="supplier_id"><option value="">All Suppliers</option><?php foreach ($suppliers as $s): ?><option value="<?= $s['id'] ?>" <?= $filters['supplier_id'] == $s['id'] ? 'selected' : '' ?>><?= h($s['company_name']) ?></option><?php endforeach; ?></select></div>
-                <div class="form-group"><label>Order Status</label><select name="order_status"><option value="">All</option><option value="pending" <?= $filters['order_status'] === 'pending' ? 'selected' : '' ?>>Pending</option><option value="partial" <?= $filters['order_status'] === 'partial' ? 'selected' : '' ?>>Partial</option><option value="received" <?= $filters['order_status'] === 'received' ? 'selected' : '' ?>>Received</option><option value="cancelled" <?= $filters['order_status'] === 'cancelled' ? 'selected' : '' ?>>Cancelled</option></select></div>
-                <div class="form-group"><label>Payment</label><select name="payment_status"><option value="">All</option><option value="unpaid" <?= $filters['payment_status'] === 'unpaid' ? 'selected' : '' ?>>Unpaid</option><option value="partial" <?= $filters['payment_status'] === 'partial' ? 'selected' : '' ?>>Partial</option><option value="paid" <?= $filters['payment_status'] === 'paid' ? 'selected' : '' ?>>Paid</option></select></div>
-                <div class="form-group"><label>From</label><input type="date" name="date_from" value="<?= h($filters['date_from']) ?>"></div>
-                <div class="form-group"><label>To</label><input type="date" name="date_to" value="<?= h($filters['date_to']) ?>"></div>
-                <div class="form-group" style="justify-content:flex-end;flex-direction:row;align-items:flex-end;gap:6px"><button type="submit" class="btn btn-primary btn-sm">Filter</button><a href="?page=purchases" class="btn btn-secondary btn-sm">Reset</a></div>
+                <div class="form-group"><label>Search</label><input type="text" name="search"
+                                                                    value="<?= h($filters['search']) ?>"
+                                                                    placeholder="PO#, supplier..."></div>
+                <div class="form-group"><label>Supplier</label><select name="supplier_id">
+                        <option value="">All Suppliers</option><?php foreach ($suppliers as $s): ?>
+                            <option
+                            value="<?= $s['id'] ?>" <?= $filters['supplier_id'] == $s['id'] ? 'selected' : '' ?>><?= h($s['company_name']) ?></option><?php endforeach; ?>
+                    </select></div>
+                <div class="form-group"><label>Order Status</label><select name="order_status">
+                        <option value="">All</option>
+                        <option value="pending" <?= $filters['order_status'] === 'pending' ? 'selected' : '' ?>>
+                            Pending
+                        </option>
+                        <option value="partial" <?= $filters['order_status'] === 'partial' ? 'selected' : '' ?>>
+                            Partial
+                        </option>
+                        <option value="received" <?= $filters['order_status'] === 'received' ? 'selected' : '' ?>>
+                            Received
+                        </option>
+                        <option value="cancelled" <?= $filters['order_status'] === 'cancelled' ? 'selected' : '' ?>>
+                            Cancelled
+                        </option>
+                    </select></div>
+                <div class="form-group"><label>Payment</label><select name="payment_status">
+                        <option value="">All</option>
+                        <option value="unpaid" <?= $filters['payment_status'] === 'unpaid' ? 'selected' : '' ?>>Unpaid
+                        </option>
+                        <option value="partial" <?= $filters['payment_status'] === 'partial' ? 'selected' : '' ?>>
+                            Partial
+                        </option>
+                        <option value="paid" <?= $filters['payment_status'] === 'paid' ? 'selected' : '' ?>>Paid
+                        </option>
+                    </select></div>
+                <div class="form-group"><label>From</label><input type="date" name="date_from"
+                                                                  value="<?= h($filters['date_from']) ?>"></div>
+                <div class="form-group"><label>To</label><input type="date" name="date_to"
+                                                                value="<?= h($filters['date_to']) ?>"></div>
+                <div class="form-group"
+                     style="justify-content:flex-end;flex-direction:row;align-items:flex-end;gap:6px">
+                    <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+                    <a href="?page=purchases" class="btn btn-secondary btn-sm">Reset</a></div>
             </div>
         </form>
-        <div class="tbl-wrap"><table class="tbl">
-            <thead><tr><th>PO#</th><th>Supplier</th><th>PO Date</th><th>Expected</th><th>Total</th><th>Order Status</th><th>Payment</th><th>Created By</th><th>Actions</th></tr></thead>
-            <tbody>
-            <?php if (empty($pos)): ?><tr><td colspan="9" class="text-center" style="padding:16px;color:#888">No purchase orders found</td></tr>
-            <?php else:
+        <div class="tbl-wrap">
+            <table class="tbl">
+                <thead>
+                <tr>
+                    <th>PO#</th>
+                    <th>Supplier</th>
+                    <th>PO Date</th>
+                    <th>Expected</th>
+                    <th>Total</th>
+                    <th>Order Status</th>
+                    <th>Payment</th>
+                    <th>Created By</th>
+                    <th>Actions</th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php if (empty($pos)): ?>
+                    <tr>
+                        <td colspan="9" class="text-center" style="padding:16px;color:#888">No purchase orders found
+                        </td>
+                    </tr>
+                <?php else:
             foreach ($pos as $po):
                 $osBadge = ['pending' => 'warning', 'partial' => 'info', 'received' => 'success', 'cancelled' => 'danger'][$po['order_status']] ?? 'secondary';
                 $psBadge = ['unpaid' => 'danger', 'partial' => 'warning', 'paid' => 'success'][$po['payment_status']] ?? 'secondary'; ?>
-            <tr>
-                <td><a href="?page=purchases&action=view&id=<?= $po['id'] ?>"><?= h($po['po_number']) ?></a></td>
-                <td><?= h($po['supplier_name']) ?></td>
-                <td><?= h($po['po_date']) ?></td>
-                <td><?= h($po['expected_delivery'] ?? '-') ?></td>
-                <td class="text-right"><?= formatCurrency((float) $po['total_amount']) ?></td>
-                <td><span class="badge badge-<?= $osBadge ?>"><?= h(strtoupper($po['order_status'])) ?></span></td>
-                <td><span class="badge badge-<?= $psBadge ?>"><?= h(strtoupper($po['payment_status'])) ?></span></td>
-                <td><?= h($po['created_by_name']) ?></td>
-                <td><div class="tbl-actions">
-                    <a href="?page=purchases&action=view&id=<?= $po['id'] ?>" class="btn btn-primary btn-xs">&#128065;</a>
-                    <?php if ($po['order_status'] !== 'received' && $po['order_status'] !== 'cancelled'): ?>
-                    <a href="?page=purchases&action=edit&id=<?= $po['id'] ?>" class="btn btn-warning btn-xs">&#9998;</a>
-                    <a href="?page=purchases&action=receive&id=<?= $po['id'] ?>" class="btn btn-success btn-xs" title="Receive Stock">&#8595;Rcv</a>
-                    <?php endif; ?>
-                    <?php if ($po['order_status'] === 'pending' && canAccess(['admin', 'manager'])): ?>
-                    <button onclick="cancelPO(<?= $po['id'] ?>)" class="btn btn-danger btn-xs">&#215;Cancel</button>
-                    <?php endif; ?>
-                </div></td>
-            </tr>
-            <?php endforeach;
+                        <tr>
+                            <td><a href="?page=purchases&action=view&id=<?= $po['id'] ?>"><?= h($po['po_number']) ?></a>
+                            </td>
+                            <td><?= h($po['supplier_name']) ?></td>
+                            <td><?= h($po['po_date']) ?></td>
+                            <td><?= h($po['expected_delivery'] ?? '-') ?></td>
+                            <td class="text-right"><?= formatCurrency((float) $po['total_amount']) ?></td>
+                            <td>
+                                <span class="badge badge-<?= $osBadge ?>"><?= h(strtoupper($po['order_status'])) ?></span>
+                            </td>
+                            <td>
+                                <span class="badge badge-<?= $psBadge ?>"><?= h(strtoupper($po['payment_status'])) ?></span>
+                            </td>
+                            <td><?= h($po['created_by_name']) ?></td>
+                            <td>
+                                <div class="tbl-actions">
+                                    <a href="?page=purchases&action=view&id=<?= $po['id'] ?>"
+                                       class="btn btn-primary btn-xs">&#128065;</a>
+                                    <?php if ($po['order_status'] !== 'received' && $po['order_status'] !== 'cancelled'): ?>
+                                        <a href="?page=purchases&action=edit&id=<?= $po['id'] ?>"
+                                           class="btn btn-warning btn-xs">&#9998;</a>
+                                        <a href="?page=purchases&action=receive&id=<?= $po['id'] ?>"
+                                           class="btn btn-success btn-xs" title="Receive Stock">&#8595;Rcv</a>
+                                    <?php endif; ?>
+                                    <?php if ($po['order_status'] === 'pending' && canAccess(['admin', 'manager'])): ?>
+                                        <button onclick="cancelPO(<?= $po['id'] ?>)" class="btn btn-danger btn-xs">
+                                            &#215;Cancel
+                                        </button>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach;
         endif; ?>
-            </tbody>
-        </table></div>
-        <?= paginationHtml($pag, '?page=purchases&search=' . urlencode($filters['search']) . '&order_status=' . urlencode($filters['order_status']) . '&payment_status=' . urlencode($filters['payment_status'])) ?>
+                </tbody>
+            </table>
+        </div>
+    <?= paginationHtml($pag, '?page=purchases&search=' . urlencode($filters['search']) . '&order_status=' . urlencode($filters['order_status']) . '&payment_status=' . urlencode($filters['payment_status'])) ?>
         <script>
-        function cancelPO(id){ confirmAction('Cancel this purchase order?',function(){ apiPost('?ajax=cancel_po',{id:id},function(){ showToast('PO cancelled.','success'); setTimeout(function(){ location.reload(); },800); }); },'Confirm Cancel'); }
+            function cancelPO(id) {
+                confirmAction('Cancel this purchase order?', function () {
+                    apiPost('?ajax=cancel_po', {id: id}, function () {
+                        showToast('PO cancelled.', 'success');
+                        setTimeout(function () {
+                            location.reload();
+                        }, 800);
+                    });
+                }, 'Confirm Cancel');
+            }
         </script>
-        <?php
+    <?php
         $content = ob_get_clean();
         renderLayout('Purchase Orders', $content, 'purchases');
     } elseif ($action === 'new' || $action === 'edit') {
@@ -3631,104 +5605,197 @@ function renderPurchases(): void
         $preSupplier = (int) ($_GET['supplier_id'] ?? $po['supplier_id'] ?? 0);
         ob_start();
         ?>
-        <div class="page-header"><h1><?= $po ? '&#9998; Edit PO: ' . h($po['po_number']) : '+ New Purchase Order' ?></h1><div class="page-header-actions"><a href="?page=purchases" class="btn btn-secondary btn-sm">&#8592; Back</a></div></div>
-        <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
+        <div class="page-header">
+            <h1><?= $po ? '&#9998; Edit PO: ' . h($po['po_number']) : '+ New Purchase Order' ?></h1>
+            <div class="page-header-actions"><a href="?page=purchases" class="btn btn-secondary btn-sm">&#8592; Back</a>
+            </div>
+        </div>
+        <?php if (isset($_SESSION['flash_msg'])): ?>
+        <div
+        class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
         <form method="POST" action="?page=purchases&action=<?= $po ? 'edit&id=' . $po['id'] : 'new' ?>" id="po-form">
             <?= csrfField() ?>
             <div class="lf"><span class="lf-title">Order Details</span>
                 <div class="form-grid form-grid-3">
-                    <div class="form-group" style="grid-column:span 2"><label>Supplier <span class="required-mark">*</span></label><select name="supplier_id" required><option value="">-- Select Supplier --</option><?php foreach ($suppliers as $s): ?><option value="<?= $s['id'] ?>" <?= ($po['supplier_id'] ?? $preSupplier) == $s['id'] ? 'selected' : '' ?>><?= h($s['company_name']) ?></option><?php endforeach; ?></select></div>
-                    <div class="form-group"><label>PO Date <span class="required-mark">*</span></label><input type="date" name="po_date" value="<?= h($po['po_date'] ?? date('Y-m-d')) ?>" required></div>
-                    <div class="form-group"><label>Expected Delivery</label><input type="date" name="expected_delivery" value="<?= h($po['expected_delivery'] ?? '') ?>"></div>
-                    <div class="form-group"><label>Tax %</label><input type="number" name="tax_percent" id="tax_percent" step="0.01" min="0" max="100" value="<?= h($po['tax_percent'] ?? getSetting('default_tax_percent')) ?>" oninput="recalcPO()"></div>
-                    <div class="form-group"><label>Discount (<?= h(getSetting('currency_symbol')) ?>)</label><input type="number" name="discount" id="po_discount" step="0.01" min="0" value="<?= h($po['discount'] ?? '0') ?>" oninput="recalcPO()"></div>
-                    <div class="form-group"><label>Payment Status</label><select name="payment_status"><option value="unpaid" <?= ($po['payment_status'] ?? 'unpaid') === 'unpaid' ? 'selected' : '' ?>>Unpaid</option><option value="partial" <?= ($po['payment_status'] ?? '') === 'partial' ? 'selected' : '' ?>>Partial</option><option value="paid" <?= ($po['payment_status'] ?? '') === 'paid' ? 'selected' : '' ?>>Paid</option></select></div>
-                    <div class="form-group full"><label>Notes</label><textarea name="notes"><?= h($po['notes'] ?? '') ?></textarea></div>
+                    <div class="form-group" style="grid-column:span 2"><label>Supplier <span
+                                    class="required-mark">*</span></label><select name="supplier_id" required>
+                            <option value="">-- Select Supplier --</option><?php foreach ($suppliers as $s): ?>
+                                <option
+                                value="<?= $s['id'] ?>" <?= ($po['supplier_id'] ?? $preSupplier) == $s['id'] ? 'selected' : '' ?>><?= h($s['company_name']) ?></option><?php endforeach; ?>
+                        </select></div>
+                    <div class="form-group"><label>PO Date <span class="required-mark">*</span></label><input
+                                type="date" name="po_date" value="<?= h($po['po_date'] ?? date('Y-m-d')) ?>" required>
+                    </div>
+                    <div class="form-group"><label>Expected Delivery</label><input type="date" name="expected_delivery"
+                                                                                   value="<?= h($po['expected_delivery'] ?? '') ?>">
+                    </div>
+                    <div class="form-group"><label>Tax %</label><input type="number" name="tax_percent" id="tax_percent"
+                                                                       step="0.01" min="0" max="100"
+                                                                       value="<?= h($po['tax_percent'] ?? getSetting('default_tax_percent')) ?>"
+                                                                       oninput="recalcPO()"></div>
+                    <div class="form-group"><label>Discount (<?= h(getSetting('currency_symbol')) ?>)</label><input
+                                type="number" name="discount" id="po_discount" step="0.01" min="0"
+                                value="<?= h($po['discount'] ?? '0') ?>" oninput="recalcPO()"></div>
+                    <div class="form-group"><label>Payment Status</label><select name="payment_status">
+                            <option value="unpaid" <?= ($po['payment_status'] ?? 'unpaid') === 'unpaid' ? 'selected' : '' ?>>
+                                Unpaid
+                            </option>
+                            <option value="partial" <?= ($po['payment_status'] ?? '') === 'partial' ? 'selected' : '' ?>>
+                                Partial
+                            </option>
+                            <option value="paid" <?= ($po['payment_status'] ?? '') === 'paid' ? 'selected' : '' ?>>
+                                Paid
+                            </option>
+                        </select></div>
+                    <div class="form-group full"><label>Notes</label><textarea
+                                name="notes"><?= h($po['notes'] ?? '') ?></textarea></div>
                 </div>
             </div>
             <div class="lf"><span class="lf-title">Order Items</span>
-                <div style="margin-bottom:10px"><button type="button" onclick="addPORow()" class="btn btn-primary btn-sm">+ Add Product</button></div>
-                <div class="tbl-wrap"><table class="tbl" id="po-items-table">
-                    <thead><tr><th style="width:35%">Product</th><th style="width:15%">Current Stock</th><th style="width:15%">Quantity</th><th style="width:20%">Unit Price</th><th style="width:12%">Total</th><th style="width:3%"></th></tr></thead>
-                    <tbody id="po-items-body">
-                    <?php if (!empty($poItems)):
-                        foreach ($poItems as $item): ?>
-                    <tr class="po-row">
-                        <td><select name="product_id[]" class="po-product" onchange="updatePOStock(this)" required style="width:100%;padding:4px;border:2px inset #a0a0a0;background:#fff">
-                            <option value="">-- Select Product --</option>
-                            <?php foreach ($products as $pr): ?><option value="<?= $pr['id'] ?>" data-price="<?= $pr['purchase_price'] ?>" data-stock="<?= $pr['current_stock'] ?>" <?= $item['product_id'] == $pr['id'] ? 'selected' : '' ?>><?= h($pr['name'] . ' (' . $pr['sku'] . ')') ?></option><?php endforeach; ?>
-                        </select></td>
-                        <td class="po-stock text-right"><?= number_format((int) $item['received_qty']) ?></td>
-                        <td><input type="number" name="quantity[]" class="po-qty" min="1" value="<?= (int) $item['quantity'] ?>" oninput="recalcPO()" required style="width:80px;padding:4px;border:2px inset #a0a0a0;background:#fff"></td>
-                        <td><input type="number" name="unit_price[]" class="po-price" step="0.01" min="0" value="<?= number_format((float) $item['unit_price'], 2, '.', '') ?>" oninput="recalcPO()" required style="width:110px;padding:4px;border:2px inset #a0a0a0;background:#fff"></td>
-                        <td class="po-row-total text-right"><?= formatCurrency((float) $item['total_price']) ?></td>
-                        <td><button type="button" onclick="this.closest('tr').remove();recalcPO()" class="btn btn-danger btn-xs">&#215;</button></td>
-                    </tr>
-                    <?php endforeach;
-                    else: ?>
-                    <tr class="po-row">
-                        <td><select name="product_id[]" class="po-product" onchange="updatePOStock(this)" required style="width:100%;padding:4px;border:2px inset #a0a0a0;background:#fff">
-                            <option value="">-- Select Product --</option>
-                            <?php foreach ($products as $pr): ?><option value="<?= $pr['id'] ?>" data-price="<?= $pr['purchase_price'] ?>" data-stock="<?= $pr['current_stock'] ?>"><?= h($pr['name'] . ' (' . $pr['sku'] . ')') ?></option><?php endforeach; ?>
-                        </select></td>
-                        <td class="po-stock text-right">-</td>
-                        <td><input type="number" name="quantity[]" class="po-qty" min="1" value="1" oninput="recalcPO()" required style="width:80px;padding:4px;border:2px inset #a0a0a0;background:#fff"></td>
-                        <td><input type="number" name="unit_price[]" class="po-price" step="0.01" min="0" value="0.00" oninput="recalcPO()" required style="width:110px;padding:4px;border:2px inset #a0a0a0;background:#fff"></td>
-                        <td class="po-row-total text-right">-</td>
-                        <td><button type="button" onclick="this.closest('tr').remove();recalcPO()" class="btn btn-danger btn-xs">&#215;</button></td>
-                    </tr>
-                    <?php endif; ?>
-                    </tbody>
-                    <tfoot><tr style="background:#e8e8e8;font-weight:700">
-                        <td colspan="4" class="text-right" style="padding:6px 10px">Subtotal:</td><td id="po-subtotal" class="text-right" style="padding:6px 10px">-</td><td></td>
-                    </tr>
-                    <tr style="background:#e8e8e8"><td colspan="4" class="text-right" style="padding:4px 10px;font-size:11px">Tax:</td><td id="po-tax" class="text-right" style="padding:4px 10px;font-size:11px">-</td><td></td></tr>
-                    <tr style="background:#e8e8e8"><td colspan="4" class="text-right" style="padding:4px 10px;font-size:11px">Discount:</td><td id="po-disc" class="text-right" style="padding:4px 10px;font-size:11px">-</td><td></td></tr>
-                    <tr style="background:#d0d0d0;font-weight:700;font-size:14px"><td colspan="4" class="text-right" style="padding:8px 10px">TOTAL:</td><td id="po-total" class="text-right" style="padding:8px 10px"></td><td></td></tr>
-                    </tfoot>
-                </table></div>
+                <div style="margin-bottom:10px">
+                    <button type="button" onclick="addPORow()" class="btn btn-primary btn-sm">+ Add Product</button>
+                </div>
+                <div class="tbl-wrap">
+                    <table class="tbl" id="po-items-table">
+                        <thead>
+                        <tr>
+                            <th style="width:35%">Product</th>
+                            <th style="width:15%">Current Stock</th>
+                            <th style="width:15%">Quantity</th>
+                            <th style="width:20%">Unit Price</th>
+                            <th style="width:12%">Total</th>
+                            <th style="width:3%"></th>
+                        </tr>
+                        </thead>
+                        <tbody id="po-items-body">
+                        <?php if (!empty($poItems)):
+                            foreach ($poItems as $item): ?>
+                                <tr class="po-row">
+                                    <td><select name="product_id[]" class="po-product" onchange="updatePOStock(this)"
+                                                required
+                                                style="width:100%;padding:4px;border:2px inset #a0a0a0;background:#fff">
+                                            <option value="">-- Select Product --</option>
+                                            <?php foreach ($products as $pr): ?>
+                                                <option value="<?= $pr['id'] ?>"
+                                                        data-price="<?= $pr['purchase_price'] ?>"
+                                                        data-stock="<?= $pr['current_stock'] ?>" <?= $item['product_id'] == $pr['id'] ? 'selected' : '' ?>><?= h($pr['name'] . ' (' . $pr['sku'] . ')') ?></option><?php endforeach; ?>
+                                        </select></td>
+                                    <td class="po-stock text-right"><?= number_format((int) $item['received_qty']) ?></td>
+                                    <td><input type="number" name="quantity[]" class="po-qty" min="1"
+                                               value="<?= (int) $item['quantity'] ?>" oninput="recalcPO()" required
+                                               style="width:80px;padding:4px;border:2px inset #a0a0a0;background:#fff">
+                                    </td>
+                                    <td><input type="number" name="unit_price[]" class="po-price" step="0.01" min="0"
+                                               value="<?= number_format((float) $item['unit_price'], 2, '.', '') ?>"
+                                               oninput="recalcPO()" required
+                                               style="width:110px;padding:4px;border:2px inset #a0a0a0;background:#fff">
+                                    </td>
+                                    <td class="po-row-total text-right"><?= formatCurrency((float) $item['total_price']) ?></td>
+                                    <td>
+                                        <button type="button" onclick="this.closest('tr').remove();recalcPO()"
+                                                class="btn btn-danger btn-xs">&#215;
+                                        </button>
+                                    </td>
+                                </tr>
+                            <?php endforeach;
+                        else: ?>
+                            <tr class="po-row">
+                                <td><select name="product_id[]" class="po-product" onchange="updatePOStock(this)"
+                                            required
+                                            style="width:100%;padding:4px;border:2px inset #a0a0a0;background:#fff">
+                                        <option value="">-- Select Product --</option>
+                                        <?php foreach ($products as $pr): ?>
+                                            <option value="<?= $pr['id'] ?>" data-price="<?= $pr['purchase_price'] ?>"
+                                                    data-stock="<?= $pr['current_stock'] ?>"><?= h($pr['name'] . ' (' . $pr['sku'] . ')') ?></option><?php endforeach; ?>
+                                    </select></td>
+                                <td class="po-stock text-right">-</td>
+                                <td><input type="number" name="quantity[]" class="po-qty" min="1" value="1"
+                                           oninput="recalcPO()" required
+                                           style="width:80px;padding:4px;border:2px inset #a0a0a0;background:#fff"></td>
+                                <td><input type="number" name="unit_price[]" class="po-price" step="0.01" min="0"
+                                           value="0.00" oninput="recalcPO()" required
+                                           style="width:110px;padding:4px;border:2px inset #a0a0a0;background:#fff">
+                                </td>
+                                <td class="po-row-total text-right">-</td>
+                                <td>
+                                    <button type="button" onclick="this.closest('tr').remove();recalcPO()"
+                                            class="btn btn-danger btn-xs">&#215;
+                                    </button>
+                                </td>
+                            </tr>
+                        <?php endif; ?>
+                        </tbody>
+                        <tfoot>
+                        <tr style="background:#e8e8e8;font-weight:700">
+                            <td colspan="4" class="text-right" style="padding:6px 10px">Subtotal:</td>
+                            <td id="po-subtotal" class="text-right" style="padding:6px 10px">-</td>
+                            <td></td>
+                        </tr>
+                        <tr style="background:#e8e8e8">
+                            <td colspan="4" class="text-right" style="padding:4px 10px;font-size:11px">Tax:</td>
+                            <td id="po-tax" class="text-right" style="padding:4px 10px;font-size:11px">-</td>
+                            <td></td>
+                        </tr>
+                        <tr style="background:#e8e8e8">
+                            <td colspan="4" class="text-right" style="padding:4px 10px;font-size:11px">Discount:</td>
+                            <td id="po-disc" class="text-right" style="padding:4px 10px;font-size:11px">-</td>
+                            <td></td>
+                        </tr>
+                        <tr style="background:#d0d0d0;font-weight:700;font-size:14px">
+                            <td colspan="4" class="text-right" style="padding:8px 10px">TOTAL:</td>
+                            <td id="po-total" class="text-right" style="padding:8px 10px"></td>
+                            <td></td>
+                        </tr>
+                        </tfoot>
+                    </table>
+                </div>
             </div>
-            <div style="display:flex;gap:8px"><button type="submit" class="btn btn-success">&#10003; <?= $po ? 'Update PO' : 'Create PO' ?></button><a href="?page=purchases" class="btn btn-secondary">Cancel</a></div>
+            <div style="display:flex;gap:8px">
+                <button type="submit" class="btn btn-success">&#10003; <?= $po ? 'Update PO' : 'Create PO' ?></button>
+                <a href="?page=purchases" class="btn btn-secondary">Cancel</a></div>
         </form>
         <script>
-        var PO_PRODUCTS = <?= json_encode($products) ?>;
-        function addPORow(){
-            var opts='<option value="">-- Select Product --</option>';
-            PO_PRODUCTS.forEach(function(p){ opts+='<option value="'+p.id+'" data-price="'+p.purchase_price+'" data-stock="'+p.current_stock+'">'+p.name+' ('+p.sku+')</option>'; });
-            var tr=document.createElement('tr'); tr.className='po-row';
-            tr.innerHTML='<td><select name="product_id[]" class="po-product" onchange="updatePOStock(this)" required style="width:100%;padding:4px;border:2px inset #a0a0a0;background:#fff">'+opts+'</select></td><td class="po-stock text-right">-</td><td><input type="number" name="quantity[]" class="po-qty" min="1" value="1" oninput="recalcPO()" required style="width:80px;padding:4px;border:2px inset #a0a0a0;background:#fff"></td><td><input type="number" name="unit_price[]" class="po-price" step="0.01" min="0" value="0.00" oninput="recalcPO()" required style="width:110px;padding:4px;border:2px inset #a0a0a0;background:#fff"></td><td class="po-row-total text-right">-</td><td><button type="button" onclick="this.closest(\'tr\').remove();recalcPO()" class="btn btn-danger btn-xs">&#215;</button></td>';
-            document.getElementById('po-items-body').appendChild(tr);
-        }
-        function updatePOStock(sel){
-            var opt=sel.options[sel.selectedIndex];
-            var row=sel.closest('tr');
-            row.querySelector('.po-stock').textContent=opt.dataset.stock||'-';
-            var priceInput=row.querySelector('.po-price');
-            if(opt.dataset.price) priceInput.value=parseFloat(opt.dataset.price).toFixed(2);
+            var PO_PRODUCTS = <?= json_encode($products) ?>;
+            function addPORow() {
+                var opts = '<option value="">-- Select Product --</option>';
+                PO_PRODUCTS.forEach(function (p) {
+                    opts += '<option value="' + p.id + '" data-price="' + p.purchase_price + '" data-stock="' + p.current_stock + '">' + p.name + ' (' + p.sku + ')</option>';
+                });
+                var tr = document.createElement('tr');
+                tr.className = 'po-row';
+                tr.innerHTML = '<td><select name="product_id[]" class="po-product" onchange="updatePOStock(this)" required style="width:100%;padding:4px;border:2px inset #a0a0a0;background:#fff">' + opts + '</select></td><td class="po-stock text-right">-</td><td><input type="number" name="quantity[]" class="po-qty" min="1" value="1" oninput="recalcPO()" required style="width:80px;padding:4px;border:2px inset #a0a0a0;background:#fff"></td><td><input type="number" name="unit_price[]" class="po-price" step="0.01" min="0" value="0.00" oninput="recalcPO()" required style="width:110px;padding:4px;border:2px inset #a0a0a0;background:#fff"></td><td class="po-row-total text-right">-</td><td><button type="button" onclick="this.closest(\'tr\').remove();recalcPO()" class="btn btn-danger btn-xs">&#215;</button></td>';
+                document.getElementById('po-items-body').appendChild(tr);
+            }
+            function updatePOStock(sel) {
+                var opt = sel.options[sel.selectedIndex];
+                var row = sel.closest('tr');
+                row.querySelector('.po-stock').textContent = opt.dataset.stock || '-';
+                var priceInput = row.querySelector('.po-price');
+                if (opt.dataset.price) priceInput.value = parseFloat(opt.dataset.price).toFixed(2);
+                recalcPO();
+            }
+            function recalcPO() {
+                var subtotal = 0;
+                document.querySelectorAll('.po-row').forEach(function (row) {
+                    var qty = parseFloat(row.querySelector('.po-qty').value) || 0;
+                    var price = parseFloat(row.querySelector('.po-price').value) || 0;
+                    var rowTotal = qty * price;
+                    row.querySelector('.po-row-total').textContent = CURRENCY + ' ' + rowTotal.toFixed(2);
+                    subtotal += rowTotal;
+                });
+                var taxPct = parseFloat(document.getElementById('tax_percent').value) || 0;
+                var disc = parseFloat(document.getElementById('po_discount').value) || 0;
+                var tax = subtotal * (taxPct / 100);
+                var total = subtotal + tax - disc;
+                document.getElementById('po-subtotal').textContent = CURRENCY + ' ' + subtotal.toFixed(2);
+                document.getElementById('po-tax').textContent = CURRENCY + ' ' + tax.toFixed(2);
+                document.getElementById('po-disc').textContent = CURRENCY + ' ' + disc.toFixed(2);
+                document.getElementById('po-total').textContent = CURRENCY + ' ' + total.toFixed(2);
+            }
             recalcPO();
-        }
-        function recalcPO(){
-            var subtotal=0;
-            document.querySelectorAll('.po-row').forEach(function(row){
-                var qty=parseFloat(row.querySelector('.po-qty').value)||0;
-                var price=parseFloat(row.querySelector('.po-price').value)||0;
-                var rowTotal=qty*price;
-                row.querySelector('.po-row-total').textContent=CURRENCY+' '+rowTotal.toFixed(2);
-                subtotal+=rowTotal;
-            });
-            var taxPct=parseFloat(document.getElementById('tax_percent').value)||0;
-            var disc=parseFloat(document.getElementById('po_discount').value)||0;
-            var tax=subtotal*(taxPct/100);
-            var total=subtotal+tax-disc;
-            document.getElementById('po-subtotal').textContent=CURRENCY+' '+subtotal.toFixed(2);
-            document.getElementById('po-tax').textContent=CURRENCY+' '+tax.toFixed(2);
-            document.getElementById('po-disc').textContent=CURRENCY+' '+disc.toFixed(2);
-            document.getElementById('po-total').textContent=CURRENCY+' '+total.toFixed(2);
-        }
-        recalcPO();
         </script>
-        <?php
+    <?php
         $content = ob_get_clean();
         renderLayout(($po ? 'Edit' : 'New') . ' Purchase Order', $content, 'purchases');
     } elseif ($action === 'view') {
@@ -3753,18 +5820,24 @@ function renderPurchases(): void
         $receipts = $pdo->query("SELECT * FROM payment_receipts WHERE po_id=$id ORDER BY created_at ASC")->fetchAll();
         ob_start();
         ?>
-            <div class="page-header no-print"><h1>&#128065; PO: <?= h($po['po_number']) ?></h1><div class="page-header-actions">
+        <div class="page-header no-print"><h1>&#128065; PO: <?= h($po['po_number']) ?></h1>
+            <div class="page-header-actions">
                 <?php if ($po['payment_status'] !== 'paid'): ?>
-                    <button onclick="openModal('paymentModal')" class="btn btn-success btn-sm">&#128176; Add Payment</button>
+                    <button onclick="openModal('paymentModal')" class="btn btn-success btn-sm">&#128176; Add Payment
+                    </button>
                 <?php endif; ?>
                 <?php if ($po['order_status'] !== 'received' && $po['order_status'] !== 'cancelled'): ?>
-                <a href="?page=purchases&action=edit&id=<?= $id ?>" class="btn btn-warning btn-sm">&#9998; Edit</a>
-                <a href="?page=purchases&action=receive&id=<?= $id ?>" class="btn btn-success btn-sm">&#8595; Receive Stock</a>
+                    <a href="?page=purchases&action=edit&id=<?= $id ?>" class="btn btn-warning btn-sm">&#9998; Edit</a>
+                    <a href="?page=purchases&action=receive&id=<?= $id ?>" class="btn btn-success btn-sm">&#8595;
+                        Receive Stock</a>
                 <?php endif; ?>
                 <button onclick="window.print()" class="btn btn-primary btn-sm">&#128438; Print</button>
                 <a href="?page=purchases" class="btn btn-secondary btn-sm">&#8592; Back</a>
-            </div></div>
-            <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?> no-print"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
+            </div>
+        </div>
+        <?php if (isset($_SESSION['flash_msg'])): ?>
+        <div
+        class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?> no-print"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
         <div class="lf print-po">
             <div class="print-only" style="margin-bottom:16px">
@@ -3774,18 +5847,43 @@ function renderPurchases(): void
             </div>
             <div class="cols-2" style="margin-bottom:12px">
                 <div>
-                    <div style="font-size:11px;color:#666;text-transform:uppercase;font-weight:700;margin-bottom:4px">Purchase Order</div>
+                    <div style="font-size:11px;color:#666;text-transform:uppercase;font-weight:700;margin-bottom:4px">
+                        Purchase Order
+                    </div>
                     <div style="font-size:20px;font-weight:700;color:#4a90d9"><?= h($po['po_number']) ?></div>
-                    <table style="font-size:12px;margin-top:8px"><tbody>
-                        <tr><td style="padding:3px 8px 3px 0;color:#666">PO Date:</td><td><?= h($po['po_date']) ?></td></tr>
-                        <tr><td style="padding:3px 8px 3px 0;color:#666">Expected Delivery:</td><td><?= h($po['expected_delivery'] ?? '-') ?></td></tr>
-                        <tr><td style="padding:3px 8px 3px 0;color:#666">Order Status:</td><td><span class="badge badge-<?= ['pending' => 'warning', 'partial' => 'info', 'received' => 'success', 'cancelled' => 'danger'][$po['order_status']] ?? 'secondary' ?>"><?= h(strtoupper($po['order_status'])) ?></span></td></tr>
-                        <tr><td style="padding:3px 8px 3px 0;color:#666">Payment Status:</td><td><span class="badge badge-<?= ['unpaid' => 'danger', 'partial' => 'warning', 'paid' => 'success'][$po['payment_status']] ?? 'secondary' ?>"><?= h(strtoupper($po['payment_status'])) ?></span></td></tr>
-                        <tr><td style="padding:3px 8px 3px 0;color:#666">Created By:</td><td><?= h($po['created_by_name']) ?></td></tr>
-                    </tbody></table>
+                    <table style="font-size:12px;margin-top:8px">
+                        <tbody>
+                        <tr>
+                            <td style="padding:3px 8px 3px 0;color:#666">PO Date:</td>
+                            <td><?= h($po['po_date']) ?></td>
+                        </tr>
+                        <tr>
+                            <td style="padding:3px 8px 3px 0;color:#666">Expected Delivery:</td>
+                            <td><?= h($po['expected_delivery'] ?? '-') ?></td>
+                        </tr>
+                        <tr>
+                            <td style="padding:3px 8px 3px 0;color:#666">Order Status:</td>
+                            <td>
+                                <span class="badge badge-<?= ['pending' => 'warning', 'partial' => 'info', 'received' => 'success', 'cancelled' => 'danger'][$po['order_status']] ?? 'secondary' ?>"><?= h(strtoupper($po['order_status'])) ?></span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding:3px 8px 3px 0;color:#666">Payment Status:</td>
+                            <td>
+                                <span class="badge badge-<?= ['unpaid' => 'danger', 'partial' => 'warning', 'paid' => 'success'][$po['payment_status']] ?? 'secondary' ?>"><?= h(strtoupper($po['payment_status'])) ?></span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding:3px 8px 3px 0;color:#666">Created By:</td>
+                            <td><?= h($po['created_by_name']) ?></td>
+                        </tr>
+                        </tbody>
+                    </table>
                 </div>
                 <div>
-                    <div style="font-size:11px;color:#666;text-transform:uppercase;font-weight:700;margin-bottom:4px">Supplier</div>
+                    <div style="font-size:11px;color:#666;text-transform:uppercase;font-weight:700;margin-bottom:4px">
+                        Supplier
+                    </div>
                     <div style="font-size:14px;font-weight:700"><?= h($po['company_name']) ?></div>
                     <div style="font-size:12px;margin-top:4px;color:#555"><?= h($po['contact_person'] ?? '') ?></div>
                     <div style="font-size:12px;color:#555"><?= h($po['supplier_email'] ?? '') ?></div>
@@ -3793,57 +5891,121 @@ function renderPurchases(): void
                     <div style="font-size:12px;color:#555"><?= h($po['supplier_address'] ?? '') ?></div>
                 </div>
             </div>
-            <div class="tbl-wrap"><table class="tbl">
-                <thead><tr><th>#</th><th>SKU</th><th>Product</th><th>Unit</th><th class="text-right">Ordered</th><th class="text-right">Received</th><th class="text-right">Unit Price</th><th class="text-right">Total</th></tr></thead>
-                <tbody>
-                <?php $rowNum = 0;
-                foreach ($items as $item):
-                    $rowNum++; ?>
-                <tr>
-                    <td><?= $rowNum ?></td>
-                    <td><code style="font-size:10px"><?= h($item['sku']) ?></code></td>
-                    <td><?= h($item['product_name']) ?></td>
-                    <td><?= h($item['unit']) ?></td>
-                    <td class="text-right"><?= number_format((int) $item['quantity']) ?></td>
-                    <td class="text-right <?= $item['received_qty'] >= $item['quantity'] ? 'stock-ok' : ($item['received_qty'] > 0 ? 'stock-low' : 'stock-critical') ?>"><?= number_format((int) $item['received_qty']) ?></td>
-                    <td class="text-right"><?= formatCurrency((float) $item['unit_price']) ?></td>
-                    <td class="text-right"><?= formatCurrency((float) $item['total_price']) ?></td>
-                </tr>
-                <?php endforeach; ?>
-                </tbody>
-                <tfoot>
-                    <tr style="background:#e8e8e8"><td colspan="7" class="text-right" style="padding:6px 10px;font-weight:600">Subtotal:</td><td class="text-right" style="padding:6px 10px"><?= formatCurrency((float) $po['subtotal']) ?></td></tr>
-                    <tr style="background:#e8e8e8"><td colspan="7" class="text-right" style="padding:4px 10px;font-size:11px">Tax (<?= h($po['tax_percent']) ?>%):</td><td class="text-right" style="padding:4px 10px;font-size:11px"><?= formatCurrency((float) $po['subtotal'] * (float) $po['tax_percent'] / 100) ?></td></tr>
-                    <tr style="background:#e8e8e8"><td colspan="7" class="text-right" style="padding:4px 10px;font-size:11px">Discount:</td><td class="text-right" style="padding:4px 10px;font-size:11px">(<?= formatCurrency((float) $po['discount']) ?>)</td></tr>
-                    <tr style="background:#d0d0d0;font-weight:700;font-size:14px"><td colspan="7" class="text-right" style="padding:8px 10px">TOTAL:</td><td class="text-right" style="padding:8px 10px"><?= formatCurrency((float) $po['total_amount']) ?></td></tr>
-                </tfoot>
-            </table></div>
+            <div class="tbl-wrap">
+                <table class="tbl">
+                    <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>SKU</th>
+                        <th>Product</th>
+                        <th>Unit</th>
+                        <th class="text-right">Ordered</th>
+                        <th class="text-right">Received</th>
+                        <th class="text-right">Unit Price</th>
+                        <th class="text-right">Total</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php $rowNum = 0;
+                    foreach ($items as $item):
+                        $rowNum++; ?>
+                        <tr>
+                            <td><?= $rowNum ?></td>
+                            <td><code style="font-size:10px"><?= h($item['sku']) ?></code></td>
+                            <td><?= h($item['product_name']) ?></td>
+                            <td><?= h($item['unit']) ?></td>
+                            <td class="text-right"><?= number_format((int) $item['quantity']) ?></td>
+                            <td class="text-right <?= $item['received_qty'] >= $item['quantity'] ? 'stock-ok' : ($item['received_qty'] > 0 ? 'stock-low' : 'stock-critical') ?>"><?= number_format((int) $item['received_qty']) ?></td>
+                            <td class="text-right"><?= formatCurrency((float) $item['unit_price']) ?></td>
+                            <td class="text-right"><?= formatCurrency((float) $item['total_price']) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                    <tfoot>
+                    <tr style="background:#e8e8e8">
+                        <td colspan="7" class="text-right" style="padding:6px 10px;font-weight:600">Subtotal:</td>
+                        <td class="text-right"
+                            style="padding:6px 10px"><?= formatCurrency((float) $po['subtotal']) ?></td>
+                    </tr>
+                    <tr style="background:#e8e8e8">
+                        <td colspan="7" class="text-right" style="padding:4px 10px;font-size:11px">Tax
+                            (<?= h($po['tax_percent']) ?>%):
+                        </td>
+                        <td class="text-right"
+                            style="padding:4px 10px;font-size:11px"><?= formatCurrency((float) $po['subtotal'] * (float) $po['tax_percent'] / 100) ?></td>
+                    </tr>
+                    <tr style="background:#e8e8e8">
+                        <td colspan="7" class="text-right" style="padding:4px 10px;font-size:11px">Discount:</td>
+                        <td class="text-right" style="padding:4px 10px;font-size:11px">
+                            (<?= formatCurrency((float) $po['discount']) ?>)
+                        </td>
+                    </tr>
+                    <tr style="background:#d0d0d0;font-weight:700;font-size:14px">
+                        <td colspan="7" class="text-right" style="padding:8px 10px">TOTAL:</td>
+                        <td class="text-right"
+                            style="padding:8px 10px"><?= formatCurrency((float) $po['total_amount']) ?></td>
+                    </tr>
+                    </tfoot>
+                </table>
+            </div>
             <div style="display:flex; justify-content:flex-end; margin-top:16px;">
                 <table style="width:300px; font-size:13px;">
-                    <tr><td style="padding:4px; color:#666;">Total Amount:</td><td class="text-right" style="padding:4px; font-weight:700;"><?= formatCurrency((float) $po['total_amount']) ?></td></tr>
-                    <tr><td style="padding:4px; color:#666;">Total Paid:</td><td class="text-right" style="padding:4px; font-weight:700; color:#5cb85c;"><?= formatCurrency($totalPaid) ?></td></tr>
-                    <tr style="border-top:2px solid #ccc;"><td style="padding:6px 4px; font-weight:700;">Balance Due:</td><td class="text-right" style="padding:6px 4px; font-weight:700; color:#d9534f; font-size:16px;"><?= formatCurrency($balanceDue) ?></td></tr>
+                    <tr>
+                        <td style="padding:4px; color:#666;">Total Amount:</td>
+                        <td class="text-right"
+                            style="padding:4px; font-weight:700;"><?= formatCurrency((float) $po['total_amount']) ?></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:4px; color:#666;">Total Paid:</td>
+                        <td class="text-right"
+                            style="padding:4px; font-weight:700; color:#5cb85c;"><?= formatCurrency($totalPaid) ?></td>
+                    </tr>
+                    <tr style="border-top:2px solid #ccc;">
+                        <td style="padding:6px 4px; font-weight:700;">Balance Due:</td>
+                        <td class="text-right"
+                            style="padding:6px 4px; font-weight:700; color:#d9534f; font-size:16px;"><?= formatCurrency($balanceDue) ?></td>
+                    </tr>
                 </table>
             </div>
-            <?php if ($po['notes']): ?><div style="margin-top:12px;font-size:12px"><strong>Notes:</strong> <?= h($po['notes']) ?></div><?php endif; ?>
+            <?php if ($po['notes']): ?>
+                <div style="margin-top:12px;font-size:12px"><strong>Notes:</strong> <?= h($po['notes']) ?>
+                </div><?php endif; ?>
             <?php if (!empty($receipts)): ?>
-            <div class="no-print mt-8">
-                <h4 style="font-size:14px; margin-bottom:8px; border-bottom:1px solid #ccc; padding-bottom:4px;">Payment Receipts</h4>
-                <table class="tbl">
-                    <thead><tr><th>Receipt#</th><th>Date</th><th>Method</th><th>Reference</th><th class="text-right">Amount</th></tr></thead>
-                    <tbody>
+                <div class="no-print mt-8">
+                    <h4 style="font-size:14px; margin-bottom:8px; border-bottom:1px solid #ccc; padding-bottom:4px;">
+                        Payment Receipts</h4>
+                    <table class="tbl">
+                        <thead>
+                        <tr>
+                            <th>Receipt#</th>
+                            <th>Date</th>
+                            <th>Method</th>
+                            <th>Reference</th>
+                            <th class="text-right">Amount</th>
+                        </tr>
+                        </thead>
+                        <tbody>
                         <?php foreach ($receipts as $r): ?>
-                        <tr><td><?= h($r['receipt_number']) ?></td><td><?= h($r['payment_date']) ?></td><td><?= h(ucfirst($r['method'])) ?></td><td><?= h($r['reference'] ?? '-') ?></td><td class="text-right" style="color:#5cb85c;font-weight:700"><?= formatCurrency((float) $r['amount']) ?></td></tr>
+                            <tr>
+                                <td><?= h($r['receipt_number']) ?></td>
+                                <td><?= h($r['payment_date']) ?></td>
+                                <td><?= h(ucfirst($r['method'])) ?></td>
+                                <td><?= h($r['reference'] ?? '-') ?></td>
+                                <td class="text-right"
+                                    style="color:#5cb85c;font-weight:700"><?= formatCurrency((float) $r['amount']) ?></td>
+                            </tr>
                         <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
+                        </tbody>
+                    </table>
+                </div>
             <?php endif; ?>
         </div>
         <?php if ($po['payment_status'] !== 'paid'): ?>
         <div id="paymentModal" class="modal-overlay no-print">
             <div class="modal" style="max-width:400px;">
-                <div class="modal-title-bar"><span>Record Payment</span><button class="modal-close-btn" onclick="closeModal('paymentModal')">&times;</button></div>
+                <div class="modal-title-bar"><span>Record Payment</span>
+                    <button class="modal-close-btn" onclick="closeModal('paymentModal')">&times;</button>
+                </div>
                 <form method="POST">
                     <?= csrfField() ?>
                     <input type="hidden" name="add_payment" value="1">
@@ -3851,7 +6013,8 @@ function renderPurchases(): void
                     <div class="modal-body">
                         <div class="form-group mb-8">
                             <label>Amount to Pay (Due: <?= formatCurrency($balanceDue) ?>)</label>
-                            <input type="number" name="amount" step="0.01" min="0.01" max="<?= $balanceDue ?>" value="<?= $balanceDue ?>" class="form-control" required>
+                            <input type="number" name="amount" step="0.01" min="0.01" max="<?= $balanceDue ?>"
+                                   value="<?= $balanceDue ?>" class="form-control" required>
                         </div>
                         <div class="form-group mb-8">
                             <label>Payment Method</label>
@@ -3864,18 +6027,21 @@ function renderPurchases(): void
                         </div>
                         <div class="form-group">
                             <label>Reference (Optional)</label>
-                            <input type="text" name="reference" class="form-control" placeholder="Transaction ID, Check #...">
+                            <input type="text" name="reference" class="form-control"
+                                   placeholder="Transaction ID, Check #...">
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('paymentModal')">Cancel</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('paymentModal')">
+                            Cancel
+                        </button>
                         <button type="submit" class="btn btn-success btn-sm">Save Payment</button>
                     </div>
                 </form>
             </div>
         </div>
-        <?php endif; ?>
-        <?php
+    <?php endif; ?>
+    <?php
         $content = ob_get_clean();
         renderLayout('PO: ' . $po['po_number'], $content, 'purchases');
     } elseif ($action === 'receive') {
@@ -3943,32 +6109,51 @@ function renderPurchases(): void
         $items = $items->fetchAll();
         ob_start();
         ?>
-        <div class="page-header"><h1>&#8595; Receive Stock: <?= h($po['po_number']) ?></h1><div class="page-header-actions"><a href="?page=purchases&action=view&id=<?= $id ?>" class="btn btn-secondary btn-sm">&#8592; Back to PO</a></div></div>
-        <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
+        <div class="page-header"><h1>&#8595; Receive Stock: <?= h($po['po_number']) ?></h1>
+            <div class="page-header-actions"><a href="?page=purchases&action=view&id=<?= $id ?>"
+                                                class="btn btn-secondary btn-sm">&#8592; Back to PO</a></div>
+        </div>
+        <?php if (isset($_SESSION['flash_msg'])): ?>
+        <div
+        class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
         <div class="lf"><span class="lf-title">Supplier: <?= h($po['company_name']) ?></span>
             <form method="POST" action="?page=purchases&action=receive&id=<?= $id ?>">
                 <?= csrfField() ?>
-                <div class="tbl-wrap"><table class="tbl">
-                    <thead><tr><th>Product</th><th>SKU</th><th class="text-right">Ordered</th><th class="text-right">Already Received</th><th class="text-right">Pending</th><th class="text-right">Current Stock</th><th style="width:130px">Receive Now</th></tr></thead>
-                    <tbody>
-                    <?php foreach ($items as $item):
-                        $pending = $item['quantity'] - $item['received_qty']; ?>
-                    <tr <?= $pending <= 0 ? 'style="opacity:0.5"' : '' ?>>
-                        <td><?= h($item['product_name']) ?></td>
-                        <td><code style="font-size:10px"><?= h($item['sku']) ?></code></td>
-                        <td class="text-right"><?= number_format((int) $item['quantity']) ?></td>
-                        <td class="text-right <?= $item['received_qty'] > 0 ? 'stock-ok' : '' ?>"><?= number_format((int) $item['received_qty']) ?></td>
-                        <td class="text-right <?= $pending > 0 ? 'stock-low' : 'stock-ok' ?>"><?= number_format($pending) ?></td>
-                        <td class="text-right"><?= number_format((int) $item['current_stock']) ?> <?= h($item['unit']) ?></td>
-                        <td>
-                            <input type="hidden" name="item_id[]" value="<?= $item['id'] ?>">
-                            <input type="number" name="receive_qty[]" min="0" max="<?= $pending ?>" value="<?= $pending > 0 ? $pending : 0 ?>" <?= $pending <= 0 ? 'disabled' : '' ?> style="width:90px;padding:4px;border:2px inset #a0a0a0;background:<?= $pending <= 0 ? '#e8e8e8' : '#fff' ?>">
-                        </td>
-                    </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table></div>
+                <div class="tbl-wrap">
+                    <table class="tbl">
+                        <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>SKU</th>
+                            <th class="text-right">Ordered</th>
+                            <th class="text-right">Already Received</th>
+                            <th class="text-right">Pending</th>
+                            <th class="text-right">Current Stock</th>
+                            <th style="width:130px">Receive Now</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach ($items as $item):
+                            $pending = $item['quantity'] - $item['received_qty']; ?>
+                            <tr <?= $pending <= 0 ? 'style="opacity:0.5"' : '' ?>>
+                                <td><?= h($item['product_name']) ?></td>
+                                <td><code style="font-size:10px"><?= h($item['sku']) ?></code></td>
+                                <td class="text-right"><?= number_format((int) $item['quantity']) ?></td>
+                                <td class="text-right <?= $item['received_qty'] > 0 ? 'stock-ok' : '' ?>"><?= number_format((int) $item['received_qty']) ?></td>
+                                <td class="text-right <?= $pending > 0 ? 'stock-low' : 'stock-ok' ?>"><?= number_format($pending) ?></td>
+                                <td class="text-right"><?= number_format((int) $item['current_stock']) ?> <?= h($item['unit']) ?></td>
+                                <td>
+                                    <input type="hidden" name="item_id[]" value="<?= $item['id'] ?>">
+                                    <input type="number" name="receive_qty[]" min="0" max="<?= $pending ?>"
+                                           value="<?= $pending > 0 ? $pending : 0 ?>" <?= $pending <= 0 ? 'disabled' : '' ?>
+                                           style="width:90px;padding:4px;border:2px inset #a0a0a0;background:<?= $pending <= 0 ? '#e8e8e8' : '#fff' ?>">
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
                 <div style="margin-top:12px;display:flex;gap:8px">
                     <button type="submit" class="btn btn-success">&#10003; Confirm Receipt & Update Stock</button>
                     <a href="?page=purchases&action=view&id=<?= $id ?>" class="btn btn-secondary">Cancel</a>
@@ -4058,48 +6243,111 @@ function renderSales(): void
         $customers = $pdo->query("SELECT id,name FROM customers WHERE status='active' ORDER BY name")->fetchAll();
         ob_start();
         ?>
-        <div class="page-header"><h1>&#128203; Sales / Invoices</h1><div class="page-header-actions"><a href="?page=sales&action=new" class="btn btn-success btn-sm">+ New Invoice</a></div></div>
-        <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
+        <div class="page-header"><h1>&#128203; Sales / Invoices</h1>
+            <div class="page-header-actions"><a href="?page=sales&action=new" class="btn btn-success btn-sm">+ New
+                    Invoice</a></div>
+        </div>
+        <?php if (isset($_SESSION['flash_msg'])): ?>
+        <div
+        class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
         <form method="GET"><input type="hidden" name="page" value="sales">
             <div class="filter-bar">
-                <div class="form-group"><label>Search</label><input type="text" name="search" value="<?= h($filters['search']) ?>" placeholder="Invoice#, customer..."></div>
-                <div class="form-group"><label>Customer</label><select name="customer_id"><option value="">All Customers</option><?php foreach ($customers as $c): ?><option value="<?= $c['id'] ?>" <?= $filters['customer_id'] == $c['id'] ? 'selected' : '' ?>><?= h($c['name']) ?></option><?php endforeach; ?></select></div>
-                <div class="form-group"><label>Payment</label><select name="payment_status"><option value="">All</option><option value="unpaid" <?= $filters['payment_status'] === 'unpaid' ? 'selected' : '' ?>>Unpaid</option><option value="partial" <?= $filters['payment_status'] === 'partial' ? 'selected' : '' ?>>Partial</option><option value="paid" <?= $filters['payment_status'] === 'paid' ? 'selected' : '' ?>>Paid</option></select></div>
-                <div class="form-group"><label>From</label><input type="date" name="date_from" value="<?= h($filters['date_from']) ?>"></div>
-                <div class="form-group"><label>To</label><input type="date" name="date_to" value="<?= h($filters['date_to']) ?>"></div>
-                <div class="form-group" style="justify-content:flex-end;flex-direction:row;align-items:flex-end;gap:6px"><button type="submit" class="btn btn-primary btn-sm">Filter</button><a href="?page=sales" class="btn btn-secondary btn-sm">Reset</a></div>
+                <div class="form-group"><label>Search</label><input type="text" name="search"
+                                                                    value="<?= h($filters['search']) ?>"
+                                                                    placeholder="Invoice#, customer..."></div>
+                <div class="form-group"><label>Customer</label><select name="customer_id">
+                        <option value="">All Customers</option><?php foreach ($customers as $c): ?>
+                            <option
+                            value="<?= $c['id'] ?>" <?= $filters['customer_id'] == $c['id'] ? 'selected' : '' ?>><?= h($c['name']) ?></option><?php endforeach; ?>
+                    </select></div>
+                <div class="form-group"><label>Payment</label><select name="payment_status">
+                        <option value="">All</option>
+                        <option value="unpaid" <?= $filters['payment_status'] === 'unpaid' ? 'selected' : '' ?>>Unpaid
+                        </option>
+                        <option value="partial" <?= $filters['payment_status'] === 'partial' ? 'selected' : '' ?>>
+                            Partial
+                        </option>
+                        <option value="paid" <?= $filters['payment_status'] === 'paid' ? 'selected' : '' ?>>Paid
+                        </option>
+                    </select></div>
+                <div class="form-group"><label>From</label><input type="date" name="date_from"
+                                                                  value="<?= h($filters['date_from']) ?>"></div>
+                <div class="form-group"><label>To</label><input type="date" name="date_to"
+                                                                value="<?= h($filters['date_to']) ?>"></div>
+                <div class="form-group"
+                     style="justify-content:flex-end;flex-direction:row;align-items:flex-end;gap:6px">
+                    <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+                    <a href="?page=sales" class="btn btn-secondary btn-sm">Reset</a></div>
             </div>
         </form>
-        <div class="tbl-wrap"><table class="tbl">
-            <thead><tr><th>Invoice#</th><th>Customer</th><th>Date</th><th>Due Date</th><th class="text-right">Total</th><th>Payment</th><th>Method</th><th>Created By</th><th>Actions</th></tr></thead>
-            <tbody>
-            <?php if (empty($invoices)): ?><tr><td colspan="9" class="text-center" style="padding:16px;color:#888">No invoices found</td></tr>
-            <?php else:
+        <div class="tbl-wrap">
+            <table class="tbl">
+                <thead>
+                <tr>
+                    <th>Invoice#</th>
+                    <th>Customer</th>
+                    <th>Date</th>
+                    <th>Due Date</th>
+                    <th class="text-right">Total</th>
+                    <th>Payment</th>
+                    <th>Method</th>
+                    <th>Created By</th>
+                    <th>Actions</th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php if (empty($invoices)): ?>
+                    <tr>
+                        <td colspan="9" class="text-center" style="padding:16px;color:#888">No invoices found</td>
+                    </tr>
+                <?php else:
             foreach ($invoices as $inv):
                 $psBadge = ['unpaid' => 'danger', 'partial' => 'warning', 'paid' => 'success'][$inv['payment_status']] ?? 'secondary'; ?>
-            <tr>
-                <td><a href="?page=sales&action=view&id=<?= $inv['id'] ?>"><?= h($inv['invoice_number']) ?></a></td>
-                <td><?= h($inv['customer_name']) ?></td>
-                <td><?= h($inv['invoice_date']) ?></td>
-                <td><?= h($inv['due_date'] ?? '-') ?></td>
-                <td class="text-right"><?= formatCurrency((float) $inv['total_amount']) ?></td>
-                <td><span class="badge badge-<?= $psBadge ?>"><?= h(strtoupper($inv['payment_status'])) ?></span></td>
-                <td><?= h(str_replace('_', ' ', strtoupper($inv['payment_method']))) ?></td>
-                <td><?= h($inv['created_by_name']) ?></td>
-                <td><div class="tbl-actions">
-                    <a href="?page=sales&action=view&id=<?= $inv['id'] ?>" class="btn btn-primary btn-xs">&#128065;</a>
-                    <?php if ($inv['payment_status'] !== 'paid'): ?><a href="?page=sales&action=edit&id=<?= $inv['id'] ?>" class="btn btn-warning btn-xs">&#9998;</a><?php endif; ?>
-                    <?php if (canAccess(['admin', 'manager'])): ?><button onclick="voidInvoice(<?= $inv['id'] ?>,'<?= h(addslashes($inv['invoice_number'])) ?>')" class="btn btn-danger btn-xs">&#215;Void</button><?php endif; ?>
-                </div></td>
-            </tr>
-            <?php endforeach;
+                        <tr>
+                            <td>
+                                <a href="?page=sales&action=view&id=<?= $inv['id'] ?>"><?= h($inv['invoice_number']) ?></a>
+                            </td>
+                            <td><?= h($inv['customer_name']) ?></td>
+                            <td><?= h($inv['invoice_date']) ?></td>
+                            <td><?= h($inv['due_date'] ?? '-') ?></td>
+                            <td class="text-right"><?= formatCurrency((float) $inv['total_amount']) ?></td>
+                            <td>
+                                <span class="badge badge-<?= $psBadge ?>"><?= h(strtoupper($inv['payment_status'])) ?></span>
+                            </td>
+                            <td><?= h(str_replace('_', ' ', strtoupper($inv['payment_method']))) ?></td>
+                            <td><?= h($inv['created_by_name']) ?></td>
+                            <td>
+                                <div class="tbl-actions">
+                                    <a href="?page=sales&action=view&id=<?= $inv['id'] ?>"
+                                       class="btn btn-primary btn-xs">&#128065;</a>
+                                    <?php if ($inv['payment_status'] !== 'paid'): ?><a
+                                        href="?page=sales&action=edit&id=<?= $inv['id'] ?>"
+                                        class="btn btn-warning btn-xs">&#9998;</a><?php endif; ?>
+                                    <?php if (canAccess(['admin', 'manager'])): ?>
+                                        <button
+                                        onclick="voidInvoice(<?= $inv['id'] ?>,'<?= h(addslashes($inv['invoice_number'])) ?>')"
+                                        class="btn btn-danger btn-xs">&#215;Void</button><?php endif; ?>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach;
         endif; ?>
-            </tbody>
-        </table></div>
-        <?= paginationHtml($pag, '?page=sales&search=' . urlencode($filters['search']) . '&payment_status=' . urlencode($filters['payment_status'])) ?>
-        <script>function voidInvoice(id,n){ confirmAction('Void invoice "'+n+'"? Stock will NOT be automatically reversed. Use Stock Adjustment if needed.',function(){ apiPost('?ajax=void_invoice',{id:id},function(){ showToast('Invoice voided.','success'); setTimeout(function(){ location.reload(); },800); }); },'Confirm Void'); }</script>
-        <?php
+                </tbody>
+            </table>
+        </div>
+    <?= paginationHtml($pag, '?page=sales&search=' . urlencode($filters['search']) . '&payment_status=' . urlencode($filters['payment_status'])) ?>
+        <script>function voidInvoice(id, n) {
+                confirmAction('Void invoice "' + n + '"? Stock will NOT be automatically reversed. Use Stock Adjustment if needed.', function () {
+                    apiPost('?ajax=void_invoice', {id: id}, function () {
+                        showToast('Invoice voided.', 'success');
+                        setTimeout(function () {
+                            location.reload();
+                        }, 800);
+                    });
+                }, 'Confirm Void');
+            }</script>
+    <?php
         $content = ob_get_clean();
         renderLayout('Sales / Invoices', $content, 'sales');
     } elseif ($action === 'new' || $action === 'edit') {
@@ -4209,108 +6457,226 @@ function renderSales(): void
         $preCustomer = (int) ($_GET['customer_id'] ?? $inv['customer_id'] ?? 0);
         ob_start();
         ?>
-        <div class="page-header"><h1><?= $inv ? '&#9998; Edit Invoice: ' . h($inv['invoice_number']) : '+ New Invoice' ?></h1><div class="page-header-actions"><a href="?page=sales" class="btn btn-secondary btn-sm">&#8592; Back</a></div></div>
-        <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
+        <div class="page-header">
+            <h1><?= $inv ? '&#9998; Edit Invoice: ' . h($inv['invoice_number']) : '+ New Invoice' ?></h1>
+            <div class="page-header-actions"><a href="?page=sales" class="btn btn-secondary btn-sm">&#8592; Back</a>
+            </div>
+        </div>
+        <?php if (isset($_SESSION['flash_msg'])): ?>
+        <div
+        class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
         <form method="POST" action="?page=sales&action=<?= $inv ? 'edit&id=' . $inv['id'] : 'new' ?>" id="inv-form">
             <?= csrfField() ?>
             <div class="lf"><span class="lf-title">Invoice Details</span>
                 <div class="form-grid form-grid-3">
-                    <div class="form-group" style="grid-column:span 2"><label>Customer <span class="required-mark">*</span></label><select name="customer_id" required><option value="">-- Select Customer --</option><?php foreach ($customers as $c): ?><option value="<?= $c['id'] ?>" data-credit="<?= $c['credit_limit'] ?>" <?= ($inv['customer_id'] ?? $preCustomer) == $c['id'] ? 'selected' : '' ?>><?= h($c['name'] . ' [' . strtoupper($c['customer_type']) . ']') ?></option><?php endforeach; ?></select></div>
-                    <div class="form-group"><label>Invoice Date <span class="required-mark">*</span></label><input type="date" name="invoice_date" value="<?= h($inv['invoice_date'] ?? date('Y-m-d')) ?>" required></div>
-                    <div class="form-group"><label>Due Date</label><input type="date" name="due_date" value="<?= h($inv['due_date'] ?? '') ?>"></div>
-                    <div class="form-group"><label>Tax %</label><input type="number" name="tax_percent" id="inv_tax_percent" step="0.01" min="0" max="100" value="<?= h($inv['tax_percent'] ?? getSetting('default_tax_percent')) ?>" oninput="recalcInv()"></div>
-                    <div class="form-group"><label>Discount (<?= h(getSetting('currency_symbol')) ?>)</label><input type="number" name="discount" id="inv_discount" step="0.01" min="0" value="<?= h($inv['discount'] ?? '0') ?>" oninput="recalcInv()"></div>
-                    <div class="form-group"><label>Payment Status</label><select name="payment_status"><option value="unpaid" <?= ($inv['payment_status'] ?? 'unpaid') === 'unpaid' ? 'selected' : '' ?>>Unpaid</option><option value="partial" <?= ($inv['payment_status'] ?? '') === 'partial' ? 'selected' : '' ?>>Partial</option><option value="paid" <?= ($inv['payment_status'] ?? '') === 'paid' ? 'selected' : '' ?>>Paid</option></select></div>
-                    <div class="form-group"><label>Payment Method</label><select name="payment_method"><option value="cash" <?= ($inv['payment_method'] ?? 'cash') === 'cash' ? 'selected' : '' ?>>Cash</option><option value="card" <?= ($inv['payment_method'] ?? '') === 'card' ? 'selected' : '' ?>>Card</option><option value="bank_transfer" <?= ($inv['payment_method'] ?? '') === 'bank_transfer' ? 'selected' : '' ?>>Bank Transfer</option><option value="credit" <?= ($inv['payment_method'] ?? '') === 'credit' ? 'selected' : '' ?>>Credit</option></select></div>
-                    <div class="form-group full"><label>Notes</label><textarea name="notes"><?= h($inv['notes'] ?? '') ?></textarea></div>
+                    <div class="form-group" style="grid-column:span 2"><label>Customer <span
+                                    class="required-mark">*</span></label><select name="customer_id" required>
+                            <option value="">-- Select Customer --</option><?php foreach ($customers as $c): ?>
+                                <option value="<?= $c['id'] ?>"
+                                        data-credit="<?= $c['credit_limit'] ?>" <?= ($inv['customer_id'] ?? $preCustomer) == $c['id'] ? 'selected' : '' ?>><?= h($c['name'] . ' [' . strtoupper($c['customer_type']) . ']') ?></option><?php endforeach; ?>
+                        </select></div>
+                    <div class="form-group"><label>Invoice Date <span class="required-mark">*</span></label><input
+                                type="date" name="invoice_date" value="<?= h($inv['invoice_date'] ?? date('Y-m-d')) ?>"
+                                required></div>
+                    <div class="form-group"><label>Due Date</label><input type="date" name="due_date"
+                                                                          value="<?= h($inv['due_date'] ?? '') ?>">
+                    </div>
+                    <div class="form-group"><label>Tax %</label><input type="number" name="tax_percent"
+                                                                       id="inv_tax_percent" step="0.01" min="0"
+                                                                       max="100"
+                                                                       value="<?= h($inv['tax_percent'] ?? getSetting('default_tax_percent')) ?>"
+                                                                       oninput="recalcInv()"></div>
+                    <div class="form-group"><label>Discount (<?= h(getSetting('currency_symbol')) ?>)</label><input
+                                type="number" name="discount" id="inv_discount" step="0.01" min="0"
+                                value="<?= h($inv['discount'] ?? '0') ?>" oninput="recalcInv()"></div>
+                    <div class="form-group"><label>Payment Status</label><select name="payment_status">
+                            <option value="unpaid" <?= ($inv['payment_status'] ?? 'unpaid') === 'unpaid' ? 'selected' : '' ?>>
+                                Unpaid
+                            </option>
+                            <option value="partial" <?= ($inv['payment_status'] ?? '') === 'partial' ? 'selected' : '' ?>>
+                                Partial
+                            </option>
+                            <option value="paid" <?= ($inv['payment_status'] ?? '') === 'paid' ? 'selected' : '' ?>>
+                                Paid
+                            </option>
+                        </select></div>
+                    <div class="form-group"><label>Payment Method</label><select name="payment_method">
+                            <option value="cash" <?= ($inv['payment_method'] ?? 'cash') === 'cash' ? 'selected' : '' ?>>
+                                Cash
+                            </option>
+                            <option value="card" <?= ($inv['payment_method'] ?? '') === 'card' ? 'selected' : '' ?>>
+                                Card
+                            </option>
+                            <option value="bank_transfer" <?= ($inv['payment_method'] ?? '') === 'bank_transfer' ? 'selected' : '' ?>>
+                                Bank Transfer
+                            </option>
+                            <option value="credit" <?= ($inv['payment_method'] ?? '') === 'credit' ? 'selected' : '' ?>>
+                                Credit
+                            </option>
+                        </select></div>
+                    <div class="form-group full"><label>Notes</label><textarea
+                                name="notes"><?= h($inv['notes'] ?? '') ?></textarea></div>
                 </div>
             </div>
             <div class="lf"><span class="lf-title">Invoice Items</span>
-                <div style="margin-bottom:10px"><button type="button" onclick="addInvRow()" class="btn btn-primary btn-sm">+ Add Product</button></div>
-                <div class="tbl-wrap"><table class="tbl" id="inv-table">
-                    <thead><tr><th style="width:35%">Product</th><th style="width:12%">In Stock</th><th style="width:12%">Qty</th><th style="width:16%">Unit Price</th><th style="width:10%">Disc %</th><th style="width:12%">Total</th><th style="width:3%"></th></tr></thead>
-                    <tbody id="inv-items-body">
-                    <?php if (!empty($invItems)):
-                        foreach ($invItems as $item): ?>
-                    <tr class="inv-row">
-                        <td><select name="product_id[]" class="inv-product" onchange="updateInvStock(this)" required style="width:100%;padding:4px;border:2px inset #a0a0a0;background:#fff">
-                            <option value="">-- Select Product --</option>
-                            <?php foreach ($products as $pr): ?><option value="<?= $pr['id'] ?>" data-price="<?= $pr['selling_price'] ?>" data-stock="<?= $pr['current_stock'] ?>" data-unit="<?= h($pr['unit']) ?>" <?= $item['product_id'] == $pr['id'] ? 'selected' : '' ?>><?= h($pr['name'] . ' (' . $pr['sku'] . ')') ?></option><?php endforeach; ?>
-                        </select></td>
-                        <td class="inv-stock text-right"><?= number_format((int) $item['current_stock']) ?></td>
-                        <td><input type="number" name="quantity[]" class="inv-qty" min="1" value="<?= (int) $item['quantity'] ?>" oninput="recalcInv()" required style="width:70px;padding:4px;border:2px inset #a0a0a0;background:#fff"></td>
-                        <td><input type="number" name="unit_price[]" class="inv-price" step="0.01" min="0" value="<?= number_format((float) $item['unit_price'], 2, '.', '') ?>" oninput="recalcInv()" required style="width:100px;padding:4px;border:2px inset #a0a0a0;background:#fff"></td>
-                        <td><input type="number" name="discount_pct[]" class="inv-disc" step="0.01" min="0" max="100" value="<?= number_format((float) $item['discount_pct'], 2, '.', '') ?>" oninput="recalcInv()" style="width:60px;padding:4px;border:2px inset #a0a0a0;background:#fff"></td>
-                        <td class="inv-row-total text-right"><?= formatCurrency((float) $item['total_price']) ?></td>
-                        <td><button type="button" onclick="this.closest('tr').remove();recalcInv()" class="btn btn-danger btn-xs">&#215;</button></td>
-                    </tr>
-                    <?php endforeach;
-                    else: ?>
-                    <tr class="inv-row">
-                        <td><select name="product_id[]" class="inv-product" onchange="updateInvStock(this)" required style="width:100%;padding:4px;border:2px inset #a0a0a0;background:#fff">
-                            <option value="">-- Select Product --</option>
-                            <?php foreach ($products as $pr): ?><option value="<?= $pr['id'] ?>" data-price="<?= $pr['selling_price'] ?>" data-stock="<?= $pr['current_stock'] ?>" data-unit="<?= h($pr['unit']) ?>"><?= h($pr['name'] . ' (' . $pr['sku'] . ')') ?></option><?php endforeach; ?>
-                        </select></td>
-                        <td class="inv-stock text-right">-</td>
-                        <td><input type="number" name="quantity[]" class="inv-qty" min="1" value="1" oninput="recalcInv()" required style="width:70px;padding:4px;border:2px inset #a0a0a0;background:#fff"></td>
-                        <td><input type="number" name="unit_price[]" class="inv-price" step="0.01" min="0" value="0.00" oninput="recalcInv()" required style="width:100px;padding:4px;border:2px inset #a0a0a0;background:#fff"></td>
-                        <td><input type="number" name="discount_pct[]" class="inv-disc" step="0.01" min="0" max="100" value="0.00" oninput="recalcInv()" style="width:60px;padding:4px;border:2px inset #a0a0a0;background:#fff"></td>
-                        <td class="inv-row-total text-right">-</td>
-                        <td><button type="button" onclick="this.closest('tr').remove();recalcInv()" class="btn btn-danger btn-xs">&#215;</button></td>
-                    </tr>
-                    <?php endif; ?>
-                    </tbody>
-                    <tfoot>
-                        <tr style="background:#e8e8e8"><td colspan="5" class="text-right" style="padding:6px 10px;font-weight:600">Subtotal:</td><td id="inv-subtotal" class="text-right" style="padding:6px 10px">-</td><td></td></tr>
-                        <tr style="background:#e8e8e8"><td colspan="5" class="text-right" style="padding:4px 10px;font-size:11px">Tax:</td><td id="inv-tax" class="text-right" style="padding:4px 10px;font-size:11px">-</td><td></td></tr>
-                        <tr style="background:#e8e8e8"><td colspan="5" class="text-right" style="padding:4px 10px;font-size:11px">Discount:</td><td id="inv-disc-total" class="text-right" style="padding:4px 10px;font-size:11px">-</td><td></td></tr>
-                        <tr style="background:#d0d0d0;font-weight:700;font-size:14px"><td colspan="5" class="text-right" style="padding:8px 10px">TOTAL:</td><td id="inv-total" class="text-right" style="padding:8px 10px"></td><td></td></tr>
-                    </tfoot>
-                </table></div>
+                <div style="margin-bottom:10px">
+                    <button type="button" onclick="addInvRow()" class="btn btn-primary btn-sm">+ Add Product</button>
+                </div>
+                <div class="tbl-wrap">
+                    <table class="tbl" id="inv-table">
+                        <thead>
+                        <tr>
+                            <th style="width:35%">Product</th>
+                            <th style="width:12%">In Stock</th>
+                            <th style="width:12%">Qty</th>
+                            <th style="width:16%">Unit Price</th>
+                            <th style="width:10%">Disc %</th>
+                            <th style="width:12%">Total</th>
+                            <th style="width:3%"></th>
+                        </tr>
+                        </thead>
+                        <tbody id="inv-items-body">
+                        <?php if (!empty($invItems)):
+                            foreach ($invItems as $item): ?>
+                                <tr class="inv-row">
+                                    <td><select name="product_id[]" class="inv-product" onchange="updateInvStock(this)"
+                                                required
+                                                style="width:100%;padding:4px;border:2px inset #a0a0a0;background:#fff">
+                                            <option value="">-- Select Product --</option>
+                                            <?php foreach ($products as $pr): ?>
+                                                <option value="<?= $pr['id'] ?>"data-price="<?= $pr['selling_price'] ?>"
+                                                        data-stock="<?= $pr['current_stock'] ?>"
+                                                        data-unit="<?= h($pr['unit']) ?>" <?= $item['product_id'] == $pr['id'] ? 'selected' : '' ?>><?= h($pr['name'] . ' (' . $pr['sku'] . ')') ?></option><?php endforeach; ?>
+                                        </select></td>
+                                    <td class="inv-stock text-right"><?= number_format((int) $item['current_stock']) ?></td>
+                                    <td><input type="number" name="quantity[]" class="inv-qty" min="1"
+                                               value="<?= (int) $item['quantity'] ?>" oninput="recalcInv()" required
+                                               style="width:70px;padding:4px;border:2px inset #a0a0a0;background:#fff">
+                                    </td>
+                                    <td><input type="number" name="unit_price[]" class="inv-price" step="0.01" min="0"
+                                               value="<?= number_format((float) $item['unit_price'], 2, '.', '') ?>"
+                                               oninput="recalcInv()" required
+                                               style="width:100px;padding:4px;border:2px inset #a0a0a0;background:#fff">
+                                    </td>
+                                    <td><input type="number" name="discount_pct[]" class="inv-disc" step="0.01" min="0"
+                                               max="100"
+                                               value="<?= number_format((float) $item['discount_pct'], 2, '.', '') ?>"
+                                               oninput="recalcInv()"
+                                               style="width:60px;padding:4px;border:2px inset #a0a0a0;background:#fff">
+                                    </td>
+                                    <td class="inv-row-total text-right"><?= formatCurrency((float) $item['total_price']) ?></td>
+                                    <td>
+                                        <button type="button" onclick="this.closest('tr').remove();recalcInv()"
+                                                class="btn btn-danger btn-xs">&#215;
+                                        </button>
+                                    </td>
+                                </tr>
+                            <?php endforeach;
+                        else: ?>
+                            <tr class="inv-row">
+                                <td><select name="product_id[]" class="inv-product" onchange="updateInvStock(this)"
+                                            required
+                                            style="width:100%;padding:4px;border:2px inset #a0a0a0;background:#fff">
+                                        <option value="">-- Select Product --</option>
+                                        <?php foreach ($products as $pr): ?>
+                                            <option value="<?= $pr['id'] ?>" data-price="<?= $pr['selling_price'] ?>"
+                                                    data-stock="<?= $pr['current_stock'] ?>"
+                                                    data-unit="<?= h($pr['unit']) ?>"><?= h($pr['name'] . ' (' . $pr['sku'] . ')') ?></option><?php endforeach; ?>
+                                    </select></td>
+                                <td class="inv-stock text-right">-</td>
+                                <td><input type="number" name="quantity[]" class="inv-qty" min="1" value="1"
+                                           oninput="recalcInv()" required
+                                           style="width:70px;padding:4px;border:2px inset #a0a0a0;background:#fff"></td>
+                                <td><input type="number" name="unit_price[]" class="inv-price" step="0.01" min="0"
+                                           value="0.00" oninput="recalcInv()" required
+                                           style="width:100px;padding:4px;border:2px inset #a0a0a0;background:#fff">
+                                </td>
+                                <td><input type="number" name="discount_pct[]" class="inv-disc" step="0.01" min="0"
+                                           max="100" value="0.00" oninput="recalcInv()"
+                                           style="width:60px;padding:4px;border:2px inset #a0a0a0;background:#fff"></td>
+                                <td class="inv-row-total text-right">-</td>
+                                <td>
+                                    <button type="button" onclick="this.closest('tr').remove();recalcInv()"
+                                            class="btn btn-danger btn-xs">&#215;
+                                    </button>
+                                </td>
+                            </tr>
+                        <?php endif; ?>
+                        </tbody>
+                        <tfoot>
+                        <tr style="background:#e8e8e8">
+                            <td colspan="5" class="text-right" style="padding:6px 10px;font-weight:600">Subtotal:</td>
+                            <td id="inv-subtotal" class="text-right" style="padding:6px 10px">-</td>
+                            <td></td>
+                        </tr>
+                        <tr style="background:#e8e8e8">
+                            <td colspan="5" class="text-right" style="padding:4px 10px;font-size:11px">Tax:</td>
+                            <td id="inv-tax" class="text-right" style="padding:4px 10px;font-size:11px">-</td>
+                            <td></td>
+                        </tr>
+                        <tr style="background:#e8e8e8">
+                            <td colspan="5" class="text-right" style="padding:4px 10px;font-size:11px">Discount:</td>
+                            <td id="inv-disc-total" class="text-right" style="padding:4px 10px;font-size:11px">-</td>
+                            <td></td>
+                        </tr>
+                        <tr style="background:#d0d0d0;font-weight:700;font-size:14px">
+                            <td colspan="5" class="text-right" style="padding:8px 10px">TOTAL:</td>
+                            <td id="inv-total" class="text-right" style="padding:8px 10px"></td>
+                            <td></td>
+                        </tr>
+                        </tfoot>
+                    </table>
+                </div>
             </div>
-            <div style="display:flex;gap:8px"><button type="submit" class="btn btn-success">&#10003; <?= $inv ? 'Update Invoice' : 'Create Invoice' ?></button><a href="?page=sales" class="btn btn-secondary">Cancel</a></div>
+            <div style="display:flex;gap:8px">
+                <button type="submit" class="btn btn-success">
+                    &#10003; <?= $inv ? 'Update Invoice' : 'Create Invoice' ?></button>
+                <a href="?page=sales" class="btn btn-secondary">Cancel</a></div>
         </form>
         <script>
-        var INV_PRODUCTS=<?= json_encode($products) ?>;
-        function addInvRow(){
-            var opts='<option value="">-- Select Product --</option>';
-            INV_PRODUCTS.forEach(function(p){ opts+='<option value="'+p.id+'" data-price="'+p.selling_price+'" data-stock="'+p.current_stock+'" data-unit="'+p.unit+'">'+p.name+' ('+p.sku+')</option>'; });
-            var tr=document.createElement('tr'); tr.className='inv-row';
-            tr.innerHTML='<td><select name="product_id[]" class="inv-product" onchange="updateInvStock(this)" required style="width:100%;padding:4px;border:2px inset #a0a0a0;background:#fff">'+opts+'</select></td><td class="inv-stock text-right">-</td><td><input type="number" name="quantity[]" class="inv-qty" min="1" value="1" oninput="recalcInv()" required style="width:70px;padding:4px;border:2px inset #a0a0a0;background:#fff"></td><td><input type="number" name="unit_price[]" class="inv-price" step="0.01" min="0" value="0.00" oninput="recalcInv()" required style="width:100px;padding:4px;border:2px inset #a0a0a0;background:#fff"></td><td><input type="number" name="discount_pct[]" class="inv-disc" step="0.01" min="0" max="100" value="0.00" oninput="recalcInv()" style="width:60px;padding:4px;border:2px inset #a0a0a0;background:#fff"></td><td class="inv-row-total text-right">-</td><td><button type="button" onclick="this.closest(\'tr\').remove();recalcInv()" class="btn btn-danger btn-xs">&#215;</button></td>';
-            document.getElementById('inv-items-body').appendChild(tr);
-        }
-        function updateInvStock(sel){
-            var opt=sel.options[sel.selectedIndex];
-            var row=sel.closest('tr');
-            var stk=opt.dataset.stock||0;
-            row.querySelector('.inv-stock').textContent=stk+' '+(opt.dataset.unit||'');
-            row.querySelector('.inv-stock').style.color=stk<=0?'#d9534f':(stk<=5?'#f0ad4e':'#5cb85c');
-            if(opt.dataset.price) row.querySelector('.inv-price').value=parseFloat(opt.dataset.price).toFixed(2);
+            var INV_PRODUCTS = <?= json_encode($products) ?>;
+            function addInvRow() {
+                var opts = '<option value="">-- Select Product --</option>';
+                INV_PRODUCTS.forEach(function (p) {
+                    opts += '<option value="' + p.id + '" data-price="' + p.selling_price + '" data-stock="' + p.current_stock + '" data-unit="' + p.unit + '">' + p.name + ' (' + p.sku + ')</option>';
+                });
+                var tr = document.createElement('tr');
+                tr.className = 'inv-row';
+                tr.innerHTML = '<td><select name="product_id[]" class="inv-product" onchange="updateInvStock(this)" required style="width:100%;padding:4px;border:2px inset #a0a0a0;background:#fff">' + opts + '</select></td><td class="inv-stock text-right">-</td><td><input type="number" name="quantity[]" class="inv-qty" min="1" value="1" oninput="recalcInv()" required style="width:70px;padding:4px;border:2px inset #a0a0a0;background:#fff"></td><td><input type="number" name="unit_price[]" class="inv-price" step="0.01" min="0" value="0.00" oninput="recalcInv()" required style="width:100px;padding:4px;border:2px inset #a0a0a0;background:#fff"></td><td><input type="number" name="discount_pct[]" class="inv-disc" step="0.01" min="0" max="100" value="0.00" oninput="recalcInv()" style="width:60px;padding:4px;border:2px inset #a0a0a0;background:#fff"></td><td class="inv-row-total text-right">-</td><td><button type="button" onclick="this.closest(\'tr\').remove();recalcInv()" class="btn btn-danger btn-xs">&#215;</button></td>';
+                document.getElementById('inv-items-body').appendChild(tr);
+            }
+            function updateInvStock(sel) {
+                var opt = sel.options[sel.selectedIndex];
+                var row = sel.closest('tr');
+                var stk = opt.dataset.stock || 0;
+                row.querySelector('.inv-stock').textContent = stk + ' ' + (opt.dataset.unit || '');
+                row.querySelector('.inv-stock').style.color = stk <= 0 ? '#d9534f' : (stk <= 5 ? '#f0ad4e' : '#5cb85c');
+                if (opt.dataset.price) row.querySelector('.inv-price').value = parseFloat(opt.dataset.price).toFixed(2);
+                recalcInv();
+            }
+            function recalcInv() {
+                var subtotal = 0;
+                document.querySelectorAll('.inv-row').forEach(function (row) {
+                    var qty = parseFloat(row.querySelector('.inv-qty').value) || 0;
+                    var price = parseFloat(row.querySelector('.inv-price').value) || 0;
+                    var disc = parseFloat(row.querySelector('.inv-disc').value) || 0;
+                    var rowTotal = qty * price * (1 - disc / 100);
+                    row.querySelector('.inv-row-total').textContent = CURRENCY + ' ' + rowTotal.toFixed(2);
+                    subtotal += rowTotal;
+                });
+                var taxPct = parseFloat(document.getElementById('inv_tax_percent').value) || 0;
+                var discAmt = parseFloat(document.getElementById('inv_discount').value) || 0;
+                var tax = subtotal * (taxPct / 100);
+                var total = subtotal + tax - discAmt;
+                document.getElementById('inv-subtotal').textContent = CURRENCY + ' ' + subtotal.toFixed(2);
+                document.getElementById('inv-tax').textContent = CURRENCY + ' ' + tax.toFixed(2);
+                document.getElementById('inv-disc-total').textContent = '(' + CURRENCY + ' ' + discAmt.toFixed(2) + ')';
+                document.getElementById('inv-total').textContent = CURRENCY + ' ' + total.toFixed(2);
+            }
             recalcInv();
-        }
-        function recalcInv(){
-            var subtotal=0;
-            document.querySelectorAll('.inv-row').forEach(function(row){
-                var qty=parseFloat(row.querySelector('.inv-qty').value)||0;
-                var price=parseFloat(row.querySelector('.inv-price').value)||0;
-                var disc=parseFloat(row.querySelector('.inv-disc').value)||0;
-                var rowTotal=qty*price*(1-disc/100);
-                row.querySelector('.inv-row-total').textContent=CURRENCY+' '+rowTotal.toFixed(2);
-                subtotal+=rowTotal;
-            });
-            var taxPct=parseFloat(document.getElementById('inv_tax_percent').value)||0;
-            var discAmt=parseFloat(document.getElementById('inv_discount').value)||0;
-            var tax=subtotal*(taxPct/100);
-            var total=subtotal+tax-discAmt;
-            document.getElementById('inv-subtotal').textContent=CURRENCY+' '+subtotal.toFixed(2);
-            document.getElementById('inv-tax').textContent=CURRENCY+' '+tax.toFixed(2);
-            document.getElementById('inv-disc-total').textContent='('+CURRENCY+' '+discAmt.toFixed(2)+')';
-            document.getElementById('inv-total').textContent=CURRENCY+' '+total.toFixed(2);
-        }
-        recalcInv();
         </script>
-        <?php
+    <?php
         $content = ob_get_clean();
         renderLayout(($inv ? 'Edit' : 'New') . ' Invoice', $content, 'sales');
     } elseif ($action === 'view') {
@@ -4336,94 +6702,197 @@ function renderSales(): void
         $receipts = $pdo->query("SELECT * FROM payment_receipts WHERE invoice_id=$id ORDER BY created_at ASC")->fetchAll();
         ob_start();
         ?>
-            <div class="page-header no-print"><h1>&#128065; Invoice: <?= h($inv['invoice_number']) ?></h1><div class="page-header-actions">
+        <div class="page-header no-print"><h1>&#128065; Invoice: <?= h($inv['invoice_number']) ?></h1>
+            <div class="page-header-actions">
                 <?php if ($inv['payment_status'] !== 'paid'): ?>
-                    <button onclick="openModal('paymentModal')" class="btn btn-success btn-sm">&#128176; Add Payment</button>
+                    <button onclick="openModal('paymentModal')" class="btn btn-success btn-sm">&#128176; Add Payment
+                    </button>
                     <a href="?page=sales&action=edit&id=<?= $id ?>" class="btn btn-warning btn-sm">&#9998; Edit</a>
                 <?php endif; ?>
                 <button onclick="window.print()" class="btn btn-primary btn-sm">&#128438; Print</button>
                 <a href="?page=sales" class="btn btn-secondary btn-sm">&#8592; Back</a>
-            </div></div>
-            <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?> no-print"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
+            </div>
+        </div>
+        <?php if (isset($_SESSION['flash_msg'])): ?>
+        <div
+        class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?> no-print"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
         <div class="lf">
             <div class="print-only" style="margin-bottom:16px;border-bottom:2px solid #333;padding-bottom:12px">
-                <table style="width:100%"><tr>
-                    <td><h2 style="font-size:20px;font-weight:700"><?= h($companyName) ?></h2><div style="font-size:11px;color:#555"><?= h($companyAddress) ?><br><?= h($companyPhone) ?> | <?= h($companyEmail) ?></div></td>
-                    <td style="text-align:right"><div style="font-size:24px;font-weight:700;color:#4a90d9">INVOICE</div><div style="font-size:14px;font-weight:700"><?= h($inv['invoice_number']) ?></div></td>
-                </tr></table>
+                <table style="width:100%">
+                    <tr>
+                        <td><h2 style="font-size:20px;font-weight:700"><?= h($companyName) ?></h2>
+                            <div style="font-size:11px;color:#555"><?= h($companyAddress) ?><br><?= h($companyPhone) ?>
+                                | <?= h($companyEmail) ?></div>
+                        </td>
+                        <td style="text-align:right">
+                            <div style="font-size:24px;font-weight:700;color:#4a90d9">INVOICE</div>
+                            <div style="font-size:14px;font-weight:700"><?= h($inv['invoice_number']) ?></div>
+                        </td>
+                    </tr>
+                </table>
             </div>
             <div class="cols-2" style="margin-bottom:12px">
                 <div>
-                    <div style="font-size:11px;color:#666;text-transform:uppercase;font-weight:700;margin-bottom:4px">Bill To</div>
+                    <div style="font-size:11px;color:#666;text-transform:uppercase;font-weight:700;margin-bottom:4px">
+                        Bill To
+                    </div>
                     <div style="font-size:14px;font-weight:700"><?= h($inv['customer_name']) ?></div>
                     <div style="font-size:12px;color:#555;margin-top:4px"><?= h($inv['customer_email'] ?? '') ?></div>
                     <div style="font-size:12px;color:#555"><?= h($inv['customer_phone'] ?? '') ?></div>
                     <div style="font-size:12px;color:#555"><?= h($inv['customer_address'] ?? '') ?><?= $inv['customer_city'] ? ', ' . h($inv['customer_city']) : '' ?></div>
                 </div>
                 <div>
-                    <table style="font-size:12px;width:100%"><tbody>
-                        <tr><td style="padding:3px 8px 3px 0;color:#666;width:45%">Invoice#:</td><td><strong><?= h($inv['invoice_number']) ?></strong></td></tr>
-                        <tr><td style="padding:3px 8px 3px 0;color:#666">Invoice Date:</td><td><?= h($inv['invoice_date']) ?></td></tr>
-                        <tr><td style="padding:3px 8px 3px 0;color:#666">Due Date:</td><td><?= h($inv['due_date'] ?? '-') ?></td></tr>
-                        <tr><td style="padding:3px 8px 3px 0;color:#666">Payment Status:</td><td><span class="badge badge-<?= ['unpaid' => 'danger', 'partial' => 'warning', 'paid' => 'success'][$inv['payment_status']] ?? 'secondary' ?>"><?= h(strtoupper($inv['payment_status'])) ?></span></td></tr>
-                        <tr><td style="padding:3px 8px 3px 0;color:#666">Payment Method:</td><td><?= h(str_replace('_', ' ', strtoupper($inv['payment_method']))) ?></td></tr>
-                        <tr><td style="padding:3px 8px 3px 0;color:#666">Created By:</td><td><?= h($inv['created_by_name']) ?></td></tr>
-                    </tbody></table>
+                    <table style="font-size:12px;width:100%">
+                        <tbody>
+                        <tr>
+                            <td style="padding:3px 8px 3px 0;color:#666;width:45%">Invoice#:</td>
+                            <td><strong><?= h($inv['invoice_number']) ?></strong></td>
+                        </tr>
+                        <tr>
+                            <td style="padding:3px 8px 3px 0;color:#666">Invoice Date:</td>
+                            <td><?= h($inv['invoice_date']) ?></td>
+                        </tr>
+                        <tr>
+                            <td style="padding:3px 8px 3px 0;color:#666">Due Date:</td>
+                            <td><?= h($inv['due_date'] ?? '-') ?></td>
+                        </tr>
+                        <tr>
+                            <td style="padding:3px 8px 3px 0;color:#666">Payment Status:</td>
+                            <td>
+                                <span class="badge badge-<?= ['unpaid' => 'danger', 'partial' => 'warning', 'paid' => 'success'][$inv['payment_status']] ?? 'secondary' ?>"><?= h(strtoupper($inv['payment_status'])) ?></span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding:3px 8px 3px 0;color:#666">Payment Method:</td>
+                            <td><?= h(str_replace('_', ' ', strtoupper($inv['payment_method']))) ?></td>
+                        </tr>
+                        <tr>
+                            <td style="padding:3px 8px 3px 0;color:#666">Created By:</td>
+                            <td><?= h($inv['created_by_name']) ?></td>
+                        </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
-            <div class="tbl-wrap"><table class="tbl">
-                <thead><tr><th>#</th><th>SKU</th><th>Product</th><th>Unit</th><th class="text-right">Qty</th><th class="text-right">Unit Price</th><th class="text-right">Disc %</th><th class="text-right">Total</th></tr></thead>
-                <tbody>
-                <?php $rn = 0;
-                foreach ($items as $item):
-                    $rn++; ?>
-                <tr>
-                    <td><?= $rn ?></td>
-                    <td><code style="font-size:10px"><?= h($item['sku']) ?></code></td>
-                    <td><?= h($item['product_name']) ?></td>
-                    <td><?= h($item['unit']) ?></td>
-                    <td class="text-right"><?= number_format((int) $item['quantity']) ?></td>
-                    <td class="text-right"><?= formatCurrency((float) $item['unit_price']) ?></td>
-                    <td class="text-right"><?= number_format((float) $item['discount_pct'], 1) ?>%</td>
-                    <td class="text-right"><?= formatCurrency((float) $item['total_price']) ?></td>
-                </tr>
-                <?php endforeach; ?>
-                </tbody>
-                <tfoot>
-                    <tr style="background:#e8e8e8"><td colspan="7" class="text-right" style="padding:6px 10px;font-weight:600">Subtotal:</td><td class="text-right" style="padding:6px 10px"><?= formatCurrency((float) $inv['subtotal']) ?></td></tr>
-                    <tr style="background:#e8e8e8"><td colspan="7" class="text-right" style="padding:4px 10px;font-size:11px">Tax (<?= h($inv['tax_percent']) ?>%):</td><td class="text-right" style="padding:4px 10px;font-size:11px"><?= formatCurrency((float) $inv['subtotal'] * (float) $inv['tax_percent'] / 100) ?></td></tr>
-                    <tr style="background:#e8e8e8"><td colspan="7" class="text-right" style="padding:4px 10px;font-size:11px">Discount:</td><td class="text-right" style="padding:4px 10px;font-size:11px">(<?= formatCurrency((float) $inv['discount']) ?>)</td></tr>
-                    <tr style="background:#d0d0d0;font-weight:700;font-size:16px"><td colspan="7" class="text-right" style="padding:8px 10px">TOTAL:</td><td class="text-right" style="padding:8px 10px"><?= formatCurrency((float) $inv['total_amount']) ?></td></tr>
-                </tfoot>
-            </table></div>
+            <div class="tbl-wrap">
+                <table class="tbl">
+                    <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>SKU</th>
+                        <th>Product</th>
+                        <th>Unit</th>
+                        <th class="text-right">Qty</th>
+                        <th class="text-right">Unit Price</th>
+                        <th class="text-right">Disc %</th>
+                        <th class="text-right">Total</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php $rn = 0;
+                    foreach ($items as $item):
+                        $rn++; ?>
+                        <tr>
+                            <td><?= $rn ?></td>
+                            <td><code style="font-size:10px"><?= h($item['sku']) ?></code></td>
+                            <td><?= h($item['product_name']) ?></td>
+                            <td><?= h($item['unit']) ?></td>
+                            <td class="text-right"><?= number_format((int) $item['quantity']) ?></td>
+                            <td class="text-right"><?= formatCurrency((float) $item['unit_price']) ?></td>
+                            <td class="text-right"><?= number_format((float) $item['discount_pct'], 1) ?>%</td>
+                            <td class="text-right"><?= formatCurrency((float) $item['total_price']) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                    <tfoot>
+                    <tr style="background:#e8e8e8">
+                        <td colspan="7" class="text-right" style="padding:6px 10px;font-weight:600">Subtotal:</td>
+                        <td class="text-right"
+                            style="padding:6px 10px"><?= formatCurrency((float) $inv['subtotal']) ?></td>
+                    </tr>
+                    <tr style="background:#e8e8e8">
+                        <td colspan="7" class="text-right" style="padding:4px 10px;font-size:11px">Tax
+                            (<?= h($inv['tax_percent']) ?>%):
+                        </td>
+                        <td class="text-right"
+                            style="padding:4px 10px;font-size:11px"><?= formatCurrency((float) $inv['subtotal'] * (float) $inv['tax_percent'] / 100) ?></td>
+                    </tr>
+                    <tr style="background:#e8e8e8">
+                        <td colspan="7" class="text-right" style="padding:4px 10px;font-size:11px">Discount:</td>
+                        <td class="text-right" style="padding:4px 10px;font-size:11px">
+                            (<?= formatCurrency((float) $inv['discount']) ?>)
+                        </td>
+                    </tr>
+                    <tr style="background:#d0d0d0;font-weight:700;font-size:16px">
+                        <td colspan="7" class="text-right" style="padding:8px 10px">TOTAL:</td>
+                        <td class="text-right"
+                            style="padding:8px 10px"><?= formatCurrency((float) $inv['total_amount']) ?></td>
+                    </tr>
+                    </tfoot>
+                </table>
+            </div>
             <div style="display:flex; justify-content:flex-end; margin-top:16px;">
                 <table style="width:300px; font-size:13px;">
-                    <tr><td style="padding:4px; color:#666;">Total Amount:</td><td class="text-right" style="padding:4px; font-weight:700;"><?= formatCurrency((float) $inv['total_amount']) ?></td></tr>
-                    <tr><td style="padding:4px; color:#666;">Total Paid:</td><td class="text-right" style="padding:4px; font-weight:700; color:#5cb85c;"><?= formatCurrency($totalPaid) ?></td></tr>
-                    <tr style="border-top:2px solid #ccc;"><td style="padding:6px 4px; font-weight:700;">Balance Due:</td><td class="text-right" style="padding:6px 4px; font-weight:700; color:#d9534f; font-size:16px;"><?= formatCurrency($balanceDue) ?></td></tr>
+                    <tr>
+                        <td style="padding:4px; color:#666;">Total Amount:</td>
+                        <td class="text-right"
+                            style="padding:4px; font-weight:700;"><?= formatCurrency((float) $inv['total_amount']) ?></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:4px; color:#666;">Total Paid:</td>
+                        <td class="text-right"
+                            style="padding:4px; font-weight:700; color:#5cb85c;"><?= formatCurrency($totalPaid) ?></td>
+                    </tr>
+                    <tr style="border-top:2px solid #ccc;">
+                        <td style="padding:6px 4px; font-weight:700;">Balance Due:</td>
+                        <td class="text-right"
+                            style="padding:6px 4px; font-weight:700; color:#d9534f; font-size:16px;"><?= formatCurrency($balanceDue) ?></td>
+                    </tr>
                 </table>
             </div>
-            <?php if ($inv['notes']): ?><div style="margin-top:12px;font-size:12px"><strong>Notes:</strong> <?= h($inv['notes']) ?></div><?php endif; ?>
+            <?php if ($inv['notes']): ?>
+                <div style="margin-top:12px;font-size:12px"><strong>Notes:</strong> <?= h($inv['notes']) ?>
+                </div><?php endif; ?>
             <?php if (!empty($receipts)): ?>
-            <div class="no-print mt-8">
-                <h4 style="font-size:14px; margin-bottom:8px; border-bottom:1px solid #ccc; padding-bottom:4px;">Payment Receipts</h4>
-                <table class="tbl">
-                    <thead><tr><th>Receipt#</th><th>Date</th><th>Method</th><th>Reference</th><th class="text-right">Amount</th></tr></thead>
-                    <tbody>
+                <div class="no-print mt-8">
+                    <h4 style="font-size:14px; margin-bottom:8px; border-bottom:1px solid #ccc; padding-bottom:4px;">
+                        Payment Receipts</h4>
+                    <table class="tbl">
+                        <thead>
+                        <tr>
+                            <th>Receipt#</th>
+                            <th>Date</th>
+                            <th>Method</th>
+                            <th>Reference</th>
+                            <th class="text-right">Amount</th>
+                        </tr>
+                        </thead>
+                        <tbody>
                         <?php foreach ($receipts as $r): ?>
-                        <tr><td><?= h($r['receipt_number']) ?></td><td><?= h($r['payment_date']) ?></td><td><?= h(ucfirst($r['method'])) ?></td><td><?= h($r['reference'] ?? '-') ?></td><td class="text-right" style="color:#5cb85c;font-weight:700"><?= formatCurrency((float) $r['amount']) ?></td></tr>
+                            <tr>
+                                <td><?= h($r['receipt_number']) ?></td>
+                                <td><?= h($r['payment_date']) ?></td>
+                                <td><?= h(ucfirst($r['method'])) ?></td>
+                                <td><?= h($r['reference'] ?? '-') ?></td>
+                                <td class="text-right"
+                                    style="color:#5cb85c;font-weight:700"><?= formatCurrency((float) $r['amount']) ?></td>
+                            </tr>
                         <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
+                        </tbody>
+                    </table>
+                </div>
             <?php endif; ?>
-            <div class="print-only" style="margin-top:30px;font-size:11px;text-align:center;color:#888;border-top:1px solid #ccc;padding-top:8px">Thank you for your business! &bull; <?= h($companyName) ?></div>
+            <div class="print-only"
+                 style="margin-top:30px;font-size:11px;text-align:center;color:#888;border-top:1px solid #ccc;padding-top:8px">
+                Thank you for your business! &bull; <?= h($companyName) ?></div>
         </div>
         <?php if ($inv['payment_status'] !== 'paid'): ?>
         <div id="paymentModal" class="modal-overlay no-print">
             <div class="modal" style="max-width:400px;">
-                <div class="modal-title-bar"><span>Record Payment</span><button class="modal-close-btn" onclick="closeModal('paymentModal')">&times;</button></div>
+                <div class="modal-title-bar"><span>Record Payment</span>
+                    <button class="modal-close-btn" onclick="closeModal('paymentModal')">&times;</button>
+                </div>
                 <form method="POST">
                     <?= csrfField() ?>
                     <input type="hidden" name="add_payment" value="1">
@@ -4431,7 +6900,8 @@ function renderSales(): void
                     <div class="modal-body">
                         <div class="form-group mb-8">
                             <label>Amount to Pay (Due: <?= formatCurrency($balanceDue) ?>)</label>
-                            <input type="number" name="amount" step="0.01" min="0.01" max="<?= $balanceDue ?>" value="<?= $balanceDue ?>" class="form-control" required>
+                            <input type="number" name="amount" step="0.01" min="0.01" max="<?= $balanceDue ?>"
+                                   value="<?= $balanceDue ?>" class="form-control" required>
                         </div>
                         <div class="form-group mb-8">
                             <label>Payment Method</label>
@@ -4444,17 +6914,20 @@ function renderSales(): void
                         </div>
                         <div class="form-group">
                             <label>Reference (Optional)</label>
-                            <input type="text" name="reference" class="form-control" placeholder="Transaction ID, Check #...">
+                            <input type="text" name="reference" class="form-control"
+                                   placeholder="Transaction ID, Check #...">
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('paymentModal')">Cancel</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('paymentModal')">
+                            Cancel
+                        </button>
                         <button type="submit" class="btn btn-success btn-sm">Save Payment</button>
                     </div>
                 </form>
             </div>
         </div>
-        <?php endif; ?>
+    <?php endif; ?>
         <?php
         $content = ob_get_clean();
         renderLayout('Invoice: ' . $inv['invoice_number'], $content, 'sales');
@@ -4475,43 +6948,89 @@ function renderAdjustments(): void
         $adjs = $stmt->fetchAll();
         ob_start();
         ?>
-        <div class="page-header"><h1>&#9881; Stock Adjustments</h1><div class="page-header-actions"><a href="?page=adjustments&action=new" class="btn btn-success btn-sm">+ New Adjustment</a></div></div>
-        <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
+        <div class="page-header"><h1>&#9881; Stock Adjustments</h1>
+            <div class="page-header-actions"><a href="?page=adjustments&action=new" class="btn btn-success btn-sm">+ New
+                    Adjustment</a></div>
+        </div>
+        <?php if (isset($_SESSION['flash_msg'])): ?>
+        <div
+        class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
-        <div class="tbl-wrap"><table class="tbl">
-            <thead><tr><th>Ref#</th><th>Product</th><th>Type</th><th class="text-right">Qty</th><th class="text-right">Before</th><th class="text-right">After</th><th>Reason</th><th>Requested By</th><th>Status</th><th>Actions</th></tr></thead>
-            <tbody>
-            <?php if (empty($adjs)): ?><tr><td colspan="10" class="text-center" style="padding:16px;color:#888">No adjustments found</td></tr>
-            <?php else:
+        <div class="tbl-wrap">
+            <table class="tbl">
+                <thead>
+                <tr>
+                    <th>Ref#</th>
+                    <th>Product</th>
+                    <th>Type</th>
+                    <th class="text-right">Qty</th>
+                    <th class="text-right">Before</th>
+                    <th class="text-right">After</th>
+                    <th>Reason</th>
+                    <th>Requested By</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php if (empty($adjs)): ?>
+                    <tr>
+                        <td colspan="10" class="text-center" style="padding:16px;color:#888">No adjustments found</td>
+                    </tr>
+                <?php else:
             foreach ($adjs as $a):
                 $sBadge = ['pending' => 'warning', 'approved' => 'success', 'rejected' => 'danger'][$a['status']] ?? 'secondary'; ?>
-            <tr>
-                <td><code style="font-size:10px"><?= h($a['reference_no']) ?></code></td>
-                <td><?= h($a['product_name']) ?><br><small style="color:#888"><?= h($a['sku']) ?></small></td>
-                <td><?= h(str_replace('_', ' ', strtoupper($a['adjustment_type']))) ?></td>
-                <td class="text-right <?= in_array($a['adjustment_type'], ['addition', 'opening_stock']) ? 'stock-ok' : 'stock-critical' ?>"><?= number_format((int) $a['quantity']) ?></td>
-                <td class="text-right"><?= number_format((int) $a['before_stock']) ?></td>
-                <td class="text-right"><?= number_format((int) $a['after_stock']) ?></td>
-                <td><?= h(substr($a['reason'] ?? '-', 0, 40)) ?></td>
-                <td><?= h($a['req_name']) ?></td>
-                <td><span class="badge badge-<?= $sBadge ?>"><?= h(strtoupper($a['status'])) ?></span></td>
-                <td><?php if ($a['status'] === 'pending' && canAccess(['admin', 'manager'])): ?>
-                    <div class="tbl-actions">
-                        <button onclick="approveAdj(<?= $a['id'] ?>)" class="btn btn-success btn-xs">&#10003;</button>
-                        <button onclick="rejectAdj(<?= $a['id'] ?>)" class="btn btn-danger btn-xs">&#215;</button>
-                    </div>
-                <?php endif; ?></td>
-            </tr>
-            <?php endforeach;
+                        <tr>
+                            <td><code style="font-size:10px"><?= h($a['reference_no']) ?></code></td>
+                            <td><?= h($a['product_name']) ?><br><small style="color:#888"><?= h($a['sku']) ?></small>
+                            </td>
+                            <td><?= h(str_replace('_', ' ', strtoupper($a['adjustment_type']))) ?></td>
+                            <td class="text-right <?= in_array($a['adjustment_type'], ['addition', 'opening_stock']) ? 'stock-ok' : 'stock-critical' ?>"><?= number_format((int) $a['quantity']) ?></td>
+                            <td class="text-right"><?= number_format((int) $a['before_stock']) ?></td>
+                            <td class="text-right"><?= number_format((int) $a['after_stock']) ?></td>
+                            <td><?= h(substr($a['reason'] ?? '-', 0, 40)) ?></td>
+                            <td><?= h($a['req_name']) ?></td>
+                            <td><span class="badge badge-<?= $sBadge ?>"><?= h(strtoupper($a['status'])) ?></span></td>
+                            <td><?php if ($a['status'] === 'pending' && canAccess(['admin', 'manager'])): ?>
+                                    <div class="tbl-actions">
+                                        <button onclick="approveAdj(<?= $a['id'] ?>)" class="btn btn-success btn-xs">
+                                            &#10003;
+                                        </button>
+                                        <button onclick="rejectAdj(<?= $a['id'] ?>)" class="btn btn-danger btn-xs">
+                                            &#215;
+                                        </button>
+                                    </div>
+                                <?php endif; ?></td>
+                        </tr>
+                    <?php endforeach;
         endif; ?>
-            </tbody>
-        </table></div>
-        <?= paginationHtml($pag, '?page=adjustments') ?>
+                </tbody>
+            </table>
+        </div>
+    <?= paginationHtml($pag, '?page=adjustments') ?>
         <script>
-        function approveAdj(id){ confirmAction('Approve this stock adjustment? Stock will be updated.',function(){ apiPost('?ajax=approve_adj',{id:id},function(d){ showToast('Adjustment approved.','success'); setTimeout(function(){ location.reload(); },800); }); },'Approve Adjustment'); }
-        function rejectAdj(id){ confirmAction('Reject this adjustment?',function(){ apiPost('?ajax=reject_adj',{id:id},function(d){ showToast('Adjustment rejected.','success'); setTimeout(function(){ location.reload(); },800); }); },'Reject Adjustment'); }
+            function approveAdj(id) {
+                confirmAction('Approve this stock adjustment? Stock will be updated.', function () {
+                    apiPost('?ajax=approve_adj', {id: id}, function (d) {
+                        showToast('Adjustment approved.', 'success');
+                        setTimeout(function () {
+                            location.reload();
+                        }, 800);
+                    });
+                }, 'Approve Adjustment');
+            }
+            function rejectAdj(id) {
+                confirmAction('Reject this adjustment?', function () {
+                    apiPost('?ajax=reject_adj', {id: id}, function (d) {
+                        showToast('Adjustment rejected.', 'success');
+                        setTimeout(function () {
+                            location.reload();
+                        }, 800);
+                    });
+                }, 'Reject Adjustment');
+            }
         </script>
-        <?php
+    <?php
         $content = ob_get_clean();
         renderLayout('Stock Adjustments', $content, 'adjustments');
     } elseif ($action === 'new') {
@@ -4554,10 +7073,18 @@ function renderAdjustments(): void
         }
         ob_start();
         ?>
-        <div class="page-header"><h1>+ New Stock Adjustment</h1><div class="page-header-actions"><a href="?page=adjustments" class="btn btn-secondary btn-sm">&#8592; Back</a></div></div>
-        <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
+        <div class="page-header"><h1>+ New Stock Adjustment</h1>
+            <div class="page-header-actions"><a href="?page=adjustments" class="btn btn-secondary btn-sm">&#8592;
+                    Back</a></div>
+        </div>
+        <?php if (isset($_SESSION['flash_msg'])): ?>
+        <div
+        class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
-        <?php if (!canAccess(['admin', 'manager'])): ?><div class="alert alert-info">&#128274; As Staff, adjustments require Manager or Admin approval before stock is updated.</div><?php endif; ?>
+        <?php if (!canAccess(['admin', 'manager'])): ?>
+        <div class="alert alert-info">&#128274; As Staff, adjustments require Manager or Admin approval before stock is
+            updated.
+        </div><?php endif; ?>
         <form method="POST" action="?page=adjustments&action=new">
             <?= csrfField() ?>
             <div class="lf"><span class="lf-title">Adjustment Details</span>
@@ -4565,10 +7092,15 @@ function renderAdjustments(): void
                     <div class="form-group"><label>Product <span class="required-mark">*</span></label>
                         <select name="product_id" id="adj-product" onchange="updateAdjStock()" required>
                             <option value="">-- Select Product --</option>
-                            <?php foreach ($products as $pr): ?><option value="<?= $pr['id'] ?>" data-stock="<?= $pr['current_stock'] ?>" data-unit="<?= h($pr['unit']) ?>" <?= $preProductId == $pr['id'] ? 'selected' : '' ?>><?= h($pr['name'] . ' (' . $pr['sku'] . ')') ?></option><?php endforeach; ?>
+                            <?php foreach ($products as $pr): ?>
+                                <option value="<?= $pr['id'] ?>" data-stock="<?= $pr['current_stock'] ?>"
+                                        data-unit="<?= h($pr['unit']) ?>" <?= $preProductId == $pr['id'] ? 'selected' : '' ?>><?= h($pr['name'] . ' (' . $pr['sku'] . ')') ?></option><?php endforeach; ?>
                         </select>
                     </div>
-                    <div class="form-group"><label>Current Stock</label><input type="text" id="adj-current-stock" readonly style="background:#e8e8e8;font-weight:700;font-size:14px" value="-"></div>
+                    <div class="form-group"><label>Current Stock</label><input type="text" id="adj-current-stock"
+                                                                               readonly
+                                                                               style="background:#e8e8e8;font-weight:700;font-size:14px"
+                                                                               value="-"></div>
                     <div class="form-group"><label>Adjustment Type <span class="required-mark">*</span></label>
                         <select name="adjustment_type" id="adj-type" onchange="updateAdjPreview()">
                             <option value="addition">Addition (+ Stock)</option>
@@ -4579,34 +7111,43 @@ function renderAdjustments(): void
                             <option value="opening_stock">Opening Stock (+ Stock)</option>
                         </select>
                     </div>
-                    <div class="form-group"><label>Quantity <span class="required-mark">*</span></label><input type="number" name="quantity" id="adj-qty" min="1" value="1" oninput="updateAdjPreview()" required></div>
-                    <div class="form-group"><label>New Stock Preview</label><input type="text" id="adj-new-stock" readonly style="background:#e8e8e8;font-weight:700;font-size:14px;color:#4a90d9" value="-"></div>
-                    <div class="form-group full"><label>Reason / Notes</label><textarea name="reason" rows="2" placeholder="Reason for adjustment..."></textarea></div>
+                    <div class="form-group"><label>Quantity <span class="required-mark">*</span></label><input
+                                type="number" name="quantity" id="adj-qty" min="1" value="1"
+                                oninput="updateAdjPreview()" required></div>
+                    <div class="form-group"><label>New Stock Preview</label><input type="text" id="adj-new-stock"
+                                                                                   readonly
+                                                                                   style="background:#e8e8e8;font-weight:700;font-size:14px;color:#4a90d9"
+                                                                                   value="-"></div>
+                    <div class="form-group full"><label>Reason / Notes</label><textarea name="reason" rows="2"
+                                                                                        placeholder="Reason for adjustment..."></textarea>
+                    </div>
                 </div>
             </div>
-            <div style="display:flex;gap:8px"><button type="submit" class="btn btn-success">&#10003; Submit Adjustment</button><a href="?page=adjustments" class="btn btn-secondary">Cancel</a></div>
+            <div style="display:flex;gap:8px">
+                <button type="submit" class="btn btn-success">&#10003; Submit Adjustment</button>
+                <a href="?page=adjustments" class="btn btn-secondary">Cancel</a></div>
         </form>
         <script>
-        function updateAdjStock(){
-            var sel=document.getElementById('adj-product');
-            var opt=sel.options[sel.selectedIndex];
-            var stk=opt.dataset.stock||0;
-            document.getElementById('adj-current-stock').value=stk+' '+(opt.dataset.unit||'');
-            updateAdjPreview();
-        }
-        function updateAdjPreview(){
-            var sel=document.getElementById('adj-product');
-            var opt=sel.options[sel.selectedIndex];
-            var stk=parseInt(opt.dataset.stock||0);
-            var qty=parseInt(document.getElementById('adj-qty').value)||0;
-            var type=document.getElementById('adj-type').value;
-            var addTypes=['addition','opening_stock'];
-            var newStk=addTypes.includes(type)?stk+qty:Math.max(0,stk-qty);
-            var el=document.getElementById('adj-new-stock');
-            el.value=newStk+' '+(opt.dataset.unit||'');
-            el.style.color=newStk<=0?'#d9534f':(newStk<5?'#f0ad4e':'#5cb85c');
-        }
-        if(document.getElementById('adj-product').value) updateAdjStock();
+            function updateAdjStock() {
+                var sel = document.getElementById('adj-product');
+                var opt = sel.options[sel.selectedIndex];
+                var stk = opt.dataset.stock || 0;
+                document.getElementById('adj-current-stock').value = stk + ' ' + (opt.dataset.unit || '');
+                updateAdjPreview();
+            }
+            function updateAdjPreview() {
+                var sel = document.getElementById('adj-product');
+                var opt = sel.options[sel.selectedIndex];
+                var stk = parseInt(opt.dataset.stock || 0);
+                var qty = parseInt(document.getElementById('adj-qty').value) || 0;
+                var type = document.getElementById('adj-type').value;
+                var addTypes = ['addition', 'opening_stock'];
+                var newStk = addTypes.includes(type) ? stk + qty : Math.max(0, stk - qty);
+                var el = document.getElementById('adj-new-stock');
+                el.value = newStk + ' ' + (opt.dataset.unit || '');
+                el.style.color = newStk <= 0 ? '#d9534f' : (newStk < 5 ? '#f0ad4e' : '#5cb85c');
+            }
+            if (document.getElementById('adj-product').value) updateAdjStock();
         </script>
         <?php
         $content = ob_get_clean();
@@ -4630,42 +7171,88 @@ function renderTransfers(): void
         $transfers = $stmt->fetchAll();
         ob_start();
         ?>
-        <div class="page-header"><h1>&#8644; Stock Transfers</h1><div class="page-header-actions"><a href="?page=transfers&action=new" class="btn btn-success btn-sm">+ New Transfer</a></div></div>
-        <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
+        <div class="page-header"><h1>&#8644; Stock Transfers</h1>
+            <div class="page-header-actions"><a href="?page=transfers&action=new" class="btn btn-success btn-sm">+ New
+                    Transfer</a></div>
+        </div>
+        <?php if (isset($_SESSION['flash_msg'])): ?>
+        <div
+        class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
-        <div class="tbl-wrap"><table class="tbl">
-            <thead><tr><th>Ref#</th><th>From</th><th>To</th><th>Date</th><th>Status</th><th>Created By</th><th>Actions</th></tr></thead>
-            <tbody>
-            <?php if (empty($transfers)): ?><tr><td colspan="7" class="text-center" style="padding:16px;color:#888">No transfers found</td></tr>
-            <?php else:
+        <div class="tbl-wrap">
+            <table class="tbl">
+                <thead>
+                <tr>
+                    <th>Ref#</th>
+                    <th>From</th>
+                    <th>To</th>
+                    <th>Date</th>
+                    <th>Status</th>
+                    <th>Created By</th>
+                    <th>Actions</th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php if (empty($transfers)): ?>
+                    <tr>
+                        <td colspan="7" class="text-center" style="padding:16px;color:#888">No transfers found</td>
+                    </tr>
+                <?php else:
             foreach ($transfers as $t):
                 $sBadge = ['pending' => 'warning', 'in_transit' => 'info', 'completed' => 'success', 'cancelled' => 'danger'][$t['status']] ?? 'secondary'; ?>
-            <tr>
-                <td><code style="font-size:10px"><?= h($t['reference_no']) ?></code></td>
-                <td><?= h($t['from_name']) ?></td>
-                <td><?= h($t['to_name']) ?></td>
-                <td><?= h($t['transfer_date']) ?></td>
-                <td><span class="badge badge-<?= $sBadge ?>"><?= h(str_replace('_', ' ', strtoupper($t['status']))) ?></span></td>
-                <td><?= h($t['created_by_name']) ?></td>
-                <td><div class="tbl-actions">
-                    <?php if ($t['status'] === 'pending'): ?>
-                    <button onclick="completeTransfer(<?= $t['id'] ?>)" class="btn btn-success btn-xs">&#10003; Complete</button>
-                    <button onclick="cancelTransfer(<?= $t['id'] ?>)" class="btn btn-danger btn-xs">&#215; Cancel</button>
-                    <?php else: ?>
-                    <span style="font-size:11px;color:#888"><?= h(strtoupper($t['status'])) ?></span>
-                    <?php endif; ?>
-                </div></td>
-            </tr>
-            <?php endforeach;
+                        <tr>
+                            <td><code style="font-size:10px"><?= h($t['reference_no']) ?></code></td>
+                            <td><?= h($t['from_name']) ?></td>
+                            <td><?= h($t['to_name']) ?></td>
+                            <td><?= h($t['transfer_date']) ?></td>
+                            <td>
+                                <span class="badge badge-<?= $sBadge ?>"><?= h(str_replace('_', ' ', strtoupper($t['status']))) ?></span>
+                            </td>
+                            <td><?= h($t['created_by_name']) ?></td>
+                            <td>
+                                <div class="tbl-actions">
+                                    <?php if ($t['status'] === 'pending'): ?>
+                                        <button onclick="completeTransfer(<?= $t['id'] ?>)"
+                                                class="btn btn-success btn-xs">&#10003; Complete
+                                        </button>
+                                        <button onclick="cancelTransfer(<?= $t['id'] ?>)" class="btn btn-danger btn-xs">
+                                            &#215; Cancel
+                                        </button>
+                                    <?php else: ?>
+                                        <span style="font-size:11px;color:#888"><?= h(strtoupper($t['status'])) ?></span>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach;
         endif; ?>
-            </tbody>
-        </table></div>
-        <?= paginationHtml($pag, '?page=transfers') ?>
+                </tbody>
+            </table>
+        </div>
+    <?= paginationHtml($pag, '?page=transfers') ?>
         <script>
-        function completeTransfer(id){ confirmAction('Mark transfer as completed? Stock will be moved.',function(){ apiPost('?ajax=complete_transfer',{id:id},function(){ showToast('Transfer completed.','success'); setTimeout(function(){ location.reload(); },800); }); },'Complete Transfer'); }
-        function cancelTransfer(id){ confirmAction('Cancel this transfer?',function(){ apiPost('?ajax=cancel_transfer',{id:id},function(){ showToast('Transfer cancelled.','success'); setTimeout(function(){ location.reload(); },800); }); },'Cancel Transfer'); }
+            function completeTransfer(id) {
+                confirmAction('Mark transfer as completed? Stock will be moved.', function () {
+                    apiPost('?ajax=complete_transfer', {id: id}, function () {
+                        showToast('Transfer completed.', 'success');
+                        setTimeout(function () {
+                            location.reload();
+                        }, 800);
+                    });
+                }, 'Complete Transfer');
+            }
+            function cancelTransfer(id) {
+                confirmAction('Cancel this transfer?', function () {
+                    apiPost('?ajax=cancel_transfer', {id: id}, function () {
+                        showToast('Transfer cancelled.', 'success');
+                        setTimeout(function () {
+                            location.reload();
+                        }, 800);
+                    });
+                }, 'Cancel Transfer');
+            }
         </script>
-        <?php
+    <?php
         $content = ob_get_clean();
         renderLayout('Stock Transfers', $content, 'transfers');
     } elseif ($action === 'new') {
@@ -4701,38 +7288,88 @@ function renderTransfers(): void
         }
         ob_start();
         ?>
-        <div class="page-header"><h1>+ New Stock Transfer</h1><div class="page-header-actions"><a href="?page=transfers" class="btn btn-secondary btn-sm">&#8592; Back</a></div></div>
-        <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
+        <div class="page-header"><h1>+ New Stock Transfer</h1>
+            <div class="page-header-actions"><a href="?page=transfers" class="btn btn-secondary btn-sm">&#8592; Back</a>
+            </div>
+        </div>
+        <?php if (isset($_SESSION['flash_msg'])): ?>
+        <div
+        class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
         <form method="POST" action="?page=transfers&action=new">
             <?= csrfField() ?>
             <div class="lf"><span class="lf-title">Transfer Details</span>
                 <div class="form-grid form-grid-3">
-                    <div class="form-group"><label>From Warehouse <span class="required-mark">*</span></label><select name="from_warehouse_id" required><option value="">-- Select --</option><?php foreach ($warehouses as $w): ?><option value="<?= $w['id'] ?>"><?= h($w['name']) ?></option><?php endforeach; ?></select></div>
-                    <div class="form-group"><label>To Warehouse <span class="required-mark">*</span></label><select name="to_warehouse_id" required><option value="">-- Select --</option><?php foreach ($warehouses as $w): ?><option value="<?= $w['id'] ?>"><?= h($w['name']) ?></option><?php endforeach; ?></select></div>
-                    <div class="form-group"><label>Transfer Date <span class="required-mark">*</span></label><input type="date" name="transfer_date" value="<?= date('Y-m-d') ?>" required></div>
+                    <div class="form-group"><label>From Warehouse <span class="required-mark">*</span></label><select
+                                name="from_warehouse_id" required>
+                            <option value="">-- Select --</option><?php foreach ($warehouses as $w): ?>
+                                <option value="<?= $w['id'] ?>"><?= h($w['name']) ?></option><?php endforeach; ?>
+                        </select></div>
+                    <div class="form-group"><label>To Warehouse <span class="required-mark">*</span></label><select
+                                name="to_warehouse_id" required>
+                            <option value="">-- Select --</option><?php foreach ($warehouses as $w): ?>
+                                <option value="<?= $w['id'] ?>"><?= h($w['name']) ?></option><?php endforeach; ?>
+                        </select></div>
+                    <div class="form-group"><label>Transfer Date <span class="required-mark">*</span></label><input
+                                type="date" name="transfer_date" value="<?= date('Y-m-d') ?>" required></div>
                     <div class="form-group full"><label>Notes</label><textarea name="notes" rows="2"></textarea></div>
                 </div>
             </div>
             <div class="lf"><span class="lf-title">Items to Transfer</span>
-                <div style="margin-bottom:10px"><button type="button" onclick="addTrfRow()" class="btn btn-primary btn-sm">+ Add Product</button></div>
-                <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Product</th><th>Available Stock</th><th style="width:130px">Transfer Qty</th><th style="width:40px"></th></tr></thead>
-                <tbody id="trf-body">
-                    <tr class="trf-row"><td><select name="product_id[]" class="trf-product" onchange="updateTrfStock(this)" required style="width:100%;padding:4px;border:2px inset #a0a0a0;background:#fff"><option value="">-- Select Product --</option><?php foreach ($products as $pr): ?><option value="<?= $pr['id'] ?>" data-stock="<?= $pr['current_stock'] ?>" data-unit="<?= h($pr['unit']) ?>"><?= h($pr['name'] . ' (' . $pr['sku'] . ')') ?></option><?php endforeach; ?></select></td><td class="trf-stock text-right">-</td><td><input type="number" name="quantity[]" min="1" value="1" required style="width:90px;padding:4px;border:2px inset #a0a0a0;background:#fff"></td><td><button type="button" onclick="this.closest('tr').remove()" class="btn btn-danger btn-xs">&#215;</button></td></tr>
-                </tbody></table></div>
+                <div style="margin-bottom:10px">
+                    <button type="button" onclick="addTrfRow()" class="btn btn-primary btn-sm">+ Add Product</button>
+                </div>
+                <div class="tbl-wrap">
+                    <table class="tbl">
+                        <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Available Stock</th>
+                            <th style="width:130px">Transfer Qty</th>
+                            <th style="width:40px"></th>
+                        </tr>
+                        </thead>
+                        <tbody id="trf-body">
+                        <tr class="trf-row">
+                            <td><select name="product_id[]" class="trf-product" onchange="updateTrfStock(this)" required
+                                        style="width:100%;padding:4px;border:2px inset #a0a0a0;background:#fff">
+                                    <option value="">-- Select Product --</option><?php foreach ($products as $pr): ?>
+                                        <option value="<?= $pr['id'] ?>" data-stock="<?= $pr['current_stock'] ?>"
+                                                data-unit="<?= h($pr['unit']) ?>"><?= h($pr['name'] . ' (' . $pr['sku'] . ')') ?></option><?php endforeach; ?>
+                                </select></td>
+                            <td class="trf-stock text-right">-</td>
+                            <td><input type="number" name="quantity[]" min="1" value="1" required
+                                       style="width:90px;padding:4px;border:2px inset #a0a0a0;background:#fff"></td>
+                            <td>
+                                <button type="button" onclick="this.closest('tr').remove()"
+                                        class="btn btn-danger btn-xs">&#215;
+                                </button>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
-            <div style="display:flex;gap:8px"><button type="submit" class="btn btn-success">&#10003; Create Transfer</button><a href="?page=transfers" class="btn btn-secondary">Cancel</a></div>
+            <div style="display:flex;gap:8px">
+                <button type="submit" class="btn btn-success">&#10003; Create Transfer</button>
+                <a href="?page=transfers" class="btn btn-secondary">Cancel</a></div>
         </form>
         <script>
-        var TRF_PRODUCTS=<?= json_encode($products) ?>;
-        function addTrfRow(){
-            var opts='<option value="">-- Select Product --</option>';
-            TRF_PRODUCTS.forEach(function(p){ opts+='<option value="'+p.id+'" data-stock="'+p.current_stock+'" data-unit="'+p.unit+'">'+p.name+' ('+p.sku+')</option>'; });
-            var tr=document.createElement('tr'); tr.className='trf-row';
-            tr.innerHTML='<td><select name="product_id[]" class="trf-product" onchange="updateTrfStock(this)" required style="width:100%;padding:4px;border:2px inset #a0a0a0;background:#fff">'+opts+'</select></td><td class="trf-stock text-right">-</td><td><input type="number" name="quantity[]" min="1" value="1" required style="width:90px;padding:4px;border:2px inset #a0a0a0;background:#fff"></td><td><button type="button" onclick="this.closest(\'tr\').remove()" class="btn btn-danger btn-xs">&#215;</button></td>';
-            document.getElementById('trf-body').appendChild(tr);
-        }
-        function updateTrfStock(sel){ var opt=sel.options[sel.selectedIndex]; sel.closest('tr').querySelector('.trf-stock').textContent=(opt.dataset.stock||'-')+' '+(opt.dataset.unit||''); }
+            var TRF_PRODUCTS = <?= json_encode($products) ?>;
+            function addTrfRow() {
+                var opts = '<option value="">-- Select Product --</option>';
+                TRF_PRODUCTS.forEach(function (p) {
+                    opts += '<option value="' + p.id + '" data-stock="' + p.current_stock + '" data-unit="' + p.unit + '">' + p.name + ' (' + p.sku + ')</option>';
+                });
+                var tr = document.createElement('tr');
+                tr.className = 'trf-row';
+                tr.innerHTML = '<td><select name="product_id[]" class="trf-product" onchange="updateTrfStock(this)" required style="width:100%;padding:4px;border:2px inset #a0a0a0;background:#fff">' + opts + '</select></td><td class="trf-stock text-right">-</td><td><input type="number" name="quantity[]" min="1" value="1" required style="width:90px;padding:4px;border:2px inset #a0a0a0;background:#fff"></td><td><button type="button" onclick="this.closest(\'tr\').remove()" class="btn btn-danger btn-xs">&#215;</button></td>';
+                document.getElementById('trf-body').appendChild(tr);
+            }
+            function updateTrfStock(sel) {
+                var opt = sel.options[sel.selectedIndex];
+                sel.closest('tr').querySelector('.trf-stock').textContent = (opt.dataset.stock || '-') + ' ' + (opt.dataset.unit || '');
+            }
         </script>
         <?php
         $content = ob_get_clean();
@@ -4755,21 +7392,25 @@ function renderReports(): void
         <div class="form-group"><label>Report Type</label>
             <select onchange="window.location='?page=reports&report='+this.value+'&date_from=<?= h($dateFrom) ?>&date_to=<?= h($dateTo) ?>'">
                 <?php $rTypes = ['stock' => 'Stock Report', 'sales' => 'Sales Report', 'purchases' => 'Purchase Report', 'profit_loss' => 'Profit & Loss', 'low_stock' => 'Low Stock Report', 'valuation' => 'Inventory Valuation', 'supplier_wise' => 'Supplier-wise Purchases', 'customer_wise' => 'Customer-wise Sales', 'product_wise' => 'Product-wise Sales', 'payment_status' => 'Payment Status', 'stock_movement' => 'Stock Movement', 'dead_stock' => 'Dead Stock Report'];
-                foreach ($rTypes as $k => $v): ?><option value="<?= $k ?>" <?= $reportType === $k ? 'selected' : '' ?>><?= h($v) ?></option><?php endforeach; ?>
+                foreach ($rTypes as $k => $v): ?>
+                    <option
+                    value="<?= $k ?>" <?= $reportType === $k ? 'selected' : '' ?>><?= h($v) ?></option><?php endforeach; ?>
             </select>
         </div>
         <?php if (!in_array($reportType, ['stock', 'low_stock', 'valuation', 'dead_stock'])): ?>
-        <div class="form-group"><label>Date From</label><input type="date" id="df" value="<?= h($dateFrom) ?>"></div>
-        <div class="form-group"><label>Date To</label><input type="date" id="dt" value="<?= h($dateTo) ?>"></div>
-        <div class="form-group" style="justify-content:flex-end;flex-direction:row;align-items:flex-end;gap:6px">
-            <button class="btn btn-primary btn-sm" onclick="applyFilter()">&#128202; Run Report</button>
-        </div>
+            <div class="form-group"><label>Date From</label><input type="date" id="df" value="<?= h($dateFrom) ?>">
+            </div>
+            <div class="form-group"><label>Date To</label><input type="date" id="dt" value="<?= h($dateTo) ?>"></div>
+            <div class="form-group" style="justify-content:flex-end;flex-direction:row;align-items:flex-end;gap:6px">
+                <button class="btn btn-primary btn-sm" onclick="applyFilter()">&#128202; Run Report</button>
+            </div>
         <?php endif; ?>
         <div class="form-group" style="justify-content:flex-end;flex-direction:row;align-items:flex-end;gap:6px">
-            <a href="?page=reports&report=<?= h($reportType) ?>&date_from=<?= h($dateFrom) ?>&date_to=<?= h($dateTo) ?>&export=csv" class="btn btn-secondary btn-sm">&#8595; Export CSV</a>
+            <a href="?page=reports&report=<?= h($reportType) ?>&date_from=<?= h($dateFrom) ?>&date_to=<?= h($dateTo) ?>&export=csv"
+               class="btn btn-secondary btn-sm">&#8595; Export CSV</a>
         </div>
     </div>
-    <?php
+<?php
     if ($reportType === 'stock') {
         $rows = $pdo->query('SELECT p.*,c.name as category_name,w.name as warehouse_name FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN warehouses w ON w.id=p.warehouse_id ORDER BY p.name')->fetchAll();
         if ($exportCsv) {
@@ -4946,7 +7587,9 @@ function renderReports(): void
         echo '</tbody></table></div>';
     }
     ?>
-    <script>function applyFilter(){ window.location='?page=reports&report=<?= h($reportType) ?>&date_from='+document.getElementById('df').value+'&date_to='+document.getElementById('dt').value; }</script>
+    <script>function applyFilter() {
+            window.location = '?page=reports&report=<?= h($reportType) ?>&date_from=' + document.getElementById('df').value + '&date_to=' + document.getElementById('dt').value;
+        }</script>
     <?php
     $content = ob_get_clean();
     renderLayout('Reports', $content, 'reports');
@@ -4968,45 +7611,61 @@ function renderBarcodes(): void
     }
     ob_start();
     ?>
-    <div class="page-header"><h1>&#9644; Barcode Labels</h1><div class="page-header-actions"><button onclick="window.print()" class="btn btn-primary btn-sm no-print">&#128438; Print Labels</button></div></div>
+    <div class="page-header"><h1>&#9644; Barcode Labels</h1>
+        <div class="page-header-actions">
+            <button onclick="window.print()" class="btn btn-primary btn-sm no-print">&#128438; Print Labels</button>
+        </div>
+    </div>
     <div class="no-print lf"><span class="lf-title">Select Product</span>
         <form method="GET" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
             <input type="hidden" name="page" value="barcodes">
             <div class="form-group" style="min-width:300px"><label>Product</label>
-                <select name="product_id" required><option value="">-- Select Product --</option><?php foreach ($products as $p): ?><option value="<?= $p['id'] ?>" <?= $productId == $p['id'] ? 'selected' : '' ?>><?= h($p['name'] . ' (' . $p['sku'] . ')') ?></option><?php endforeach; ?></select>
+                <select name="product_id" required>
+                    <option value="">-- Select Product --</option><?php foreach ($products as $p): ?>
+                        <option
+                        value="<?= $p['id'] ?>" <?= $productId == $p['id'] ? 'selected' : '' ?>><?= h($p['name'] . ' (' . $p['sku'] . ')') ?></option><?php endforeach; ?>
+                </select>
             </div>
-            <div class="form-group"><label>Labels per Row</label><select name="cols" id="barcode-cols"><option value="2" <?= ($_GET['cols'] ?? '2') === '2' ? 'selected' : '' ?>>2</option><option value="3" <?= ($_GET['cols'] ?? '') === '3' ? 'selected' : '' ?>>3</option><option value="4" <?= ($_GET['cols'] ?? '') === '4' ? 'selected' : '' ?>>4</option></select></div>
+            <div class="form-group"><label>Labels per Row</label><select name="cols" id="barcode-cols">
+                    <option value="2" <?= ($_GET['cols'] ?? '2') === '2' ? 'selected' : '' ?>>2</option>
+                    <option value="3" <?= ($_GET['cols'] ?? '') === '3' ? 'selected' : '' ?>>3</option>
+                    <option value="4" <?= ($_GET['cols'] ?? '') === '4' ? 'selected' : '' ?>>4</option>
+                </select></div>
             <button type="submit" class="btn btn-primary btn-sm">Generate</button>
         </form>
     </div>
-    <?php
+<?php
     if ($selectedProduct):
         $cols = (int) ($_GET['cols'] ?? 2);
         $barcodeVal = $selectedProduct['barcode'] ?: $selectedProduct['sku'];
         $numLabels = 12;
         ?>
     <div style="display:grid;grid-template-columns:repeat(<?= $cols ?>,1fr);gap:8px;max-width:800px">
-    <?php for ($i = 0; $i < $numLabels; $i++): ?>
-    <div class="barcode-svg-wrap">
-        <div style="font-size:11px;font-weight:700;margin-bottom:4px;color:#000"><?= h(substr($selectedProduct['name'], 0, 25)) ?></div>
-        <svg class="js-barcode" jsbarcode-value="<?= h($barcodeVal) ?>" jsbarcode-height="40" jsbarcode-width="1.5" jsbarcode-fontsize="12" jsbarcode-textmargin="2" style="max-width:100%;height:auto;"></svg>
-        <div style="font-size:9px;color:#555;margin-top:2px"><?= h($selectedProduct['sku']) ?></div>
-    </div>
-    <?php endfor; ?>
+        <?php for ($i = 0; $i < $numLabels; $i++): ?>
+            <div class="barcode-svg-wrap">
+                <div style="font-size:11px;font-weight:700;margin-bottom:4px;color:#000"><?= h(substr($selectedProduct['name'], 0, 25)) ?></div>
+                <svg class="js-barcode" jsbarcode-value="<?= h($barcodeVal) ?>" jsbarcode-height="40"
+                     jsbarcode-width="1.5" jsbarcode-fontsize="12" jsbarcode-textmargin="2"
+                     style="max-width:100%;height:auto;"></svg>
+                <div style="font-size:9px;color:#555;margin-top:2px"><?= h($selectedProduct['sku']) ?></div>
+            </div>
+        <?php endfor; ?>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <script>
-        document.addEventListener("DOMContentLoaded", function() {
+        document.addEventListener("DOMContentLoaded", function () {
             if (typeof JsBarcode !== 'undefined') {
                 JsBarcode(".js-barcode").init();
             }
         });
     </script>
-    <?php elseif ($productId): ?>
+<?php elseif ($productId): ?>
     <div class="alert alert-warning">Product not found.</div>
-    <?php else: ?>
-    <div style="padding:20px;text-align:center;color:#888;font-size:13px">Select a product above to generate barcode labels.</div>
-    <?php endif; ?>
+<?php else: ?>
+    <div style="padding:20px;text-align:center;color:#888;font-size:13px">Select a product above to generate barcode
+        labels.
+    </div>
+<?php endif; ?>
     <?php
     $content = ob_get_clean();
     renderLayout('Barcodes', $content, 'barcodes');
@@ -5060,31 +7719,38 @@ function renderSettings(): void
     ob_start();
     ?>
     <div class="page-header"><h1>&#9881; Settings</h1></div>
-    <?php if ($msg): ?><div class="alert alert-<?= h($msgType) ?>"><?= h($msg) ?></div><?php endif; ?>
+    <?php if ($msg): ?>
+    <div class="alert alert-<?= h($msgType) ?>"><?= h($msg) ?></div><?php endif; ?>
     <div style="display:flex;gap:0;margin-bottom:12px;border-bottom:2px solid #a0a0a0">
         <?php $sections = ['company' => '&#127970; Company', 'invoice' => '&#128203; Invoice', 'system' => '&#9881; System', 'backup' => '&#128190; Backup'];
         foreach ($sections as $k => $v): ?>
-        <a href="?page=settings&section=<?= $k ?>" style="padding:8px 16px;text-decoration:none;font-size:12px;font-weight:600;border:1px solid #a0a0a0;border-bottom:none;background:<?= $section === $k ? '#f0f0f0' : '#d0d0d0' ?>;color:<?= $section === $k ? '#000' : '#555' ?>;margin-right:2px"><?= $v ?></a>
+            <a href="?page=settings&section=<?= $k ?>"
+               style="padding:8px 16px;text-decoration:none;font-size:12px;font-weight:600;border:1px solid #a0a0a0;border-bottom:none;background:<?= $section === $k ? '#f0f0f0' : '#d0d0d0' ?>;color:<?= $section === $k ? '#000' : '#555' ?>;margin-right:2px"><?= $v ?></a>
         <?php endforeach; ?>
     </div>
-    <?php if ($section !== 'backup' && isset($settingKeys[$section])): ?>
+<?php if ($section !== 'backup' && isset($settingKeys[$section])): ?>
     <form method="POST" action="?page=settings&section=<?= h($section) ?>">
         <?= csrfField() ?>
-        <div class="lf"><span class="lf-title"><?= ['company' => 'Company Information', 'invoice' => 'Invoice & PO Settings', 'system' => 'System Preferences'][$section] ?></span>
+        <div class="lf"><span
+                    class="lf-title"><?= ['company' => 'Company Information', 'invoice' => 'Invoice & PO Settings', 'system' => 'System Preferences'][$section] ?></span>
             <div class="form-grid form-grid-2">
-            <?php foreach ($settingKeys[$section] as $key => $label): ?>
-            <div class="form-group"><label><?= h($label) ?></label><input type="text" name="setting_<?= h($key) ?>" value="<?= h(getSetting($key)) ?>"></div>
-            <?php endforeach; ?>
+                <?php foreach ($settingKeys[$section] as $key => $label): ?>
+                    <div class="form-group"><label><?= h($label) ?></label><input type="text"
+                                                                                  name="setting_<?= h($key) ?>"
+                                                                                  value="<?= h(getSetting($key)) ?>">
+                    </div>
+                <?php endforeach; ?>
             </div>
         </div>
         <button type="submit" class="btn btn-success">&#10003; Save Settings</button>
     </form>
-    <?php elseif ($section === 'backup'): ?>
+<?php elseif ($section === 'backup'): ?>
     <div class="lf"><span class="lf-title">&#128190; Database Backup &amp; Restore</span>
         <div class="cols-2">
             <div>
                 <div style="font-size:13px;font-weight:700;margin-bottom:8px">&#8595; Download SQL Backup</div>
-                <p style="font-size:12px;color:#555;margin-bottom:10px">Downloads a full SQL dump of all tables and data. Store securely.</p>
+                <p style="font-size:12px;color:#555;margin-bottom:10px">Downloads a full SQL dump of all tables and
+                    data. Store securely.</p>
                 <form method="POST" action="?page=settings&section=backup">
                     <?= csrfField() ?>
                     <input type="hidden" name="db_backup" value="1">
@@ -5093,11 +7759,15 @@ function renderSettings(): void
             </div>
             <div>
                 <div style="font-size:13px;font-weight:700;margin-bottom:8px">&#8593; Restore from SQL File</div>
-                <p style="font-size:12px;color:#555;margin-bottom:10px">Upload a previously downloaded SQL backup file. <strong style="color:#d9534f">WARNING: This will overwrite existing data.</strong></p>
-                <form method="POST" action="?page=settings&section=backup" enctype="multipart/form-data" id="restore-form">
+                <p style="font-size:12px;color:#555;margin-bottom:10px">Upload a previously downloaded SQL backup file.
+                    <strong style="color:#d9534f">WARNING: This will overwrite existing data.</strong></p>
+                <form method="POST" action="?page=settings&section=backup" enctype="multipart/form-data"
+                      id="restore-form">
                     <?= csrfField() ?>
-                    <input type="file" name="sql_restore" accept=".sql" style="display:block;margin-bottom:8px;padding:4px;border:2px inset #a0a0a0;background:#fff;width:100%">
-                    <button type="button" onclick="confirmRestoreDB()" class="btn btn-danger">&#9888; Restore Database</button>
+                    <input type="file" name="sql_restore" accept=".sql"
+                           style="display:block;margin-bottom:8px;padding:4px;border:2px inset #a0a0a0;background:#fff;width:100%">
+                    <button type="button" onclick="confirmRestoreDB()" class="btn btn-danger">&#9888; Restore Database
+                    </button>
                 </form>
                 <?php
                 if (!empty($_FILES['sql_restore']['tmp_name']) && verifyCsrf()) {
@@ -5129,8 +7799,14 @@ function renderSettings(): void
             </div>
         </div>
     </div>
-    <script>function confirmRestoreDB(){ confirmAction('DANGER! Restoring will overwrite ALL current data. This cannot be undone. Continue?',function(){ document.getElementById(\'restore-form\').submit(); },'Confirm Database Restore'); }</script>
-    <?php endif; ?>
+    <script>function confirmRestoreDB() {
+            confirmAction('DANGER! Restoring will overwrite ALL current data. This cannot be undone. Continue?', function () {
+                document.getElementById(\'restore-form\').submit(); },'
+                Confirm
+                Database
+                Restore
+                '); }</script>
+<?php endif; ?>
     <?php
     $content = ob_get_clean();
     renderLayout('Settings', $content, 'settings');
@@ -5179,32 +7855,62 @@ function renderAuditLog(): void
     <div class="page-header"><h1>&#128196; Activity Log / Audit Trail</h1></div>
     <form method="GET"><input type="hidden" name="page" value="audit_log">
         <div class="filter-bar">
-            <div class="form-group"><label>User</label><select name="user_id"><option value="">All Users</option><?php foreach ($users as $u): ?><option value="<?= $u['id'] ?>" <?= $userId == $u['id'] ? 'selected' : '' ?>><?= h($u['full_name'] . ' (@' . $u['username'] . ')') ?></option><?php endforeach; ?></select></div>
-            <div class="form-group"><label>Module</label><select name="module"><option value="">All Modules</option><?php foreach ($modules as $m): ?><option value="<?= h($m) ?>" <?= $module === $m ? 'selected' : '' ?>><?= h(strtoupper($m)) ?></option><?php endforeach; ?></select></div>
-            <div class="form-group"><label>From</label><input type="date" name="date_from" value="<?= h($dateFrom) ?>"></div>
+            <div class="form-group"><label>User</label><select name="user_id">
+                    <option value="">All Users</option><?php foreach ($users as $u): ?>
+                        <option
+                        value="<?= $u['id'] ?>" <?= $userId == $u['id'] ? 'selected' : '' ?>><?= h($u['full_name'] . ' (@' . $u['username'] . ')') ?></option><?php endforeach; ?>
+                </select></div>
+            <div class="form-group"><label>Module</label><select name="module">
+                    <option value="">All Modules</option><?php foreach ($modules as $m): ?>
+                        <option
+                        value="<?= h($m) ?>" <?= $module === $m ? 'selected' : '' ?>><?= h(strtoupper($m)) ?></option><?php endforeach; ?>
+                </select></div>
+            <div class="form-group"><label>From</label><input type="date" name="date_from" value="<?= h($dateFrom) ?>">
+            </div>
             <div class="form-group"><label>To</label><input type="date" name="date_to" value="<?= h($dateTo) ?>"></div>
-            <div class="form-group" style="justify-content:flex-end;flex-direction:row;align-items:flex-end;gap:6px"><button type="submit" class="btn btn-primary btn-sm">Filter</button><a href="?page=audit_log" class="btn btn-secondary btn-sm">Reset</a></div>
+            <div class="form-group" style="justify-content:flex-end;flex-direction:row;align-items:flex-end;gap:6px">
+                <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+                <a href="?page=audit_log" class="btn btn-secondary btn-sm">Reset</a></div>
         </div>
     </form>
-    <div class="tbl-wrap"><table class="tbl">
-        <thead><tr><th>User</th><th>Action</th><th>Module</th><th>Description</th><th>IP Address</th><th>Date &amp; Time</th></tr></thead>
-        <tbody>
-        <?php if (empty($logs)): ?><tr><td colspan="6" class="text-center" style="padding:16px;color:#888">No activity records found</td></tr>
-        <?php else:
+    <div class="tbl-wrap">
+        <table class="tbl">
+            <thead>
+            <tr>
+                <th>User</th>
+                <th>Action</th>
+                <th>Module</th>
+                <th>Description</th>
+                <th>IP Address</th>
+                <th>Date &amp; Time</th>
+            </tr>
+            </thead>
+            <tbody>
+            <?php if (empty($logs)): ?>
+                <tr>
+                    <td colspan="6" class="text-center" style="padding:16px;color:#888">No activity records found</td>
+                </tr>
+            <?php else:
         foreach ($logs as $log):
             $actionColor = ['CREATE' => '#5cb85c', 'UPDATE' => '#f0ad4e', 'DELETE' => '#d9534f', 'LOGIN' => '#4a90d9', 'LOGOUT' => '#888', 'RECEIVE' => '#5bc0de'][$log['action']] ?? '#555'; ?>
-        <tr>
-            <td><strong><?= h($log['full_name'] ?? 'System') ?></strong><br><small style="color:#888">@<?= h($log['username'] ?? '-') ?></small></td>
-            <td><span style="display:inline-block;padding:2px 6px;background:<?= $actionColor ?>;color:#fff;font-size:10px;font-weight:700"><?= h($log['action']) ?></span></td>
-            <td><span style="font-size:11px;text-transform:uppercase;color:#555"><?= h($log['module']) ?></span></td>
-            <td style="font-size:12px;max-width:300px"><?= h($log['description']) ?></td>
-            <td style="font-size:11px;color:#888"><?= h($log['ip_address'] ?? '-') ?></td>
-            <td style="font-size:11px;white-space:nowrap"><?= h($log['created_at']) ?></td>
-        </tr>
-        <?php endforeach;
+                    <tr>
+                        <td><strong><?= h($log['full_name'] ?? 'System') ?></strong><br><small
+                                    style="color:#888">@<?= h($log['username'] ?? '-') ?></small></td>
+                        <td>
+                            <span style="display:inline-block;padding:2px 6px;background:<?= $actionColor ?>;color:#fff;font-size:10px;font-weight:700"><?= h($log['action']) ?></span>
+                        </td>
+                        <td>
+                            <span style="font-size:11px;text-transform:uppercase;color:#555"><?= h($log['module']) ?></span>
+                        </td>
+                        <td style="font-size:12px;max-width:300px"><?= h($log['description']) ?></td>
+                        <td style="font-size:11px;color:#888"><?= h($log['ip_address'] ?? '-') ?></td>
+                        <td style="font-size:11px;white-space:nowrap"><?= h($log['created_at']) ?></td>
+                    </tr>
+                <?php endforeach;
     endif; ?>
-        </tbody>
-    </table></div>
+            </tbody>
+        </table>
+    </div>
     <?= paginationHtml($pag, '?page=audit_log&user_id=' . urlencode($userId) . '&module=' . urlencode($module) . '&date_from=' . urlencode($dateFrom) . '&date_to=' . urlencode($dateTo)) ?>
     <?php
     $content = ob_get_clean();
@@ -5221,35 +7927,100 @@ function renderNotifications(): void
     ?>
     <div class="page-header"><h1>&#128276; Notifications &amp; Alerts</h1></div>
     <?php if (count($lowStockItems) > 0): ?>
-    <div class="lf"><span class="lf-title" style="color:#d9534f">&#9888; Low Stock Alerts (<?= count($lowStockItems) ?>)</span>
-        <div class="tbl-wrap"><table class="tbl"><thead><tr><th>SKU</th><th>Product</th><th class="text-right">Current</th><th class="text-right">Minimum</th><th>Action</th></tr></thead><tbody>
-        <?php foreach ($lowStockItems as $p):
-            $sc = $p['current_stock'] <= 0 ? 'critical' : 'low'; ?>
-        <tr><td><code style="font-size:10px"><?= h($p['sku']) ?></code></td><td><?= h($p['name']) ?></td><td class="text-right stock-<?= $sc ?>"><?= number_format((int) $p['current_stock']) ?></td><td class="text-right"><?= number_format((int) $p['min_stock_level']) ?></td><td><a href="?page=purchases&action=new" class="btn btn-warning btn-xs">Order</a></td></tr>
-        <?php endforeach; ?>
-        </tbody></table></div>
+    <div class="lf"><span class="lf-title"
+                          style="color:#d9534f">&#9888; Low Stock Alerts (<?= count($lowStockItems) ?>)</span>
+        <div class="tbl-wrap">
+            <table class="tbl">
+                <thead>
+                <tr>
+                    <th>SKU</th>
+                    <th>Product</th>
+                    <th class="text-right">Current</th>
+                    <th class="text-right">Minimum</th>
+                    <th>Action</th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($lowStockItems as $p):
+                    $sc = $p['current_stock'] <= 0 ? 'critical' : 'low'; ?>
+                    <tr>
+                        <td><code style="font-size:10px"><?= h($p['sku']) ?></code></td>
+                        <td><?= h($p['name']) ?></td>
+                        <td class="text-right stock-<?= $sc ?>"><?= number_format((int) $p['current_stock']) ?></td>
+                        <td class="text-right"><?= number_format((int) $p['min_stock_level']) ?></td>
+                        <td><a href="?page=purchases&action=new" class="btn btn-warning btn-xs">Order</a></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
     </div>
-    <?php else: ?><div class="alert alert-success">&#10003; No low stock alerts. All products adequately stocked.</div><?php endif; ?>
+<?php else: ?>
+    <div class="alert alert-success">&#10003; No low stock alerts. All products adequately stocked.</div><?php endif; ?>
     <?php if (count($overdueInvoices) > 0): ?>
-    <div class="lf"><span class="lf-title" style="color:#d9534f">&#128178; Overdue Receivables (<?= count($overdueInvoices) ?>)</span>
-        <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Invoice#</th><th>Customer</th><th>Due Date</th><th class="text-right">Amount</th><th>Days Overdue</th></tr></thead><tbody>
-        <?php foreach ($overdueInvoices as $inv):
-            $days = max(0, (int) floor((time() - strtotime($inv['due_date'])) / 86400)); ?>
-        <tr><td><a href="?page=sales&action=view&id=<?= $inv['id'] ?>"><?= h($inv['invoice_number']) ?></a></td><td><?= h($inv['customer_name']) ?></td><td style="color:#d9534f;font-weight:700"><?= h($inv['due_date']) ?></td><td class="text-right"><?= formatCurrency((float) $inv['total_amount']) ?></td><td class="text-right stock-critical"><?= $days ?> days</td></tr>
-        <?php endforeach; ?>
-        </tbody></table></div>
+    <div class="lf"><span class="lf-title"
+                          style="color:#d9534f">&#128178; Overdue Receivables (<?= count($overdueInvoices) ?>)</span>
+        <div class="tbl-wrap">
+            <table class="tbl">
+                <thead>
+                <tr>
+                    <th>Invoice#</th>
+                    <th>Customer</th>
+                    <th>Due Date</th>
+                    <th class="text-right">Amount</th>
+                    <th>Days Overdue</th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($overdueInvoices as $inv):
+                    $days = max(0, (int) floor((time() - strtotime($inv['due_date'])) / 86400)); ?>
+                    <tr>
+                        <td><a href="?page=sales&action=view&id=<?= $inv['id'] ?>"><?= h($inv['invoice_number']) ?></a>
+                        </td>
+                        <td><?= h($inv['customer_name']) ?></td>
+                        <td style="color:#d9534f;font-weight:700"><?= h($inv['due_date']) ?></td>
+                        <td class="text-right"><?= formatCurrency((float) $inv['total_amount']) ?></td>
+                        <td class="text-right stock-critical"><?= $days ?> days</td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
     </div>
-    <?php else: ?><div class="alert alert-success">&#10003; No overdue customer invoices.</div><?php endif; ?>
+<?php else: ?>
+    <div class="alert alert-success">&#10003; No overdue customer invoices.</div><?php endif; ?>
     <?php if (count($overduePOs) > 0): ?>
-    <div class="lf"><span class="lf-title" style="color:#f0ad4e">&#128667; Overdue Supplier Payments (<?= count($overduePOs) ?>)</span>
-        <div class="tbl-wrap"><table class="tbl"><thead><tr><th>PO#</th><th>Supplier</th><th>Expected By</th><th class="text-right">Amount</th><th>Days Overdue</th></tr></thead><tbody>
-        <?php foreach ($overduePOs as $po):
-            $days = max(0, (int) floor((time() - strtotime($po['expected_delivery'])) / 86400)); ?>
-        <tr><td><a href="?page=purchases&action=view&id=<?= $po['id'] ?>"><?= h($po['po_number']) ?></a></td><td><?= h($po['company_name']) ?></td><td style="color:#f0ad4e;font-weight:700"><?= h($po['expected_delivery']) ?></td><td class="text-right"><?= formatCurrency((float) $po['total_amount']) ?></td><td class="text-right stock-low"><?= $days ?> days</td></tr>
-        <?php endforeach; ?>
-        </tbody></table></div>
+    <div class="lf"><span class="lf-title"
+                          style="color:#f0ad4e">&#128667; Overdue Supplier Payments (<?= count($overduePOs) ?>)</span>
+        <div class="tbl-wrap">
+            <table class="tbl">
+                <thead>
+                <tr>
+                    <th>PO#</th>
+                    <th>Supplier</th>
+                    <th>Expected By</th>
+                    <th class="text-right">Amount</th>
+                    <th>Days Overdue</th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($overduePOs as $po):
+                    $days = max(0, (int) floor((time() - strtotime($po['expected_delivery'])) / 86400)); ?>
+                    <tr>
+                        <td><a href="?page=purchases&action=view&id=<?= $po['id'] ?>"><?= h($po['po_number']) ?></a>
+                        </td>
+                        <td><?= h($po['company_name']) ?></td>
+                        <td style="color:#f0ad4e;font-weight:700"><?= h($po['expected_delivery']) ?></td>
+                        <td class="text-right"><?= formatCurrency((float) $po['total_amount']) ?></td>
+                        <td class="text-right stock-low"><?= $days ?> days</td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
     </div>
-    <?php else: ?><div class="alert alert-success">&#10003; No overdue supplier payment alerts.</div><?php endif; ?>
+<?php else: ?>
+    <div class="alert alert-success">&#10003; No overdue supplier payment alerts.</div><?php endif; ?>
     <?php
     $content = ob_get_clean();
     renderLayout('Notifications', $content, 'notifications');
@@ -5559,38 +8330,73 @@ if (!empty($_GET['ajax'])) {
             $modules[$p['module']][] = $p;
         ob_start();
         ?>
-        <div class="page-header"><h1>&#128272; Roles & Permissions</h1><div class="page-header-actions"><button class="btn btn-primary btn-sm" onclick="newRole()">+ New Role</button></div></div>
-        <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
+    <div class="page-header"><h1>&#128272; Roles & Permissions</h1>
+        <div class="page-header-actions">
+            <button class="btn btn-primary btn-sm" onclick="newRole()">+ New Role</button>
+        </div>
+    </div>
+    <?php if (isset($_SESSION['flash_msg'])): ?>
+    <div
+    class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
-        <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Role</th><th>Description</th><th>Permissions</th><th>Actions</th></tr></thead><tbody>
-        <?php foreach ($roles as $r) {
-            $cnt = $pdo->prepare('SELECT COUNT(*) FROM role_permissions WHERE role_id=?');
-            $cnt->execute([$r['id']]);
-            $rolePerms = $pdo->prepare('SELECT permission_id FROM role_permissions WHERE role_id=?');
-            $rolePerms->execute([$r['id']]);
-            $rpJson = htmlspecialchars(json_encode($rolePerms->fetchAll(PDO::FETCH_COLUMN)), ENT_QUOTES, 'UTF-8');
-            echo '<tr><td>' . h($r['name']) . '</td><td>' . h($r['description']) . '</td><td>' . $cnt->fetchColumn() . ' permissions</td>';
-            echo '<td><button class="btn btn-warning btn-xs" onclick="editRole(' . $r['id'] . ", '" . h(addslashes($r['name'])) . "', '" . h(addslashes($r['description'])) . "', " . $rpJson . ')">&#9998; Edit</button></td></tr>';
-        } ?>
-        </tbody></table></div>
-        <div id="roleModal" class="modal-overlay"><div class="modal wide"><div class="modal-title-bar"><span id="roleTitle">New Role</span><button class="modal-close-btn" onclick="closeModal('roleModal')">&times;</button></div>
-        <div class="modal-body"><form id="roleForm" method="POST" action="?page=roles"><?= csrfField() ?><input type="hidden" name="id" id="roleId"><div class="form-group"><label>Name</label><input type="text" name="name" required></div>
-        <div class="form-group"><label>Description</label><input type="text" name="description"></div><hr><h5>Permissions</h5><div class="cols-3">
-        <?php foreach ($modules as $mod => $list) {
-            echo '<div style="margin-bottom:10px"><strong>' . ucfirst($mod) . '</strong><br>';
-            foreach ($list as $p) {
-                echo '<label style="display:block;font-weight:normal;font-size:12px"><input type="checkbox" name="perms[]" value="' . $p['id'] . '"> ' . h($p['display_name']) . '</label>';
-            }
-            echo '</div>';
-        } ?>
-        </div></div><div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('roleModal')">Cancel</button><button type="submit" class="btn btn-success btn-sm">Save</button></form></div></div></div>
-        <script>
+    <div class="tbl-wrap">
+        <table class="tbl">
+            <thead>
+            <tr>
+                <th>Role</th>
+                <th>Description</th>
+                <th>Permissions</th>
+                <th>Actions</th>
+            </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($roles as $r) {
+                $cnt = $pdo->prepare('SELECT COUNT(*) FROM role_permissions WHERE role_id=?');
+                $cnt->execute([$r['id']]);
+                $rolePerms = $pdo->prepare('SELECT permission_id FROM role_permissions WHERE role_id=?');
+                $rolePerms->execute([$r['id']]);
+                $rpJson = htmlspecialchars(json_encode($rolePerms->fetchAll(PDO::FETCH_COLUMN)), ENT_QUOTES, 'UTF-8');
+                echo '<tr><td>' . h($r['name']) . '</td><td>' . h($r['description']) . '</td><td>' . $cnt->fetchColumn() . ' permissions</td>';
+                echo '<td><button class="btn btn-warning btn-xs" onclick="editRole(' . $r['id'] . ", '" . h(addslashes($r['name'])) . "', '" . h(addslashes($r['description'])) . "', " . $rpJson . ')">&#9998; Edit</button></td></tr>';
+            } ?>
+            </tbody>
+        </table>
+    </div>
+    <div id="roleModal" class="modal-overlay">
+        <div class="modal wide">
+            <div class="modal-title-bar"><span id="roleTitle">New Role</span>
+                <button class="modal-close-btn" onclick="closeModal('roleModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="roleForm" method="POST" action="?page=roles"><?= csrfField() ?><input type="hidden" name="id"
+                                                                                                id="roleId">
+                    <div class="form-group"><label>Name</label><input type="text" name="name" required></div>
+                    <div class="form-group"><label>Description</label><input type="text" name="description"></div>
+                    <hr>
+                    <h5>Permissions</h5>
+                    <div class="cols-3">
+                        <?php foreach ($modules as $mod => $list) {
+                            echo '<div style="margin-bottom:10px"><strong>' . ucfirst($mod) . '</strong><br>';
+                            foreach ($list as $p) {
+                                echo '<label style="display:block;font-weight:normal;font-size:12px"><input type="checkbox" name="perms[]" value="' . $p['id'] . '"> ' . h($p['display_name']) . '</label>';
+                            }
+                            echo '</div>';
+                        } ?>
+                    </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('roleModal')">Cancel</button>
+                <button type="submit" class="btn btn-success btn-sm">Save</button>
+                </form></div>
+        </div>
+    </div>
+    <script>
         function editRole(id, name, desc, perms) {
             document.getElementById('roleTitle').textContent = 'Edit Role';
             document.getElementById('roleId').value = id;
             document.querySelector('input[name="name"]').value = name;
             document.querySelector('input[name="description"]').value = desc;
-            document.querySelectorAll('input[name="perms[]"]').forEach(function(cb) {
+            document.querySelectorAll('input[name="perms[]"]').forEach(function (cb) {
                 cb.checked = perms.includes(parseInt(cb.value));
             });
             openModal('roleModal');
@@ -5601,8 +8407,8 @@ if (!empty($_GET['ajax'])) {
             document.getElementById('roleForm').reset();
             openModal('roleModal');
         }
-        </script>
-        <?php
+    </script>
+<?php
         $content = ob_get_clean();
         renderLayout('Roles & Permissions', $content, 'roles');
     }
@@ -5683,193 +8489,230 @@ if (!empty($_GET['ajax'])) {
         $income = $pdo->query('SELECT * FROM income ORDER BY income_date DESC LIMIT 50')->fetchAll();
         $categories = $pdo->query('SELECT * FROM finance_categories ORDER BY type, name')->fetchAll();
         ob_start();
-        ?>
-        <div class="page-header">
-            <h1>&#128181; Income & Expenses</h1>
-            <div class="page-header-actions">
-                <button class="btn btn-success btn-sm" onclick="openModal('incomeModal')">+ Add Income</button>
-                <button class="btn btn-danger btn-sm" onclick="openModal('expenseModal')">+ Add Expense</button>
-                <button class="btn btn-primary btn-sm" onclick="openModal('categoryModal')">Manage Categories</button>
-            </div>
+?>
+    <div class="page-header">
+        <h1>&#128181; Income & Expenses</h1>
+        <div class="page-header-actions">
+            <button class="btn btn-success btn-sm" onclick="openModal('incomeModal')">+ Add Income</button>
+            <button class="btn btn-danger btn-sm" onclick="openModal('expenseModal')">+ Add Expense</button>
+            <button class="btn btn-primary btn-sm" onclick="openModal('categoryModal')">Manage Categories</button>
         </div>
-        <?php if (isset($_SESSION['flash_msg'])): ?>
-            <div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div>
-            <?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']); ?>
-        <?php endif; ?>
+    </div>
+    <?php if (isset($_SESSION['flash_msg'])): ?>
+    <div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div>
+    <?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']); ?>
+<?php endif; ?>
+    <div class="lf">
+        <span class="lf-title">Monthly Summary</span>
+        <div class="tbl-wrap">
+            <table class="tbl">
+                <thead>
+                <tr>
+                    <th>Month</th>
+                    <th class="text-right">Total Income</th>
+                    <th class="text-right">Total Expenses</th>
+                    <th class="text-right">Net Profit/Loss</th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php
+                foreach ($summary as $s):
+                    $net = $s['total_income'] - $s['total_expense'];
+                    ?>
+                    <tr>
+                        <td><?= h($s['month']) ?></td>
+                        <td class="text-right" style="color:green"><?= formatCurrency((float) $s['total_income']) ?></td>
+                        <td class="text-right" style="color:red"><?= formatCurrency((float) $s['total_expense']) ?></td>
+                        <td class="text-right font-weight-bold" style="color:<?= $net >= 0 ? 'green' : 'red' ?>">
+                            <?= formatCurrency((float) $net) ?>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                <?php if (empty($summary)): ?>
+                    <tr>
+                        <td colspan="4" class="text-center text-muted">No data available</td>
+                    </tr>
+                <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="cols-2">
         <div class="lf">
-            <span class="lf-title">Monthly Summary</span>
+            <span class="lf-title">Recent Expenses</span>
             <div class="tbl-wrap">
                 <table class="tbl">
                     <thead>
-                        <tr>
-                            <th>Month</th>
-                            <th class="text-right">Total Income</th>
-                            <th class="text-right">Total Expenses</th>
-                            <th class="text-right">Net Profit/Loss</th>
-                        </tr>
+                    <tr>
+                        <th>Date</th>
+                        <th>Category</th>
+                        <th class="text-right">Amount</th>
+                        <th>Method</th>
+                    </tr>
                     </thead>
                     <tbody>
-                        <?php
-                        foreach ($summary as $s):
-                            $net = $s['total_income'] - $s['total_expense'];
-                            ?>
-                            <tr>
-                                <td><?= h($s['month']) ?></td>
-                                <td class="text-right" style="color:green"><?= formatCurrency((float) $s['total_income']) ?></td>
-                                <td class="text-right" style="color:red"><?= formatCurrency((float) $s['total_expense']) ?></td>
-                                <td class="text-right font-weight-bold" style="color:<?= $net >= 0 ? 'green' : 'red' ?>">
-                                    <?= formatCurrency((float) $net) ?>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                        <?php if (empty($summary)): ?>
-                            <tr><td colspan="4" class="text-center text-muted">No data available</td></tr>
-                        <?php endif; ?>
+                    <?php foreach ($expenses as $e): ?>
+                        <tr>
+                            <td><?= h($e['expense_date']) ?></td>
+                            <td><?= h($e['category']) ?></td>
+                            <td class="text-right"><?= formatCurrency((float) $e['amount']) ?></td>
+                            <td><?= h($e['payment_method']) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    <?php if (empty($expenses)): ?>
+                        <tr>
+                            <td colspan="4" class="text-center text-muted">No expenses found</td>
+                        </tr>
+                    <?php endif; ?>
                     </tbody>
                 </table>
             </div>
         </div>
-        <div class="cols-2">
-            <div class="lf">
-                <span class="lf-title">Recent Expenses</span>
-                <div class="tbl-wrap">
-                    <table class="tbl">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Category</th>
-                                <th class="text-right">Amount</th>
-                                <th>Method</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($expenses as $e): ?>
-                                <tr>
-                                    <td><?= h($e['expense_date']) ?></td>
-                                    <td><?= h($e['category']) ?></td>
-                                    <td class="text-right"><?= formatCurrency((float) $e['amount']) ?></td>
-                                    <td><?= h($e['payment_method']) ?></td>
-                                </tr>
-                            <?php endforeach; ?>
-                            <?php if (empty($expenses)): ?>
-                                <tr><td colspan="4" class="text-center text-muted">No expenses found</td></tr>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            <div class="lf">
-                <span class="lf-title">Recent Income</span>
-                <div class="tbl-wrap">
-                    <table class="tbl">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Source</th>
-                                <th class="text-right">Amount</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($income as $i): ?>
-                                <tr>
-                                    <td><?= h($i['income_date']) ?></td>
-                                    <td><?= h($i['source']) ?></td>
-                                    <td class="text-right"><?= formatCurrency((float) $i['amount']) ?></td>
-                                </tr>
-                            <?php endforeach; ?>
-                            <?php if (empty($income)): ?>
-                                <tr><td colspan="3" class="text-center text-muted">No income found</td></tr>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
+        <div class="lf">
+            <span class="lf-title">Recent Income</span>
+            <div class="tbl-wrap">
+                <table class="tbl">
+                    <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Source</th>
+                        <th class="text-right">Amount</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($income as $i): ?>
+                        <tr>
+                            <td><?= h($i['income_date']) ?></td>
+                            <td><?= h($i['source']) ?></td>
+                            <td class="text-right"><?= formatCurrency((float) $i['amount']) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    <?php if (empty($income)): ?>
+                        <tr>
+                            <td colspan="3" class="text-center text-muted">No income found</td>
+                        </tr>
+                    <?php endif; ?>
+                    </tbody>
+                </table>
             </div>
         </div>
-        <div id="expenseModal" class="modal-overlay">
-            <div class="modal">
-                <div class="modal-title-bar"><span>Add Expense</span><button class="modal-close-btn" onclick="closeModal('expenseModal')">&times;</button></div>
-                <form method="POST">
-                    <?= csrfField() ?>
-                    <input type="hidden" name="save_expense" value="1">
-                    <div class="modal-body">
-                        <div class="form-group mb-8"><label>Date</label><input type="date" name="expense_date" value="<?= date('Y-m-d') ?>" required></div>
-                        <div class="form-group mb-8"><label>Category</label>
-                            <select name="category" required>
-                                <option value="">-- Select Category --</option>
-                                <?php foreach ($categories as $cat) if ($cat['type'] === 'expense') echo "<option value='" . h($cat['name']) . "'>" . h($cat['name']) . '</option>'; ?>
-                            </select>
-                        </div>
-                        <div class="form-group mb-8"><label>Amount</label><input type="number" name="amount" step="0.01" required></div>
-                        <div class="form-group mb-8"><label>Payment Method</label>
-                            <select name="payment_method">
-                                <option value="Cash">Cash</option>
-                                <option value="Bank Transfer">Bank Transfer</option>
-                                <option value="Card">Card</option>
-                                <option value="Cheque">Cheque</option>
-                            </select>
-                        </div>
-                        <div class="form-group mb-8"><label>Reference</label><input type="text" name="reference"></div>
-                        <div class="form-group"><label>Notes</label><textarea name="notes"></textarea></div>
-                    </div>
-                    <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('expenseModal')">Cancel</button><button type="submit" class="btn btn-danger btn-sm">Save Expense</button></div>
-                </form>
+    </div>
+    <div id="expenseModal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-title-bar"><span>Add Expense</span>
+                <button class="modal-close-btn" onclick="closeModal('expenseModal')">&times;</button>
             </div>
-        </div>
-        <div id="incomeModal" class="modal-overlay">
-            <div class="modal">
-                <div class="modal-title-bar"><span>Add Income</span><button class="modal-close-btn" onclick="closeModal('incomeModal')">&times;</button></div>
-                <form method="POST">
-                    <?= csrfField() ?>
-                    <input type="hidden" name="save_income" value="1">
-                    <div class="modal-body">
-                        <div class="form-group mb-8"><label>Date</label><input type="date" name="income_date" value="<?= date('Y-m-d') ?>" required></div>
-                        <div class="form-group mb-8"><label>Source / Category</label>
-                            <select name="source" required>
-                                <option value="">-- Select Category --</option>
-                                <?php foreach ($categories as $cat) if ($cat['type'] === 'income') echo "<option value='" . h($cat['name']) . "'>" . h($cat['name']) . '</option>'; ?>
-                            </select>
-                        </div>
-                        <div class="form-group mb-8"><label>Amount</label><input type="number" name="amount" step="0.01" required></div>
-                        <div class="form-group mb-8"><label>Payment Method</label>
-                            <select name="payment_method">
-                                <option value="Cash">Cash</option>
-                                <option value="Bank Transfer">Bank Transfer</option>
-                                <option value="Card">Card</option>
-                                <option value="Cheque">Cheque</option>
-                            </select>
-                        </div>
-                        <div class="form-group mb-8"><label>Reference</label><input type="text" name="reference"></div>
-                        <div class="form-group"><label>Notes</label><textarea name="notes"></textarea></div>
-                    </div>
-                    <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('incomeModal')">Cancel</button><button type="submit" class="btn btn-success btn-sm">Save Income</button></div>
-                </form>
-            </div>
-        </div>
-        <div id="categoryModal" class="modal-overlay">
-            <div class="modal">
-                <div class="modal-title-bar"><span>Finance Categories</span><button class="modal-close-btn" onclick="closeModal('categoryModal')">&times;</button></div>
+            <form method="POST">
+                <?= csrfField() ?>
+                <input type="hidden" name="save_expense" value="1">
                 <div class="modal-body">
-                    <form method="POST" class="mb-8" style="display:flex;gap:4px;align-items:flex-end">
-                        <?= csrfField() ?>
-                        <input type="hidden" name="save_finance_category" value="1">
-                        <div class="form-group"><label>Name</label><input type="text" name="name" required></div>
-                        <div class="form-group"><label>Type</label><select name="type"><option value="income">Income</option><option value="expense">Expense</option></select></div>
-                        <button type="submit" class="btn btn-primary btn-sm">Add</button>
-                    </form>
-                    <div class="tbl-wrap" style="max-height:200px;overflow-y:auto">
-                        <table class="tbl">
-                            <thead><tr><th>Name</th><th>Type</th></tr></thead>
-                            <tbody>
-                                <?php foreach ($categories as $cat): ?>
-                                    <tr><td><?= h($cat['name']) ?></td><td><span class="badge badge-<?= $cat['type'] === 'income' ? 'success' : 'danger' ?>"><?= strtoupper($cat['type']) ?></span></td></tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
+                    <div class="form-group mb-8"><label>Date</label><input type="date" name="expense_date"
+                                                                           value="<?= date('Y-m-d') ?>" required></div>
+                    <div class="form-group mb-8"><label>Category</label>
+                        <select name="category" required>
+                            <option value="">-- Select Category --</option>
+                            <?php foreach ($categories as $cat) if ($cat['type'] === 'expense') echo "<option value='" . h($cat['name']) . "'>" . h($cat['name']) . '</option>'; ?>
+                        </select>
                     </div>
+                    <div class="form-group mb-8"><label>Amount</label><input type="number" name="amount" step="0.01"
+                                                                             required></div>
+                    <div class="form-group mb-8"><label>Payment Method</label>
+                        <select name="payment_method">
+                            <option value="Cash">Cash</option>
+                            <option value="Bank Transfer">Bank Transfer</option>
+                            <option value="Card">Card</option>
+                            <option value="Cheque">Cheque</option>
+                        </select>
+                    </div>
+                    <div class="form-group mb-8"><label>Reference</label><input type="text" name="reference"></div>
+                    <div class="form-group"><label>Notes</label><textarea name="notes"></textarea></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('expenseModal')">Cancel
+                    </button>
+                    <button type="submit" class="btn btn-danger btn-sm">Save Expense</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div id="incomeModal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-title-bar"><span>Add Income</span>
+                <button class="modal-close-btn" onclick="closeModal('incomeModal')">&times;</button>
+            </div>
+            <form method="POST">
+                <?= csrfField() ?>
+                <input type="hidden" name="save_income" value="1">
+                <div class="modal-body">
+                    <div class="form-group mb-8"><label>Date</label><input type="date" name="income_date"
+                                                                           value="<?= date('Y-m-d') ?>" required></div>
+                    <div class="form-group mb-8"><label>Source / Category</label>
+                        <select name="source" required>
+                            <option value="">-- Select Category --</option>
+                            <?php foreach ($categories as $cat) if ($cat['type'] === 'income') echo "<option value='" . h($cat['name']) . "'>" . h($cat['name']) . '</option>'; ?>
+                        </select>
+                    </div>
+                    <div class="form-group mb-8"><label>Amount</label><input type="number" name="amount" step="0.01"
+                                                                             required></div>
+                    <div class="form-group mb-8"><label>Payment Method</label>
+                        <select name="payment_method">
+                            <option value="Cash">Cash</option>
+                            <option value="Bank Transfer">Bank Transfer</option>
+                            <option value="Card">Card</option>
+                            <option value="Cheque">Cheque</option>
+                        </select>
+                    </div>
+                    <div class="form-group mb-8"><label>Reference</label><input type="text" name="reference"></div>
+                    <div class="form-group"><label>Notes</label><textarea name="notes"></textarea></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('incomeModal')">Cancel
+                    </button>
+                    <button type="submit" class="btn btn-success btn-sm">Save Income</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div id="categoryModal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-title-bar"><span>Finance Categories</span>
+                <button class="modal-close-btn" onclick="closeModal('categoryModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form method="POST" class="mb-8" style="display:flex;gap:4px;align-items:flex-end">
+                    <?= csrfField() ?>
+                    <input type="hidden" name="save_finance_category" value="1">
+                    <div class="form-group"><label>Name</label><input type="text" name="name" required></div>
+                    <div class="form-group"><label>Type</label><select name="type">
+                            <option value="income">Income</option>
+                            <option value="expense">Expense</option>
+                        </select></div>
+                    <button type="submit" class="btn btn-primary btn-sm">Add</button>
+                </form>
+                <div class="tbl-wrap" style="max-height:200px;overflow-y:auto">
+                    <table class="tbl">
+                        <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Type</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach ($categories as $cat): ?>
+                            <tr>
+                                <td><?= h($cat['name']) ?></td>
+                                <td>
+                                    <span class="badge badge-<?= $cat['type'] === 'income' ? 'success' : 'danger' ?>"><?= strtoupper($cat['type']) ?></span>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
-        <?php
+    </div>
+<?php
         $content = ob_get_clean();
         renderLayout('Income & Expenses', $content, 'income_expenses');
     }
@@ -5956,80 +8799,101 @@ if (!empty($_GET['ajax'])) {
             $products = $pdo->query("SELECT id,name,sku,selling_price,current_stock FROM products WHERE status='active' ORDER BY name")->fetchAll();
             ob_start();
             ?>
-            <div class="page-header">
-                <h1>&#128221; New Quotation</h1>
-                <div class="page-header-actions"><a href="?page=quotations" class="btn btn-secondary btn-sm">Back to List</a></div>
+    <div class="page-header">
+        <h1>&#128221; New Quotation</h1>
+        <div class="page-header-actions"><a href="?page=quotations" class="btn btn-secondary btn-sm">Back to List</a>
+        </div>
+    </div>
+    <div class="lf">
+        <form method="POST" id="qForm">
+            <?= csrfField() ?>
+            <input type="hidden" name="save_quotation" value="1">
+            <input type="hidden" name="items_json" id="qJ">
+            <div class="form-grid form-grid-3">
+                <div class="form-group" style="grid-column:span 2">
+                    <label>Customer</label>
+                    <select name="customer_id" required>
+                        <option value="">-- Select Customer --</option>
+                        <?php foreach ($customers as $c) echo "<option value='{$c['id']}'>" . h($c['name']) . '</option>'; ?>
+                    </select>
+                </div>
+                <div class="form-group"><label>Valid Until</label><input type="date" name="valid_until"
+                                                                         value="<?= date('Y-m-d', strtotime('+15 days')) ?>"
+                                                                         required></div>
+                <div class="form-group"><label>Status</label><select name="status">
+                        <option value="sent">Sent</option>
+                        <option value="draft">Draft</option>
+                    </select></div>
             </div>
-            <div class="lf">
-                <form method="POST" id="qForm">
-                    <?= csrfField() ?>
-                    <input type="hidden" name="save_quotation" value="1">
-                    <input type="hidden" name="items_json" id="qJ">
-                    <div class="form-grid form-grid-3">
-                        <div class="form-group" style="grid-column:span 2">
-                            <label>Customer</label>
-                            <select name="customer_id" required>
-                                <option value="">-- Select Customer --</option>
-                                <?php foreach ($customers as $c) echo "<option value='{$c['id']}'>" . h($c['name']) . '</option>'; ?>
-                            </select>
-                        </div>
-                        <div class="form-group"><label>Valid Until</label><input type="date" name="valid_until" value="<?= date('Y-m-d', strtotime('+15 days')) ?>" required></div>
-                        <div class="form-group"><label>Status</label><select name="status"><option value="sent">Sent</option><option value="draft">Draft</option></select></div>
+            <div class="lf mt-8">
+                <span class="lf-title">Select Items</span>
+                <div class="form-group" style="flex-direction:row;gap:8px;align-items:flex-end">
+                    <div style="flex:1">
+                        <label>Product</label>
+                        <select id="qP">
+                            <option value="">-- Choose Product --</option>
+                            <?php foreach ($products as $p) echo "<option value='{$p['id']}' data-price='{$p['selling_price']}' data-sku='{$p['sku']}'>" . h($p['name']) . ' (' . h($p['sku']) . ')</option>'; ?>
+                        </select>
                     </div>
-                    <div class="lf mt-8">
-                        <span class="lf-title">Select Items</span>
-                        <div class="form-group" style="flex-direction:row;gap:8px;align-items:flex-end">
-                            <div style="flex:1">
-                                <label>Product</label>
-                                <select id="qP">
-                                    <option value="">-- Choose Product --</option>
-                                    <?php foreach ($products as $p) echo "<option value='{$p['id']}' data-price='{$p['selling_price']}' data-sku='{$p['sku']}'>" . h($p['name']) . ' (' . h($p['sku']) . ')</option>'; ?>
-                                </select>
-                            </div>
-                            <div style="width:100px"><label>Qty</label><input type="number" id="qQ" value="1" min="1"></div>
-                            <button type="button" class="btn btn-primary" onclick="qA()">Add Item</button>
-                        </div>
-                        <table class="tbl mt-8" id="qT">
-                            <thead><tr><th>SKU</th><th>Product</th><th class="text-right">Price</th><th class="text-right">Qty</th><th class="text-right">Total</th><th></th></tr></thead>
-                            <tbody></tbody>
-                            <tfoot>
-                                <tr><th colspan="4" class="text-right">Subtotal:</th><th class="text-right" id="qSub">0.00</th><th></th></tr>
-                            </tfoot>
-                        </table>
-                    </div>
-                    <div class="mt-8"><button type="submit" class="btn btn-success" onclick="qS(event)">Create Quotation</button></div>
-                </form>
+                    <div style="width:100px"><label>Qty</label><input type="number" id="qQ" value="1" min="1"></div>
+                    <button type="button" class="btn btn-primary" onclick="qA()">Add Item</button>
+                </div>
+                <table class="tbl mt-8" id="qT">
+                    <thead>
+                    <tr>
+                        <th>SKU</th>
+                        <th>Product</th>
+                        <th class="text-right">Price</th>
+                        <th class="text-right">Qty</th>
+                        <th class="text-right">Total</th>
+                        <th></th>
+                    </tr>
+                    </thead>
+                    <tbody></tbody>
+                    <tfoot>
+                    <tr>
+                        <th colspan="4" class="text-right">Subtotal:</th>
+                        <th class="text-right" id="qSub">0.00</th>
+                        <th></th>
+                    </tr>
+                    </tfoot>
+                </table>
             </div>
-            <script>
-                let qc = [];
-                function qA() {
-                    let s = document.getElementById('qP');
-                    let q = document.getElementById('qQ');
-                    if(!s.value) return;
-                    let opt = s.options[s.selectedIndex];
-                    let id = +s.value;
-                    let f = qc.find(i => i.id === id);
-                    if(f) {
-                        f.qty += +q.value;
-                    } else {
-                        qc.push({
-                            id: id,
-                            sku: opt.dataset.sku,
-                            name: opt.text,
-                            price: +opt.dataset.price,
-                            qty: +q.value
-                        });
-                    }
-                    qr();
-                }
-                function qr() {
-                    let b = document.querySelector('#qT tbody');
-                    b.innerHTML = '';
-                    let sub = 0;
-                    qc.forEach((i, k) => {
-                        let total = i.price * i.qty;
-                        sub += total;
-                        b.innerHTML += `<tr>
+            <div class="mt-8">
+                <button type="submit" class="btn btn-success" onclick="qS(event)">Create Quotation</button>
+            </div>
+        </form>
+    </div>
+    <script>
+        let qc = [];
+        function qA() {
+            let s = document.getElementById('qP');
+            let q = document.getElementById('qQ');
+            if (!s.value) return;
+            let opt = s.options[s.selectedIndex];
+            let id = +s.value;
+            let f = qc.find(i => i.id === id);
+            if (f) {
+                f.qty += +q.value;
+            } else {
+                qc.push({
+                    id: id,
+                    sku: opt.dataset.sku,
+                    name: opt.text,
+                    price: +opt.dataset.price,
+                    qty: +q.value
+                });
+            }
+            qr();
+        }
+        function qr() {
+            let b = document.querySelector('#qT tbody');
+            b.innerHTML = '';
+            let sub = 0;
+            qc.forEach((i, k) => {
+                let total = i.price * i.qty;
+                sub += total;
+                b.innerHTML += `<tr>
                             <td>${h(i.sku)}</td>
                             <td>${h(i.name)}</td>
                             <td class="text-right">${i.price.toFixed(2)}</td>
@@ -6037,79 +8901,86 @@ if (!empty($_GET['ajax'])) {
                             <td class="text-right">${total.toFixed(2)}</td>
                             <td class="text-center"><button type="button" class="btn btn-danger btn-xs" onclick="qc.splice(${k},1);qr()">×</button></td>
                         </tr>`;
-                    });
-                    document.getElementById('qSub').textContent = sub.toFixed(2);
-                }
-                function qS(e) {
-                    if (qc.length === 0) {
-                        alert('Please add at least one item.');
-                        e.preventDefault();
-                        return;
-                    }
-                    document.getElementById('qJ').value = JSON.stringify(qc);
-                }
-            </script>
-            <?php
+            });
+            document.getElementById('qSub').textContent = sub.toFixed(2);
+        }
+        function qS(e) {
+            if (qc.length === 0) {
+                alert('Please add at least one item.');
+                e.preventDefault();
+                return;
+            }
+            document.getElementById('qJ').value = JSON.stringify(qc);
+        }
+    </script>
+<?php
         } else {
             $quotes = $pdo->query('SELECT q.*,c.name as customer FROM quotations q LEFT JOIN customers c ON c.id=q.customer_id ORDER BY q.id DESC')->fetchAll();
             ob_start();
-            ?>
-            <div class="page-header">
-                <h1>&#128221; Quotations</h1>
-                <div class="page-header-actions"><a href="?page=quotations&action=new" class="btn btn-primary btn-sm">+ New Quotation</a></div>
-            </div>
-            <?php if (isset($_SESSION['flash_msg'])): ?>
-                <div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div>
-                <?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']); ?>
-            <?php endif; ?>
-            <div class="lf">
-                <div class="tbl-wrap">
-                    <table class="tbl">
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>Customer</th>
-                                <th>Date</th>
-                                <th>Valid Until</th>
-                                <th class="text-right">Total</th>
-                                <th>Status</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($quotes as $q): ?>
-                                <tr>
-                                    <td><?= h($q['quote_number']) ?></td>
-                                    <td><?= h($q['customer']) ?></td>
-                                    <td><?= h($q['quote_date']) ?></td>
-                                    <td><?= h($q['valid_until']) ?></td>
-                                    <td class="text-right"><?= formatCurrency((float) $q['total_amount']) ?></td>
-                                    <td><span class="badge badge-<?= ['draft' => 'secondary', 'sent' => 'info', 'accepted' => 'success', 'rejected' => 'danger', 'converted' => 'primary'][$q['status']] ?? 'secondary' ?>"><?= strtoupper($q['status']) ?></span></td>
-                                    <td>
-                                        <div class="tbl-actions">
-                                            <?php if ($q['status'] === 'sent' || $q['status'] === 'accepted'): ?>
-                                                <form method="POST" style="display:inline" onsubmit="return confirm('Convert this quotation to an invoice?')">
-                                                    <?= csrfField() ?>
-                                                    <input type="hidden" name="convert_quotation" value="1">
-                                                    <input type="hidden" name="quote_id" value="<?= $q['id'] ?>">
-                                                    <button type="submit" class="btn btn-success btn-xs">Convert to Invoice</button>
-                                                </form>
-                                            <?php endif; ?>
-                                            <?php if ($q['status'] === 'converted' && $q['converted_invoice_id']): ?>
-                                                <a href="?page=sales&action=view&id=<?= $q['converted_invoice_id'] ?>" class="btn btn-info btn-xs">View Invoice</a>
-                                            <?php endif; ?>
-                                        </div>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                            <?php if (empty($quotes)): ?>
-                                <tr><td colspan="7" class="text-center text-muted">No quotations found</td></tr>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            <?php
+?>
+    <div class="page-header">
+        <h1>&#128221; Quotations</h1>
+        <div class="page-header-actions"><a href="?page=quotations&action=new" class="btn btn-primary btn-sm">+ New
+                Quotation</a></div>
+    </div>
+    <?php if (isset($_SESSION['flash_msg'])): ?>
+    <div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div>
+    <?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']); ?>
+<?php endif; ?>
+    <div class="lf">
+        <div class="tbl-wrap">
+            <table class="tbl">
+                <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Customer</th>
+                    <th>Date</th>
+                    <th>Valid Until</th>
+                    <th class="text-right">Total</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($quotes as $q): ?>
+                    <tr>
+                        <td><?= h($q['quote_number']) ?></td>
+                        <td><?= h($q['customer']) ?></td>
+                        <td><?= h($q['quote_date']) ?></td>
+                        <td><?= h($q['valid_until']) ?></td>
+                        <td class="text-right"><?= formatCurrency((float) $q['total_amount']) ?></td>
+                        <td>
+                            <span class="badge badge-<?= ['draft' => 'secondary', 'sent' => 'info', 'accepted' => 'success', 'rejected' => 'danger', 'converted' => 'primary'][$q['status']] ?? 'secondary' ?>"><?= strtoupper($q['status']) ?></span>
+                        </td>
+                        <td>
+                            <div class="tbl-actions">
+                                <?php if ($q['status'] === 'sent' || $q['status'] === 'accepted'): ?>
+                                    <form method="POST" style="display:inline"
+                                          onsubmit="return confirm('Convert this quotation to an invoice?')">
+                                        <?= csrfField() ?>
+                                        <input type="hidden" name="convert_quotation" value="1">
+                                        <input type="hidden" name="quote_id" value="<?= $q['id'] ?>">
+                                        <button type="submit" class="btn btn-success btn-xs">Convert to Invoice</button>
+                                    </form>
+                                <?php endif; ?>
+                                <?php if ($q['status'] === 'converted' && $q['converted_invoice_id']): ?>
+                                    <a href="?page=sales&action=view&id=<?= $q['converted_invoice_id'] ?>"
+                                       class="btn btn-info btn-xs">View Invoice</a>
+                                <?php endif; ?>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                <?php if (empty($quotes)): ?>
+                    <tr>
+                        <td colspan="7" class="text-center text-muted">No quotations found</td>
+                    </tr>
+                <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+<?php
         }
         $content = ob_get_clean();
         renderLayout('Quotations', $content, 'quotations');
@@ -6158,98 +9029,102 @@ if (!empty($_GET['ajax'])) {
         if ($action === 'new') {
             $invoices = $pdo->query("SELECT i.id, i.invoice_number, i.customer_id, c.name as customer_name FROM invoices i JOIN customers c ON i.customer_id = c.id WHERE i.payment_status IN ('paid', 'partial') ORDER BY i.id DESC")->fetchAll();
             ob_start();
-            ?>
-            <div class="page-header">
-                <h1>&#8630; Process Sales Return</h1>
-                <div class="page-header-actions"><a href="?page=sales_returns" class="btn btn-secondary btn-sm">Back to List</a></div>
+?>
+    <div class="page-header">
+        <h1>&#8630; Process Sales Return</h1>
+        <div class="page-header-actions"><a href="?page=sales_returns" class="btn btn-secondary btn-sm">Back to List</a>
+        </div>
+    </div>
+    <div class="lf">
+        <?php if (isset($error)): ?>
+            <div class="alert alert-danger"><?= h($error) ?></div><?php endif; ?>
+        <form method="POST" id="srForm">
+            <?= csrfField() ?>
+            <input type="hidden" name="save_return" value="1">
+            <input type="hidden" name="items_json" id="items_json">
+            <div class="grid grid-2">
+                <div class="form-group">
+                    <label>Select Invoice</label>
+                    <select name="invoice_id" id="invoice_id" required onchange="loadInvoiceItems(this.value)">
+                        <option value="">-- Select Invoice --</option>
+                        <?php foreach ($invoices as $inv): ?>
+                            <option value="<?= $inv['id'] ?>"
+                                    data-customer-id="<?= $inv['customer_id'] ?>"><?= h($inv['invoice_number']) ?>
+                                - <?= h($inv['customer_name']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <input type="hidden" name="customer_id" id="customer_id">
+                </div>
+                <div class="form-group">
+                    <label>Refund Method</label>
+                    <select name="refund_method" required>
+                        <option value="cash">Cash</option>
+                        <option value="card">Card</option>
+                        <option value="bank_transfer">Bank Transfer</option>
+                        <option value="credit_note">Credit Note</option>
+                    </select>
+                </div>
             </div>
-            <div class="lf">
-                <?php if (isset($error)): ?><div class="alert alert-danger"><?= h($error) ?></div><?php endif; ?>
-                <form method="POST" id="srForm">
-                    <?= csrfField() ?>
-                    <input type="hidden" name="save_return" value="1">
-                    <input type="hidden" name="items_json" id="items_json">
-                    <div class="grid grid-2">
-                        <div class="form-group">
-                            <label>Select Invoice</label>
-                            <select name="invoice_id" id="invoice_id" required onchange="loadInvoiceItems(this.value)">
-                                <option value="">-- Select Invoice --</option>
-                                <?php foreach ($invoices as $inv): ?>
-                                    <option value="<?= $inv['id'] ?>" data-customer-id="<?= $inv['customer_id'] ?>"><?= h($inv['invoice_number']) ?> - <?= h($inv['customer_name']) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                            <input type="hidden" name="customer_id" id="customer_id">
-                        </div>
-                        <div class="form-group">
-                            <label>Refund Method</label>
-                            <select name="refund_method" required>
-                                <option value="cash">Cash</option>
-                                <option value="card">Card</option>
-                                <option value="bank_transfer">Bank Transfer</option>
-                                <option value="credit_note">Credit Note</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>Reason for Return</label>
-                        <textarea name="reason" rows="2" class="form-control" placeholder="Optional reason..."></textarea>
-                    </div>
-                    <div id="items-container" style="display:none; margin-top:20px;">
-                        <h3>Invoice Items</h3>
-                        <table class="tbl" id="items-table">
-                            <thead>
-                                <tr>
-                                    <th>Product</th>
-                                    <th>Bought Qty</th>
-                                    <th>Unit Price</th>
-                                    <th>Return Qty</th>
-                                    <th>Total</th>
-                                </tr>
-                            </thead>
-                            <tbody></tbody>
-                            <tfoot>
-                                <tr>
-                                    <th colspan="4" class="text-right">Return Total:</th>
-                                    <th id="return-total"><?= formatCurrency(0) ?></th>
-                                </tr>
-                            </tfoot>
-                        </table>
-                        <div class="mt-4">
-                            <button type="submit" class="btn btn-primary" onclick="prepareSubmit(event)">Submit Return</button>
-                        </div>
-                    </div>
-                </form>
+            <div class="form-group">
+                <label>Reason for Return</label>
+                <textarea name="reason" rows="2" class="form-control" placeholder="Optional reason..."></textarea>
             </div>
-            <script>
-                let invoiceItems = [];
-                function loadInvoiceItems(invId) {
-                    if (!invId) {
-                        document.getElementById('items-container').style.display = 'none';
-                        return;
+            <div id="items-container" style="display:none; margin-top:20px;">
+                <h3>Invoice Items</h3>
+                <table class="tbl" id="items-table">
+                    <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>Bought Qty</th>
+                        <th>Unit Price</th>
+                        <th>Return Qty</th>
+                        <th>Total</th>
+                    </tr>
+                    </thead>
+                    <tbody></tbody>
+                    <tfoot>
+                    <tr>
+                        <th colspan="4" class="text-right">Return Total:</th>
+                        <th id="return-total"><?= formatCurrency(0) ?></th>
+                    </tr>
+                    </tfoot>
+                </table>
+                <div class="mt-4">
+                    <button type="submit" class="btn btn-primary" onclick="prepareSubmit(event)">Submit Return</button>
+                </div>
+            </div>
+        </form>
+    </div>
+    <script>
+        let invoiceItems = [];
+        function loadInvoiceItems(invId) {
+            if (!invId) {
+                document.getElementById('items-container').style.display = 'none';
+                return;
+            }
+            const sel = document.getElementById('invoice_id');
+            document.getElementById('customer_id').value = sel.options[sel.selectedIndex].dataset.customerId;
+            fetch('?ajax=get_invoice_details', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({id: invId})
+            })
+                .then(r => r.json())
+                .then(res => {
+                    if (res.success) {
+                        invoiceItems = res.items;
+                        renderItems();
+                        document.getElementById('items-container').style.display = 'block';
+                    } else {
+                        alert('Error loading items: ' + (res.msg || 'Unknown error'));
                     }
-                    const sel = document.getElementById('invoice_id');
-                    document.getElementById('customer_id').value = sel.options[sel.selectedIndex].dataset.customerId;
-                    fetch('?ajax=get_invoice_details', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ id: invId })
-                    })
-                    .then(r => r.json())
-                    .then(res => {
-                        if (res.success) {
-                            invoiceItems = res.items;
-                            renderItems();
-                            document.getElementById('items-container').style.display = 'block';
-                        } else {
-                            alert('Error loading items: ' + (res.msg || 'Unknown error'));
-                        }
-                    });
-                }
-                function renderItems() {
-                    const tbody = document.querySelector('#items-table tbody');
-                    tbody.innerHTML = '';
-                    invoiceItems.forEach((it, idx) => {
-                        tbody.innerHTML += `
+                });
+        }
+        function renderItems() {
+            const tbody = document.querySelector('#items-table tbody');
+            tbody.innerHTML = '';
+            invoiceItems.forEach((it, idx) => {
+                tbody.innerHTML += `
                             <tr>
                                 <td>${h(it.name)}</td>
                                 <td>${it.quantity}</td>
@@ -6258,76 +9133,79 @@ if (!empty($_GET['ajax'])) {
                                 <td id="total-${idx}">${(0).toFixed(2)}</td>
                             </tr>
                         `;
-                    });
-                    calculateGrandTotal();
-                }
-                function updateTotal(idx, qty) {
-                    invoiceItems[idx].return_qty = parseFloat(qty) || 0;
-                    document.getElementById('total-' + idx).textContent = (invoiceItems[idx].return_qty * invoiceItems[idx].unit_price).toFixed(2);
-                    calculateGrandTotal();
-                }
-                function calculateGrandTotal() {
-                    let total = 0;
-                    invoiceItems.forEach(it => {
-                        total += (it.return_qty || 0) * it.unit_price;
-                    });
-                    document.getElementById('return-total').textContent = total.toFixed(2);
-                }
-                function prepareSubmit(e) {
-                    const returns = invoiceItems.filter(it => (it.return_qty || 0) > 0).map(it => ({
-                        id: it.product_id,
-                        qty: it.return_qty,
-                        price: it.unit_price
-                    }));
-                    if (returns.length === 0) {
-                        alert('Please select at least one item to return.');
-                        e.preventDefault();
-                        return;
-                    }
-                    document.getElementById('items_json').value = JSON.stringify(returns);
-                }
-            </script>
-            <?php
+            });
+            calculateGrandTotal();
+        }
+        function updateTotal(idx, qty) {
+            invoiceItems[idx].return_qty = parseFloat(qty) || 0;
+            document.getElementById('total-' + idx).textContent = (invoiceItems[idx].return_qty * invoiceItems[idx].unit_price).toFixed(2);
+            calculateGrandTotal();
+        }
+        function calculateGrandTotal() {
+            let total = 0;
+            invoiceItems.forEach(it => {
+                total += (it.return_qty || 0) * it.unit_price;
+            });
+            document.getElementById('return-total').textContent = total.toFixed(2);
+        }
+        function prepareSubmit(e) {
+            const returns = invoiceItems.filter(it => (it.return_qty || 0) > 0).map(it => ({
+                id: it.product_id,
+                qty: it.return_qty,
+                price: it.unit_price
+            }));
+            if (returns.length === 0) {
+                alert('Please select at least one item to return.');
+                e.preventDefault();
+                return;
+            }
+            document.getElementById('items_json').value = JSON.stringify(returns);
+        }
+    </script>
+<?php
             $c = ob_get_clean();
             renderLayout('Process Sales Return', $c, 'sales_returns');
         } else {
             $returns = $pdo->query('SELECT sr.*, c.name as customer FROM sales_returns sr JOIN customers c ON sr.customer_id = c.id ORDER BY sr.id DESC')->fetchAll();
             ob_start();
-            ?>
-            <div class="page-header">
-                <h1>&#8630; Sales Returns</h1>
-                <div class="page-header-actions"><a href="?page=sales_returns&action=new" class="btn btn-primary btn-sm">+ Process Return</a></div>
-            </div>
-            <div class="lf">
-                <table class="tbl">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>Return No.</th>
-                            <th>Customer</th>
-                            <th>Date</th>
-                            <th>Total Amount</th>
-                            <th>Method</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if (empty($returns)): ?>
-                            <tr><td colspan="6" class="text-center">No sales returns found.</td></tr>
-                        <?php endif; ?>
-                        <?php foreach ($returns as $idx => $r): ?>
-                            <tr>
-                                <td><?= $idx + 1 ?></td>
-                                <td><?= h($r['return_number']) ?></td>
-                                <td><?= h($r['customer']) ?></td>
-                                <td><?= h($r['return_date']) ?></td>
-                                <td><?= formatCurrency((float) $r['total_amount']) ?></td>
-                                <td><span class="badge badge-info"><?= h(ucfirst($r['refund_method'])) ?></span></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-            <?php
+?>
+    <div class="page-header">
+        <h1>&#8630; Sales Returns</h1>
+        <div class="page-header-actions"><a href="?page=sales_returns&action=new" class="btn btn-primary btn-sm">+
+                Process Return</a></div>
+    </div>
+    <div class="lf">
+        <table class="tbl">
+            <thead>
+            <tr>
+                <th>#</th>
+                <th>Return No.</th>
+                <th>Customer</th>
+                <th>Date</th>
+                <th>Total Amount</th>
+                <th>Method</th>
+            </tr>
+            </thead>
+            <tbody>
+            <?php if (empty($returns)): ?>
+                <tr>
+                    <td colspan="6" class="text-center">No sales returns found.</td>
+                </tr>
+            <?php endif; ?>
+            <?php foreach ($returns as $idx => $r): ?>
+                <tr>
+                    <td><?= $idx + 1 ?></td>
+                    <td><?= h($r['return_number']) ?></td>
+                    <td><?= h($r['customer']) ?></td>
+                    <td><?= h($r['return_date']) ?></td>
+                    <td><?= formatCurrency((float) $r['total_amount']) ?></td>
+                    <td><span class="badge badge-info"><?= h(ucfirst($r['refund_method'])) ?></span></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+<?php
             $c = ob_get_clean();
             renderLayout('Sales Returns', $c, 'sales_returns');
         }
@@ -6343,21 +9221,47 @@ if (!empty($_GET['ajax'])) {
         ?>
     <div class="page-header"><h1>&#128200; Customer Ledgers</h1></div>
     <div class="lf"><span class="lf-title">Statement of Account</span>
-    <form method="GET" class="mb-8" style="display:flex;gap:8px;align-items:flex-end">
-        <input type="hidden" name="page" value="customer_ledgers">
-        <div class="form-group" style="width:300px"><label>Select Customer</label>
-        <select name="customer_id" onchange="this.form.submit()"><?php foreach ($customers as $c) { $s = $c['id'] == $cid ? 'selected' : ''; echo "<option value='{$c['id']}' $s>" . h($c['name']) . '</option>'; } ?></select>
+        <form method="GET" class="mb-8" style="display:flex;gap:8px;align-items:flex-end">
+            <input type="hidden" name="page" value="customer_ledgers">
+            <div class="form-group" style="width:300px"><label>Select Customer</label>
+                <select name="customer_id" onchange="this.form.submit()"><?php foreach ($customers as $c) {
+            $s = $c['id'] == $cid ? 'selected' : '';
+            echo "<option value='{$c['id']}' $s>" . h($c['name']) . '</option>';
+        } ?></select>
+            </div>
+        </form>
+        <div class="tbl-wrap">
+            <table class="tbl">
+                <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th class="text-right">Debit</th>
+                    <th class="text-right">Credit</th>
+                    <th class="text-right">Balance</th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php $stmt = $pdo->prepare('SELECT * FROM customer_ledgers WHERE customer_id=? ORDER BY transaction_date');
+                $stmt->execute([$cid]);
+                $ledgers = $stmt->fetchAll();
+                if (empty($ledgers)): ?>
+                    <tr>
+                        <td colspan="5" class="text-center text-muted">No ledger entries found</td>
+                    </tr><?php endif;
+                foreach ($ledgers as $l): ?>
+                    <tr>
+                        <td><?= $l['transaction_date'] ?></td>
+                        <td><?= h(ucfirst($l['reference_type'])) ?></td>
+                        <td class="text-right" style="color:#d9534f"><?= formatCurrency($l['debit']) ?></td>
+                        <td class="text-right" style="color:#5cb85c"><?= formatCurrency($l['credit']) ?></td>
+                        <td class="text-right font-weight-bold"><?= formatCurrency($l['balance']) ?></td>
+                    </tr>
+                <?php endforeach; ?></tbody>
+            </table>
         </div>
-    </form>
-    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Type</th><th class="text-right">Debit</th><th class="text-right">Credit</th><th class="text-right">Balance</th></tr></thead><tbody>
-    <?php $stmt = $pdo->prepare('SELECT * FROM customer_ledgers WHERE customer_id=? ORDER BY transaction_date');
-    $stmt->execute([$cid]);
-    $ledgers = $stmt->fetchAll();
-    if (empty($ledgers)): ?><tr><td colspan="5" class="text-center text-muted">No ledger entries found</td></tr><?php endif;
-    foreach ($ledgers as $l): ?>
-    <tr><td><?= $l['transaction_date'] ?></td><td><?= h(ucfirst($l['reference_type'])) ?></td><td class="text-right" style="color:#d9534f"><?= formatCurrency($l['debit']) ?></td><td class="text-right" style="color:#5cb85c"><?= formatCurrency($l['credit']) ?></td><td class="text-right font-weight-bold"><?= formatCurrency($l['balance']) ?></td></tr>
-    <?php endforeach; ?></tbody></table></div></div>
-    <?php
+    </div>
+<?php
         $content = ob_get_clean();
         renderLayout('Customer Ledgers', $content, 'customer_ledgers');
     }
@@ -6404,82 +9308,86 @@ if (!empty($_GET['ajax'])) {
             $pos = $pdo->query("SELECT po.id, po.po_number, po.supplier_id, s.name as supplier_name FROM purchase_orders po JOIN suppliers s ON po.supplier_id = s.id WHERE po.order_status = 'Received' ORDER BY po.id DESC")->fetchAll();
             ob_start();
             ?>
-            <div class="page-header">
-                <h1>&#8630; New Purchase Return</h1>
-                <div class="page-header-actions"><a href="?page=purchase_returns" class="btn btn-secondary btn-sm">Back to List</a></div>
+    <div class="page-header">
+        <h1>&#8630; New Purchase Return</h1>
+        <div class="page-header-actions"><a href="?page=purchase_returns" class="btn btn-secondary btn-sm">Back to
+                List</a></div>
+    </div>
+    <div class="lf">
+        <?php if (isset($error)): ?>
+            <div class="alert alert-danger"><?= h($error) ?></div><?php endif; ?>
+        <form method="POST" id="prForm">
+            <?= csrfField() ?>
+            <input type="hidden" name="save_return" value="1">
+            <input type="hidden" name="items_json" id="items_json">
+            <div class="form-group">
+                <label>Select Purchase Order</label>
+                <select name="po_id" id="po_id" required onchange="loadPoItems(this.value)">
+                    <option value="">-- Select PO --</option>
+                    <?php foreach ($pos as $po): ?>
+                        <option value="<?= $po['id'] ?>"
+                                data-supplier-id="<?= $po['supplier_id'] ?>"><?= h($po['po_number']) ?>
+                            - <?= h($po['supplier_name']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <input type="hidden" name="supplier_id" id="supplier_id">
             </div>
-            <div class="lf">
-                <?php if (isset($error)): ?><div class="alert alert-danger"><?= h($error) ?></div><?php endif; ?>
-                <form method="POST" id="prForm">
-                    <?= csrfField() ?>
-                    <input type="hidden" name="save_return" value="1">
-                    <input type="hidden" name="items_json" id="items_json">
-                    <div class="form-group">
-                        <label>Select Purchase Order</label>
-                        <select name="po_id" id="po_id" required onchange="loadPoItems(this.value)">
-                            <option value="">-- Select PO --</option>
-                            <?php foreach ($pos as $po): ?>
-                                <option value="<?= $po['id'] ?>" data-supplier-id="<?= $po['supplier_id'] ?>"><?= h($po['po_number']) ?> - <?= h($po['supplier_name']) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                        <input type="hidden" name="supplier_id" id="supplier_id">
-                    </div>
-                    <div id="items-container" style="display:none; margin-top:20px;">
-                        <h3>PO Items</h3>
-                        <table class="tbl" id="items-table">
-                            <thead>
-                                <tr>
-                                    <th>Product</th>
-                                    <th>Received Qty</th>
-                                    <th>Unit Price</th>
-                                    <th>Return Qty</th>
-                                    <th>Total</th>
-                                </tr>
-                            </thead>
-                            <tbody></tbody>
-                            <tfoot>
-                                <tr>
-                                    <th colspan="4" class="text-right">Return Total:</th>
-                                    <th id="return-total"><?= formatCurrency(0) ?></th>
-                                </tr>
-                            </tfoot>
-                        </table>
-                        <div class="mt-4">
-                            <button type="submit" class="btn btn-primary" onclick="prepareSubmit(event)">Submit Return</button>
-                        </div>
-                    </div>
-                </form>
+            <div id="items-container" style="display:none; margin-top:20px;">
+                <h3>PO Items</h3>
+                <table class="tbl" id="items-table">
+                    <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>Received Qty</th>
+                        <th>Unit Price</th>
+                        <th>Return Qty</th>
+                        <th>Total</th>
+                    </tr>
+                    </thead>
+                    <tbody></tbody>
+                    <tfoot>
+                    <tr>
+                        <th colspan="4" class="text-right">Return Total:</th>
+                        <th id="return-total"><?= formatCurrency(0) ?></th>
+                    </tr>
+                    </tfoot>
+                </table>
+                <div class="mt-4">
+                    <button type="submit" class="btn btn-primary" onclick="prepareSubmit(event)">Submit Return</button>
+                </div>
             </div>
-            <script>
-                let poItems = [];
-                function loadPoItems(poId) {
-                    if (!poId) {
-                        document.getElementById('items-container').style.display = 'none';
-                        return;
+        </form>
+    </div>
+    <script>
+        let poItems = [];
+        function loadPoItems(poId) {
+            if (!poId) {
+                document.getElementById('items-container').style.display = 'none';
+                return;
+            }
+            const sel = document.getElementById('po_id');
+            document.getElementById('supplier_id').value = sel.options[sel.selectedIndex].dataset.supplierId;
+            fetch('?ajax=get_po_details', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({id: poId})
+            })
+                .then(r => r.json())
+                .then(res => {
+                    if (res.success) {
+                        poItems = res.items;
+                        renderItems();
+                        document.getElementById('items-container').style.display = 'block';
+                    } else {
+                        alert('Error loading items: ' + (res.msg || 'Unknown error'));
                     }
-                    const sel = document.getElementById('po_id');
-                    document.getElementById('supplier_id').value = sel.options[sel.selectedIndex].dataset.supplierId;
-                    fetch('?ajax=get_po_details', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ id: poId })
-                    })
-                    .then(r => r.json())
-                    .then(res => {
-                        if (res.success) {
-                            poItems = res.items;
-                            renderItems();
-                            document.getElementById('items-container').style.display = 'block';
-                        } else {
-                            alert('Error loading items: ' + (res.msg || 'Unknown error'));
-                        }
-                    });
-                }
-                function renderItems() {
-                    const tbody = document.querySelector('#items-table tbody');
-                    tbody.innerHTML = '';
-                    poItems.forEach((it, idx) => {
-                        tbody.innerHTML += `
+                });
+        }
+        function renderItems() {
+            const tbody = document.querySelector('#items-table tbody');
+            tbody.innerHTML = '';
+            poItems.forEach((it, idx) => {
+                tbody.innerHTML += `
                             <tr>
                                 <td>${h(it.name)}</td>
                                 <td>${it.received_qty}</td>
@@ -6488,73 +9396,76 @@ if (!empty($_GET['ajax'])) {
                                 <td id="total-${idx}">${(0).toFixed(2)}</td>
                             </tr>
                         `;
-                    });
-                    calculateGrandTotal();
-                }
-                function updateTotal(idx, qty) {
-                    poItems[idx].return_qty = parseFloat(qty) || 0;
-                    document.getElementById('total-' + idx).textContent = (poItems[idx].return_qty * poItems[idx].unit_price).toFixed(2);
-                    calculateGrandTotal();
-                }
-                function calculateGrandTotal() {
-                    let total = 0;
-                    poItems.forEach(it => {
-                        total += (it.return_qty || 0) * it.unit_price;
-                    });
-                    document.getElementById('return-total').textContent = total.toFixed(2);
-                }
-                function prepareSubmit(e) {
-                    const returns = poItems.filter(it => (it.return_qty || 0) > 0).map(it => ({
-                        id: it.product_id,
-                        qty: it.return_qty,
-                        price: it.unit_price
-                    }));
-                    if (returns.length === 0) {
-                        alert('Please select at least one item to return.');
-                        e.preventDefault();
-                        return;
-                    }
-                    document.getElementById('items_json').value = JSON.stringify(returns);
-                }
-            </script>
-            <?php
+            });
+            calculateGrandTotal();
+        }
+        function updateTotal(idx, qty) {
+            poItems[idx].return_qty = parseFloat(qty) || 0;
+            document.getElementById('total-' + idx).textContent = (poItems[idx].return_qty * poItems[idx].unit_price).toFixed(2);
+            calculateGrandTotal();
+        }
+        function calculateGrandTotal() {
+            let total = 0;
+            poItems.forEach(it => {
+                total += (it.return_qty || 0) * it.unit_price;
+            });
+            document.getElementById('return-total').textContent = total.toFixed(2);
+        }
+        function prepareSubmit(e) {
+            const returns = poItems.filter(it => (it.return_qty || 0) > 0).map(it => ({
+                id: it.product_id,
+                qty: it.return_qty,
+                price: it.unit_price
+            }));
+            if (returns.length === 0) {
+                alert('Please select at least one item to return.');
+                e.preventDefault();
+                return;
+            }
+            document.getElementById('items_json').value = JSON.stringify(returns);
+        }
+    </script>
+<?php
             renderLayout('Purchase Returns', ob_get_clean(), 'purchase_returns');
         } else {
             $returns = $pdo->query('SELECT pr.*, s.company_name as supplier FROM purchase_returns pr JOIN suppliers s ON pr.supplier_id = s.id ORDER BY pr.id DESC')->fetchAll();
             ob_start();
-            ?>
-            <div class="page-header">
-                <h1>&#8630; Purchase Returns</h1>
-                <div class="page-header-actions"><a href="?page=purchase_returns&action=new" class="btn btn-primary btn-sm">+ New Return</a></div>
-            </div>
-            <div class="lf">
-                <table class="tbl">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>Return No.</th>
-                            <th>Supplier</th>
-                            <th>Date</th>
-                            <th>Total Amount</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if (empty($returns)): ?>
-                            <tr><td colspan="5" class="text-center">No purchase returns found.</td></tr>
-                        <?php endif; ?>
-                        <?php foreach ($returns as $idx => $r): ?>
-                            <tr>
-                                <td><?= $idx + 1 ?></td>
-                                <td><?= h($r['return_number']) ?></td>
-                                <td><?= h($r['supplier']) ?></td>
-                                <td><?= h($r['return_date']) ?></td>
-                                <td><?= formatCurrency((float) $r['total_amount']) ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-            <?php renderLayout('Purchase Returns', ob_get_clean(), 'purchase_returns');
+?>
+    <div class="page-header">
+        <h1>&#8630; Purchase Returns</h1>
+        <div class="page-header-actions"><a href="?page=purchase_returns&action=new" class="btn btn-primary btn-sm">+
+                New Return</a></div>
+    </div>
+    <div class="lf">
+        <table class="tbl">
+            <thead>
+            <tr>
+                <th>#</th>
+                <th>Return No.</th>
+                <th>Supplier</th>
+                <th>Date</th>
+                <th>Total Amount</th>
+            </tr>
+            </thead>
+            <tbody>
+            <?php if (empty($returns)): ?>
+                <tr>
+                    <td colspan="5" class="text-center">No purchase returns found.</td>
+                </tr>
+            <?php endif; ?>
+            <?php foreach ($returns as $idx => $r): ?>
+                <tr>
+                    <td><?= $idx + 1 ?></td>
+                    <td><?= h($r['return_number']) ?></td>
+                    <td><?= h($r['supplier']) ?></td>
+                    <td><?= h($r['return_date']) ?></td>
+                    <td><?= formatCurrency((float) $r['total_amount']) ?></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+<?php renderLayout('Purchase Returns', ob_get_clean(), 'purchase_returns');
         }
     }
 
@@ -6649,181 +9560,203 @@ if (!empty($_GET['ajax'])) {
         if ($action === 'new') {
             $products = $pdo->query("SELECT id,name,sku,current_stock FROM products WHERE status='active' ORDER BY name")->fetchAll();
             ob_start(); ?>
-            <div class="page-header">
-                <h1>&#128227; New Requisition</h1>
-                <div class="page-header-actions"><a href="?page=requisitions" class="btn btn-secondary btn-sm">Back to List</a></div>
+    <div class="page-header">
+        <h1>&#128227; New Requisition</h1>
+        <div class="page-header-actions"><a href="?page=requisitions" class="btn btn-secondary btn-sm">Back to List</a>
+        </div>
+    </div>
+    <div class="lf">
+        <form method="POST" id="rqForm">
+            <?= csrfField() ?>
+            <input type="hidden" name="save_requisition" value="1">
+            <input type="hidden" name="items_json" id="rqJ">
+            <div class="form-group mb-8">
+                <label>Notes / Reason</label>
+                <textarea name="notes" placeholder="Why is this being requested?"></textarea>
             </div>
             <div class="lf">
-                <form method="POST" id="rqForm">
-                    <?= csrfField() ?>
-                    <input type="hidden" name="save_requisition" value="1">
-                    <input type="hidden" name="items_json" id="rqJ">
-                    <div class="form-group mb-8">
-                        <label>Notes / Reason</label>
-                        <textarea name="notes" placeholder="Why is this being requested?"></textarea>
+                <span class="lf-title">Request Items</span>
+                <div class="form-group" style="flex-direction:row;gap:8px;align-items:flex-end">
+                    <div style="flex:1">
+                        <label>Product</label>
+                        <select id="rqP">
+                            <option value="">-- Choose Product --</option>
+                            <?php foreach ($products as $p) echo "<option value='{$p['id']}' data-sku='{$p['sku']}'>" . h($p['name']) . ' (' . h($p['sku']) . ')</option>'; ?>
+                        </select>
                     </div>
-                    <div class="lf">
-                        <span class="lf-title">Request Items</span>
-                        <div class="form-group" style="flex-direction:row;gap:8px;align-items:flex-end">
-                            <div style="flex:1">
-                                <label>Product</label>
-                                <select id="rqP">
-                                    <option value="">-- Choose Product --</option>
-                                    <?php foreach ($products as $p) echo "<option value='{$p['id']}' data-sku='{$p['sku']}'>" . h($p['name']) . ' (' . h($p['sku']) . ')</option>'; ?>
-                                </select>
-                            </div>
-                            <div style="width:100px"><label>Qty</label><input type="number" id="rqQ" value="1" min="1"></div>
-                            <button type="button" class="btn btn-primary" onclick="rqA()">Add Item</button>
-                        </div>
-                        <table class="tbl mt-8" id="rqT">
-                            <thead><tr><th>SKU</th><th>Product</th><th class="text-right">Qty</th><th></th></tr></thead>
-                            <tbody></tbody>
-                        </table>
-                    </div>
-                    <div class="mt-8"><button type="submit" class="btn btn-success" onclick="rqS(event)">Submit Requisition</button></div>
-                </form>
+                    <div style="width:100px"><label>Qty</label><input type="number" id="rqQ" value="1" min="1"></div>
+                    <button type="button" class="btn btn-primary" onclick="rqA()">Add Item</button>
+                </div>
+                <table class="tbl mt-8" id="rqT">
+                    <thead>
+                    <tr>
+                        <th>SKU</th>
+                        <th>Product</th>
+                        <th class="text-right">Qty</th>
+                        <th></th>
+                    </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
             </div>
-            <script>
-                let rqc = [];
-                function rqA() {
-                    let s = document.getElementById('rqP');
-                    let q = document.getElementById('rqQ');
-                    if(!s.value) return;
-                    let opt = s.options[s.selectedIndex];
-                    let id = +s.value;
-                    let f = rqc.find(i => i.id === id);
-                    if(f) {
-                        f.qty += +q.value;
-                    } else {
-                        rqc.push({
-                            id: id,
-                            sku: opt.dataset.sku,
-                            name: opt.text,
-                            qty: +q.value
-                        });
-                    }
-                    rqr();
-                }
-                function rqr() {
-                    let b = document.querySelector('#rqT tbody');
-                    b.innerHTML = '';
-                    rqc.forEach((i, k) => {
-                        b.innerHTML += `<tr>
+            <div class="mt-8">
+                <button type="submit" class="btn btn-success" onclick="rqS(event)">Submit Requisition</button>
+            </div>
+        </form>
+    </div>
+    <script>
+        let rqc = [];
+        function rqA() {
+            let s = document.getElementById('rqP');
+            let q = document.getElementById('rqQ');
+            if (!s.value) return;
+            let opt = s.options[s.selectedIndex];
+            let id = +s.value;
+            let f = rqc.find(i => i.id === id);
+            if (f) {
+                f.qty += +q.value;
+            } else {
+                rqc.push({
+                    id: id,
+                    sku: opt.dataset.sku,
+                    name: opt.text,
+                    qty: +q.value
+                });
+            }
+            rqr();
+        }
+        function rqr() {
+            let b = document.querySelector('#rqT tbody');
+            b.innerHTML = '';
+            rqc.forEach((i, k) => {
+                b.innerHTML += `<tr>
                             <td>${h(i.sku)}</td>
                             <td>${h(i.name)}</td>
                             <td class="text-right"><input type="number" value="${i.qty}" min="1" style="width:60px" onchange="rqc[${k}].qty=+this.value;rqr()"></td>
                             <td class="text-center"><button type="button" class="btn btn-danger btn-xs" onclick="rqc.splice(${k},1);rqr()">×</button></td>
                         </tr>`;
-                    });
-                }
-                function rqS(e) {
-                    if (rqc.length === 0) {
-                        alert('Please add at least one item.');
-                        e.preventDefault();
-                        return;
-                    }
-                    document.getElementById('rqJ').value = JSON.stringify(rqc);
-                }
-            </script>
-            <?php
+            });
+        }
+        function rqS(e) {
+            if (rqc.length === 0) {
+                alert('Please add at least one item.');
+                e.preventDefault();
+                return;
+            }
+            document.getElementById('rqJ').value = JSON.stringify(rqc);
+        }
+    </script>
+<?php
         } else {
             $reqs = $pdo->query('SELECT r.*, u.full_name as requester FROM requisitions r JOIN users u ON u.id=r.requested_by ORDER BY r.id DESC')->fetchAll();
             $suppliers = $pdo->query('SELECT id, company_name FROM suppliers WHERE status="active"')->fetchAll();
             ob_start();
-            ?>
-            <div class="page-header">
-                <h1>&#128227; Requisitions</h1>
-                <div class="page-header-actions"><a href="?page=requisitions&action=new" class="btn btn-primary btn-sm">+ New Requisition</a></div>
-            </div>
-            <?php if (isset($_SESSION['flash_msg'])): ?>
-                <div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div>
-                <?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']); ?>
-            <?php endif; ?>
-            <div class="lf">
-                <div class="tbl-wrap">
-                    <table class="tbl">
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>Requester</th>
-                                <th>Date</th>
-                                <th>Status</th>
-                                <th>Notes</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($reqs as $r): ?>
-                                <tr>
-                                    <td><?= h($r['req_number']) ?></td>
-                                    <td><?= h($r['requester']) ?></td>
-                                    <td><?= h($r['created_at']) ?></td>
-                                    <td><span class="badge badge-<?= ['pending' => 'warning', 'approved' => 'success', 'rejected' => 'danger', 'ordered' => 'primary'][$r['status']] ?? 'secondary' ?>"><?= strtoupper($r['status']) ?></span></td>
-                                    <td><?= h($r['notes']) ?></td>
-                                    <td>
-                                        <div class="tbl-actions">
-                                            <?php if ($r['status'] === 'pending' && canAccess(['admin', 'manager'])): ?>
-                                                <form method="POST" style="display:inline">
-                                                    <?= csrfField() ?>
-                                                    <input type="hidden" name="update_status" value="1">
-                                                    <input type="hidden" name="req_id" value="<?= $r['id'] ?>">
-                                                    <input type="hidden" name="status" value="approved">
-                                                    <button type="submit" class="btn btn-success btn-xs">Approve</button>
-                                                </form>
-                                                <form method="POST" style="display:inline">
-                                                    <?= csrfField() ?>
-                                                    <input type="hidden" name="update_status" value="1">
-                                                    <input type="hidden" name="req_id" value="<?= $r['id'] ?>">
-                                                    <input type="hidden" name="status" value="rejected">
-                                                    <button type="submit" class="btn btn-danger btn-xs">Reject</button>
-                                                </form>
-                                            <?php endif; ?>
-                                            <?php if ($r['status'] === 'approved'): ?>
-                                                <button class="btn btn-primary btn-xs" onclick="openPoModal(<?= $r['id'] ?>, '<?= h($r['req_number']) ?>')">Create PO</button>
-                                            <?php endif; ?>
-                                        </div>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                            <?php if (empty($reqs)): ?>
-                                <tr><td colspan="6" class="text-center text-muted">No requisitions found</td></tr>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            <div id="poModal" class="modal-overlay">
-                <div class="modal">
-                    <div class="modal-title-bar"><span>Create PO from Requisition</span><button class="modal-close-btn" onclick="closeModal('poModal')">&times;</button></div>
-                    <form method="POST">
-                        <?= csrfField() ?>
-                        <input type="hidden" name="create_po" value="1">
-                        <input type="hidden" name="req_id" id="modal_req_id">
-                        <div class="modal-body">
-                            <p>Select a supplier to create a draft Purchase Order for Requisition <strong id="modal_req_num"></strong>.</p>
-                            <div class="form-group mt-8">
-                                <label>Supplier</label>
-                                <select name="supplier_id" required>
-                                    <option value="">-- Select Supplier --</option>
-                                    <?php foreach ($suppliers as $s) echo "<option value='{$s['id']}'>" . h($s['company_name']) . '</option>'; ?>
-                                </select>
+?>
+    <div class="page-header">
+        <h1>&#128227; Requisitions</h1>
+        <div class="page-header-actions"><a href="?page=requisitions&action=new" class="btn btn-primary btn-sm">+ New
+                Requisition</a></div>
+    </div>
+<?php if (isset($_SESSION['flash_msg'])): ?>
+    <div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div>
+<?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']); ?>
+<?php endif; ?>
+    <div class="lf">
+        <div class="tbl-wrap">
+            <table class="tbl">
+                <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Requester</th>
+                    <th>Date</th>
+                    <th>Status</th>
+                    <th>Notes</th>
+                    <th>Action</th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($reqs as $r): ?>
+                    <tr>
+                        <td><?= h($r['req_number']) ?></td>
+                        <td><?= h($r['requester']) ?></td>
+                        <td><?= h($r['created_at']) ?></td>
+                        <td>
+                            <span class="badge badge-<?= ['pending' => 'warning', 'approved' => 'success', 'rejected' => 'danger', 'ordered' => 'primary'][$r['status']] ?? 'secondary' ?>"><?= strtoupper($r['status']) ?></span>
+                        </td>
+                        <td><?= h($r['notes']) ?></td>
+                        <td>
+                            <div class="tbl-actions">
+                                <?php if ($r['status'] === 'pending' && canAccess(['admin', 'manager'])): ?>
+                                    <form method="POST" style="display:inline">
+                                        <?= csrfField() ?>
+                                        <input type="hidden" name="update_status" value="1">
+                                        <input type="hidden" name="req_id" value="<?= $r['id'] ?>">
+                                        <input type="hidden" name="status" value="approved">
+                                        <button type="submit" class="btn btn-success btn-xs">Approve</button>
+                                    </form>
+                                    <form method="POST" style="display:inline">
+                                        <?= csrfField() ?>
+                                        <input type="hidden" name="update_status" value="1">
+                                        <input type="hidden" name="req_id" value="<?= $r['id'] ?>">
+                                        <input type="hidden" name="status" value="rejected">
+                                        <button type="submit" class="btn btn-danger btn-xs">Reject</button>
+                                    </form>
+                                <?php endif; ?>
+                                <?php if ($r['status'] === 'approved'): ?>
+                                    <button class="btn btn-primary btn-xs"
+                                            onclick="openPoModal(<?= $r['id'] ?>, '<?= h($r['req_number']) ?>')">Create
+                                        PO
+                                    </button>
+                                <?php endif; ?>
                             </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('poModal')">Cancel</button>
-                            <button type="submit" class="btn btn-primary btn-sm">Generate PO</button>
-                        </div>
-                    </form>
-                </div>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                <?php if (empty($reqs)): ?>
+                    <tr>
+                        <td colspan="6" class="text-center text-muted">No requisitions found</td>
+                    </tr>
+                <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div id="poModal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-title-bar"><span>Create PO from Requisition</span>
+                <button class="modal-close-btn" onclick="closeModal('poModal')">&times;</button>
             </div>
-            <script>
-                function openPoModal(id, num) {
-                    document.getElementById('modal_req_id').value = id;
-                    document.getElementById('modal_req_num').textContent = num;
-                    openModal('poModal');
-                }
-            </script>
-            <?php
+            <form method="POST">
+                <?= csrfField() ?>
+                <input type="hidden" name="create_po" value="1">
+                <input type="hidden" name="req_id" id="modal_req_id">
+                <div class="modal-body">
+                    <p>Select a supplier to create a draft Purchase Order for Requisition <strong
+                                id="modal_req_num"></strong>.</p>
+                    <div class="form-group mt-8">
+                        <label>Supplier</label>
+                        <select name="supplier_id" required>
+                            <option value="">-- Select Supplier --</option>
+                            <?php foreach ($suppliers as $s) echo "<option value='{$s['id']}'>" . h($s['company_name']) . '</option>'; ?>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('poModal')">Cancel
+                    </button>
+                    <button type="submit" class="btn btn-primary btn-sm">Generate PO</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <script>
+        function openPoModal(id, num) {
+            document.getElementById('modal_req_id').value = id;
+            document.getElementById('modal_req_num').textContent = num;
+            openModal('poModal');
+        }
+    </script>
+<?php
         }
         $content = ob_get_clean();
         renderLayout('Requisitions', $content, 'requisitions');
@@ -6933,140 +9866,161 @@ if (!empty($_GET['ajax'])) {
             $stmtItems = $pdo->prepare('SELECT sai.*, p.name as product_name, p.sku, p.unit FROM stock_audit_items sai JOIN products p ON p.id=sai.product_id WHERE sai.audit_id=? ORDER BY p.name');
             $stmtItems->execute([$id]);
             $items = $stmtItems->fetchAll();
-            ?>
-            <div class="page-header">
-                <h1>&#128269; Stock Audit: <?= h($audit['audit_number']) ?></h1>
-                <div class="page-header-actions">
-                    <a href="?page=stock_audit" class="btn btn-secondary btn-sm">Back to List</a>
-                    <button class="btn btn-primary btn-sm no-print" onclick="window.print()">Print List</button>
-                </div>
-            </div>
-            <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
+?>
+    <div class="page-header">
+        <h1>&#128269; Stock Audit: <?= h($audit['audit_number']) ?></h1>
+        <div class="page-header-actions">
+            <a href="?page=stock_audit" class="btn btn-secondary btn-sm">Back to List</a>
+            <button class="btn btn-primary btn-sm no-print" onclick="window.print()">Print List</button>
+        </div>
+    </div>
+    <?php if (isset($_SESSION['flash_msg'])): ?>
+    <div
+    class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
             endif; ?>
-            <div class="lf">
-                <span class="lf-title">Audit Info</span>
-                <div style="display:flex; gap:30px; padding:5px;">
-                    <div>Date: <strong><?= formatDate($audit['audit_date']) ?></strong></div>
-                    <div>Status: <span class="badge badge-<?= $audit['status'] === 'open' ? 'warning' : 'success' ?>"><?= strtoupper($audit['status']) ?></span></div>
-                    <div>Created By: <strong><?= h($audit['creator']) ?></strong></div>
-                </div>
+    <div class="lf">
+        <span class="lf-title">Audit Info</span>
+        <div style="display:flex; gap:30px; padding:5px;">
+            <div>Date: <strong><?= formatDate($audit['audit_date']) ?></strong></div>
+            <div>Status: <span
+                        class="badge badge-<?= $audit['status'] === 'open' ? 'warning' : 'success' ?>"><?= strtoupper($audit['status']) ?></span>
             </div>
-            <form method="POST">
-                <?= csrfField() ?>
-                <input type="hidden" name="audit_id" value="<?= $id ?>">
-                <div class="tbl-wrap">
-                    <table class="tbl">
-                        <thead>
-                            <tr>
-                                <th>Product</th>
-                                <th class="text-right">System Qty</th>
-                                <th class="text-right">Counted Qty</th>
-                                <th class="text-right">Difference</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php
-                            foreach ($items as $x):
-                                $diff = (int) $x['difference'];
-                                $diffClass = '';
-                                if ($diff > 0)
-                                    $diffClass = 'stock-ok';
-                                elseif ($diff < 0)
-                                    $diffClass = 'stock-critical';
-                                ?>
-                                <tr>
-                                    <td><strong><?= h($x['product_name']) ?></strong><br><small style="color:#666"><?= h($x['sku']) ?></small></td>
-                                    <td class="text-right"><?= number_format($x['system_qty']) ?> <small><?= h($x['unit']) ?></small></td>
-                                    <td class="text-right">
-                                        <?php if ($audit['status'] === 'open'): ?>
-                                            <input type="number" name="counts[<?= $x['product_id'] ?>]" value="<?= (int) $x['counted_qty'] ?>" class="text-right" style="width:100px; padding:4px;" onchange="updDiff(this, <?= (int) $x['system_qty'] ?>)">
-                                        <?php else: ?>
-                                            <strong><?= number_format($x['counted_qty']) ?></strong>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td class="text-right diff-val <?= $diffClass ?>" style="font-weight:700">
-                                        <?= $diff > 0 ? '+' : '' ?><?= number_format($diff) ?>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-                <?php if ($audit['status'] === 'open'): ?>
-                    <div class="mt-8 no-print" style="display:flex; justify-content:flex-end; gap:10px; padding:10px 0;">
-                        <button type="submit" name="action" value="save_counts" class="btn btn-primary">Save Counts</button>
-                        <button type="submit" name="action" value="finalize_audit" class="btn btn-success" onclick="return confirm('Are you sure you want to finalize this audit? Product stock levels will be updated immediately.')">Finalize & Post Variance</button>
-                    </div>
-                <?php endif; ?>
-            </form>
-            <script>
-            function updDiff(inp, sys) {
-                var c = parseInt(inp.value) || 0;
-                var d = c - sys;
-                var cell = inp.closest('tr').querySelector('.diff-val');
-                cell.textContent = (d > 0 ? '+' : '') + d;
-                cell.className = 'text-right diff-val ' + (d > 0 ? 'stock-ok' : (d < 0 ? 'stock-critical' : ''));
-            }
-            </script>
-        <?php
+            <div>Created By: <strong><?= h($audit['creator']) ?></strong></div>
+        </div>
+    </div>
+    <form method="POST">
+        <?= csrfField() ?>
+        <input type="hidden" name="audit_id" value="<?= $id ?>">
+        <div class="tbl-wrap">
+            <table class="tbl">
+                <thead>
+                <tr>
+                    <th>Product</th>
+                    <th class="text-right">System Qty</th>
+                    <th class="text-right">Counted Qty</th>
+                    <th class="text-right">Difference</th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php
+                foreach ($items as $x):
+                    $diff = (int) $x['difference'];
+                    $diffClass = '';
+                    if ($diff > 0)
+                        $diffClass = 'stock-ok';
+                    elseif ($diff < 0)
+                        $diffClass = 'stock-critical';
+                    ?>
+                    <tr>
+                        <td><strong><?= h($x['product_name']) ?></strong><br><small
+                                    style="color:#666"><?= h($x['sku']) ?></small></td>
+                        <td class="text-right"><?= number_format($x['system_qty']) ?><small><?= h($x['unit']) ?></small>
+                        </td>
+                        <td class="text-right">
+                            <?php if ($audit['status'] === 'open'): ?>
+                                <input type="number" name="counts[<?= $x['product_id'] ?>]"
+                                       value="<?= (int) $x['counted_qty'] ?>" class="text-right"
+                                       style="width:100px; padding:4px;"
+                                       onchange="updDiff(this, <?= (int) $x['system_qty'] ?>)">
+                            <?php else: ?>
+                                <strong><?= number_format($x['counted_qty']) ?></strong>
+                            <?php endif; ?>
+                        </td>
+                        <td class="text-right diff-val <?= $diffClass ?>" style="font-weight:700">
+                            <?= $diff > 0 ? '+' : '' ?><?= number_format($diff) ?>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+        <?php if ($audit['status'] === 'open'): ?>
+            <div class="mt-8 no-print" style="display:flex; justify-content:flex-end; gap:10px; padding:10px 0;">
+                <button type="submit" name="action" value="save_counts" class="btn btn-primary">Save Counts</button>
+                <button type="submit" name="action" value="finalize_audit" class="btn btn-success"
+                        onclick="return confirm('Are you sure you want to finalize this audit? Product stock levels will be updated immediately.')">
+                    Finalize & Post Variance
+                </button>
+            </div>
+        <?php endif; ?>
+    </form>
+    <script>
+        function updDiff(inp, sys) {
+            var c = parseInt(inp.value) || 0;
+            var d = c - sys;
+            var cell = inp.closest('tr').querySelector('.diff-val');
+            cell.textContent = (d > 0 ? '+' : '') + d;
+            cell.className = 'text-right diff-val ' + (d > 0 ? 'stock-ok' : (d < 0 ? 'stock-critical' : ''));
+        }
+    </script>
+<?php
         else:
             $a = $pdo->query('SELECT a.*, u.full_name as creator, w.name as warehouse_name FROM stock_audits a JOIN users u ON u.id=a.created_by LEFT JOIN warehouses w ON w.id=a.warehouse_id ORDER BY a.id DESC')->fetchAll();
             $warehouses = $pdo->query("SELECT id, name FROM warehouses WHERE status='active' ORDER BY name")->fetchAll();
-            ?>
-            <div class="page-header">
-                <h1>&#128269; Stock Audits</h1>
-                <div class="page-header-actions">
-                    <form method="POST" style="display:flex;gap:6px" onsubmit="return confirm('Start a new warehouse-wide stock audit? This will capture all current system stock levels.')">
-                        <?= csrfField() ?>
-                        <input type="hidden" name="action" value="start_audit">
-                        <select name="warehouse_id" required class="form-control" style="padding:4px 8px;font-size:12px;border:2px inset #a0a0a0;height:auto">
-                            <?php foreach ($warehouses as $w): ?>
-                                <option value="<?= $w['id'] ?>"><?= h($w['name']) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                        <button type="submit" class="btn btn-primary btn-sm">+ Start New Audit</button>
-                    </form>
-                </div>
-            </div>
-            <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
+?>
+    <div class="page-header">
+        <h1>&#128269; Stock Audits</h1>
+        <div class="page-header-actions">
+            <form method="POST" style="display:flex;gap:6px"
+                  onsubmit="return confirm('Start a new warehouse-wide stock audit? This will capture all current system stock levels.')">
+                <?= csrfField() ?>
+                <input type="hidden" name="action" value="start_audit">
+                <select name="warehouse_id" required class="form-control"
+                        style="padding:4px 8px;font-size:12px;border:2px inset #a0a0a0;height:auto">
+                    <?php foreach ($warehouses as $w): ?>
+                        <option value="<?= $w['id'] ?>"><?= h($w['name']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <button type="submit" class="btn btn-primary btn-sm">+ Start New Audit</button>
+            </form>
+        </div>
+    </div>
+    <?php if (isset($_SESSION['flash_msg'])): ?>
+    <div
+    class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
             endif; ?>
-            <div class="lf">
-                <table class="tbl">
-                    <thead>
-                        <tr>
-                            <th>Ref #</th>
-                            <th>Warehouse</th>
-                            <th>Date</th>
-                            <th>Items</th>
-                            <th>Created By</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if (empty($a)): ?><tr><td colspan="7" class="text-center" style="padding:20px; color:#888;">No stock audits found.</td></tr><?php endif; ?>
-                        <?php
-                        foreach ($a as $x):
-                            $count = $pdo->prepare('SELECT COUNT(*) FROM stock_audit_items WHERE audit_id=?');
-                            $count->execute([$x['id']]);
-                            $numItems = $count->fetchColumn();
-                            ?>
-                            <tr>
-                                <td><code><?= h($x['audit_number']) ?></code></td>
-                                <td><?= h($x['warehouse_name'] ?? 'Main') ?></td>
-                                <td><?= formatDate($x['audit_date']) ?></td>
-                                <td><?= $numItems ?> items</td>
-                                <td><?= h($x['creator']) ?></td>
-                                <td><span class="badge badge-<?= $x['status'] === 'open' ? 'warning' : 'success' ?>"><?= strtoupper($x['status']) ?></span></td>
-                                <td>
-                                    <a href="?page=stock_audit&id=<?= $x['id'] ?>" class="btn btn-xs btn-secondary">View Details</a>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-        <?php endif;
+    <div class="lf">
+        <table class="tbl">
+            <thead>
+            <tr>
+                <th>Ref #</th>
+                <th>Warehouse</th>
+                <th>Date</th>
+                <th>Items</th>
+                <th>Created By</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+            </thead>
+            <tbody>
+            <?php if (empty($a)): ?>
+                <tr>
+                    <td colspan="7" class="text-center" style="padding:20px; color:#888;">No stock audits found.</td>
+                </tr><?php endif; ?>
+            <?php
+            foreach ($a as $x):
+                $count = $pdo->prepare('SELECT COUNT(*) FROM stock_audit_items WHERE audit_id=?');
+                $count->execute([$x['id']]);
+                $numItems = $count->fetchColumn();
+                ?>
+                <tr>
+                    <td><code><?= h($x['audit_number']) ?></code></td>
+                    <td><?= h($x['warehouse_name'] ?? 'Main') ?></td>
+                    <td><?= formatDate($x['audit_date']) ?></td>
+                    <td><?= $numItems ?> items</td>
+                    <td><?= h($x['creator']) ?></td>
+                    <td>
+                        <span class="badge badge-<?= $x['status'] === 'open' ? 'warning' : 'success' ?>"><?= strtoupper($x['status']) ?></span>
+                    </td>
+                    <td>
+                        <a href="?page=stock_audit&id=<?= $x['id'] ?>" class="btn btn-xs btn-secondary">View Details</a>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+<?php endif;
         $content = ob_get_clean();
         renderLayout('Stock Audit', $content, 'stock_audit');
     }
@@ -7086,11 +10040,53 @@ if (!empty($_GET['ajax'])) {
         }
         $t = $pdo->query('SELECT * FROM taxes')->fetchAll();
         ob_start(); ?>
-    <div class="page-header"><h1>Taxes</h1><div class="page-header-actions"><button class="btn btn-primary btn-sm" onclick="openModal('txM')">+ Add</button></div></div>
-    <div class="lf"><table class="tbl"><thead><tr><th>Name</th><th>Rate</th><th>Default</th><th></th></tr></thead><tbody><?php foreach ($t as $x): ?><tr><td><?= h($x['name']) ?></td><td><?= $x['rate'] ?>%</td><td><?= $x['is_default'] ? 'Yes' : 'No' ?></td><td><button class="btn btn-xs" onclick="eT(<?= $x['id'] ?>,'<?= h($x['name']) ?>',<?= $x['rate'] ?>,<?= $x['is_default'] ?>)">Edit</button></td></tr><?php endforeach; ?></tbody></table></div>
-    <div id="txM" class="modal-overlay"><div class="modal"><form method="POST"><?= csrfField() ?><input type="hidden" name="id" id="ti"><input name="name" id="tn" placeholder="Name" required><input name="rate" id="tr" type="number" step="0.01" placeholder="Rate" required><label><input type="checkbox" name="def" id="td"> Default</label><button>Save</button></form></div></div>
-    <script>function eT(i,n,r,d){ti.value=i;tn.value=n;tr.value=r;td.checked=d==1;openModal('txM')}</script>
-    <?php renderLayout('Taxes', ob_get_clean(), 'taxes');
+    <div class="page-header"><h1>Taxes</h1>
+        <div class="page-header-actions">
+            <button class="btn btn-primary btn-sm" onclick="openModal('txM')">+ Add</button>
+        </div>
+    </div>
+    <div class="lf">
+        <table class="tbl">
+            <thead>
+            <tr>
+                <th>Name</th>
+                <th>Rate</th>
+                <th>Default</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody><?php foreach ($t as $x): ?>
+                <tr>
+                <td><?= h($x['name']) ?></td>
+                <td><?= $x['rate'] ?>%</td>
+                <td><?= $x['is_default'] ? 'Yes' : 'No' ?></td>
+                <td>
+                    <button class="btn btn-xs"
+                            onclick="eT(<?= $x['id'] ?>,'<?= h($x['name']) ?>',<?= $x['rate'] ?>,<?= $x['is_default'] ?>)">
+                        Edit
+                    </button>
+                </td></tr><?php endforeach; ?></tbody>
+        </table>
+    </div>
+    <div id="txM" class="modal-overlay">
+        <div class="modal">
+            <form method="POST"><?= csrfField() ?><input type="hidden" name="id" id="ti"><input name="name" id="tn"
+                                                                                                placeholder="Name"
+                                                                                                required><input
+                        name="rate" id="tr" type="number" step="0.01" placeholder="Rate" required><label><input
+                            type="checkbox" name="def" id="td"> Default</label>
+                <button>Save</button>
+            </form>
+        </div>
+    </div>
+    <script>function eT(i, n, r, d) {
+            ti.value = i;
+            tn.value = n;
+            tr.value = r;
+            td.checked = d == 1;
+            openModal('txM')
+        }</script>
+<?php renderLayout('Taxes', ob_get_clean(), 'taxes');
     }
 
     function renderCurrencies(): void
@@ -7104,10 +10100,42 @@ if (!empty($_GET['ajax'])) {
         }
         $c = $pdo->query('SELECT * FROM currencies')->fetchAll();
         ob_start(); ?>
-    <div class="page-header"><h1>Currencies</h1><div class="page-header-actions"><button class="btn btn-primary btn-sm" onclick="openModal('cuM')">+ Add</button></div></div>
-    <div class="lf"><table class="tbl"><thead><tr><th>Code</th><th>Name</th><th>Rate</th><th>Base</th></tr></thead><tbody><?php foreach ($c as $x): ?><tr><td><?= $x['code'] ?></td><td><?= h($x['name']) ?></td><td><?= $x['rate_to_base'] ?></td><td><?= $x['is_base'] ? 'Yes' : 'No' ?></td></tr><?php endforeach; ?></tbody></table></div>
-    <div id="cuM" class="modal-overlay"><div class="modal"><form method="POST"><?= csrfField() ?><input name="code" placeholder="USD" maxlength="3" required><input name="name" placeholder="US Dollar" required><input name="symbol" placeholder="$" required><input name="rate" type="number" step="0.000001" value="1" required><label><input type="checkbox" name="base"> Base</label><button>Save</button></form></div></div>
-    <?php
+    <div class="page-header"><h1>Currencies</h1>
+        <div class="page-header-actions">
+            <button class="btn btn-primary btn-sm" onclick="openModal('cuM')">+ Add</button>
+        </div>
+    </div>
+    <div class="lf">
+        <table class="tbl">
+            <thead>
+            <tr>
+                <th>Code</th>
+                <th>Name</th>
+                <th>Rate</th>
+                <th>Base</th>
+            </tr>
+            </thead>
+            <tbody><?php foreach ($c as $x): ?>
+                <tr>
+                <td><?= $x['code'] ?></td>
+                <td><?= h($x['name']) ?></td>
+                <td><?= $x['rate_to_base'] ?></td>
+                <td><?= $x['is_base'] ? 'Yes' : 'No' ?></td></tr><?php endforeach; ?></tbody>
+        </table>
+    </div>
+    <div id="cuM" class="modal-overlay">
+        <div class="modal">
+            <form method="POST"><?= csrfField() ?><input name="code" placeholder="USD" maxlength="3" required><input
+                        name="name" placeholder="US Dollar" required><input name="symbol" placeholder="$"
+                                                                            required><input name="rate" type="number"
+                                                                                            step="0.000001" value="1"
+                                                                                            required><label><input
+                            type="checkbox" name="base"> Base</label>
+                <button>Save</button>
+            </form>
+        </div>
+    </div>
+<?php
         renderLayout('Currencies', ob_get_clean(), 'currencies');
     }
 
@@ -7142,91 +10170,133 @@ if (!empty($_GET['ajax'])) {
         $openShift->execute([$_SESSION['user_id']]);
         $myOpenShift = $openShift->fetch();
         ob_start();
-    ?>
+?>
     <div class="page-header"><h1>&#128336; POS Shifts / Registers</h1></div>
-    <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
+    <?php if (isset($_SESSION['flash_msg'])): ?>
+    <div
+    class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
     <div class="cols-2">
         <div>
             <div class="lf"><span class="lf-title">My Current Shift</span>
-            <?php
-            if ($myOpenShift):
-                $expectedCash = $myOpenShift['opening_float'] + $myOpenShift['cash_sales'];
-                ?>
-                <div style="padding:15px; background:#f9f9f9; border:1px solid #ddd; border-radius:4px;">
-                    <div style="margin-bottom:10px;">Opened at: <strong><?= $myOpenShift['open_time'] ?></strong></div>
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:15px;">
-                        <div>Opening Float:<br><strong><?= formatCurrency($myOpenShift['opening_float']) ?></strong></div>
-                        <div>Cash Sales:<br><strong><?= formatCurrency($myOpenShift['cash_sales']) ?></strong></div>
-                        <div>Card Sales:<br><strong><?= formatCurrency($myOpenShift['card_sales']) ?></strong></div>
-                        <div>Total Sales:<br><strong><?= formatCurrency($myOpenShift['total_sales']) ?></strong></div>
-                        <div style="grid-column: span 2; padding-top:10px; border-top:1px solid #eee;">
-                            Expected Cash in Drawer:<br><strong style="font-size:1.4em; color:var(--primary);"><?= formatCurrency($expectedCash) ?></strong>
+                <?php
+                if ($myOpenShift):
+                    $expectedCash = $myOpenShift['opening_float'] + $myOpenShift['cash_sales'];
+                    ?>
+                    <div style="padding:15px; background:#f9f9f9; border:1px solid #ddd; border-radius:4px;">
+                        <div style="margin-bottom:10px;">Opened at: <strong><?= $myOpenShift['open_time'] ?></strong>
                         </div>
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:15px;">
+                            <div>Opening Float:<br><strong><?= formatCurrency($myOpenShift['opening_float']) ?></strong>
+                            </div>
+                            <div>Cash Sales:<br><strong><?= formatCurrency($myOpenShift['cash_sales']) ?></strong></div>
+                            <div>Card Sales:<br><strong><?= formatCurrency($myOpenShift['card_sales']) ?></strong></div>
+                            <div>Total Sales:<br><strong><?= formatCurrency($myOpenShift['total_sales']) ?></strong>
+                            </div>
+                            <div style="grid-column: span 2; padding-top:10px; border-top:1px solid #eee;">
+                                Expected Cash in Drawer:<br><strong
+                                        style="font-size:1.4em; color:var(--primary);"><?= formatCurrency($expectedCash) ?></strong>
+                            </div>
+                        </div>
+                        <button class="btn btn-danger btn-block" onclick="openModal('closeShiftModal')">Close Shift &
+                            Reconcile
+                        </button>
                     </div>
-                    <button class="btn btn-danger btn-block" onclick="openModal('closeShiftModal')">Close Shift & Reconcile</button>
-                </div>
-            <?php else: ?>
-                <div style="padding:20px; text-align:center; background:#f0f0f0; border:2px dashed #ccc; color:#666;">
-                    <p style="margin-bottom:15px;">No open shift found for your user account.</p>
-                    <button class="btn btn-success" onclick="openModal('openShiftModal')">Open New Shift</button>
-                </div>
-            <?php endif; ?>
+                <?php else: ?>
+                    <div style="padding:20px; text-align:center; background:#f0f0f0; border:2px dashed #ccc; color:#666;">
+                        <p style="margin-bottom:15px;">No open shift found for your user account.</p>
+                        <button class="btn btn-success" onclick="openModal('openShiftModal')">Open New Shift</button>
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
         <div>
             <div class="lf"><span class="lf-title">Recent Shifts</span>
-            <div class="tbl-wrap"><table class="tbl"><thead><tr><th>User</th><th>Opened</th><th>Closed</th><th class="text-right">Expected</th><th class="text-right">Actual</th><th>Status</th></tr></thead><tbody>
-            <?php if (empty($s)): ?><tr><td colspan="6" class="text-center text-muted">No shifts recorded</td></tr><?php endif; ?>
-            <?php
-            foreach ($s as $x):
-                $exp = $x['opening_float'] + $x['total_sales'];
-                $diff = ($x['closing_cash'] !== null) ? ($x['closing_cash'] - $exp) : 0;
-                ?>
-                <tr>
-                    <td><?= h($x['full_name']) ?></td>
-                    <td><?= date('d M H:i', strtotime($x['open_time'])) ?></td>
-                    <td><?= $x['close_time'] ? date('d M H:i', strtotime($x['close_time'])) : '-' ?></td>
-                    <td class="text-right"><?= formatCurrency($exp) ?></td>
-                    <td class="text-right">
-                        <?= ($x['closing_cash'] !== null) ? formatCurrency($x['closing_cash']) : '-' ?>
-                        <?php if ($x['status'] === 'closed'): ?>
-                            <br><small style="color:<?= $diff >= 0 ? 'green' : 'red' ?>"><?= $diff >= 0 ? '+' : '' ?><?= formatCurrency($diff) ?></small>
-                        <?php endif; ?>
-                    </td>
-                    <td><span class="badge badge-<?= $x['status'] === 'open' ? 'success' : 'secondary' ?>"><?= strtoupper($x['status']) ?></span></td>
-                </tr>
-            <?php endforeach; ?>
-            </tbody></table></div></div>
+                <div class="tbl-wrap">
+                    <table class="tbl">
+                        <thead>
+                        <tr>
+                            <th>User</th>
+                            <th>Opened</th>
+                            <th>Closed</th>
+                            <th class="text-right">Expected</th>
+                            <th class="text-right">Actual</th>
+                            <th>Status</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php if (empty($s)): ?>
+                            <tr>
+                                <td colspan="6" class="text-center text-muted">No shifts recorded</td>
+                            </tr><?php endif; ?>
+                        <?php
+                        foreach ($s as $x):
+                            $exp = $x['opening_float'] + $x['total_sales'];
+                            $diff = ($x['closing_cash'] !== null) ? ($x['closing_cash'] - $exp) : 0;
+                            ?>
+                            <tr>
+                                <td><?= h($x['full_name']) ?></td>
+                                <td><?= date('d M H:i', strtotime($x['open_time'])) ?></td>
+                                <td><?= $x['close_time'] ? date('d M H:i', strtotime($x['close_time'])) : '-' ?></td>
+                                <td class="text-right"><?= formatCurrency($exp) ?></td>
+                                <td class="text-right">
+                                    <?= ($x['closing_cash'] !== null) ? formatCurrency($x['closing_cash']) : '-' ?>
+                                    <?php if ($x['status'] === 'closed'): ?>
+                                        <br><small
+                                                style="color:<?= $diff >= 0 ? 'green' : 'red' ?>"><?= $diff >= 0 ? '+' : '' ?><?= formatCurrency($diff) ?></small>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <span class="badge badge-<?= $x['status'] === 'open' ? 'success' : 'secondary' ?>"><?= strtoupper($x['status']) ?></span>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
     <div id="openShiftModal" class="modal-overlay">
         <div class="modal">
-            <div class="modal-title-bar"><span>Open New Shift</span><button class="modal-close-btn" onclick="closeModal('openShiftModal')">&times;</button></div>
+            <div class="modal-title-bar"><span>Open New Shift</span>
+                <button class="modal-close-btn" onclick="closeModal('openShiftModal')">&times;</button>
+            </div>
             <form method="POST"><?= csrfField() ?><input type="hidden" name="action" value="open_shift">
                 <div class="modal-body">
-                    <div class="form-group"><label>Opening Cash Float</label><input type="number" name="opening_float" step="0.01" value="0.00" class="form-control" autofocus></div>
+                    <div class="form-group"><label>Opening Cash Float</label><input type="number" name="opening_float"
+                                                                                    step="0.01" value="0.00"
+                                                                                    class="form-control" autofocus>
+                    </div>
                 </div>
-                <div class="modal-footer"><button type="submit" class="btn btn-primary">Start Shift</button></div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Start Shift</button>
+                </div>
             </form>
         </div>
     </div>
     <div id="closeShiftModal" class="modal-overlay">
         <div class="modal">
-            <div class="modal-title-bar"><span>Close Shift & Reconcile</span><button class="modal-close-btn" onclick="closeModal('closeShiftModal')">&times;</button></div>
+            <div class="modal-title-bar"><span>Close Shift & Reconcile</span>
+                <button class="modal-close-btn" onclick="closeModal('closeShiftModal')">&times;</button>
+            </div>
             <form method="POST"><?= csrfField() ?><input type="hidden" name="action" value="close_shift">
                 <input type="hidden" name="shift_id" value="<?= $myOpenShift['id'] ?? '' ?>">
                 <div class="modal-body">
                     <div style="margin-bottom:15px; padding:10px; background:#eef; border:1px solid #ccd; border-radius:4px;">
                         Expected Cash: <strong><?= formatCurrency($expectedCash ?? 0) ?></strong>
                     </div>
-                    <div class="form-group"><label>Actual Cash in Drawer</label><input type="number" name="closing_cash" step="0.01" class="form-control" required autofocus></div>
+                    <div class="form-group"><label>Actual Cash in Drawer</label><input type="number" name="closing_cash"
+                                                                                       step="0.01" class="form-control"
+                                                                                       required autofocus></div>
                 </div>
-                <div class="modal-footer"><button type="submit" class="btn btn-danger">Finalize & Close</button></div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-danger">Finalize & Close</button>
+                </div>
             </form>
         </div>
     </div>
-    <?php
+<?php
         $content = ob_get_clean();
         renderLayout('Shifts', $content, 'shifts');
     }
@@ -7293,55 +10363,154 @@ if (!empty($_GET['ajax'])) {
         $integrations = $pdo->query('SELECT * FROM api_keys ORDER BY platform, name')->fetchAll();
         $logs = $pdo->query('SELECT l.*, k.name, k.platform FROM sync_logs l JOIN api_keys k ON k.id=l.integration_id ORDER BY l.created_at DESC LIMIT 20')->fetchAll();
         ob_start();
-    ?>
-    <div class="page-header"><h1>&#128279; E-Commerce Sync</h1><div class="page-header-actions"><button class="btn btn-primary btn-sm" onclick="openModal('apiM')">+ Add Integration</button></div></div>
-    <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
+?>
+    <div class="page-header"><h1>&#128279; E-Commerce Sync</h1>
+        <div class="page-header-actions">
+            <button class="btn btn-primary btn-sm" onclick="openModal('apiM')">+ Add Integration</button>
+        </div>
+    </div>
+    <?php if (isset($_SESSION['flash_msg'])): ?>
+    <div
+    class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-    <div class="lf"><span class="lf-title">Active Integrations</span>
-    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Platform</th><th>Name</th><th>Status</th><th>Last Sync</th><th>Actions</th></tr></thead><tbody>
-    <?php if (empty($integrations)): ?><tr><td colspan="5" class="text-center text-muted">No integrations configured</td></tr><?php endif; ?>
-    <?php foreach ($integrations as $i): ?>
-    <tr>
-        <td><span class="badge badge-info"><?= ucfirst($i['platform']) ?></span></td>
-        <td><?= h($i['name']) ?></td>
-        <td><span class="badge badge-<?= $i['is_active'] ? 'success' : 'secondary' ?>"><?= $i['is_active'] ? 'Active' : 'Inactive' ?></span></td>
-        <td><?= $i['last_sync'] ? date('M j H:i', strtotime($i['last_sync'])) : 'Never' ?></td>
-        <td>
-            <button class="btn btn-xs btn-success" onclick="syncNow(<?= $i['id'] ?>,'inventory_sync')">Sync</button>
-            <button class="btn btn-xs" onclick="editInt(<?= $i['id'] ?>,'<?= h($i['platform']) ?>','<?= h(addslashes($i['name'])) ?>','<?= h(addslashes($i['api_key'])) ?>','<?= h(addslashes($i['api_secret'])) ?>','<?= h(addslashes($i['webhook_url'])) ?>',<?= $i['is_active'] ?>)">Edit</button>
-            <form method="POST" style="display:inline" onsubmit="return confirm('Delete?')"><?= csrfField() ?><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= $i['id'] ?>"><button class="btn btn-xs btn-danger">Del</button></form>
-        </td>
-    </tr>
-    <?php endforeach; ?>
-    </tbody></table></div></div>
-    <div class="lf"><span class="lf-title">Recent Sync Activity</span>
-    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Time</th><th>Integration</th><th>Type</th><th>Result</th></tr></thead><tbody>
-    <?php foreach ($logs as $l): ?>
-    <tr><td><?= date('H:i', strtotime($l['created_at'])) ?></td><td><?= h($l['name']) ?></td><td><?= str_replace('_', ' ', $l['sync_type']) ?></td><td><span class="badge badge-<?= $l['status'] === 'success' ? 'success' : ($l['status'] === 'partial' ? 'warning' : 'danger') ?>"><?= $l['items_processed'] ?> items</span></td></tr>
-    <?php endforeach; ?>
-    </tbody></table></div></div>
+        <div class="lf"><span class="lf-title">Active Integrations</span>
+            <div class="tbl-wrap">
+                <table class="tbl">
+                    <thead>
+                    <tr>
+                        <th>Platform</th>
+                        <th>Name</th>
+                        <th>Status</th>
+                        <th>Last Sync</th>
+                        <th>Actions</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php if (empty($integrations)): ?>
+                        <tr>
+                            <td colspan="5" class="text-center text-muted">No integrations configured</td>
+                        </tr><?php endif; ?>
+                    <?php foreach ($integrations as $i): ?>
+                        <tr>
+                            <td><span class="badge badge-info"><?= ucfirst($i['platform']) ?></span></td>
+                            <td><?= h($i['name']) ?></td>
+                            <td>
+                                <span class="badge badge-<?= $i['is_active'] ? 'success' : 'secondary' ?>"><?= $i['is_active'] ? 'Active' : 'Inactive' ?></span>
+                            </td>
+                            <td><?= $i['last_sync'] ? date('M j H:i', strtotime($i['last_sync'])) : 'Never' ?></td>
+                            <td>
+                                <button class="btn btn-xs btn-success"
+                                        onclick="syncNow(<?= $i['id'] ?>,'inventory_sync')">Sync
+                                </button>
+                                <button class="btn btn-xs"
+                                        onclick="editInt(<?= $i['id'] ?>,'<?= h($i['platform']) ?>','<?= h(addslashes($i['name'])) ?>','<?= h(addslashes($i['api_key'])) ?>','<?= h(addslashes($i['api_secret'])) ?>','<?= h(addslashes($i['webhook_url'])) ?>',<?= $i['is_active'] ?>)">
+                                    Edit
+                                </button>
+                                <form method="POST" style="display:inline"
+                                      onsubmit="return confirm('Delete?')"><?= csrfField() ?><input type="hidden"
+                                                                                                    name="action"
+                                                                                                    value="delete"><input
+                                            type="hidden" name="id" value="<?= $i['id'] ?>">
+                                    <button class="btn btn-xs btn-danger">Del</button>
+                                </form>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="lf"><span class="lf-title">Recent Sync Activity</span>
+            <div class="tbl-wrap">
+                <table class="tbl">
+                    <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Integration</th>
+                        <th>Type</th>
+                        <th>Result</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($logs as $l): ?>
+                        <tr>
+                            <td><?= date('H:i', strtotime($l['created_at'])) ?></td>
+                            <td><?= h($l['name']) ?></td>
+                            <td><?= str_replace('_', ' ', $l['sync_type']) ?></td>
+                            <td>
+                                <span class="badge badge-<?= $l['status'] === 'success' ? 'success' : ($l['status'] === 'partial' ? 'warning' : 'danger') ?>"><?= $l['items_processed'] ?> items</span>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
     <div class="lf" style="margin-top:16px"><span class="lf-title">Webhook URLs</span>
-    <div style="padding:12px;font-family:monospace;font-size:12px;background:#f8f9fa;border-radius:4px">
-    Shopify: <?= h((isset($_SERVER['HTTPS']) ? 'https://' : 'http://') . $_SERVER['HTTP_HOST'] . $_SERVER['SCRIPT_NAME']) ?>?webhook=shopify<br>
-    WooCommerce: <?= h((isset($_SERVER['HTTPS']) ? 'https://' : 'http://') . $_SERVER['HTTP_HOST'] . $_SERVER['SCRIPT_NAME']) ?>?webhook=woo
-    </div></div>
-    <div id="apiM" class="modal-overlay"><div class="modal"><div class="modal-title-bar"><span id="apiTitle">Add Integration</span><button class="modal-close-btn" onclick="closeModal('apiM')">&times;</button></div>
-    <div class="modal-body"><form method="POST"><?= csrfField() ?><input type="hidden" name="action" value="save"><input type="hidden" name="id" id="apiId">
-    <div class="form-group"><label>Platform</label><select name="platform" id="apiPlatform" required><option value="shopify">Shopify</option><option value="woocommerce">WooCommerce</option><option value="amazon">Amazon</option></select></div>
-    <div class="form-group"><label>Store Name</label><input name="name" id="apiName" required placeholder="My Store"></div>
-    <div class="form-group"><label>API Key / Store URL</label><input name="api_key" id="apiKey" required></div>
-    <div class="form-group"><label>API Secret / Access Token</label><input name="api_secret" id="apiSecret"></div>
-    <div class="form-group"><label>Webhook URL (optional)</label><input name="webhook_url" id="apiWebhook"></div>
-    <label><input type="checkbox" name="is_active" id="apiActive" checked> Active</label>
-    </div><div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('apiM')">Cancel</button><button class="btn btn-success btn-sm">Save</button></div></form></div></div>
-    <form id="syncForm" method="POST" style="display:none"><?= csrfField() ?><input type="hidden" name="action" value="sync"><input type="hidden" name="id" id="syncId"><input type="hidden" name="sync_type" id="syncType"></form>
+        <div style="padding:12px;font-family:monospace;font-size:12px;background:#f8f9fa;border-radius:4px">
+            Shopify: <?= h((isset($_SERVER['HTTPS']) ? 'https://' : 'http://') . $_SERVER['HTTP_HOST'] . $_SERVER['SCRIPT_NAME']) ?>
+            ?webhook=shopify<br>
+            WooCommerce: <?= h((isset($_SERVER['HTTPS']) ? 'https://' : 'http://') . $_SERVER['HTTP_HOST'] . $_SERVER['SCRIPT_NAME']) ?>
+            ?webhook=woo
+        </div>
+    </div>
+    <div id="apiM" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-title-bar"><span id="apiTitle">Add Integration</span>
+                <button class="modal-close-btn" onclick="closeModal('apiM')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form method="POST"><?= csrfField() ?><input type="hidden" name="action" value="save"><input
+                            type="hidden" name="id" id="apiId">
+                    <div class="form-group"><label>Platform</label><select name="platform" id="apiPlatform" required>
+                            <option value="shopify">Shopify</option>
+                            <option value="woocommerce">WooCommerce</option>
+                            <option value="amazon">Amazon</option>
+                        </select></div>
+                    <div class="form-group"><label>Store Name</label><input name="name" id="apiName" required
+                                                                            placeholder="My Store"></div>
+                    <div class="form-group"><label>API Key / Store URL</label><input name="api_key" id="apiKey"
+                                                                                     required></div>
+                    <div class="form-group"><label>API Secret / Access Token</label><input name="api_secret"
+                                                                                           id="apiSecret"></div>
+                    <div class="form-group"><label>Webhook URL (optional)</label><input name="webhook_url"
+                                                                                        id="apiWebhook"></div>
+                    <label><input type="checkbox" name="is_active" id="apiActive" checked> Active</label>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('apiM')">Cancel</button>
+                <button class="btn btn-success btn-sm">Save</button>
+            </div>
+            </form></div>
+    </div>
+    <form id="syncForm" method="POST" style="display:none"><?= csrfField() ?><input type="hidden" name="action"
+                                                                                    value="sync"><input type="hidden"
+                                                                                                        name="id"
+                                                                                                        id="syncId"><input
+                type="hidden" name="sync_type" id="syncType"></form>
     <script>
-    function editInt(id,p,n,k,s,w,a){document.getElementById('apiTitle').textContent='Edit Integration';apiId.value=id;apiPlatform.value=p;apiName.value=n;apiKey.value=k;apiSecret.value=s;apiWebhook.value=w;apiActive.checked=a==1;openModal('apiM')}
-    function syncNow(id,type){if(confirm('Run '+type.replace('_',' ')+'?')){syncId.value=id;syncType.value=type;syncForm.submit()}}
+        function editInt(id, p, n, k, s, w, a) {
+            document.getElementById('apiTitle').textContent = 'Edit Integration';
+            apiId.value = id;
+            apiPlatform.value = p;
+            apiName.value = n;
+            apiKey.value = k;
+            apiSecret.value = s;
+            apiWebhook.value = w;
+            apiActive.checked = a == 1;
+            openModal('apiM')
+        }
+        function syncNow(id, type) {
+            if (confirm('Run ' + type.replace('_', ' ') + '?')) {
+                syncId.value = id;
+                syncType.value = type;
+                syncForm.submit()
+            }
+        }
     </script>
-    <?php
+<?php
         $content = ob_get_clean();
         renderLayout('E-Commerce Sync', $content, 'api_sync');
     }
@@ -7400,47 +10569,151 @@ if (!empty($_GET['ajax'])) {
         $triggers = $pdo->query('SELECT * FROM sms_triggers ORDER BY trigger_name')->fetchAll();
         $logs = $pdo->query('SELECT * FROM sms_logs ORDER BY created_at DESC LIMIT 30')->fetchAll();
         ob_start();
-    ?>
-    <div class="page-header"><h1>&#128241; SMS Alerts</h1><div class="page-header-actions"><button class="btn btn-primary btn-sm" onclick="openModal('smsTestM')">Send Test</button></div></div>
-    <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
+?>
+    <div class="page-header"><h1>&#128241; SMS Alerts</h1>
+        <div class="page-header-actions">
+            <button class="btn btn-primary btn-sm" onclick="openModal('smsTestM')">Send Test</button>
+        </div>
+    </div>
+    <?php if (isset($_SESSION['flash_msg'])): ?>
+    <div
+    class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
     <div style="display:grid;grid-template-columns:350px 1fr;gap:16px">
-    <div class="lf"><span class="lf-title">Gateway Configuration</span>
-    <form method="POST" style="padding:12px"><?= csrfField() ?><input type="hidden" name="action" value="save_settings">
-    <div class="form-group"><label>Provider</label><select name="provider"><option value="twilio" <?= $settings['provider'] === 'twilio' ? 'selected' : '' ?>>Twilio</option><option value="messagebird" <?= $settings['provider'] === 'messagebird' ? 'selected' : '' ?>>MessageBird</option><option value="vonage" <?= $settings['provider'] === 'vonage' ? 'selected' : '' ?>>Vonage</option><option value="custom" <?= $settings['provider'] === 'custom' ? 'selected' : '' ?>>Custom API</option></select></div>
-    <div class="form-group"><label>API Key / Token</label><input type="text" name="api_key" value="<?= h($settings['api_key']) ?>" placeholder="SK..."></div>
-    <div class="form-group"><label>Sender ID</label><input type="text" name="sender_id" value="<?= h($settings['sender_id']) ?>" placeholder="InventoryPro"></div>
-    <label><input type="checkbox" name="is_active" <?= $settings['is_active'] ? 'checked' : '' ?>> Enable SMS</label>
-    <button class="btn btn-success btn-sm" style="margin-top:8px;width:100%">Save Settings</button>
-    </form></div>
-    <div class="lf"><span class="lf-title">Automated Triggers</span>
-    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Trigger</th><th>Status</th><th>Template</th><th></th></tr></thead><tbody>
-    <?php foreach ($triggers as $t): ?>
-    <tr><td><?= ucfirst(str_replace('_', ' ', $t['trigger_name'])) ?></td><td><span class="badge badge-<?= $t['is_active'] ? 'success' : 'secondary' ?>"><?= $t['is_active'] ? 'ON' : 'OFF' ?></span></td><td style="font-size:12px"><?= h(substr($t['template'], 0, 50)) ?>...</td><td><button class="btn btn-xs" onclick="editTrig(<?= $t['id'] ?>,'<?= h(addslashes($t['trigger_name'])) ?>',<?= $t['is_active'] ?>,`<?= h(addslashes($t['template'])) ?>`)">Edit</button></td></tr>
-    <?php endforeach; ?>
-    </tbody></table></div></div>
+        <div class="lf"><span class="lf-title">Gateway Configuration</span>
+            <form method="POST" style="padding:12px"><?= csrfField() ?><input type="hidden" name="action"
+                                                                              value="save_settings">
+                <div class="form-group"><label>Provider</label><select name="provider">
+                        <option value="twilio" <?= $settings['provider'] === 'twilio' ? 'selected' : '' ?>>Twilio
+                        </option>
+                        <option value="messagebird" <?= $settings['provider'] === 'messagebird' ? 'selected' : '' ?>>
+                            MessageBird
+                        </option>
+                        <option value="vonage" <?= $settings['provider'] === 'vonage' ? 'selected' : '' ?>>Vonage
+                        </option>
+                        <option value="custom" <?= $settings['provider'] === 'custom' ? 'selected' : '' ?>>Custom API
+                        </option>
+                    </select></div>
+                <div class="form-group"><label>API Key / Token</label><input type="text" name="api_key"
+                                                                             value="<?= h($settings['api_key']) ?>"
+                                                                             placeholder="SK..."></div>
+                <div class="form-group"><label>Sender ID</label><input type="text" name="sender_id"
+                                                                       value="<?= h($settings['sender_id']) ?>"
+                                                                       placeholder="InventoryPro"></div>
+                <label><input type="checkbox" name="is_active" <?= $settings['is_active'] ? 'checked' : '' ?>> Enable
+                    SMS</label>
+                <button class="btn btn-success btn-sm" style="margin-top:8px;width:100%">Save Settings</button>
+            </form>
+        </div>
+        <div class="lf"><span class="lf-title">Automated Triggers</span>
+            <div class="tbl-wrap">
+                <table class="tbl">
+                    <thead>
+                    <tr>
+                        <th>Trigger</th>
+                        <th>Status</th>
+                        <th>Template</th>
+                        <th></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($triggers as $t): ?>
+                        <tr>
+                            <td><?= ucfirst(str_replace('_', ' ', $t['trigger_name'])) ?></td>
+                            <td>
+                                <span class="badge badge-<?= $t['is_active'] ? 'success' : 'secondary' ?>"><?= $t['is_active'] ? 'ON' : 'OFF' ?></span>
+                            </td>
+                            <td style="font-size:12px"><?= h(substr($t['template'], 0, 50)) ?>...</td>
+                            <td>
+                                <button class="btn btn-xs"
+                                        onclick="editTrig(<?= $t['id'] ?>,'<?= h(addslashes($t['trigger_name'])) ?>',<?= $t['is_active'] ?>,`<?= h(addslashes($t['template'])) ?>`)">
+                                    Edit
+                                </button>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
     <div class="lf" style="margin-top:16px"><span class="lf-title">SMS History (last 30)</span>
-    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Time</th><th>To</th><th>Message</th><th>Status</th></tr></thead><tbody>
-    <?php if (empty($logs)): ?><tr><td colspan="4" class="text-center text-muted">No messages sent yet</td></tr><?php endif; ?>
-    <?php foreach ($logs as $l): ?>
-    <tr><td><?= date('M j H:i', strtotime($l['created_at'])) ?></td><td><?= h($l['recipient']) ?></td><td><?= h(substr($l['message'], 0, 60)) ?></td><td><span class="badge badge-<?= $l['status'] === 'sent' ? 'success' : 'danger' ?>"><?= $l['status'] ?></span></td></tr>
-    <?php endforeach; ?>
-    </tbody></table></div></div>
-    <div id="smsTestM" class="modal-overlay"><div class="modal"><div class="modal-title-bar"><span>Send Test SMS</span><button class="modal-close-btn" onclick="closeModal('smsTestM')">&times;</button></div>
-    <div class="modal-body"><form method="POST"><?= csrfField() ?><input type="hidden" name="action" value="test_sms">
-    <div class="form-group"><label>Phone Number</label><input name="test_number" required placeholder="+923001234567"></div>
-    <div class="form-group"><label>Message</label><textarea name="test_message" required>Test from InventoryPro - <?= date('H:i') ?></textarea></div>
-    </div><div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('smsTestM')">Cancel</button><button class="btn btn-success btn-sm">Send</button></form></div></div></div>
-    <div id="trigM" class="modal-overlay"><div class="modal"><div class="modal-title-bar"><span id="trigTitle">Edit Trigger</span><button class="modal-close-btn" onclick="closeModal('trigM')">&times;</button></div>
-    <div class="modal-body"><form method="POST"><?= csrfField() ?><input type="hidden" name="action" value="save_trigger"><input type="hidden" name="id" id="trigId">
-    <div class="form-group"><label>Template</label><textarea name="template" id="trigTemplate" rows="3" required></textarea><small>Variables: {product}, {qty}, {invoice}, {amount}, {customer}</small></div>
-    <label><input type="checkbox" name="is_active" id="trigActive"> Enable this trigger</label>
-    </div><div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('trigM')">Cancel</button><button class="btn btn-success btn-sm">Save</button></form></div></div></div>
+        <div class="tbl-wrap">
+            <table class="tbl">
+                <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>To</th>
+                    <th>Message</th>
+                    <th>Status</th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php if (empty($logs)): ?>
+                    <tr>
+                        <td colspan="4" class="text-center text-muted">No messages sent yet</td>
+                    </tr><?php endif; ?>
+                <?php foreach ($logs as $l): ?>
+                    <tr>
+                        <td><?= date('M j H:i', strtotime($l['created_at'])) ?></td>
+                        <td><?= h($l['recipient']) ?></td>
+                        <td><?= h(substr($l['message'], 0, 60)) ?></td>
+                        <td>
+                            <span class="badge badge-<?= $l['status'] === 'sent' ? 'success' : 'danger' ?>"><?= $l['status'] ?></span>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div id="smsTestM" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-title-bar"><span>Send Test SMS</span>
+                <button class="modal-close-btn" onclick="closeModal('smsTestM')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form method="POST"><?= csrfField() ?><input type="hidden" name="action" value="test_sms">
+                    <div class="form-group"><label>Phone Number</label><input name="test_number" required
+                                                                              placeholder="+923001234567"></div>
+                    <div class="form-group"><label>Message</label><textarea name="test_message" required>Test from InventoryPro - <?= date('H:i') ?></textarea>
+                    </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('smsTestM')">Cancel</button>
+                <button class="btn btn-success btn-sm">Send</button>
+                </form></div>
+        </div>
+    </div>
+    <div id="trigM" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-title-bar"><span id="trigTitle">Edit Trigger</span>
+                <button class="modal-close-btn" onclick="closeModal('trigM')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form method="POST"><?= csrfField() ?><input type="hidden" name="action" value="save_trigger"><input
+                            type="hidden" name="id" id="trigId">
+                    <div class="form-group"><label>Template</label><textarea name="template" id="trigTemplate" rows="3"
+                                                                             required></textarea><small>Variables:
+                            {product}, {qty}, {invoice}, {amount}, {customer}</small></div>
+                    <label><input type="checkbox" name="is_active" id="trigActive"> Enable this trigger</label>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('trigM')">Cancel</button>
+                <button class="btn btn-success btn-sm">Save</button>
+                </form></div>
+        </div>
+    </div>
     <script>
-    function editTrig(id,name,active,tpl){document.getElementById('trigTitle').textContent='Edit: '+name.replace('_',' ');trigId.value=id;trigTemplate.value=tpl;trigActive.checked=active==1;openModal('trigM')}
+        function editTrig(id, name, active, tpl) {
+            document.getElementById('trigTitle').textContent = 'Edit: ' + name.replace('_', ' ');
+            trigId.value = id;
+            trigTemplate.value = tpl;
+            trigActive.checked = active == 1;
+            openModal('trigM')
+        }
     </script>
-    <?php
+<?php
         $content = ob_get_clean();
         renderLayout('SMS Alerts', $content, 'sms');
     }
@@ -7452,23 +10725,49 @@ if (!empty($_GET['ajax'])) {
         $suppliers = $pdo->query('SELECT id,company_name FROM suppliers ORDER BY company_name')->fetchAll();
         $sid = (int) ($_GET['supplier_id'] ?? ($suppliers[0]['id'] ?? 0));
         ob_start();
-    ?>
+?>
     <div class="page-header"><h1>&#128200; Supplier Ledgers</h1></div>
     <div class="lf"><span class="lf-title">Statement of Account (Payables)</span>
-    <form method="GET" class="mb-8" style="display:flex;gap:8px;align-items:flex-end">
-        <input type="hidden" name="page" value="supplier_ledgers">
-        <div class="form-group" style="width:300px"><label>Select Supplier</label>
-        <select name="supplier_id" onchange="this.form.submit()"><?php foreach ($suppliers as $s) { $v = $s['id'] == $sid ? 'selected' : ''; echo "<option value='{$s['id']}' $v>" . h($s['company_name']) . '</option>'; } ?></select>
+        <form method="GET" class="mb-8" style="display:flex;gap:8px;align-items:flex-end">
+            <input type="hidden" name="page" value="supplier_ledgers">
+            <div class="form-group" style="width:300px"><label>Select Supplier</label>
+                <select name="supplier_id" onchange="this.form.submit()"><?php foreach ($suppliers as $s) {
+            $v = $s['id'] == $sid ? 'selected' : '';
+            echo "<option value='{$s['id']}' $v>" . h($s['company_name']) . '</option>';
+        } ?></select>
+            </div>
+        </form>
+        <div class="tbl-wrap">
+            <table class="tbl">
+                <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th class="text-right">Debit (Paid)</th>
+                    <th class="text-right">Credit (Due)</th>
+                    <th class="text-right">Balance</th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php $stmt = $pdo->prepare('SELECT * FROM supplier_ledgers WHERE supplier_id=? ORDER BY transaction_date, id');
+                $stmt->execute([$sid]);
+                $ledgers = $stmt->fetchAll();
+                if (empty($ledgers)): ?>
+                    <tr>
+                        <td colspan="5" class="text-center text-muted">No ledger entries found</td>
+                    </tr><?php endif;
+                foreach ($ledgers as $l): ?>
+                    <tr>
+                        <td><?= h($l['transaction_date']) ?></td>
+                        <td><?= h(ucfirst($l['reference_type'])) ?></td>
+                        <td class="text-right" style="color:#5cb85c"><?= formatCurrency((float) $l['debit']) ?></td>
+                        <td class="text-right" style="color:#d9534f"><?= formatCurrency((float) $l['credit']) ?></td>
+                        <td class="text-right font-weight-bold"><?= formatCurrency((float) $l['balance']) ?></td>
+                    </tr>
+                <?php endforeach; ?></tbody>
+            </table>
         </div>
-    </form>
-    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Type</th><th class="text-right">Debit (Paid)</th><th class="text-right">Credit (Due)</th><th class="text-right">Balance</th></tr></thead><tbody>
-    <?php $stmt = $pdo->prepare('SELECT * FROM supplier_ledgers WHERE supplier_id=? ORDER BY transaction_date, id');
-    $stmt->execute([$sid]);
-    $ledgers = $stmt->fetchAll();
-    if (empty($ledgers)): ?><tr><td colspan="5" class="text-center text-muted">No ledger entries found</td></tr><?php endif;
-    foreach ($ledgers as $l): ?>
-    <tr><td><?= h($l['transaction_date']) ?></td><td><?= h(ucfirst($l['reference_type'])) ?></td><td class="text-right" style="color:#5cb85c"><?= formatCurrency((float) $l['debit']) ?></td><td class="text-right" style="color:#d9534f"><?= formatCurrency((float) $l['credit']) ?></td><td class="text-right font-weight-bold"><?= formatCurrency((float) $l['balance']) ?></td></tr>
-    <?php endforeach; ?></tbody></table></div></div>
+    </div>
     <?php
         $content = ob_get_clean();
         renderLayout('Supplier Ledgers', $content, 'supplier_ledgers');
