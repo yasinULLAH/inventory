@@ -704,7 +704,6 @@ function getProducts(array $filters = [], int $page = 1): array
             $where[] = 'p.`current_stock` > p.`min_stock_level`';
     }
     $whereStr = implode(' AND ', $where);
-    $total = (int) $pdo->query("SELECT COUNT(*) FROM `products` p WHERE $whereStr", $params)->fetchColumn();
     $countStmt = $pdo->prepare("SELECT COUNT(*) FROM `products` p WHERE $whereStr");
     $countStmt->execute($params);
     $total = (int) $countStmt->fetchColumn();
@@ -4391,7 +4390,6 @@ function renderAuditLog(): void
         $params[] = $dateTo;
     }
     $whereStr = implode(' AND ', $where);
-    $total = (int) $pdo->prepare("SELECT COUNT(*) FROM activity_logs al WHERE $whereStr")->execute($params) ? $pdo->prepare("SELECT COUNT(*) FROM activity_logs al WHERE $whereStr")->execute($params) : 0;
     $cntQ = $pdo->prepare("SELECT COUNT(*) FROM activity_logs al WHERE $whereStr");
     $cntQ->execute($params);
     $total = (int) $cntQ->fetchColumn();
