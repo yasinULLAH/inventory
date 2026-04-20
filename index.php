@@ -936,6 +936,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BNI Enterprises - Bike Dealer Management System</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
 :root {
 --bg: #2b2b2b;
@@ -1224,7 +1225,7 @@ else:
     $branch_name = get_setting('branch_name') ?? 'Dera (Ahmed Metro)';
     $currency = get_setting('currency') ?? 'Rs.';
     $all_nav = [
-        ['dashboard', '⌂', 'Dashboard'],
+        ['dashboard', '🏠', 'Dashboard'],
         ['purchase', '📦', 'Purchase Entry'],
         ['inventory', '📋', 'Inventory / Stock'],
         ['sale', '🛒', 'Sales Entry'],
@@ -1299,6 +1300,28 @@ else:
         $chq_issued = $conn->query("SELECT COUNT(*) as c, SUM(amount) as s FROM cheque_register WHERE type='payment'")->fetch_assoc();
         $chq_received = $conn->query("SELECT COUNT(*) as c, SUM(amount) as s FROM cheque_register WHERE type='receipt'")->fetch_assoc();
         $pending_cheques = $conn->query("SELECT COUNT(*) as c, SUM(amount) as s FROM cheque_register WHERE status='pending'")->fetch_assoc();
+
+        $sales_trend = $conn->query("SELECT DATE_FORMAT(selling_date,'%Y-%m') as ym, SUM(selling_price) as total FROM bikes WHERE status='sold' AND selling_date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH) GROUP BY ym ORDER BY ym");
+        $chart_labels = [];
+        $chart_sales = [];
+        while ($r = $sales_trend->fetch_assoc()) {
+            $chart_labels[] = $r['ym'];
+            $chart_sales[] = $r['total'];
+        }
+
+        $model_stock = $conn->query("SELECT m.model_name, COUNT(b.id) as cnt FROM models m LEFT JOIN bikes b ON m.id=b.model_id WHERE b.status='in_stock' GROUP BY m.id HAVING cnt > 0");
+        $ms_labels = [];
+        $ms_data = [];
+        while ($r = $model_stock->fetch_assoc()) {
+            $ms_labels[] = $r['model_name'];
+            $ms_data[] = $r['cnt'];
+        }
+
+        $ie_summary = $conn->query('SELECT type, SUM(amount) as total FROM income_expenses GROUP BY type');
+        $ie_data = ['income' => 0, 'expense' => 0];
+        while ($r = $ie_summary->fetch_assoc()) {
+            $ie_data[$r['type']] = $r['total'];
+        }
 ?>
 <div class="card-grid">
 <div class="card accent"><div class="card-icon">📦</div><div class="card-body"><div class="card-label">In Stock</div><div class="card-value"><?= number_format($total_stock) ?></div><div class="card-sub">bikes</div></div></div>
@@ -1310,6 +1333,61 @@ else:
 <div class="card success"><div class="card-icon">📈</div><div class="card-body"><div class="card-label">Total Profit</div><div class="card-value" style="font-size:1rem;color:var(--success)"><?= $currency ?> <?= number_format($total_margin) ?></div></div></div>
 <div class="card"><div class="card-icon">💳</div><div class="card-body"><div class="card-label">Pending Cheques</div><div class="card-value" style="font-size:1rem;color:var(--warning)"><?= number_format($pending_cheques['c']) ?></div><div class="card-sub"><?= $currency ?> <?= number_format($pending_cheques['s'] ?? 0) ?></div></div></div>
 </div>
+<fieldset class="fieldset"><legend>⚡ Quick Actions (Top 10)</legend>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+<?php if (has_permission($conn, 'sale', 'view')): ?><a href="index.php?page=sale" class="btn btn-success">🛒 New Sale</a><?php endif; ?>
+<?php if (has_permission($conn, 'purchase', 'view')): ?><a href="index.php?page=purchase" class="btn btn-primary">📦 New Purchase</a><?php endif; ?>
+<?php if (has_permission($conn, 'customers', 'view')): ?><a href="index.php?page=customers" class="btn btn-default">👥 Add Customer</a><?php endif; ?>
+<?php if (has_permission($conn, 'income_expense', 'add')): ?><a href="index.php?page=income_expense" class="btn btn-default">💰 Add Expense</a><?php endif; ?>
+<?php if (has_permission($conn, 'returns', 'view')): ?><a href="index.php?page=returns" class="btn btn-warning">↩ Process Return</a><?php endif; ?>
+<?php if (has_permission($conn, 'inventory', 'view')): ?><a href="index.php?page=inventory" class="btn btn-default" style="background:#1a2d4d;color:#8ab8f0;border-color:#1a2d4d">📋 View Inventory</a><?php endif; ?>
+<?php if (has_permission($conn, 'reports', 'view')): ?>
+<a href="index.php?page=reports&sub=daily" class="btn btn-default">📆 Daily Report</a>
+<a href="index.php?page=reports&sub=profit" class="btn btn-default">📈 Profit Report</a>
+<?php endif; ?>
+<?php if (has_permission($conn, 'cheques', 'view')): ?><a href="index.php?page=cheques" class="btn btn-default">💳 Cheques</a><?php endif; ?>
+<?php if (has_permission($conn, 'settings', 'view')): ?><a href="index.php?page=settings" class="btn btn-default">⚙ Settings</a><?php endif; ?>
+</div>
+</fieldset>
+
+<div class="split-grid" style="margin-bottom:16px;">
+<fieldset class="fieldset"><legend>📈 Sales Trend (Last 6 Months)</legend><div style="position:relative;height:250px;width:100%"><canvas id="salesChart"></canvas></div></fieldset>
+<fieldset class="fieldset"><legend>📊 Model-wise Stock</legend><div style="position:relative;height:250px;width:100%"><canvas id="stockChart"></canvas></div></fieldset>
+<fieldset class="fieldset"><legend>💰 Income vs Expense</legend><div style="position:relative;height:250px;width:100%"><canvas id="ieChart"></canvas></div></fieldset>
+<fieldset class="fieldset"><legend>🚲 Inventory Status</legend><div style="position:relative;height:250px;width:100%"><canvas id="statusChart"></canvas></div></fieldset>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    Chart.defaults.color = 'var(--text2)';
+    const commonOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'var(--border)' } }, y: { grid: { color: 'var(--border)' } } } };
+    const pieOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: 'var(--text)' } } } };
+
+    new Chart(document.getElementById('salesChart'), {
+        type: 'line',
+        data: { labels: <?= json_encode($chart_labels) ?>, datasets: [{ label: 'Sales (<?= $currency ?>)', data: <?= json_encode($chart_sales) ?>, borderColor: '#4ec94e', tension: 0.3, fill: true, backgroundColor: 'rgba(78, 201, 78, 0.1)' }] },
+        options: commonOptions
+    });
+
+    new Chart(document.getElementById('stockChart'), {
+        type: 'doughnut',
+        data: { labels: <?= json_encode($ms_labels) ?>, datasets: [{ data: <?= json_encode($ms_data) ?>, backgroundColor: ['#4a9eff','#4ec94e','#e74c3c','#e0a800','#9b59b6','#34495e','#16a085'] }] },
+        options: pieOptions
+    });
+
+    new Chart(document.getElementById('ieChart'), {
+        type: 'bar',
+        data: { labels: ['Income', 'Expense'], datasets: [{ label: 'Amount (<?= $currency ?>)', data: [<?= $ie_data['income'] ?? 0 ?>, <?= $ie_data['expense'] ?? 0 ?>], backgroundColor: ['#4ec94e', '#e74c3c'] }] },
+        options: commonOptions
+    });
+
+    new Chart(document.getElementById('statusChart'), {
+        type: 'pie',
+        data: { labels: ['In Stock', 'Sold', 'Returned'], datasets: [{ data: [<?= $total_stock ?>, <?= $total_sold ?>, <?= $total_returned ?>], backgroundColor: ['#4a9eff', '#4ec94e', '#e74c3c'] }] },
+        options: pieOptions
+    });
+});
+</script>
 <?php if ($pending_cheques['c'] > 0): ?>
 <div style="background:#3d2a00;border:1px solid var(--warning);padding:8px 14px;margin-bottom:12px;border-radius:2px;font-size:0.82rem;color:#f0c858">
 ⚠ <strong><?= $pending_cheques['c'] ?> pending cheque(s)</strong> totaling <?= $currency ?> <?= number_format($pending_cheques['s'] ?? 0) ?> — <a href="index.php?page=cheques">View Cheques →</a>
