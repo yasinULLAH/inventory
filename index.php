@@ -1,4421 +1,2833 @@
 <?php
 session_start();
-define('DB_HOST', 'localhost');
-define('DB_USER', 'root');
-define('DB_PASS', 'root');
-define('DB_NAME', 'inventory_ms');
-define('APP_NAME', 'InventoryPro');
-define('APP_VERSION', '1.0.0');
-define('CSRF_TOKEN_NAME', '_csrf_token');
-define('SESSION_TIMEOUT', 2400);
-define('SESSION_ABSOLUTE', 28800);
+$db_host = 'localhost';
+$db_user = 'root';
+$db_pass = 'root';
+$db_name = 'bni_enterprises2';
+$app_version = '1.0.0';
+$author = 'Yasin Ullah';
 
-function getDB()
+function db_connect($create_db = false)
 {
-    static $pdo = null;
-    if ($pdo === null) {
-        try {
-            $dsn = 'mysql:host=' . DB_HOST . ';charset=utf8mb4';
-            $pdo = new PDO($dsn, DB_USER, DB_PASS, [
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                PDO::ATTR_EMULATE_PREPARES => false,
-            ]);
-            $pdo->exec('CREATE DATABASE IF NOT EXISTS `' . DB_NAME . '` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
-            $pdo->exec('USE `' . DB_NAME . '`');
-            initializeDatabase($pdo);
-        } catch (PDOException $e) {
-            die("<div style='font-family:Arial;padding:20px;background:#fee;border:1px solid #f00;margin:20px;'>Database Connection Error: " . htmlspecialchars($e->getMessage()) . '</div>');
+    global $db_host, $db_user, $db_pass, $db_name;
+    if ($create_db) {
+        $conn = new mysqli($db_host, $db_user, $db_pass);
+    } else {
+        $conn = new mysqli($db_host, $db_user, $db_pass, $db_name);
+    }
+    if ($conn->connect_error) {
+        return null;
+    }
+    $conn->set_charset('utf8mb4');
+    return $conn;
+}
+
+function install_database()
+{
+    global $db_name;
+    $conn = db_connect(true);
+    if (!$conn)
+        return false;
+    $conn->query("CREATE DATABASE IF NOT EXISTS `$db_name` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+    $conn->select_db($db_name);
+
+    $tables = [
+        'CREATE TABLE IF NOT EXISTS `settings` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `setting_key` VARCHAR(100) UNIQUE NOT NULL,
+            `setting_value` TEXT
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
+        'CREATE TABLE IF NOT EXISTS `suppliers` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `name` VARCHAR(255) NOT NULL,
+            `contact` VARCHAR(100),
+            `address` TEXT,
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
+        'CREATE TABLE IF NOT EXISTS `customers` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `name` VARCHAR(255) NOT NULL,
+            `phone` VARCHAR(50),
+            `cnic` VARCHAR(20),
+            `address` TEXT,
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
+        'CREATE TABLE IF NOT EXISTS `models` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `model_code` VARCHAR(50) NOT NULL,
+            `model_name` VARCHAR(255) NOT NULL,
+            `category` VARCHAR(100),
+            `short_code` VARCHAR(20),
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
+        'CREATE TABLE IF NOT EXISTS `purchase_orders` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `order_date` DATE,
+            `supplier_id` INT,
+            `cheque_number` VARCHAR(50),
+            `bank_name` VARCHAR(100),
+            `cheque_date` DATE,
+            `cheque_amount` DECIMAL(15,2),
+            `total_units` INT,
+            `notes` TEXT,
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (`supplier_id`) REFERENCES `suppliers`(`id`) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
+        "CREATE TABLE IF NOT EXISTS `bikes` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `purchase_order_id` INT,
+            `order_date` DATE,
+            `inventory_date` DATE,
+            `chassis_number` VARCHAR(100) UNIQUE NOT NULL,
+            `motor_number` VARCHAR(100),
+            `model_id` INT,
+            `color` VARCHAR(50),
+            `purchase_price` DECIMAL(15,2),
+            `selling_price` DECIMAL(15,2) NULL,
+            `selling_date` DATE NULL,
+            `customer_id` INT NULL,
+            `tax_amount` DECIMAL(15,2) DEFAULT 0,
+            `margin` DECIMAL(15,2) DEFAULT 0,
+            `status` ENUM('in_stock','sold','returned','reserved') DEFAULT 'in_stock',
+            `return_date` DATE NULL,
+            `return_amount` DECIMAL(15,2) NULL,
+            `return_notes` TEXT NULL,
+            `accessories` TEXT NULL,
+            `safeguard_notes` TEXT NULL,
+            `notes` TEXT,
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (`model_id`) REFERENCES `models`(`id`) ON DELETE SET NULL,
+            FOREIGN KEY (`customer_id`) REFERENCES `customers`(`id`) ON DELETE SET NULL,
+            FOREIGN KEY (`purchase_order_id`) REFERENCES `purchase_orders`(`id`) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+        "CREATE TABLE IF NOT EXISTS `cheque_register` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `cheque_number` VARCHAR(50),
+            `bank_name` VARCHAR(100),
+            `cheque_date` DATE,
+            `amount` DECIMAL(15,2),
+            `type` ENUM('payment','receipt','refund'),
+            `status` ENUM('pending','cleared','bounced','cancelled') DEFAULT 'pending',
+            `reference_type` VARCHAR(50),
+            `reference_id` INT,
+            `party_name` VARCHAR(255),
+            `notes` TEXT,
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+        "CREATE TABLE IF NOT EXISTS `payments` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `payment_date` DATE,
+            `payment_type` ENUM('cash','cheque','bank_transfer','online'),
+            `amount` DECIMAL(15,2),
+            `cheque_id` INT NULL,
+            `reference_type` VARCHAR(50),
+            `reference_id` INT,
+            `party_name` VARCHAR(255),
+            `notes` TEXT,
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (`cheque_id`) REFERENCES `cheque_register`(`id`) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+        "CREATE TABLE IF NOT EXISTS `ledger` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `entry_date` DATE,
+            `entry_type` ENUM('debit','credit'),
+            `amount` DECIMAL(15,2),
+            `party_type` ENUM('customer','supplier','other'),
+            `party_id` INT,
+            `description` TEXT,
+            `reference_type` VARCHAR(50),
+            `reference_id` INT,
+            `balance` DECIMAL(15,2),
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    ];
+
+    foreach ($tables as $sql) {
+        if (!$conn->query($sql)) {
+            $conn->close();
+            return false;
         }
     }
-    return $pdo;
-}
 
-function initializeDatabase($pdo)
-{
-    $tables = $pdo->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN);
-    if (in_array('users', $tables))
-        return;
-    $sql = "
-    CREATE TABLE IF NOT EXISTS `settings` (
-        `id` INT AUTO_INCREMENT PRIMARY KEY,
-        `setting_key` VARCHAR(100) NOT NULL UNIQUE,
-        `setting_value` TEXT,
-        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB;
-    CREATE TABLE IF NOT EXISTS `users` (
-        `id` INT AUTO_INCREMENT PRIMARY KEY,
-        `username` VARCHAR(50) NOT NULL UNIQUE,
-        `password` VARCHAR(255) NOT NULL,
-        `full_name` VARCHAR(100) NOT NULL,
-        `email` VARCHAR(100) UNIQUE,
-        `role` ENUM('Admin','Manager','Staff') NOT NULL DEFAULT 'Staff',
-        `status` TINYINT(1) NOT NULL DEFAULT 1,
-        `last_login` TIMESTAMP NULL,
-        `login_attempts` INT NOT NULL DEFAULT 0,
-        `locked_until` TIMESTAMP NULL,
-        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB;
-    CREATE TABLE IF NOT EXISTS `activity_log` (
-        `id` INT AUTO_INCREMENT PRIMARY KEY,
-        `user_id` INT,
-        `username` VARCHAR(50),
-        `action` VARCHAR(100) NOT NULL,
-        `module` VARCHAR(50),
-        `description` TEXT,
-        `ip_address` VARCHAR(45),
-        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE SET NULL
-    ) ENGINE=InnoDB;
-    CREATE TABLE IF NOT EXISTS `categories` (
-        `id` INT AUTO_INCREMENT PRIMARY KEY,
-        `name` VARCHAR(100) NOT NULL,
-        `parent_id` INT NULL,
-        `description` TEXT,
-        `status` TINYINT(1) NOT NULL DEFAULT 1,
-        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        FOREIGN KEY (`parent_id`) REFERENCES `categories`(`id`) ON DELETE SET NULL
-    ) ENGINE=InnoDB;
-    CREATE TABLE IF NOT EXISTS `suppliers` (
-        `id` INT AUTO_INCREMENT PRIMARY KEY,
-        `company_name` VARCHAR(150) NOT NULL,
-        `contact_person` VARCHAR(100),
-        `email` VARCHAR(100),
-        `phone` VARCHAR(30),
-        `address` TEXT,
-        `city` VARCHAR(80),
-        `country` VARCHAR(80),
-        `tax_id` VARCHAR(50),
-        `payment_terms` VARCHAR(100),
-        `status` TINYINT(1) NOT NULL DEFAULT 1,
-        `notes` TEXT,
-        `balance` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
-        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB;
-    CREATE TABLE IF NOT EXISTS `customers` (
-        `id` INT AUTO_INCREMENT PRIMARY KEY,
-        `name` VARCHAR(150) NOT NULL,
-        `email` VARCHAR(100),
-        `phone` VARCHAR(30),
-        `address` TEXT,
-        `city` VARCHAR(80),
-        `country` VARCHAR(80),
-        `customer_type` ENUM('Walk-in','Regular','Wholesale') NOT NULL DEFAULT 'Walk-in',
-        `credit_limit` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
-        `current_balance` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
-        `status` TINYINT(1) NOT NULL DEFAULT 1,
-        `notes` TEXT,
-        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB;
-    CREATE TABLE IF NOT EXISTS `products` (
-        `id` INT AUTO_INCREMENT PRIMARY KEY,
-        `sku` VARCHAR(50) NOT NULL UNIQUE,
-        `name` VARCHAR(200) NOT NULL,
-        `description` TEXT,
-        `category_id` INT,
-        `brand` VARCHAR(100),
-        `unit` VARCHAR(30) NOT NULL DEFAULT 'pcs',
-        `purchase_price` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
-        `selling_price` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
-        `current_stock` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
-        `min_stock` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
-        `max_stock` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
-        `location` VARCHAR(100),
-        `barcode` VARCHAR(100),
-        `status` TINYINT(1) NOT NULL DEFAULT 1,
-        `image_url` VARCHAR(500),
-        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        FOREIGN KEY (`category_id`) REFERENCES `categories`(`id`) ON DELETE SET NULL,
-        INDEX `idx_sku` (`sku`),
-        INDEX `idx_status` (`status`),
-        INDEX `idx_category` (`category_id`)
-    ) ENGINE=InnoDB;
-    CREATE TABLE IF NOT EXISTS `purchase_orders` (
-        `id` INT AUTO_INCREMENT PRIMARY KEY,
-        `po_number` VARCHAR(30) NOT NULL UNIQUE,
-        `supplier_id` INT NOT NULL,
-        `po_date` DATE NOT NULL,
-        `expected_delivery` DATE,
-        `subtotal` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
-        `tax_percent` DECIMAL(5,2) NOT NULL DEFAULT 0.00,
-        `discount` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
-        `total_amount` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
-        `payment_status` ENUM('Unpaid','Partial','Paid') NOT NULL DEFAULT 'Unpaid',
-        `order_status` ENUM('Pending','Received','Partial','Cancelled') NOT NULL DEFAULT 'Pending',
-        `notes` TEXT,
-        `created_by` INT,
-        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        FOREIGN KEY (`supplier_id`) REFERENCES `suppliers`(`id`),
-        FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE SET NULL
-    ) ENGINE=InnoDB;
-    CREATE TABLE IF NOT EXISTS `purchase_order_items` (
-        `id` INT AUTO_INCREMENT PRIMARY KEY,
-        `po_id` INT NOT NULL,
-        `product_id` INT NOT NULL,
-        `quantity` DECIMAL(15,2) NOT NULL,
-        `received_qty` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
-        `unit_price` DECIMAL(15,2) NOT NULL,
-        `total_price` DECIMAL(15,2) NOT NULL,
-        FOREIGN KEY (`po_id`) REFERENCES `purchase_orders`(`id`) ON DELETE CASCADE,
-        FOREIGN KEY (`product_id`) REFERENCES `products`(`id`)
-    ) ENGINE=InnoDB;
-    CREATE TABLE IF NOT EXISTS `invoices` (
-        `id` INT AUTO_INCREMENT PRIMARY KEY,
-        `invoice_number` VARCHAR(30) NOT NULL UNIQUE,
-        `customer_id` INT NOT NULL,
-        `invoice_date` DATE NOT NULL,
-        `due_date` DATE,
-        `subtotal` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
-        `tax_percent` DECIMAL(5,2) NOT NULL DEFAULT 0.00,
-        `discount` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
-        `total_amount` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
-        `payment_status` ENUM('Unpaid','Partial','Paid') NOT NULL DEFAULT 'Unpaid',
-        `payment_method` ENUM('Cash','Card','Bank Transfer','Credit') NOT NULL DEFAULT 'Cash',
-        `notes` TEXT,
-        `created_by` INT,
-        `is_return` TINYINT(1) NOT NULL DEFAULT 0,
-        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        FOREIGN KEY (`customer_id`) REFERENCES `customers`(`id`),
-        FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE SET NULL
-    ) ENGINE=InnoDB;
-    CREATE TABLE IF NOT EXISTS `invoice_items` (
-        `id` INT AUTO_INCREMENT PRIMARY KEY,
-        `invoice_id` INT NOT NULL,
-        `product_id` INT NOT NULL,
-        `quantity` DECIMAL(15,2) NOT NULL,
-        `unit_price` DECIMAL(15,2) NOT NULL,
-        `discount` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
-        `total_price` DECIMAL(15,2) NOT NULL,
-        FOREIGN KEY (`invoice_id`) REFERENCES `invoices`(`id`) ON DELETE CASCADE,
-        FOREIGN KEY (`product_id`) REFERENCES `products`(`id`)
-    ) ENGINE=InnoDB;
-    CREATE TABLE IF NOT EXISTS `stock_adjustments` (
-        `id` INT AUTO_INCREMENT PRIMARY KEY,
-        `reference_no` VARCHAR(30) NOT NULL UNIQUE,
-        `product_id` INT NOT NULL,
-        `adjustment_type` ENUM('Addition','Subtraction','Damage','Expired','Correction','Opening Stock') NOT NULL,
-        `quantity` DECIMAL(15,2) NOT NULL,
-        `previous_stock` DECIMAL(15,2) NOT NULL,
-        `new_stock` DECIMAL(15,2) NOT NULL,
-        `reason` TEXT,
-        `status` ENUM('Pending','Approved','Rejected') NOT NULL DEFAULT 'Pending',
-        `approved_by` INT NULL,
-        `created_by` INT,
-        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (`product_id`) REFERENCES `products`(`id`),
-        FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE SET NULL,
-        FOREIGN KEY (`approved_by`) REFERENCES `users`(`id`) ON DELETE SET NULL
-    ) ENGINE=InnoDB;
-    CREATE TABLE IF NOT EXISTS `stock_transfers` (
-        `id` INT AUTO_INCREMENT PRIMARY KEY,
-        `reference_no` VARCHAR(30) NOT NULL UNIQUE,
-        `from_location` VARCHAR(100) NOT NULL,
-        `to_location` VARCHAR(100) NOT NULL,
-        `transfer_date` DATE NOT NULL,
-        `status` ENUM('Pending','In Transit','Completed','Cancelled') NOT NULL DEFAULT 'Pending',
-        `notes` TEXT,
-        `created_by` INT,
-        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE SET NULL
-    ) ENGINE=InnoDB;
-    CREATE TABLE IF NOT EXISTS `stock_transfer_items` (
-        `id` INT AUTO_INCREMENT PRIMARY KEY,
-        `transfer_id` INT NOT NULL,
-        `product_id` INT NOT NULL,
-        `quantity` DECIMAL(15,2) NOT NULL,
-        FOREIGN KEY (`transfer_id`) REFERENCES `stock_transfers`(`id`) ON DELETE CASCADE,
-        FOREIGN KEY (`product_id`) REFERENCES `products`(`id`)
-    ) ENGINE=InnoDB;
-    CREATE TABLE IF NOT EXISTS `login_attempts` (
-        `id` INT AUTO_INCREMENT PRIMARY KEY,
-        `username` VARCHAR(50),
-        `ip_address` VARCHAR(45),
-        `status` ENUM('Success','Failed') NOT NULL,
-        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB;
-    ";
-    foreach (explode(';', $sql) as $stmt) {
-        $stmt = trim($stmt);
-        if (!empty($stmt)) {
-            $pdo->exec($stmt);
+    $defaults = [
+        ['company_name', 'BNI Enterprises'],
+        ['branch_name', 'Dera (Ahmed Metro)'],
+        ['tax_rate', '0.1'],
+        ['currency', 'Rs.'],
+        ['tax_on', 'purchase_price'],
+        ['theme', 'dark'],
+        ['admin_password', password_hash('admin123', PASSWORD_DEFAULT)],
+        ['show_purchase_on_invoice', '0'],
+    ];
+    $stmt = $conn->prepare('INSERT IGNORE INTO `settings` (`setting_key`, `setting_value`) VALUES (?, ?)');
+    foreach ($defaults as $d) {
+        $stmt->bind_param('ss', $d[0], $d[1]);
+        $stmt->execute();
+    }
+    $stmt->close();
+
+    $models_seed = [
+        ['LY SI', 'LY SI Electric Bike', 'Electric Bike', 'LY'],
+        ['T9 Sports', 'T9 Sports Electric Bike', 'Electric Bike', 'T9'],
+        ['T9 Sports LFP', 'T9 Sports LFP Electric Bike', 'Electric Bike', 'T9 LFP'],
+        ['T9 Eco', 'T9 Eco Electric Bike', 'Electric Bike', 'T9 Eco'],
+        ['Thrill Pro', 'Thrill Pro Electric Bike', 'Electric Bike', 'TP'],
+        ['Thrill Pro LFP', 'Thrill Pro LFP Electric Bike', 'Electric Bike', 'TP LFP'],
+        ['E8S M2', 'E8S M2 Electric Scooter', 'Electric Scooter', 'E8S'],
+        ['E8S Pro', 'E8S Pro Electric Scooter', 'Electric Scooter', 'E8S Pro'],
+        ['M6 K6', 'M6 K6 Electric Bike', 'Electric Bike', 'M6'],
+        ['M6 NP', 'M6 NP Electric Bike', 'Electric Bike', 'M6 NP'],
+        ['M6 Lithium NP', 'M6 Lithium NP Electric Bike', 'Electric Bike', 'M6 L'],
+        ['Premium', 'Premium Electric Bike', 'Electric Bike', 'Premium'],
+        ['W. Bike H2', 'W. Bike H2 Electric Bike', 'Electric Bike', 'W. Bike'],
+    ];
+    $r = $conn->query('SELECT COUNT(*) as c FROM `models`');
+    $row = $r->fetch_assoc();
+    if ($row['c'] == 0) {
+        $stmt = $conn->prepare('INSERT INTO `models` (`model_code`,`model_name`,`category`,`short_code`) VALUES (?,?,?,?)');
+        foreach ($models_seed as $m) {
+            $stmt->bind_param('ssss', $m[0], $m[1], $m[2], $m[3]);
+            $stmt->execute();
         }
+        $stmt->close();
     }
-    $adminPass = password_hash('admin123', PASSWORD_BCRYPT);
-    $pdo->exec("INSERT IGNORE INTO `users` (`username`,`password`,`full_name`,`email`,`role`) VALUES ('admin','$adminPass','System Administrator','admin@inventorypro.com','Admin')");
-    $pdo->exec("INSERT IGNORE INTO `settings` (`setting_key`,`setting_value`) VALUES
-        ('company_name','InventoryPro Ltd'),
-        ('company_address','123 Business Avenue, Industrial Zone'),
-        ('company_phone','+1 (555) 000-1234'),
-        ('company_email','info@inventorypro.com'),
-        ('company_website','www.inventorypro.com'),
-        ('tax_number','TAX-987654321'),
-        ('currency','USD'),
-        ('currency_symbol','\$'),
-        ('date_format','Y-m-d'),
-        ('timezone','UTC'),
-        ('low_stock_threshold','10'),
-        ('items_per_page','20'),
-        ('invoice_prefix','INV'),
-        ('invoice_start','1000'),
-        ('default_tax','0'),
-        ('default_payment_terms','Net 30')
-    ");
-    $pdo->exec("INSERT IGNORE INTO `categories` (`id`,`name`,`parent_id`,`description`,`status`) VALUES
-        (1,'Electronics',NULL,'Electronic devices and components',1),
-        (2,'Office Supplies',NULL,'Stationery and office equipment',1),
-        (3,'Consumables',NULL,'Daily use consumable products',1),
-        (4,'Furniture',NULL,'Office and warehouse furniture',1),
-        (5,'Laptops',1,'Notebook computers',1),
-        (6,'Printers',1,'Printing devices',1)
-    ");
-    $pdo->exec("INSERT IGNORE INTO `suppliers` (`id`,`company_name`,`contact_person`,`email`,`phone`,`address`,`city`,`country`,`tax_id`,`payment_terms`,`status`) VALUES
-        (1,'TechWorld Distributors','Ahmed Hassan','ahmed@techworld.com','+92-300-1234567','Plot 45, Tech Zone','Karachi','Pakistan','TW-001','Net 30',1),
-        (2,'Global Office Mart','Sarah Johnson','sarah@officemaret.com','+1-555-987-6543','100 Commerce Blvd','New York','USA','GO-002','Net 15',1),
-        (3,'Alpha Supplies Co.','Raj Patel','raj@alphasupplies.in','+91-98765-43210','22 Industrial Road','Mumbai','India','AS-003','Net 45',1),
-        (4,'Prime Furniture House','Li Wei','liwei@primefurniture.cn','+86-10-12345678','88 Factory Street','Shanghai','China','PF-004','Net 60',1)
-    ");
-    $pdo->exec("INSERT IGNORE INTO `customers` (`id`,`name`,`email`,`phone`,`address`,`city`,`country`,`customer_type`,`credit_limit`,`current_balance`,`status`) VALUES
-        (1,'Nexus Technologies Ltd','contact@nexustech.com','+92-21-1234567','Tower 3, Business District','Karachi','Pakistan','Wholesale',500000.00,125000.00,1),
-        (2,'City Office Solutions','info@cityoffice.com','+1-555-111-2222','Suite 200, Park Ave','Chicago','USA','Regular',100000.00,15000.00,1),
-        (3,'Retail Plus Store','retail@retailplus.com','+44-20-9876-5432','10 High Street','London','UK','Regular',50000.00,8500.00,1),
-        (4,'Walk-In Customer','','','','','','Walk-in',0.00,0.00,1)
-    ");
-    $pdo->exec("INSERT IGNORE INTO `products` (`id`,`sku`,`name`,`description`,`category_id`,`brand`,`unit`,`purchase_price`,`selling_price`,`current_stock`,`min_stock`,`max_stock`,`location`,`barcode`,`status`) VALUES
-        (1,'SKU-0001','Dell Latitude 5540 Laptop','14-inch business laptop, Intel Core i5, 16GB RAM, 512GB SSD',5,'Dell','pcs',850.00,1099.00,45,10,100,'Warehouse A','8001234560001',1),
-        (2,'SKU-0002','HP LaserJet Pro M404dn','Monochrome laser printer, duplex printing, network ready',6,'HP','pcs',280.00,399.00,18,5,50,'Warehouse A','8001234560002',1),
-        (3,'SKU-0003','A4 Copy Paper 500 Sheets','80gsm premium white copy paper, ream of 500 sheets',2,'Navigator','box',3.50,6.00,320,50,1000,'Warehouse B','8001234560003',1),
-        (4,'SKU-0004','Executive Office Chair','Ergonomic mesh back office chair with lumbar support, adjustable height',4,'ErgoPlus','pcs',120.00,199.00,12,3,30,'Warehouse C','8001234560004',1)
-    ");
-    $today = date('Y-m-d');
-    $poNum = 'PO-' . date('Ymd') . '-001';
-    $invNum = 'INV-' . date('Ymd') . '-001';
-    $pdo->exec("INSERT IGNORE INTO `purchase_orders` (`id`,`po_number`,`supplier_id`,`po_date`,`expected_delivery`,`subtotal`,`tax_percent`,`discount`,`total_amount`,`payment_status`,`order_status`,`created_by`) VALUES
-        (1,'$poNum',1,'$today','$today',42500.00,0,0,42500.00,'Paid','Received',1)
-    ");
-    $pdo->exec('INSERT IGNORE INTO `purchase_order_items` (`po_id`,`product_id`,`quantity`,`received_qty`,`unit_price`,`total_price`) VALUES
-        (1,1,50,50,850.00,42500.00)
-    ');
-    $pdo->exec("INSERT IGNORE INTO `invoices` (`id`,`invoice_number`,`customer_id`,`invoice_date`,`due_date`,`subtotal`,`tax_percent`,`discount`,`total_amount`,`payment_status`,`payment_method`,`created_by`) VALUES
-        (1,'$invNum',1,'$today','$today',10990.00,0,0,10990.00,'Paid','Bank Transfer',1)
-    ");
-    $pdo->exec('INSERT IGNORE INTO `invoice_items` (`invoice_id`,`product_id`,`quantity`,`unit_price`,`discount`,`total_price`) VALUES
-        (1,1,10,1099.00,0,10990.00)
-    ');
-    logActivity(1, 'admin', 'System Initialized', 'System', 'Database and seed data created successfully.');
-}
 
-function logActivity($userId, $username, $action, $module, $description)
-{
-    try {
-        $pdo = getDB();
-        $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
-        $stmt = $pdo->prepare('INSERT INTO `activity_log` (`user_id`,`username`,`action`,`module`,`description`,`ip_address`) VALUES (?,?,?,?,?,?)');
-        $stmt->execute([$userId, $username, $action, $module, $description, $ip]);
-    } catch (Exception $e) {
+    $r2 = $conn->query('SELECT COUNT(*) as c FROM `suppliers`');
+    $row2 = $r2->fetch_assoc();
+    if ($row2['c'] == 0) {
+        $conn->query("INSERT INTO `suppliers` (`name`,`contact`,`address`) VALUES ('Default Supplier','0300-0000000','Pakistan')");
     }
-}
 
-function generateCSRF()
-{
-    if (empty($_SESSION[CSRF_TOKEN_NAME])) {
-        $_SESSION[CSRF_TOKEN_NAME] = bin2hex(random_bytes(32));
+    $r3 = $conn->query('SELECT COUNT(*) as c FROM `customers`');
+    $row3 = $r3->fetch_assoc();
+    if ($row3['c'] == 0) {
+        $customers_seed = [
+            ['Ahmed Ali', '0321-1234567', '35201-1234567-1', 'Dera Ghazi Khan, Punjab'],
+            ['Muhammad Usman', '0333-7654321', '35201-7654321-3', 'Muzaffargarh, Punjab'],
+            ['Bilal Hussain', '0345-9876543', '35201-9876543-5', 'Rajanpur, Punjab'],
+            ['Zafar Iqbal', '0312-4567890', '35201-4567890-7', 'Layyah, Punjab'],
+        ];
+        $stmt = $conn->prepare('INSERT INTO `customers` (`name`,`phone`,`cnic`,`address`) VALUES (?,?,?,?)');
+        foreach ($customers_seed as $c) {
+            $stmt->bind_param('ssss', $c[0], $c[1], $c[2], $c[3]);
+            $stmt->execute();
+        }
+        $stmt->close();
     }
-    return $_SESSION[CSRF_TOKEN_NAME];
-}
 
-function verifyCSRF($token)
-{
-    return isset($_SESSION[CSRF_TOKEN_NAME]) && hash_equals($_SESSION[CSRF_TOKEN_NAME], $token);
-}
-
-function h($str)
-{
-    return htmlspecialchars((string) $str, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-}
-
-function getSetting($key, $default = '')
-{
-    static $cache = [];
-    if (isset($cache[$key]))
-        return $cache[$key];
-    try {
-        $pdo = getDB();
-        $stmt = $pdo->prepare('SELECT `setting_value` FROM `settings` WHERE `setting_key` = ?');
-        $stmt->execute([$key]);
-        $val = $stmt->fetchColumn();
-        $cache[$key] = ($val !== false) ? $val : $default;
-    } catch (Exception $e) {
-        $cache[$key] = $default;
-    }
-    return $cache[$key];
-}
-
-function formatCurrency($amount)
-{
-    $symbol = getSetting('currency_symbol', '$');
-    return $symbol . number_format((float) $amount, 2);
-}
-
-function formatDate($date)
-{
-    if (empty($date))
-        return '';
-    return date(getSetting('date_format', 'Y-m-d'), strtotime($date));
-}
-
-function paginate($total, $page, $perPage, $baseUrl)
-{
-    $totalPages = ceil($total / $perPage);
-    if ($totalPages <= 1)
-        return '';
-    $html = '<div class="pagination">';
-    if ($page > 1)
-        $html .= '<a href="' . $baseUrl . '&pg=' . ($page - 1) . '" class="page-btn">&laquo; Prev</a>';
-    $start = max(1, $page - 2);
-    $end = min($totalPages, $page + 2);
-    if ($start > 1) {
-        $html .= '<a href="' . $baseUrl . '&pg=1" class="page-btn">1</a>';
-        if ($start > 2)
-            $html .= '<span class="page-dots">...</span>';
-    }
-    for ($i = $start; $i <= $end; $i++) {
-        $active = ($i == $page) ? ' active' : '';
-        $html .= '<a href="' . $baseUrl . '&pg=' . $i . '" class="page-btn' . $active . '">' . $i . '</a>';
-    }
-    if ($end < $totalPages) {
-        if ($end < $totalPages - 1)
-            $html .= '<span class="page-dots">...</span>';
-        $html .= '<a href="' . $baseUrl . '&pg=' . $totalPages . '" class="page-btn">' . $totalPages . '</a>';
-    }
-    if ($page < $totalPages)
-        $html .= '<a href="' . $baseUrl . '&pg=' . ($page + 1) . '" class="page-btn">Next &raquo;</a>';
-    $html .= '<span class="page-info">Page ' . $page . ' of ' . $totalPages . ' (' . $total . ' records)</span>';
-    $html .= '</div>';
-    return $html;
-}
-
-function generateSKU()
-{
-    $pdo = getDB();
-    $last = $pdo->query('SELECT `sku` FROM `products` ORDER BY `id` DESC LIMIT 1')->fetchColumn();
-    if ($last && preg_match('/SKU-(\d+)/', $last, $m)) {
-        return 'SKU-' . str_pad((int) $m[1] + 1, 4, '0', STR_PAD_LEFT);
-    }
-    return 'SKU-0001';
-}
-
-function generatePONumber()
-{
-    $pdo = getDB();
-    $prefix = 'PO-' . date('Ymd') . '-';
-    $count = $pdo->query("SELECT COUNT(*) FROM `purchase_orders` WHERE `po_number` LIKE '" . $prefix . "%'")->fetchColumn();
-    return $prefix . str_pad($count + 1, 3, '0', STR_PAD_LEFT);
-}
-
-function generateInvoiceNumber()
-{
-    $pdo = getDB();
-    $prefix = getSetting('invoice_prefix', 'INV') . '-' . date('Ymd') . '-';
-    $count = $pdo->query("SELECT COUNT(*) FROM `invoices` WHERE `invoice_number` LIKE '" . $prefix . "%'")->fetchColumn();
-    return $prefix . str_pad($count + 1, 3, '0', STR_PAD_LEFT);
-}
-
-function generateAdjRef()
-{
-    $pdo = getDB();
-    $prefix = 'ADJ-' . date('Ymd') . '-';
-    $count = $pdo->query("SELECT COUNT(*) FROM `stock_adjustments` WHERE `reference_no` LIKE '" . $prefix . "%'")->fetchColumn();
-    return $prefix . str_pad($count + 1, 3, '0', STR_PAD_LEFT);
-}
-
-function generateTransferRef()
-{
-    $pdo = getDB();
-    $prefix = 'TRF-' . date('Ymd') . '-';
-    $count = $pdo->query("SELECT COUNT(*) FROM `stock_transfers` WHERE `reference_no` LIKE '" . $prefix . "%'")->fetchColumn();
-    return $prefix . str_pad($count + 1, 3, '0', STR_PAD_LEFT);
-}
-
-function isLoggedIn()
-{
-    if (empty($_SESSION['user_id']))
-        return false;
-    $now = time();
-    if (!empty($_SESSION['last_activity']) && ($now - $_SESSION['last_activity']) > SESSION_TIMEOUT) {
-        session_destroy();
-        return false;
-    }
-    if (!empty($_SESSION['login_time']) && ($now - $_SESSION['login_time']) > SESSION_ABSOLUTE) {
-        session_destroy();
-        return false;
-    }
-    $_SESSION['last_activity'] = $now;
+    $conn->close();
     return true;
 }
 
-function requireLogin()
+function get_setting($key)
 {
-    if (!isLoggedIn()) {
-        header('Location: ?page=login');
+    $conn = db_connect();
+    if (!$conn)
+        return null;
+    $stmt = $conn->prepare('SELECT setting_value FROM settings WHERE setting_key = ?');
+    $stmt->bind_param('s', $key);
+    $stmt->execute();
+    $r = $stmt->get_result();
+    $row = $r->fetch_assoc();
+    $stmt->close();
+    $conn->close();
+    return $row ? $row['setting_value'] : null;
+}
+
+function fmt_money($val)
+{
+    return 'Rs. ' . number_format((float) $val, 2);
+}
+
+function fmt_date($d)
+{
+    if (!$d || $d === '0000-00-00')
+        return '-';
+    try {
+        $dt = new DateTime($d);
+        return $dt->format('d/m/Y');
+    } catch (Exception $e) {
+        return $d;
+    }
+}
+
+function sanitize($val)
+{
+    return htmlspecialchars(strip_tags(trim($val)), ENT_QUOTES, 'UTF-8');
+}
+
+$db_exists = false;
+$test_conn = db_connect(true);
+if ($test_conn) {
+    $r = $test_conn->query("SHOW DATABASES LIKE '$db_name'");
+    if ($r && $r->num_rows > 0) {
+        $test_conn->select_db($db_name);
+        $r2 = $test_conn->query("SHOW TABLES LIKE 'settings'");
+        if ($r2 && $r2->num_rows > 0) {
+            $db_exists = true;
+        }
+    }
+    $test_conn->close();
+}
+
+if (isset($_POST['do_install'])) {
+    if (install_database()) {
+        $db_exists = true;
+        header('Location: index.php');
         exit;
     }
 }
 
-function hasRole($roles)
-{
-    if (!isLoggedIn())
-        return false;
-    $roles = (array) $roles;
-    return in_array($_SESSION['user_role'], $roles);
-}
-
-function requireRole($roles)
-{
-    if (!hasRole($roles)) {
-        $_SESSION['flash_error'] = 'Access denied. Insufficient permissions.';
-        header('Location: ?page=dashboard');
+if ($db_exists) {
+    $theme = get_setting('theme') ?? 'dark';
+    if (isset($_POST['toggle_theme'])) {
+        $new_theme = ($theme === 'dark') ? 'light' : 'dark';
+        $conn = db_connect();
+        if ($conn) {
+            $stmt = $conn->prepare("UPDATE settings SET setting_value=? WHERE setting_key='theme'");
+            $stmt->bind_param('s', $new_theme);
+            $stmt->execute();
+            $stmt->close();
+            $conn->close();
+        }
+        $theme = $new_theme;
+        header('Location: index.php?' . http_build_query(array_merge($_GET, [])));
         exit;
     }
-}
 
-function setFlash($type, $msg)
-{
-    $_SESSION['flash_' . $type] = $msg;
-}
+    if (!isset($_SESSION['logged_in'])) {
+        if (isset($_POST['do_login'])) {
+            $uname = $_POST['username'] ?? '';
+            $upass = $_POST['password'] ?? '';
+            $stored_pass = get_setting('admin_password');
+            if ($uname === 'admin' && password_verify($upass, $stored_pass)) {
+                $_SESSION['logged_in'] = true;
+                $_SESSION['login_time'] = time();
+                header('Location: index.php');
+                exit;
+            } else {
+                $login_error = 'Invalid username or password.';
+            }
+        }
+    } else {
+        if (time() - $_SESSION['login_time'] > 28800) {
+            session_destroy();
+            header('Location: index.php?msg=session_expired');
+            exit;
+        }
+        if (time() - ($_SESSION['last_active'] ?? $_SESSION['login_time']) > 2400) {
+            session_destroy();
+            header('Location: index.php?msg=idle_logout');
+            exit;
+        }
+        $_SESSION['last_active'] = time();
 
-function getFlash($type)
-{
-    $msg = $_SESSION['flash_' . $type] ?? '';
-    unset($_SESSION['flash_' . $type]);
-    return $msg;
-}
-
-function mathCaptcha()
-{
-    $a = rand(2, 9);
-    $b = rand(1, 8);
-    $ops = ['+', '-', '*'];
-    $op = $ops[array_rand($ops)];
-    $ans = $op === '+' ? $a + $b : ($op === '-' ? $a - $b : $a * $b);
-    $_SESSION['captcha_answer'] = $ans;
-    return ['q' => "$a $op $b = ?", 'a' => $ans];
-}
-
-function verifyCaptcha($input)
-{
-    return isset($_SESSION['captcha_answer']) && (int) $input === (int) $_SESSION['captcha_answer'];
-}
-
-function generateCaptchaImage($question)
-{
-    $width = 160;
-    $height = 50;
-    ob_start();
-    ?>
-    <svg width="<?= $width ?>" height="<?= $height ?>" xmlns="http://www.w3.org/2000/svg" style="background:#e0e0e0;border:2px inset #999;">
-        <?php for ($i = 0; $i < 8; $i++): ?>
-        <line x1="<?= rand(0, $width) ?>" y1="<?= rand(0, $height) ?>" x2="<?= rand(0, $width) ?>" y2="<?= rand(0, $height) ?>" stroke="<?= '#' . dechex(rand(0x555555, 0x999999)) ?>" stroke-width="1"/>
-        <?php endfor; ?>
-        <?php for ($i = 0; $i < 15; $i++): ?>
-        <circle cx="<?= rand(0, $width) ?>" cy="<?= rand(0, $height) ?>" r="1.5" fill="<?= '#' . dechex(rand(0x555555, 0x888888)) ?>"/>
-        <?php endfor; ?>
-        <text x="<?= $width / 2 ?>" y="<?= $height / 2 + 8 ?>" text-anchor="middle" font-family="Courier New,monospace" font-size="22" font-weight="bold" fill="#222" transform="rotate(<?= rand(-5, 5) ?>,<?= $width / 2 ?>,<?= $height / 2 ?>)"><?= h($question) ?></text>
-    </svg>
-    <?php
-    return ob_get_clean();
+        if (isset($_GET['logout'])) {
+            session_destroy();
+            header('Location: index.php');
+            exit;
+        }
+    }
 }
 
 $page = $_GET['page'] ?? 'dashboard';
-$action = $_GET['action'] ?? 'list';
-if ($page === 'login') {
-    handleLogin();
-} elseif ($page === 'logout') {
-    handleLogout();
-} elseif ($page === 'captcha_refresh') {
-    $cap = mathCaptcha();
-    echo json_encode(['html' => generateCaptchaImage($cap['q'])]);
-    exit;
-} else {
-    requireLogin();
-    handlePage($page, $action);
-}
+$action = $_GET['action'] ?? '';
+$msg = '';
+$err = '';
 
-function handleLogin()
-{
-    $error = '';
-    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        $captcha = mathCaptcha();
-    }
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        $username = trim($_POST['username'] ?? '');
-        $password = $_POST['password'] ?? '';
-        $captchaInput = $_POST['captcha'] ?? '';
-        $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
-        if (!verifyCaptcha($captchaInput)) {
-            $error = 'Incorrect CAPTCHA answer. Please try again.';
-            $captcha = mathCaptcha();
+if ($db_exists && isset($_SESSION['logged_in'])) {
+    $conn = db_connect();
+
+    if ($page === 'purchase' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_purchase'])) {
+        $order_date = $_POST['order_date'] ?? date('Y-m-d');
+        $inventory_date = $_POST['inventory_date'] ?? date('Y-m-d');
+        $supplier_id = (int) ($_POST['supplier_id'] ?? 0);
+        $cheque_number = sanitize($_POST['cheque_number'] ?? '');
+        $bank_name = sanitize($_POST['bank_name'] ?? '');
+        $cheque_date = $_POST['cheque_date'] ?? '';
+        $cheque_amount = (float) ($_POST['cheque_amount'] ?? 0);
+        $notes = sanitize($_POST['po_notes'] ?? '');
+        $bikes_data = $_POST['bikes'] ?? [];
+        $total_units = count($bikes_data);
+
+        $stmt = $conn->prepare('INSERT INTO purchase_orders (order_date,supplier_id,cheque_number,bank_name,cheque_date,cheque_amount,total_units,notes) VALUES (?,?,?,?,?,?,?,?)');
+        $stmt->bind_param('siisssdis', $order_date, $supplier_id, $cheque_number, $bank_name, $cheque_date, $cheque_amount, $total_units, $notes);
+        $stmt->bind_param('sissssdis', $order_date, $supplier_id, $cheque_number, $bank_name, $cheque_date, $cheque_amount, $total_units, $notes);
+
+        $stmt2 = $conn->prepare('INSERT INTO purchase_orders (order_date,supplier_id,cheque_number,bank_name,cheque_date,cheque_amount,total_units,notes) VALUES (?,?,?,?,?,?,?,?)');
+        $stmt2->bind_param('sisssdis', $order_date, $supplier_id, $cheque_number, $bank_name, $cheque_date, $cheque_amount, $total_units, $notes);
+
+        $po_stmt = $conn->prepare('INSERT INTO purchase_orders (order_date,supplier_id,cheque_number,bank_name,cheque_date,cheque_amount,total_units,notes) VALUES (?,?,?,?,?,?,?,?)');
+        $po_stmt->bind_param('sissssis', $order_date, $supplier_id, $cheque_number, $bank_name, $cheque_date, $cheque_amount, $total_units, $notes);
+        $po_stmt->execute();
+        $po_id = $conn->insert_id;
+        $po_stmt->close();
+
+        $tax_rate = (float) (get_setting('tax_rate') ?? 0.1);
+        $tax_on = get_setting('tax_on') ?? 'purchase_price';
+        $bike_stmt = $conn->prepare("INSERT INTO bikes (purchase_order_id,order_date,inventory_date,chassis_number,motor_number,model_id,color,purchase_price,tax_amount,status,safeguard_notes,accessories,notes) VALUES (?,?,?,?,?,?,?,?,?,'in_stock',?,?,?)");
+
+        $saved_count = 0;
+        $errors_list = [];
+        foreach ($bikes_data as $b) {
+            $chassis = sanitize($b['chassis'] ?? '');
+            $motor = sanitize($b['motor'] ?? '');
+            $model_id = (int) ($b['model_id'] ?? 0);
+            $color = sanitize($b['color'] ?? '');
+            $pp = (float) ($b['purchase_price'] ?? 0);
+            $safe_notes = sanitize($b['safeguard_notes'] ?? '');
+            $accessories = sanitize($b['accessories'] ?? '');
+            $bnotes = sanitize($b['notes'] ?? '');
+            if (empty($chassis))
+                continue;
+            $tax = ($pp * $tax_rate) / 100;
+            $bike_stmt->bind_param('ississsddss s', $po_id, $order_date, $inventory_date, $chassis, $motor, $model_id, $color, $pp, $tax, $safe_notes, $accessories, $bnotes);
+            $bike_stmt->bind_param('issssissdsss', $po_id, $order_date, $inventory_date, $chassis, $motor, $model_id, $color, $pp, $tax, $safe_notes, $accessories, $bnotes);
+            if (!$bike_stmt->execute()) {
+                $errors_list[] = "Chassis $chassis: " . $bike_stmt->error;
+            } else {
+                $saved_count++;
+            }
+        }
+        $bike_stmt->close();
+
+        if (!empty($cheque_number) && $cheque_amount > 0) {
+            $sup_r = $conn->query("SELECT name FROM suppliers WHERE id=$supplier_id");
+            $sup_row = $sup_r ? $sup_r->fetch_assoc() : null;
+            $party = $sup_row ? $sup_row['name'] : 'Unknown Supplier';
+            $chq_stmt = $conn->prepare("INSERT INTO cheque_register (cheque_number,bank_name,cheque_date,amount,type,status,reference_type,reference_id,party_name,notes) VALUES (?,?,?,?,'payment','pending','purchase_order',?,?,?)");
+            $chq_stmt->bind_param('sssdiiss', $cheque_number, $bank_name, $cheque_date, $cheque_amount, $po_id, $party, $notes);
+            $chq_stmt->execute();
+            $chq_stmt->close();
+        }
+
+        if (!empty($errors_list)) {
+            $err = "Saved $saved_count bikes. Errors: " . implode('; ', $errors_list);
         } else {
-            $pdo = getDB();
-            $stmt = $pdo->prepare('SELECT * FROM `users` WHERE `username` = ? AND `status` = 1 LIMIT 1');
-            $stmt->execute([$username]);
-            $user = $stmt->fetch();
-            if ($user) {
-                $lockedUntil = $user['locked_until'] ? strtotime($user['locked_until']) : 0;
-                if ($lockedUntil > time()) {
-                    $error = 'Account locked. Try again after ' . date('H:i', $lockedUntil) . '.';
-                } elseif (password_verify($password, $user['password'])) {
-                    $pdo->prepare('UPDATE `users` SET `login_attempts`=0,`locked_until`=NULL,`last_login`=NOW() WHERE `id`=?')->execute([$user['id']]);
-                    session_regenerate_id(true);
-                    $_SESSION['user_id'] = $user['id'];
-                    $_SESSION['username'] = $user['username'];
-                    $_SESSION['full_name'] = $user['full_name'];
-                    $_SESSION['user_role'] = $user['role'];
-                    $_SESSION['login_time'] = time();
-                    $_SESSION['last_activity'] = time();
-                    $pdo->prepare("INSERT INTO `login_attempts` (`username`,`ip_address`,`status`) VALUES (?,?,'Success')")->execute([$username, $ip]);
-                    logActivity($user['id'], $user['username'], 'Login', 'Auth', 'User logged in successfully from ' . $ip);
-                    header('Location: ?page=dashboard');
-                    exit;
+            $msg = "Purchase order saved. $saved_count bike(s) added to inventory.";
+        }
+    }
+
+    if ($page === 'suppliers' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        if ($action === 'add' || $action === 'edit') {
+            $name = sanitize($_POST['name'] ?? '');
+            $contact = sanitize($_POST['contact'] ?? '');
+            $address = sanitize($_POST['address'] ?? '');
+            if (empty($name)) {
+                $err = 'Supplier name is required.';
+            } else {
+                if ($action === 'add') {
+                    $st = $conn->prepare('INSERT INTO suppliers (name,contact,address) VALUES (?,?,?)');
+                    $st->bind_param('sss', $name, $contact, $address);
+                    $st->execute();
+                    $st->close();
+                    $msg = 'Supplier added successfully.';
                 } else {
-                    $attempts = $user['login_attempts'] + 1;
-                    $lockUntil = $attempts >= 5 ? date('Y-m-d H:i:s', time() + 900) : null;
-                    $pdo->prepare('UPDATE `users` SET `login_attempts`=?,`locked_until`=? WHERE `id`=?')->execute([$attempts, $lockUntil, $user['id']]);
-                    $error = 'Invalid username or password.' . ($attempts >= 3 ? ' (' . (5 - $attempts) . ' attempts remaining)' : '');
-                    $pdo->prepare("INSERT INTO `login_attempts` (`username`,`ip_address`,`status`) VALUES (?,?,'Failed')")->execute([$username, $ip]);
-                    $captcha = mathCaptcha();
+                    $sid = (int) ($_POST['id'] ?? 0);
+                    $st = $conn->prepare('UPDATE suppliers SET name=?,contact=?,address=? WHERE id=?');
+                    $st->bind_param('sssi', $name, $contact, $address, $sid);
+                    $st->execute();
+                    $st->close();
+                    $msg = 'Supplier updated successfully.';
                 }
+            }
+        }
+        if ($action === 'delete') {
+            $sid = (int) ($_POST['id'] ?? 0);
+            $st = $conn->prepare('DELETE FROM suppliers WHERE id=?');
+            $st->bind_param('i', $sid);
+            $st->execute();
+            $st->close();
+            $msg = 'Supplier deleted.';
+        }
+    }
+
+    if ($page === 'customers' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        if ($action === 'add' || $action === 'edit') {
+            $name = sanitize($_POST['name'] ?? '');
+            $phone = sanitize($_POST['phone'] ?? '');
+            $cnic = sanitize($_POST['cnic'] ?? '');
+            $address = sanitize($_POST['address'] ?? '');
+            if (empty($name)) {
+                $err = 'Customer name is required.';
             } else {
-                $error = 'Invalid username or password.';
-                $captcha = mathCaptcha();
+                if ($action === 'add') {
+                    $st = $conn->prepare('INSERT INTO customers (name,phone,cnic,address) VALUES (?,?,?,?)');
+                    $st->bind_param('ssss', $name, $phone, $cnic, $address);
+                    $st->execute();
+                    $st->close();
+                    $msg = 'Customer added.';
+                } else {
+                    $cid = (int) ($_POST['id'] ?? 0);
+                    $st = $conn->prepare('UPDATE customers SET name=?,phone=?,cnic=?,address=? WHERE id=?');
+                    $st->bind_param('ssssi', $name, $phone, $cnic, $address, $cid);
+                    $st->execute();
+                    $st->close();
+                    $msg = 'Customer updated.';
+                }
+            }
+        }
+        if ($action === 'delete') {
+            $cid = (int) ($_POST['id'] ?? 0);
+            $st = $conn->prepare('DELETE FROM customers WHERE id=?');
+            $st->bind_param('i', $cid);
+            $st->execute();
+            $st->close();
+            $msg = 'Customer deleted.';
+        }
+    }
+
+    if ($page === 'models' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        if ($action === 'add' || $action === 'edit') {
+            $mc = sanitize($_POST['model_code'] ?? '');
+            $mn = sanitize($_POST['model_name'] ?? '');
+            $cat = sanitize($_POST['category'] ?? '');
+            $sc = sanitize($_POST['short_code'] ?? '');
+            if (empty($mc) || empty($mn)) {
+                $err = 'Model code and name are required.';
+            } else {
+                if ($action === 'add') {
+                    $st = $conn->prepare('INSERT INTO models (model_code,model_name,category,short_code) VALUES (?,?,?,?)');
+                    $st->bind_param('ssss', $mc, $mn, $cat, $sc);
+                    $st->execute();
+                    $st->close();
+                    $msg = 'Model added.';
+                } else {
+                    $mid = (int) ($_POST['id'] ?? 0);
+                    $st = $conn->prepare('UPDATE models SET model_code=?,model_name=?,category=?,short_code=? WHERE id=?');
+                    $st->bind_param('ssssi', $mc, $mn, $cat, $sc, $mid);
+                    $st->execute();
+                    $st->close();
+                    $msg = 'Model updated.';
+                }
+            }
+        }
+        if ($action === 'delete') {
+            $mid = (int) ($_POST['id'] ?? 0);
+            $st = $conn->prepare('DELETE FROM models WHERE id=?');
+            $st->bind_param('i', $mid);
+            $st->execute();
+            $st->close();
+            $msg = 'Model deleted.';
+        }
+    }
+
+    if ($page === 'sale' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_sale'])) {
+        $bike_id = (int) ($_POST['bike_id'] ?? 0);
+        $selling_price = (float) ($_POST['selling_price'] ?? 0);
+        $selling_date = $_POST['selling_date'] ?? date('Y-m-d');
+        $customer_id = (int) ($_POST['customer_id'] ?? 0);
+        $payment_type = sanitize($_POST['payment_type'] ?? 'cash');
+        $cheque_number = sanitize($_POST['cheque_number'] ?? '');
+        $bank_name = sanitize($_POST['bank_name'] ?? '');
+        $cheque_date = $_POST['cheque_date'] ?? '';
+        $cheque_amount = (float) ($_POST['cheque_amount'] ?? 0);
+        $sale_notes = sanitize($_POST['sale_notes'] ?? '');
+        $accessories = sanitize($_POST['accessories'] ?? '');
+
+        if ($bike_id && $selling_price > 0 && $selling_date) {
+            $br = $conn->query("SELECT * FROM bikes WHERE id=$bike_id AND status='in_stock'");
+            $bike = $br ? $br->fetch_assoc() : null;
+            if ($bike) {
+                $tax_rate = (float) (get_setting('tax_rate') ?? 0.1);
+                $tax_on = get_setting('tax_on') ?? 'purchase_price';
+                $base = ($tax_on === 'selling_price') ? $selling_price : $bike['purchase_price'];
+                $tax_amount = ($base * $tax_rate) / 100;
+                $margin = $selling_price - $bike['purchase_price'];
+
+                $st = $conn->prepare("UPDATE bikes SET selling_price=?,selling_date=?,customer_id=?,tax_amount=?,margin=?,status='sold',accessories=?,notes=? WHERE id=?");
+                $st->bind_param('dsiddsssi', $selling_price, $selling_date, $customer_id, $tax_amount, $margin, $accessories, $sale_notes, $bike_id);
+                $st->bind_param('dsiidssi', $selling_price, $selling_date, $customer_id, $tax_amount, $margin, $accessories, $sale_notes, $bike_id);
+
+                $st2 = $conn->prepare("UPDATE bikes SET selling_price=?,selling_date=?,customer_id=?,tax_amount=?,margin=?,status='sold',accessories=?,notes=? WHERE id=?");
+                $st2->bind_param('dsiddss i', $selling_price, $selling_date, $customer_id, $tax_amount, $margin, $accessories, $sale_notes, $bike_id);
+
+                $conn->query("UPDATE bikes SET selling_price=$selling_price, selling_date='$selling_date', customer_id=$customer_id, tax_amount=$tax_amount, margin=$margin, status='sold', accessories='" . mysqli_real_escape_string($conn, $accessories) . "', notes='" . mysqli_real_escape_string($conn, $sale_notes) . "' WHERE id=$bike_id");
+
+                $cust_r = $conn->query("SELECT name FROM customers WHERE id=$customer_id");
+                $cust_row = $cust_r ? $cust_r->fetch_assoc() : null;
+                $party_name = $cust_row ? $cust_row['name'] : 'Cash Customer';
+
+                $pay_st = $conn->prepare("INSERT INTO payments (payment_date,payment_type,amount,reference_type,reference_id,party_name,notes) VALUES (?,?,?,'sale',?,?,?)");
+                $pay_st->bind_param('ssdiss', $selling_date, $payment_type, $selling_price, $bike_id, $party_name, $sale_notes);
+                $pay_st->execute();
+                $pay_st->close();
+
+                if ($payment_type === 'cheque' && !empty($cheque_number)) {
+                    $chq_st = $conn->prepare("INSERT INTO cheque_register (cheque_number,bank_name,cheque_date,amount,type,status,reference_type,reference_id,party_name,notes) VALUES (?,?,?,?,'receipt','pending','sale',?,?,?)");
+                    $chq_st->bind_param('sssdiss', $cheque_number, $bank_name, $cheque_date, $cheque_amount, $bike_id, $party_name, $sale_notes);
+                    $chq_st->execute();
+                    $chq_st->close();
+                }
+
+                $led_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'credit',?,'customer',?,?,'sale',?,?)");
+                $desc = 'Sale of Chassis: ' . $bike['chassis_number'];
+                $led_st->bind_param('sdisid', $selling_date, $selling_price, $customer_id, $desc, $bike_id, $selling_price);
+                $led_st->execute();
+                $led_st->close();
+
+                $_SESSION['last_sale_bike_id'] = $bike_id;
+                $msg = 'Sale recorded successfully. Margin: ' . fmt_money($margin);
+            } else {
+                $err = 'Bike not found or already sold.';
+            }
+        } else {
+            $err = 'Please fill all required fields.';
+        }
+    }
+
+    if ($page === 'returns' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_return'])) {
+        $bike_id = (int) ($_POST['bike_id'] ?? 0);
+        $return_date = $_POST['return_date'] ?? date('Y-m-d');
+        $return_amount = (float) ($_POST['return_amount'] ?? 0);
+        $refund_method = sanitize($_POST['refund_method'] ?? 'cash');
+        $cheque_number = sanitize($_POST['cheque_number'] ?? '');
+        $bank_name = sanitize($_POST['bank_name'] ?? '');
+        $cheque_date = $_POST['cheque_date'] ?? '';
+        $return_notes = sanitize($_POST['return_notes'] ?? '');
+
+        if ($bike_id && $return_date) {
+            $conn->query("UPDATE bikes SET status='returned', return_date='$return_date', return_amount=$return_amount, return_notes='" . mysqli_real_escape_string($conn, $return_notes) . "' WHERE id=$bike_id AND status='sold'");
+
+            if ($refund_method === 'cheque' && !empty($cheque_number)) {
+                $br = $conn->query("SELECT b.*, c.name as cust_name FROM bikes b LEFT JOIN customers c ON b.customer_id=c.id WHERE b.id=$bike_id");
+                $bike = $br ? $br->fetch_assoc() : null;
+                $party = $bike ? ($bike['cust_name'] ?? 'Unknown') : 'Unknown';
+                $chq_st = $conn->prepare("INSERT INTO cheque_register (cheque_number,bank_name,cheque_date,amount,type,status,reference_type,reference_id,party_name,notes) VALUES (?,?,?,?,'refund','pending','return',?,?,?)");
+                $chq_st->bind_param('sssdiss', $cheque_number, $bank_name, $cheque_date, $return_amount, $bike_id, $party, $return_notes);
+                $chq_st->execute();
+                $chq_st->close();
+            }
+
+            $led_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'debit',?,'customer',0,?,'return',?,?)");
+            $desc = "Return for Bike ID: $bike_id";
+            $led_st->bind_param('sdsid', $return_date, $return_amount, $desc, $bike_id, $return_amount);
+            $led_st->execute();
+            $led_st->close();
+
+            $msg = 'Return processed successfully.';
+        } else {
+            $err = 'Please fill all required fields.';
+        }
+    }
+
+    if ($page === 'cheques' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        if ($action === 'clear') {
+            $cid = (int) ($_POST['id'] ?? 0);
+            $conn->query("UPDATE cheque_register SET status='cleared' WHERE id=$cid");
+            $msg = 'Cheque marked as cleared.';
+        }
+        if ($action === 'bounce') {
+            $cid = (int) ($_POST['id'] ?? 0);
+            $conn->query("UPDATE cheque_register SET status='bounced' WHERE id=$cid");
+            $msg = 'Cheque marked as bounced.';
+        }
+        if ($action === 'delete') {
+            $cid = (int) ($_POST['id'] ?? 0);
+            $conn->query("DELETE FROM cheque_register WHERE id=$cid");
+            $msg = 'Cheque deleted.';
+        }
+    }
+
+    if ($page === 'inventory' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        if ($action === 'delete') {
+            $bid = (int) ($_POST['id'] ?? 0);
+            $conn->query("DELETE FROM bikes WHERE id=$bid");
+            $msg = 'Bike deleted from inventory.';
+        }
+        if ($action === 'edit') {
+            $bid = (int) ($_POST['id'] ?? 0);
+            $color = sanitize($_POST['color'] ?? '');
+            $pp = (float) ($_POST['purchase_price'] ?? 0);
+            $status = sanitize($_POST['status'] ?? 'in_stock');
+            $notes = sanitize($_POST['notes'] ?? '');
+            $safe = sanitize($_POST['safeguard_notes'] ?? '');
+            $conn->query("UPDATE bikes SET color='" . mysqli_real_escape_string($conn, $color) . "', purchase_price=$pp, status='" . mysqli_real_escape_string($conn, $status) . "', notes='" . mysqli_real_escape_string($conn, $notes) . "', safeguard_notes='" . mysqli_real_escape_string($conn, $safe) . "' WHERE id=$bid");
+            $msg = 'Bike updated.';
+        }
+        if ($action === 'bulk_delete') {
+            $ids = $_POST['selected_bikes'] ?? [];
+            $ids = array_map('intval', $ids);
+            if (!empty($ids)) {
+                $id_str = implode(',', $ids);
+                $conn->query("DELETE FROM bikes WHERE id IN ($id_str)");
+                $msg = count($ids) . ' bike(s) deleted.';
+            }
+        }
+        if ($action === 'bulk_export') {
+            $ids = $_POST['selected_bikes'] ?? [];
+            $ids = array_map('intval', $ids);
+            if (!empty($ids)) {
+                $id_str = implode(',', $ids);
+                $er = $conn->query("SELECT b.*, m.model_name, m.model_code FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.id IN ($id_str)");
+                $csv_data = "Sr,Chassis,Motor,Model,Color,Purchase Price,Status,Selling Price,Selling Date,Margin\n";
+                $sr = 1;
+                while ($row = $er->fetch_assoc()) {
+                    $csv_data .= "$sr,{$row['chassis_number']},{$row['motor_number']},{$row['model_name']},{$row['color']},{$row['purchase_price']},{$row['status']},{$row['selling_price']},{$row['selling_date']},{$row['margin']}\n";
+                    $sr++;
+                }
+                header('Content-Type: text/csv');
+                header('Content-Disposition: attachment; filename="inventory_export_' . date('Ymd') . '.csv"');
+                echo $csv_data;
+                exit;
             }
         }
     }
-    renderLogin($error, $captcha);
-}
 
-function handleLogout()
-{
-    if (isset($_SESSION['user_id'])) {
-        logActivity($_SESSION['user_id'], $_SESSION['username'] ?? '', 'Logout', 'Auth', 'User logged out.');
+    if ($page === 'settings' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_settings'])) {
+        $fields = ['company_name', 'branch_name', 'tax_rate', 'currency', 'tax_on', 'show_purchase_on_invoice'];
+        $st = $conn->prepare('UPDATE settings SET setting_value=? WHERE setting_key=?');
+        foreach ($fields as $f) {
+            if (isset($_POST[$f])) {
+                $val = sanitize($_POST[$f]);
+                $st->bind_param('ss', $val, $f);
+                $st->execute();
+            }
+        }
+        if (!empty($_POST['new_password']) && strlen($_POST['new_password']) >= 8) {
+            $np = password_hash($_POST['new_password'], PASSWORD_DEFAULT);
+            $st->bind_param('ss', $np, $_POST['new_password']);
+            $conn->query("UPDATE settings SET setting_value='" . mysqli_real_escape_string($conn, $np) . "' WHERE setting_key='admin_password'");
+        }
+        $st->close();
+        $msg = 'Settings saved.';
     }
-    session_destroy();
-    header('Location: ?page=login');
-    exit;
-}
 
-function handlePage($page, $action)
-{
-    $pdo = getDB();
-    switch ($page) {
-        case 'dashboard':
-            renderDashboard();
-            break;
-        case 'products':
-            handleProducts($action);
-            break;
-        case 'categories':
-            handleCategories($action);
-            break;
-        case 'suppliers':
-            handleSuppliers($action);
-            break;
-        case 'customers':
-            handleCustomers($action);
-            break;
-        case 'purchases':
-            handlePurchases($action);
-            break;
-        case 'sales':
-            handleSales($action);
-            break;
-        case 'adjustments':
-            handleAdjustments($action);
-            break;
-        case 'transfers':
-            handleTransfers($action);
-            break;
-        case 'reports':
-            handleReports();
-            break;
-        case 'users':
-            handleUsers($action);
-            break;
-        case 'settings':
-            handleSettings();
-            break;
-        case 'activity':
-            handleActivity();
-            break;
-        case 'profile':
-            handleProfile($action);
-            break;
-        case 'backup':
-            handleBackup();
-            break;
-        default:
-            renderDashboard();
+    if ($page === 'settings' && isset($_GET['action']) && $_GET['action'] === 'backup') {
+        $tables_list = ['settings', 'suppliers', 'customers', 'models', 'purchase_orders', 'bikes', 'cheque_register', 'payments', 'ledger'];
+        $sql_dump = "-- BNI Enterprises Database Backup\n-- Generated: " . date('Y-m-d H:i:s') . "\n-- Author: $author\n\n";
+        $sql_dump .= "SET FOREIGN_KEY_CHECKS=0;\n\n";
+        foreach ($tables_list as $tbl) {
+            $sql_dump .= "TRUNCATE TABLE `$tbl`;\n";
+            $r = $conn->query("SELECT * FROM `$tbl`");
+            if ($r && $r->num_rows > 0) {
+                while ($row = $r->fetch_assoc()) {
+                    $vals = array_map(function ($v) use ($conn) {
+                        return $v === null ? 'NULL' : "'" . mysqli_real_escape_string($conn, $v) . "'";
+                    }, array_values($row));
+                    $cols = '`' . implode('`,`', array_keys($row)) . '`';
+                    $sql_dump .= "INSERT INTO `$tbl` ($cols) VALUES (" . implode(',', $vals) . ");\n";
+                }
+            }
+            $sql_dump .= "\n";
+        }
+        $sql_dump .= "SET FOREIGN_KEY_CHECKS=1;\n";
+        header('Content-Type: application/sql');
+        header('Content-Disposition: attachment; filename="bni_backup_' . date('Ymd_His') . '.sql"');
+        echo $sql_dump;
+        exit;
     }
-}
 
-function handleProducts($action)
-{
-    requireLogin();
-    $pdo = getDB();
-    if ($action === 'export_csv') {
-        $products = $pdo->query('SELECT p.*,c.name as category_name FROM products p LEFT JOIN categories c ON p.category_id=c.id ORDER BY p.name')->fetchAll();
+    if ($page === 'inventory' && isset($_GET['export_csv']) && $_GET['export_csv'] == 1) {
+        $status_f = sanitize($_GET['status_f'] ?? '');
+        $where = '1=1';
+        if ($status_f && in_array($status_f, ['in_stock', 'sold', 'returned', 'reserved']))
+            $where .= " AND b.status='$status_f'";
+        $er = $conn->query("SELECT b.*, m.model_name, m.model_code, c.name as cust_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id WHERE $where ORDER BY b.id DESC");
         header('Content-Type: text/csv');
-        header('Content-Disposition: attachment; filename="products_' . date('Ymd') . '.csv"');
-        $out = fopen('php://output', 'w');
-        fputcsv($out, ['SKU', 'Name', 'Category', 'Brand', 'Unit', 'Purchase Price', 'Selling Price', 'Stock', 'Min Stock', 'Max Stock', 'Location', 'Status']);
-        foreach ($products as $p) {
-            fputcsv($out, [$p['sku'], $p['name'], $p['category_name'], $p['brand'], $p['unit'], $p['purchase_price'], $p['selling_price'], $p['current_stock'], $p['min_stock'], $p['max_stock'], $p['location'], ($p['status'] ? 'Active' : 'Inactive')]);
+        header('Content-Disposition: attachment; filename="inventory_' . date('Ymd') . '.csv"');
+        echo "Sr,Chassis,Motor,Model,Color,Purchase Price,Status,Selling Price,Selling Date,Customer,Margin\n";
+        $sr = 1;
+        while ($row = $er->fetch_assoc()) {
+            echo "$sr,\"{$row['chassis_number']}\",\"{$row['motor_number']}\",\"{$row['model_name']}\",\"{$row['color']}\",{$row['purchase_price']},{$row['status']},{$row['selling_price']},\"{$row['selling_date']}\",\"{$row['cust_name']}\",{$row['margin']}\n";
+            $sr++;
         }
-        fclose($out);
         exit;
     }
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        if (!verifyCSRF($_POST[CSRF_TOKEN_NAME] ?? '')) {
-            setFlash('error', 'Invalid CSRF token.');
-            header('Location: ?page=products');
-            exit;
-        }
-        if ($action === 'add' || $action === 'edit') {
-            requireRole(['Admin', 'Manager']);
-            $id = (int) ($_POST['id'] ?? 0);
-            $name = trim($_POST['name'] ?? '');
-            $desc = trim($_POST['description'] ?? '');
-            $cat = (int) ($_POST['category_id'] ?? 0);
-            $brand = trim($_POST['brand'] ?? '');
-            $unit = trim($_POST['unit'] ?? 'pcs');
-            $pprice = (float) ($_POST['purchase_price'] ?? 0);
-            $sprice = (float) ($_POST['selling_price'] ?? 0);
-            $minStock = (float) ($_POST['min_stock'] ?? 0);
-            $maxStock = (float) ($_POST['max_stock'] ?? 0);
-            $location = trim($_POST['location'] ?? '');
-            $barcode = trim($_POST['barcode'] ?? '');
-            $imgUrl = trim($_POST['image_url'] ?? '');
-            $status = (int) ($_POST['status'] ?? 1);
-            $pass = strlen($name) < 2 ? 'Product name too short.' : '';
-            if ($pass) {
-                setFlash('error', $pass);
-                header('Location: ?page=products&action=' . $action . ($id ? '&id=' . $id : ''));
-                exit;
-            }
-            if ($id) {
-                $stmt = $pdo->prepare('UPDATE `products` SET `name`=?,`description`=?,`category_id`=?,`brand`=?,`unit`=?,`purchase_price`=?,`selling_price`=?,`min_stock`=?,`max_stock`=?,`location`=?,`barcode`=?,`image_url`=?,`status`=? WHERE `id`=?');
-                $stmt->execute([$name, $desc, $cat ? $cat : null, $brand, $unit, $pprice, $sprice, $minStock, $maxStock, $location, $barcode, $imgUrl, $status, $id]);
-                logActivity($_SESSION['user_id'], $_SESSION['username'], 'Update Product', 'Products', "Updated product: $name (ID:$id)");
-                setFlash('success', 'Product updated successfully.');
-            } else {
-                $sku = generateSKU();
-                $stmt = $pdo->prepare('INSERT INTO `products` (`sku`,`name`,`description`,`category_id`,`brand`,`unit`,`purchase_price`,`selling_price`,`min_stock`,`max_stock`,`location`,`barcode`,`image_url`,`status`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
-                $stmt->execute([$sku, $name, $desc, $cat ? $cat : null, $brand, $unit, $pprice, $sprice, $minStock, $maxStock, $location, $barcode, $imgUrl, $status]);
-                logActivity($_SESSION['user_id'], $_SESSION['username'], 'Add Product', 'Products', "Added product: $name (SKU:$sku)");
-                setFlash('success', 'Product added successfully. SKU: ' . $sku);
-            }
-            header('Location: ?page=products');
-            exit;
-        }
-        if ($action === 'delete') {
-            requireRole(['Admin']);
-            $id = (int) ($_POST['id'] ?? 0);
-            $prod = $pdo->prepare('SELECT `name` FROM `products` WHERE `id`=?');
-            $prod->execute([$id]);
-            $prod = $prod->fetchColumn();
-            $pdo->prepare('DELETE FROM `products` WHERE `id`=?')->execute([$id]);
-            logActivity($_SESSION['user_id'], $_SESSION['username'], 'Delete Product', 'Products', "Deleted product: $prod (ID:$id)");
-            setFlash('success', 'Product deleted.');
-            header('Location: ?page=products');
-            exit;
-        }
-        if ($action === 'bulk') {
-            requireRole(['Admin', 'Manager']);
-            $ids = $_POST['selected_ids'] ?? [];
-            $bulkAction = $_POST['bulk_action'] ?? '';
-            if (!empty($ids) && in_array($bulkAction, ['activate', 'deactivate', 'delete'])) {
-                $placeholders = implode(',', array_fill(0, count($ids), '?'));
-                if ($bulkAction === 'activate')
-                    $pdo->prepare("UPDATE `products` SET `status`=1 WHERE `id` IN ($placeholders)")->execute($ids);
-                elseif ($bulkAction === 'deactivate')
-                    $pdo->prepare("UPDATE `products` SET `status`=0 WHERE `id` IN ($placeholders)")->execute($ids);
-                elseif ($bulkAction === 'delete') {
-                    requireRole(['Admin']);
-                    $pdo->prepare("DELETE FROM `products` WHERE `id` IN ($placeholders)")->execute($ids);
-                }
-                logActivity($_SESSION['user_id'], $_SESSION['username'], 'Bulk ' . ucfirst($bulkAction), 'Products', "Bulk $bulkAction on " . count($ids) . ' products.');
-                setFlash('success', 'Bulk action completed.');
-            }
-            header('Location: ?page=products');
-            exit;
-        }
-    }
-    $search = trim($_GET['search'] ?? '');
-    $catFilter = (int) ($_GET['cat'] ?? 0);
-    $statusFilter = $_GET['status'] ?? '';
-    $page = max(1, (int) ($_GET['pg'] ?? 1));
-    $perPage = (int) getSetting('items_per_page', 20);
-    $where = ['1=1'];
-    $params = [];
-    if ($search) {
-        $where[] = '(p.name LIKE ? OR p.sku LIKE ? OR p.brand LIKE ?)';
-        $params[] = "%$search%";
-        $params[] = "%$search%";
-        $params[] = "%$search%";
-    }
-    if ($catFilter) {
-        $where[] = 'p.category_id = ?';
-        $params[] = $catFilter;
-    }
-    if ($statusFilter !== '') {
-        $where[] = 'p.status = ?';
-        $params[] = (int) $statusFilter;
-    }
-    $whereStr = implode(' AND ', $where);
-    $total = $pdo->prepare("SELECT COUNT(*) FROM `products` p WHERE $whereStr");
-    $total->execute($params);
-    $total = $total->fetchColumn();
-    $offset = ($page - 1) * $perPage;
-    $stmt = $pdo->prepare("SELECT p.*,c.name as category_name FROM `products` p LEFT JOIN `categories` c ON p.category_id=c.id WHERE $whereStr ORDER BY p.name LIMIT $perPage OFFSET $offset");
-    $stmt->execute($params);
-    $products = $stmt->fetchAll();
-    $categories = $pdo->query('SELECT `id`,`name` FROM `categories` WHERE `status`=1 ORDER BY `name`')->fetchAll();
-    $baseUrl = '?page=products&search=' . urlencode($search) . "&cat=$catFilter&status=$statusFilter";
-    if ($action === 'add') {
-        requireRole(['Admin', 'Manager']);
-        renderProductForm(null, $categories);
-    } elseif ($action === 'edit') {
-        requireRole(['Admin', 'Manager']);
-        $id = (int) ($_GET['id'] ?? 0);
-        $prod = $pdo->prepare('SELECT * FROM `products` WHERE `id`=?');
-        $prod->execute([$id]);
-        $prod = $prod->fetch();
-        if (!$prod) {
-            setFlash('error', 'Product not found.');
-            header('Location: ?page=products');
-            exit;
-        }
-        renderProductForm($prod, $categories);
-    } elseif ($action === 'view') {
-        $id = (int) ($_GET['id'] ?? 0);
-        $prod = $pdo->prepare('SELECT p.*,c.name as category_name FROM `products` p LEFT JOIN `categories` c ON p.category_id=c.id WHERE p.id=?');
-        $prod->execute([$id]);
-        $prod = $prod->fetch();
-        if (!$prod) {
-            setFlash('error', 'Product not found.');
-            header('Location: ?page=products');
-            exit;
-        }
-        renderProductDetail($prod);
-    } else {
-        renderProductList($products, $categories, $search, $catFilter, $statusFilter, $total, $page, $perPage, $baseUrl);
-    }
 }
-
-function handleCategories($action)
-{
-    $pdo = getDB();
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        if (!verifyCSRF($_POST[CSRF_TOKEN_NAME] ?? '')) {
-            setFlash('error', 'Invalid CSRF token.');
-            header('Location: ?page=categories');
-            exit;
-        }
-        requireRole(['Admin', 'Manager']);
-        if ($action === 'add' || $action === 'edit') {
-            $id = (int) ($_POST['id'] ?? 0);
-            $name = trim($_POST['name'] ?? '');
-            $parent = (int) ($_POST['parent_id'] ?? 0);
-            $desc = trim($_POST['description'] ?? '');
-            $status = (int) ($_POST['status'] ?? 1);
-            if (strlen($name) < 2) {
-                setFlash('error', 'Category name too short.');
-                header('Location: ?page=categories');
-                exit;
-            }
-            if ($id) {
-                $pdo->prepare('UPDATE `categories` SET `name`=?,`parent_id`=?,`description`=?,`status`=? WHERE `id`=?')->execute([$name, $parent ? $parent : null, $desc, $status, $id]);
-                logActivity($_SESSION['user_id'], $_SESSION['username'], 'Update Category', 'Categories', "Updated: $name");
-                setFlash('success', 'Category updated.');
-            } else {
-                $pdo->prepare('INSERT INTO `categories` (`name`,`parent_id`,`description`,`status`) VALUES (?,?,?,?)')->execute([$name, $parent ? $parent : null, $desc, $status]);
-                logActivity($_SESSION['user_id'], $_SESSION['username'], 'Add Category', 'Categories', "Added: $name");
-                setFlash('success', 'Category added.');
-            }
-            header('Location: ?page=categories');
-            exit;
-        }
-        if ($action === 'delete') {
-            requireRole(['Admin']);
-            $id = (int) ($_POST['id'] ?? 0);
-            $pdo->prepare('UPDATE `categories` SET `parent_id`=NULL WHERE `parent_id`=?')->execute([$id]);
-            $pdo->prepare('UPDATE `products` SET `category_id`=NULL WHERE `category_id`=?')->execute([$id]);
-            $pdo->prepare('DELETE FROM `categories` WHERE `id`=?')->execute([$id]);
-            setFlash('success', 'Category deleted.');
-            header('Location: ?page=categories');
-            exit;
-        }
-        if ($action === 'toggle') {
-            $id = (int) ($_POST['id'] ?? 0);
-            $pdo->prepare('UPDATE `categories` SET `status`=1-`status` WHERE `id`=?')->execute([$id]);
-            setFlash('success', 'Category status toggled.');
-            header('Location: ?page=categories');
-            exit;
-        }
-    }
-    $cats = $pdo->query('SELECT c.*,p.name as parent_name,(SELECT COUNT(*) FROM products WHERE category_id=c.id) as product_count FROM categories c LEFT JOIN categories p ON c.parent_id=p.id ORDER BY c.name')->fetchAll();
-    $parentCats = $pdo->query('SELECT `id`,`name` FROM `categories` WHERE `parent_id` IS NULL AND `status`=1 ORDER BY `name`')->fetchAll();
-    renderCategories($cats, $parentCats);
-}
-
-function handleSuppliers($action)
-{
-    $pdo = getDB();
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        if (!verifyCSRF($_POST[CSRF_TOKEN_NAME] ?? '')) {
-            setFlash('error', 'Invalid CSRF token.');
-            header('Location: ?page=suppliers');
-            exit;
-        }
-        requireRole(['Admin', 'Manager']);
-        if ($action === 'add' || $action === 'edit') {
-            $id = (int) ($_POST['id'] ?? 0);
-            $company = trim($_POST['company_name'] ?? '');
-            $contact = trim($_POST['contact_person'] ?? '');
-            $email = trim($_POST['email'] ?? '');
-            $phone = trim($_POST['phone'] ?? '');
-            $address = trim($_POST['address'] ?? '');
-            $city = trim($_POST['city'] ?? '');
-            $country = trim($_POST['country'] ?? '');
-            $taxId = trim($_POST['tax_id'] ?? '');
-            $terms = trim($_POST['payment_terms'] ?? '');
-            $status = (int) ($_POST['status'] ?? 1);
-            $notes = trim($_POST['notes'] ?? '');
-            if (strlen($company) < 2) {
-                setFlash('error', 'Company name too short.');
-                header('Location: ?page=suppliers');
-                exit;
-            }
-            if ($id) {
-                $pdo->prepare('UPDATE `suppliers` SET `company_name`=?,`contact_person`=?,`email`=?,`phone`=?,`address`=?,`city`=?,`country`=?,`tax_id`=?,`payment_terms`=?,`status`=?,`notes`=? WHERE `id`=?')->execute([$company, $contact, $email, $phone, $address, $city, $country, $taxId, $terms, $status, $notes, $id]);
-                logActivity($_SESSION['user_id'], $_SESSION['username'], 'Update Supplier', 'Suppliers', "Updated: $company");
-                setFlash('success', 'Supplier updated.');
-            } else {
-                $pdo->prepare('INSERT INTO `suppliers` (`company_name`,`contact_person`,`email`,`phone`,`address`,`city`,`country`,`tax_id`,`payment_terms`,`status`,`notes`) VALUES (?,?,?,?,?,?,?,?,?,?,?)')->execute([$company, $contact, $email, $phone, $address, $city, $country, $taxId, $terms, $status, $notes]);
-                logActivity($_SESSION['user_id'], $_SESSION['username'], 'Add Supplier', 'Suppliers', "Added: $company");
-                setFlash('success', 'Supplier added.');
-            }
-            header('Location: ?page=suppliers');
-            exit;
-        }
-        if ($action === 'delete') {
-            requireRole(['Admin']);
-            $id = (int) ($_POST['id'] ?? 0);
-            $name = $pdo->prepare('SELECT company_name FROM suppliers WHERE id=?');
-            $name->execute([$id]);
-            $name = $name->fetchColumn();
-            $pdo->prepare('DELETE FROM `suppliers` WHERE `id`=?')->execute([$id]);
-            logActivity($_SESSION['user_id'], $_SESSION['username'], 'Delete Supplier', 'Suppliers', "Deleted: $name");
-            setFlash('success', 'Supplier deleted.');
-            header('Location: ?page=suppliers');
-            exit;
-        }
-    }
-    $search = trim($_GET['search'] ?? '');
-    $page = max(1, (int) ($_GET['pg'] ?? 1));
-    $perPage = (int) getSetting('items_per_page', 20);
-    $where = '1=1';
-    $params = [];
-    if ($search) {
-        $where .= ' AND (company_name LIKE ? OR contact_person LIKE ? OR email LIKE ?)';
-        $params = ["%$search%", "%$search%", "%$search%"];
-    }
-    $total = $pdo->prepare("SELECT COUNT(*) FROM suppliers WHERE $where");
-    $total->execute($params);
-    $total = $total->fetchColumn();
-    $offset = ($page - 1) * $perPage;
-    $stmt = $pdo->prepare("SELECT * FROM `suppliers` WHERE $where ORDER BY company_name LIMIT $perPage OFFSET $offset");
-    $stmt->execute($params);
-    $suppliers = $stmt->fetchAll();
-    if ($action === 'view') {
-        $id = (int) ($_GET['id'] ?? 0);
-        $sup = $pdo->prepare('SELECT * FROM suppliers WHERE id=?');
-        $sup->execute([$id]);
-        $sup = $sup->fetch();
-        $pos = $pdo->prepare('SELECT po.*,s.company_name FROM purchase_orders po JOIN suppliers s ON po.supplier_id=s.id WHERE po.supplier_id=? ORDER BY po.created_at DESC LIMIT 10');
-        $pos->execute([$id]);
-        $pos = $pos->fetchAll();
-        renderSupplierDetail($sup, $pos);
-        return;
-    }
-    renderSuppliers($suppliers, $search, $total, $page, $perPage);
-}
-
-function handleCustomers($action)
-{
-    $pdo = getDB();
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        if (!verifyCSRF($_POST[CSRF_TOKEN_NAME] ?? '')) {
-            setFlash('error', 'Invalid CSRF.');
-            header('Location: ?page=customers');
-            exit;
-        }
-        requireRole(['Admin', 'Manager']);
-        if ($action === 'add' || $action === 'edit') {
-            $id = (int) ($_POST['id'] ?? 0);
-            $name = trim($_POST['name'] ?? '');
-            $email = trim($_POST['email'] ?? '');
-            $phone = trim($_POST['phone'] ?? '');
-            $address = trim($_POST['address'] ?? '');
-            $city = trim($_POST['city'] ?? '');
-            $country = trim($_POST['country'] ?? '');
-            $type = $_POST['customer_type'] ?? 'Walk-in';
-            $credit = (float) ($_POST['credit_limit'] ?? 0);
-            $status = (int) ($_POST['status'] ?? 1);
-            $notes = trim($_POST['notes'] ?? '');
-            if (strlen($name) < 2) {
-                setFlash('error', 'Name too short.');
-                header('Location: ?page=customers');
-                exit;
-            }
-            if ($id) {
-                $pdo->prepare('UPDATE `customers` SET `name`=?,`email`=?,`phone`=?,`address`=?,`city`=?,`country`=?,`customer_type`=?,`credit_limit`=?,`status`=?,`notes`=? WHERE `id`=?')->execute([$name, $email, $phone, $address, $city, $country, $type, $credit, $status, $notes, $id]);
-                setFlash('success', 'Customer updated.');
-            } else {
-                $pdo->prepare('INSERT INTO `customers` (`name`,`email`,`phone`,`address`,`city`,`country`,`customer_type`,`credit_limit`,`status`,`notes`) VALUES (?,?,?,?,?,?,?,?,?,?)')->execute([$name, $email, $phone, $address, $city, $country, $type, $credit, $status, $notes]);
-                setFlash('success', 'Customer added.');
-            }
-            logActivity($_SESSION['user_id'], $_SESSION['username'], ($id ? 'Update' : 'Add') . ' Customer', 'Customers', "Name: $name");
-            header('Location: ?page=customers');
-            exit;
-        }
-        if ($action === 'delete') {
-            requireRole(['Admin']);
-            $id = (int) ($_POST['id'] ?? 0);
-            $pdo->prepare('DELETE FROM customers WHERE id=?')->execute([$id]);
-            setFlash('success', 'Customer deleted.');
-            header('Location: ?page=customers');
-            exit;
-        }
-    }
-    $search = trim($_GET['search'] ?? '');
-    $page = max(1, (int) ($_GET['pg'] ?? 1));
-    $perPage = (int) getSetting('items_per_page', 20);
-    $where = '1=1';
-    $params = [];
-    if ($search) {
-        $where .= ' AND (name LIKE ? OR email LIKE ? OR phone LIKE ?)';
-        $params = ["%$search%", "%$search%", "%$search%"];
-    }
-    $total = $pdo->prepare("SELECT COUNT(*) FROM customers WHERE $where");
-    $total->execute($params);
-    $total = $total->fetchColumn();
-    $offset = ($page - 1) * $perPage;
-    $stmt = $pdo->prepare("SELECT * FROM customers WHERE $where ORDER BY name LIMIT $perPage OFFSET $offset");
-    $stmt->execute($params);
-    $customers = $stmt->fetchAll();
-    if ($action === 'view') {
-        $id = (int) ($_GET['id'] ?? 0);
-        $cust = $pdo->prepare('SELECT * FROM customers WHERE id=?');
-        $cust->execute([$id]);
-        $cust = $cust->fetch();
-        $invs = $pdo->prepare('SELECT * FROM invoices WHERE customer_id=? ORDER BY created_at DESC LIMIT 10');
-        $invs->execute([$id]);
-        $invs = $invs->fetchAll();
-        renderCustomerDetail($cust, $invs);
-        return;
-    }
-    renderCustomers($customers, $search, $total, $page, $perPage);
-}
-
-function handlePurchases($action)
-{
-    $pdo = getDB();
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        if (!verifyCSRF($_POST[CSRF_TOKEN_NAME] ?? '')) {
-            setFlash('error', 'Invalid CSRF.');
-            header('Location: ?page=purchases');
-            exit;
-        }
-        requireRole(['Admin', 'Manager']);
-        if ($action === 'add') {
-            $supplierId = (int) ($_POST['supplier_id'] ?? 0);
-            $poDate = $_POST['po_date'] ?? date('Y-m-d');
-            $expDel = $_POST['expected_delivery'] ?? '';
-            $taxPct = (float) ($_POST['tax_percent'] ?? 0);
-            $discount = (float) ($_POST['discount'] ?? 0);
-            $notes = trim($_POST['notes'] ?? '');
-            $payStatus = $_POST['payment_status'] ?? 'Unpaid';
-            $prodIds = $_POST['product_id'] ?? [];
-            $quantities = $_POST['quantity'] ?? [];
-            $unitPrices = $_POST['unit_price'] ?? [];
-            if (!$supplierId || empty($prodIds)) {
-                setFlash('error', 'Select supplier and add at least one product.');
-                header('Location: ?page=purchases&action=add');
-                exit;
-            }
-            $subtotal = 0;
-            foreach ($prodIds as $k => $pid) {
-                $subtotal += (float) $quantities[$k] * (float) $unitPrices[$k];
-            }
-            $taxAmount = $subtotal * $taxPct / 100;
-            $total = $subtotal + $taxAmount - $discount;
-            $poNum = generatePONumber();
-            $stmt = $pdo->prepare("INSERT INTO purchase_orders (po_number,supplier_id,po_date,expected_delivery,subtotal,tax_percent,discount,total_amount,payment_status,order_status,notes,created_by) VALUES (?,?,?,?,?,?,?,?,'Pending','Pending',?,?)");
-            $stmt->execute([$poNum, $supplierId, $poDate, $expDel ? $expDel : null, $subtotal, $taxPct, $discount, $total, $notes, $_SESSION['user_id']]);
-            $poId = $pdo->lastInsertId();
-            $payStatus === 'Paid' ? $pdo->prepare("UPDATE purchase_orders SET payment_status='Paid' WHERE id=?")->execute([$poId]) : null;
-            foreach ($prodIds as $k => $pid) {
-                $pid = (int) $pid;
-                $qty = (float) $quantities[$k];
-                $up = (float) $unitPrices[$k];
-                $tp = $qty * $up;
-                $pdo->prepare('INSERT INTO purchase_order_items (po_id,product_id,quantity,unit_price,total_price) VALUES (?,?,?,?,?)')->execute([$poId, $pid, $qty, $up, $tp]);
-            }
-            logActivity($_SESSION['user_id'], $_SESSION['username'], 'Create PO', 'Purchases', "PO: $poNum, Total: $total");
-            setFlash('success', "Purchase Order $poNum created.");
-            header('Location: ?page=purchases');
-            exit;
-        }
-        if ($action === 'receive') {
-            $poId = (int) ($_POST['po_id'] ?? 0);
-            $po = $pdo->prepare('SELECT * FROM purchase_orders WHERE id=?');
-            $po->execute([$poId]);
-            $po = $po->fetch();
-            if (!$po) {
-                setFlash('error', 'PO not found.');
-                header('Location: ?page=purchases');
-                exit;
-            }
-            $items = $pdo->prepare('SELECT * FROM purchase_order_items WHERE po_id=?');
-            $items->execute([$poId]);
-            $items = $items->fetchAll();
-            $recvQtys = $_POST['recv_qty'] ?? [];
-            $allReceived = true;
-            foreach ($items as $item) {
-                $recvQty = (float) ($recvQtys[$item['id']] ?? 0);
-                $newRecv = $item['received_qty'] + $recvQty;
-                if ($newRecv < $item['quantity'])
-                    $allReceived = false;
-                $pdo->prepare('UPDATE purchase_order_items SET received_qty=? WHERE id=?')->execute([$newRecv, $item['id']]);
-                if ($recvQty > 0) {
-                    $pdo->prepare('UPDATE products SET current_stock=current_stock+? WHERE id=?')->execute([$recvQty, $item['product_id']]);
-                    $adjRef = generateAdjRef();
-                    $prod = $pdo->prepare('SELECT current_stock FROM products WHERE id=?');
-                    $prod->execute([$item['product_id']]);
-                    $newStock = $prod->fetchColumn();
-                    $pdo->prepare("INSERT INTO stock_adjustments (reference_no,product_id,adjustment_type,quantity,previous_stock,new_stock,reason,status,approved_by,created_by) VALUES (?,?,'Addition',?,?,?,?,?,'Approved',?,?)")->execute([$adjRef, $item['product_id'], $recvQty, $newStock - $recvQty, $newStock, "Received from PO: {$po['po_number']}", $_SESSION['user_id'], $_SESSION['user_id']]);
-                }
-            }
-            $status = $allReceived ? 'Received' : 'Partial';
-            $pdo->prepare('UPDATE purchase_orders SET order_status=? WHERE id=?')->execute([$status, $poId]);
-            logActivity($_SESSION['user_id'], $_SESSION['username'], 'Receive PO', 'Purchases', "PO ID: $poId, Status: $status");
-            setFlash('success', 'Stock received and inventory updated.');
-            header('Location: ?page=purchases&action=view&id=' . $poId);
-            exit;
-        }
-        if ($action === 'delete') {
-            requireRole(['Admin']);
-            $id = (int) ($_POST['id'] ?? 0);
-            $pdo->prepare('DELETE FROM purchase_orders WHERE id=?')->execute([$id]);
-            setFlash('success', 'Purchase order deleted.');
-            header('Location: ?page=purchases');
-            exit;
-        }
-    }
-    if ($action === 'add') {
-        requireRole(['Admin', 'Manager']);
-        $suppliers = $pdo->query('SELECT id,company_name FROM suppliers WHERE status=1 ORDER BY company_name')->fetchAll();
-        $products = $pdo->query('SELECT id,sku,name,purchase_price FROM products WHERE status=1 ORDER BY name')->fetchAll();
-        renderPurchaseForm($suppliers, $products);
-        return;
-    }
-    if ($action === 'view') {
-        $id = (int) ($_GET['id'] ?? 0);
-        $po = $pdo->prepare('SELECT po.*,s.company_name,s.contact_person,s.phone,s.email FROM purchase_orders po JOIN suppliers s ON po.supplier_id=s.id WHERE po.id=?');
-        $po->execute([$id]);
-        $po = $po->fetch();
-        $items = $pdo->prepare('SELECT poi.*,p.name as product_name,p.sku,p.unit FROM purchase_order_items poi JOIN products p ON poi.product_id=p.id WHERE poi.po_id=?');
-        $items->execute([$id]);
-        $items = $items->fetchAll();
-        renderPurchaseDetail($po, $items);
-        return;
-    }
-    $search = trim($_GET['search'] ?? '');
-    $status = $_GET['status'] ?? '';
-    $dateFrom = $_GET['date_from'] ?? '';
-    $dateTo = $_GET['date_to'] ?? '';
-    $pg = max(1, (int) ($_GET['pg'] ?? 1));
-    $perPage = (int) getSetting('items_per_page', 20);
-    $where = '1=1';
-    $params = [];
-    if ($search) {
-        $where .= ' AND (po.po_number LIKE ? OR s.company_name LIKE ?)';
-        $params = ["%$search%", "%$search%"];
-    }
-    if ($status) {
-        $where .= ' AND po.order_status=?';
-        $params[] = $status;
-    }
-    if ($dateFrom) {
-        $where .= ' AND po.po_date>=?';
-        $params[] = $dateFrom;
-    }
-    if ($dateTo) {
-        $where .= ' AND po.po_date<=?';
-        $params[] = $dateTo;
-    }
-    $total = $pdo->prepare("SELECT COUNT(*) FROM purchase_orders po JOIN suppliers s ON po.supplier_id=s.id WHERE $where");
-    $total->execute($params);
-    $total = $total->fetchColumn();
-    $offset = ($pg - 1) * $perPage;
-    $stmt = $pdo->prepare("SELECT po.*,s.company_name FROM purchase_orders po JOIN suppliers s ON po.supplier_id=s.id WHERE $where ORDER BY po.created_at DESC LIMIT $perPage OFFSET $offset");
-    $stmt->execute($params);
-    $orders = $stmt->fetchAll();
-    $baseUrl = '?page=purchases&search=' . urlencode($search) . "&status=$status&date_from=$dateFrom&date_to=$dateTo";
-    renderPurchaseList($orders, $search, $status, $dateFrom, $dateTo, $total, $pg, $perPage, $baseUrl);
-}
-
-function handleSales($action)
-{
-    $pdo = getDB();
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        if (!verifyCSRF($_POST[CSRF_TOKEN_NAME] ?? '')) {
-            setFlash('error', 'Invalid CSRF.');
-            header('Location: ?page=sales');
-            exit;
-        }
-        if ($action === 'add') {
-            requireRole(['Admin', 'Manager', 'Staff']);
-            $customerId = (int) ($_POST['customer_id'] ?? 0);
-            $invDate = $_POST['invoice_date'] ?? date('Y-m-d');
-            $dueDate = $_POST['due_date'] ?? '';
-            $taxPct = (float) ($_POST['tax_percent'] ?? 0);
-            $discount = (float) ($_POST['discount'] ?? 0);
-            $payStatus = $_POST['payment_status'] ?? 'Unpaid';
-            $payMethod = $_POST['payment_method'] ?? 'Cash';
-            $notes = trim($_POST['notes'] ?? '');
-            $prodIds = $_POST['product_id'] ?? [];
-            $quantities = $_POST['quantity'] ?? [];
-            $unitPrices = $_POST['unit_price'] ?? [];
-            $itemDiscs = $_POST['item_discount'] ?? [];
-            if (!$customerId || empty($prodIds)) {
-                setFlash('error', 'Select customer and add at least one product.');
-                header('Location: ?page=sales&action=add');
-                exit;
-            }
-            foreach ($prodIds as $k => $pid) {
-                $pid = (int) $pid;
-                $qty = (float) $quantities[$k];
-                $stock = $pdo->prepare('SELECT current_stock,name FROM products WHERE id=?');
-                $stock->execute([$pid]);
-                $stock = $stock->fetch();
-                if ($stock && $stock['current_stock'] < $qty) {
-                    setFlash('error', 'Insufficient stock for: ' . $stock['name'] . '. Available: ' . $stock['current_stock']);
-                    header('Location: ?page=sales&action=add');
-                    exit;
-                }
-            }
-            $subtotal = 0;
-            foreach ($prodIds as $k => $pid) {
-                $qty = (float) ($quantities[$k] ?? 0);
-                $up = (float) ($unitPrices[$k] ?? 0);
-                $item_disc_pct = (float) ($itemDiscs[$k] ?? 0);
-                $subtotal += ($qty * $up) * (1 - $item_disc_pct / 100);
-            }
-            $taxAmount = $subtotal * $taxPct / 100;
-            $total = $subtotal + $taxAmount - $discount;
-            $invNum = generateInvoiceNumber();
-            $stmt = $pdo->prepare('INSERT INTO invoices (invoice_number,customer_id,invoice_date,due_date,subtotal,tax_percent,discount,total_amount,payment_status,payment_method,notes,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
-            $stmt->execute([$invNum, $customerId, $invDate, $dueDate ? $dueDate : null, $subtotal, $taxPct, $discount, $total, $payStatus, $payMethod, $notes, $_SESSION['user_id']]);
-            $invId = $pdo->lastInsertId();
-            foreach ($prodIds as $k => $pid) {
-                $pid = (int) $pid;
-                $qty = (float) ($quantities[$k]);
-                $up = (float) ($unitPrices[$k]);
-                $iDisc_pct = (float) ($itemDiscs[$k] ?? 0);
-                $line_total = $qty * $up;
-                $discount_amount = $line_total * $iDisc_pct / 100;
-                $total_price = $line_total - $discount_amount;
-                $pdo->prepare('INSERT INTO invoice_items (invoice_id,product_id,quantity,unit_price,discount,total_price) VALUES (?,?,?,?,?,?)')->execute([$invId, $pid, $qty, $up, $discount_amount, $total_price]);
-                $pdo->prepare('UPDATE products SET current_stock=current_stock-? WHERE id=?')->execute([$qty, $pid]);
-            }
-            if ($payStatus !== 'Paid') {
-                $pdo->prepare('UPDATE customers SET current_balance=current_balance+? WHERE id=?')->execute([$total, $customerId]);
-            }
-            logActivity($_SESSION['user_id'], $_SESSION['username'], 'Create Invoice', 'Sales', "Invoice: $invNum, Total: $total");
-            setFlash('success', "Invoice $invNum created successfully.");
-            header('Location: ?page=sales&action=view&id=' . $invId);
-            exit;
-        }
-        if ($action === 'delete') {
-            requireRole(['Admin']);
-            $id = (int) ($_POST['id'] ?? 0);
-            $pdo->prepare('DELETE FROM invoices WHERE id=?')->execute([$id]);
-            setFlash('success', 'Invoice deleted.');
-            header('Location: ?page=sales');
-            exit;
-        }
-        if ($action === 'mark_paid') {
-            requireRole(['Admin', 'Manager']);
-            $id = (int) ($_POST['id'] ?? 0);
-            $inv = $pdo->prepare('SELECT * FROM invoices WHERE id = ?');
-            $inv->execute([$id]);
-            $inv = $inv->fetch();
-
-            if ($inv && $inv['payment_status'] !== 'Paid') {
-                $pdo->prepare("UPDATE invoices SET payment_status = 'Paid', payment_method = ? WHERE id = ?")->execute([$_POST['payment_method'] ?? 'Cash', $id]);
-                $pdo->prepare('UPDATE customers SET current_balance = current_balance - ? WHERE id = ?')->execute([$inv['total_amount'], $inv['customer_id']]);
-                logActivity($_SESSION['user_id'], $_SESSION['username'], 'Mark Invoice Paid', 'Sales', "Invoice {$inv['invoice_number']} marked as paid.");
-                setFlash('success', 'Invoice payment status updated to Paid.');
-            }
-            header('Location: ?page=sales&action=view&id=' . $id);
-            exit;
-        }
-        if ($action === 'return') {
-            requireRole(['Admin', 'Manager']);
-            $invId = (int) ($_POST['invoice_id'] ?? 0);
-            $retQtys = $_POST['ret_qty'] ?? [];
-            $reason = trim($_POST['reason'] ?? 'N/A');
-
-            if (empty($reason)) {
-                setFlash('error', 'Return reason is required.');
-                header('Location: ?page=sales&action=view&id=' . $invId);
-                exit;
-            }
-
-            $origInv = $pdo->prepare('SELECT * FROM invoices WHERE id=?');
-            $origInv->execute([$invId]);
-            $origInv = $origInv->fetch();
-
-            if (!$origInv) {
-                setFlash('error', 'Invoice not found.');
-                header('Location: ?page=sales');
-                exit;
-            }
-
-            $itemsStmt = $pdo->prepare('SELECT * FROM invoice_items WHERE invoice_id=?');
-            $itemsStmt->execute([$invId]);
-            $items_rows = $itemsStmt->fetchAll();
-            $items = [];
-            foreach ($items_rows as $item_row) {
-                $items[$item_row['id']] = $item_row;
-            }
-
-            $return_subtotal = 0;
-            $itemsToReturn = [];
-
-            foreach ($retQtys as $itemId => $retQty) {
-                $retQty = (float) $retQty;
-                if ($retQty > 0 && isset($items[$itemId])) {
-                    $item = $items[$itemId];
-                    if ($retQty > $item['quantity']) {
-                        setFlash('error', 'Return quantity cannot exceed sold quantity for an item.');
-                        header('Location: ?page=sales&action=view&id=' . $invId);
-                        exit;
-                    }
-                    $itemsToReturn[$itemId] = ['item' => $item, 'ret_qty' => $retQty];
-                    $price_per_unit = $item['quantity'] > 0 ? $item['total_price'] / $item['quantity'] : 0;
-                    $return_subtotal += $price_per_unit * $retQty;
-                }
-            }
-
-            if (empty($itemsToReturn)) {
-                setFlash('error', 'No items selected for return.');
-                header('Location: ?page=sales&action=view&id=' . $invId);
-                exit;
-            }
-
-            $return_ratio = ($origInv['subtotal'] > 0) ? ($return_subtotal / abs($origInv['subtotal'])) : 0;
-            $return_discount = $origInv['discount'] * $return_ratio;
-            $tax_amount = $origInv['subtotal'] * $origInv['tax_percent'] / 100;
-            $return_tax_amount = $tax_amount * $return_ratio;
-            $return_total = $return_subtotal + $return_tax_amount - $return_discount;
-
-            $retNum = 'RET-' . $origInv['invoice_number'] . '-' . rand(100, 999);
-            $notes = "Return for invoice {$origInv['invoice_number']}. Reason: " . $reason;
-
-            $stmt = $pdo->prepare('INSERT INTO invoices (invoice_number,customer_id,invoice_date,subtotal,tax_percent,discount,total_amount,payment_status,payment_method,notes,created_by,is_return) VALUES (?,?,NOW(),?,?,?,?,?,?,?,?,1)');
-            $stmt->execute([$retNum, $origInv['customer_id'], -$return_subtotal, $origInv['tax_percent'], -$return_discount, -$return_total, 'Paid', 'Credit', $notes, $_SESSION['user_id']]);
-            $retId = $pdo->lastInsertId();
-
-            foreach ($itemsToReturn as $itemId => $retData) {
-                $item = $retData['item'];
-                $retQty = $retData['ret_qty'];
-
-                $price_per_unit = $item['quantity'] > 0 ? $item['total_price'] / $item['quantity'] : 0;
-                $ret_total_price = $price_per_unit * $retQty;
-
-                $pdo->prepare('INSERT INTO invoice_items (invoice_id,product_id,quantity,unit_price,discount,total_price) VALUES (?,?,?,?,?,?)')->execute([$retId, $item['product_id'], -$retQty, $item['unit_price'], 0, -$ret_total_price]);
-                $pdo->prepare('UPDATE products SET current_stock=current_stock+? WHERE id=?')->execute([$retQty, $item['product_id']]);
-            }
-
-            $pdo->prepare('UPDATE customers SET current_balance=current_balance-? WHERE id=?')->execute([$return_total, $origInv['customer_id']]);
-
-            logActivity($_SESSION['user_id'], $_SESSION['username'], 'Return Invoice', 'Sales', "Return: $retNum for: " . $origInv['invoice_number'] . ', Amount: ' . formatCurrency($return_total));
-            setFlash('success', "Return processed. Reference: $retNum");
-            header('Location: ?page=sales&action=view&id=' . $retId);
-            exit;
-        }
-    }
-    if ($action === 'add') {
-        requireRole(['Admin', 'Manager', 'Staff']);
-        $customers = $pdo->query('SELECT id,name,current_balance,credit_limit FROM customers WHERE status=1 ORDER BY name')->fetchAll();
-        $products = $pdo->query('SELECT id,sku,name,selling_price,current_stock,unit FROM products WHERE status=1 ORDER BY name')->fetchAll();
-        renderSalesForm($customers, $products);
-        return;
-    }
-    if ($action === 'view') {
-        $id = (int) ($_GET['id'] ?? 0);
-        $inv = $pdo->prepare('SELECT i.*,c.name as customer_name,c.phone,c.email,c.address FROM invoices i JOIN customers c ON i.customer_id=c.id WHERE i.id=?');
-        $inv->execute([$id]);
-        $inv = $inv->fetch();
-        $items = $pdo->prepare('SELECT ii.*,p.name as product_name,p.sku,p.unit FROM invoice_items ii JOIN products p ON ii.product_id=p.id WHERE ii.invoice_id=?');
-        $items->execute([$id]);
-        $items = $items->fetchAll();
-        renderSalesDetail($inv, $items);
-        return;
-    }
-    $search = trim($_GET['search'] ?? '');
-    $status = $_GET['status'] ?? '';
-    $dateFrom = $_GET['date_from'] ?? '';
-    $dateTo = $_GET['date_to'] ?? '';
-    $pg = max(1, (int) ($_GET['pg'] ?? 1));
-    $perPage = (int) getSetting('items_per_page', 20);
-    $where = '1=1';
-    $params = [];
-    if ($search) {
-        $where .= ' AND (i.invoice_number LIKE ? OR c.name LIKE ?)';
-        $params = ["%$search%", "%$search%"];
-    }
-    if ($status) {
-        $where .= ' AND i.payment_status=?';
-        $params[] = $status;
-    }
-    if ($dateFrom) {
-        $where .= ' AND i.invoice_date>=?';
-        $params[] = $dateFrom;
-    }
-    if ($dateTo) {
-        $where .= ' AND i.invoice_date<=?';
-        $params[] = $dateTo;
-    }
-    $total = $pdo->prepare("SELECT COUNT(*) FROM invoices i JOIN customers c ON i.customer_id=c.id WHERE $where");
-    $total->execute($params);
-    $total = $total->fetchColumn();
-    $offset = ($pg - 1) * $perPage;
-    $stmt = $pdo->prepare("SELECT i.*,c.name as customer_name FROM invoices i JOIN customers c ON i.customer_id=c.id WHERE $where ORDER BY i.created_at DESC LIMIT $perPage OFFSET $offset");
-    $stmt->execute($params);
-    $invoices = $stmt->fetchAll();
-    $baseUrl = '?page=sales&search=' . urlencode($search) . "&status=$status&date_from=$dateFrom&date_to=$dateTo";
-    renderSalesList($invoices, $search, $status, $dateFrom, $dateTo, $total, $pg, $perPage, $baseUrl);
-}
-
-function handleAdjustments($action)
-{
-    $pdo = getDB();
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        if (!verifyCSRF($_POST[CSRF_TOKEN_NAME] ?? '')) {
-            setFlash('error', 'Invalid CSRF.');
-            header('Location: ?page=adjustments');
-            exit;
-        }
-        if ($action === 'add') {
-            requireRole(['Admin', 'Manager', 'Staff']);
-            $prodId = (int) ($_POST['product_id'] ?? 0);
-            $type = $_POST['adjustment_type'] ?? '';
-            $qty = (float) ($_POST['quantity'] ?? 0);
-            $reason = trim($_POST['reason'] ?? '');
-            if (!$prodId || !$type || $qty <= 0) {
-                setFlash('error', 'All fields required and quantity must be > 0.');
-                header('Location: ?page=adjustments&action=add');
-                exit;
-            }
-            $prod = $pdo->prepare('SELECT current_stock FROM products WHERE id=?');
-            $prod->execute([$prodId]);
-            $prevStock = (float) $prod->fetchColumn();
-            $negTypes = ['Subtraction', 'Damage', 'Expired'];
-            $newStock = in_array($type, $negTypes) ? $prevStock - $qty : $prevStock + $qty;
-            if ($newStock < 0) {
-                setFlash('error', 'Resulting stock cannot be negative.');
-                header('Location: ?page=adjustments&action=add');
-                exit;
-            }
-            $status = hasRole(['Admin', 'Manager']) ? 'Approved' : 'Pending';
-            $approvedBy = hasRole(['Admin', 'Manager']) ? $_SESSION['user_id'] : null;
-            $ref = generateAdjRef();
-            $pdo->prepare('INSERT INTO stock_adjustments (reference_no,product_id,adjustment_type,quantity,previous_stock,new_stock,reason,status,approved_by,created_by) VALUES (?,?,?,?,?,?,?,?,?,?)')->execute([$ref, $prodId, $type, $qty, $prevStock, $newStock, $reason, $status, $approvedBy, $_SESSION['user_id']]);
-            if ($status === 'Approved') {
-                $pdo->prepare('UPDATE products SET current_stock=? WHERE id=?')->execute([$newStock, $prodId]);
-            }
-            logActivity($_SESSION['user_id'], $_SESSION['username'], 'Stock Adjustment', 'Adjustments', "Ref: $ref, Type: $type, Qty: $qty");
-            setFlash('success', 'Adjustment recorded' . ($status === 'Pending' ? ' and awaiting approval.' : '.'));
-            header('Location: ?page=adjustments');
-            exit;
-        }
-        if ($action === 'approve') {
-            requireRole(['Admin', 'Manager']);
-            $id = (int) ($_POST['id'] ?? 0);
-            $adj = $pdo->prepare('SELECT * FROM stock_adjustments WHERE id=?');
-            $adj->execute([$id]);
-            $adj = $adj->fetch();
-            if ($adj && $adj['status'] === 'Pending') {
-                $pdo->prepare("UPDATE stock_adjustments SET status='Approved',approved_by=? WHERE id=?")->execute([$_SESSION['user_id'], $id]);
-                $pdo->prepare('UPDATE products SET current_stock=? WHERE id=?')->execute([$adj['new_stock'], $adj['product_id']]);
-                setFlash('success', 'Adjustment approved.');
-            }
-            header('Location: ?page=adjustments');
-            exit;
-        }
-        if ($action === 'reject') {
-            requireRole(['Admin', 'Manager']);
-            $id = (int) ($_POST['id'] ?? 0);
-            $pdo->prepare("UPDATE stock_adjustments SET status='Rejected',approved_by=? WHERE id=?")->execute([$_SESSION['user_id'], $id]);
-            setFlash('success', 'Adjustment rejected.');
-            header('Location: ?page=adjustments');
-            exit;
-        }
-    }
-    if ($action === 'add') {
-        requireRole(['Admin', 'Manager', 'Staff']);
-        $products = $pdo->query('SELECT id,sku,name,current_stock,unit FROM products WHERE status=1 ORDER BY name')->fetchAll();
-        renderAdjustmentForm($products);
-        return;
-    }
-    $pg = max(1, (int) ($_GET['pg'] ?? 1));
-    $perPage = (int) getSetting('items_per_page', 20);
-    $total = $pdo->query('SELECT COUNT(*) FROM stock_adjustments')->fetchColumn();
-    $offset = ($pg - 1) * $perPage;
-    $adjs = $pdo->query("SELECT sa.*,p.name as product_name,p.sku,u.full_name as created_by_name,a.full_name as approved_by_name FROM stock_adjustments sa JOIN products p ON sa.product_id=p.id JOIN users u ON sa.created_by=u.id LEFT JOIN users a ON sa.approved_by=a.id ORDER BY sa.created_at DESC LIMIT $perPage OFFSET $offset")->fetchAll();
-    renderAdjustmentList($adjs, $total, $pg, $perPage);
-}
-
-function handleTransfers($action)
-{
-    $pdo = getDB();
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        if (!verifyCSRF($_POST[CSRF_TOKEN_NAME] ?? '')) {
-            setFlash('error', 'Invalid CSRF.');
-            header('Location: ?page=transfers');
-            exit;
-        }
-        requireRole(['Admin', 'Manager']);
-        if ($action === 'add') {
-            $fromLoc = trim($_POST['from_location'] ?? '');
-            $toLoc = trim($_POST['to_location'] ?? '');
-            $tDate = $_POST['transfer_date'] ?? date('Y-m-d');
-            $notes = trim($_POST['notes'] ?? '');
-            $prodIds = $_POST['product_id'] ?? [];
-            $quantities = $_POST['quantity'] ?? [];
-            if (!$fromLoc || !$toLoc || empty($prodIds)) {
-                setFlash('error', 'All fields required.');
-                header('Location: ?page=transfers&action=add');
-                exit;
-            }
-            $ref = generateTransferRef();
-            $pdo->prepare("INSERT INTO stock_transfers (reference_no,from_location,to_location,transfer_date,status,notes,created_by) VALUES (?,?,?,?,'Pending',?,?)")->execute([$ref, $fromLoc, $toLoc, $tDate, $notes, $_SESSION['user_id']]);
-            $tId = $pdo->lastInsertId();
-            foreach ($prodIds as $k => $pid) {
-                $pid = (int) $pid;
-                $qty = (float) $quantities[$k];
-                $pdo->prepare('INSERT INTO stock_transfer_items (transfer_id,product_id,quantity) VALUES (?,?,?)')->execute([$tId, $pid, $qty]);
-            }
-            logActivity($_SESSION['user_id'], $_SESSION['username'], 'Create Transfer', 'Transfers', "Ref: $ref, From: $fromLoc To: $toLoc");
-            setFlash('success', "Transfer $ref created.");
-            header('Location: ?page=transfers');
-            exit;
-        }
-        if ($action === 'complete') {
-            $id = (int) ($_POST['id'] ?? 0);
-            $transfer = $pdo->prepare('SELECT * FROM stock_transfers WHERE id=?');
-            $transfer->execute([$id]);
-            $transfer = $transfer->fetch();
-            if ($transfer && $transfer['status'] === 'Pending') {
-                $items = $pdo->prepare('SELECT * FROM stock_transfer_items WHERE transfer_id=?');
-                $items->execute([$id]);
-                $items = $items->fetchAll();
-                foreach ($items as $item) {
-                    $pdo->prepare('UPDATE products SET current_stock=current_stock-? WHERE id=?')->execute([$item['quantity'], $item['product_id']]);
-                }
-                $pdo->prepare("UPDATE stock_transfers SET status='Completed' WHERE id=?")->execute([$id]);
-                setFlash('success', 'Transfer completed and stock updated.');
-            }
-            header('Location: ?page=transfers');
-            exit;
-        }
-        if ($action === 'cancel') {
-            $id = (int) ($_POST['id'] ?? 0);
-            $pdo->prepare("UPDATE stock_transfers SET status='Cancelled' WHERE id=?")->execute([$id]);
-            setFlash('success', 'Transfer cancelled.');
-            header('Location: ?page=transfers');
-            exit;
-        }
-    }
-    if ($action === 'add') {
-        $products = $pdo->query('SELECT id,sku,name,current_stock,unit,location FROM products WHERE status=1 ORDER BY name')->fetchAll();
-        $locations = $pdo->query("SELECT DISTINCT location FROM products WHERE location IS NOT NULL AND location != '' ORDER BY location")->fetchAll(PDO::FETCH_COLUMN);
-        renderTransferForm($products, $locations);
-        return;
-    }
-    $pg = max(1, (int) ($_GET['pg'] ?? 1));
-    $perPage = (int) getSetting('items_per_page', 20);
-    $total = $pdo->query('SELECT COUNT(*) FROM stock_transfers')->fetchColumn();
-    $offset = ($pg - 1) * $perPage;
-    $transfers = $pdo->query("SELECT st.*,u.full_name as created_by_name FROM stock_transfers st JOIN users u ON st.created_by=u.id ORDER BY st.created_at DESC LIMIT $perPage OFFSET $offset")->fetchAll();
-    renderTransferList($transfers, $total, $pg, $perPage, '?page=transfers');
-}
-
-function handleReports()
-{
-    $pdo = getDB();
-    $report = $_GET['report'] ?? 'stock';
-    $dateFrom = $_GET['date_from'] ?? date('Y-m-01');
-    $dateTo = $_GET['date_to'] ?? date('Y-m-d');
-    $export = $_GET['export'] ?? '';
-    $data = [];
-    $title = '';
-    switch ($report) {
-        case 'stock':
-            $title = 'Stock Report';
-            $data = $pdo->query('SELECT p.*,c.name as category_name,(p.current_stock*p.purchase_price) as stock_value FROM products p LEFT JOIN categories c ON p.category_id=c.id WHERE p.status=1 ORDER BY p.name')->fetchAll();
-            break;
-        case 'sales':
-            $title = 'Sales Report';
-            $data = $pdo->query("SELECT i.*,c.name as customer_name FROM invoices i JOIN customers c ON i.customer_id=c.id WHERE i.invoice_date BETWEEN '$dateFrom' AND '$dateTo' AND i.is_return=0 ORDER BY i.invoice_date DESC")->fetchAll();
-            break;
-        case 'purchases':
-            $title = 'Purchase Report';
-            $data = $pdo->query("SELECT po.*,s.company_name FROM purchase_orders po JOIN suppliers s ON po.supplier_id=s.id WHERE po.po_date BETWEEN '$dateFrom' AND '$dateTo' ORDER BY po.po_date DESC")->fetchAll();
-            break;
-        case 'low_stock':
-            $title = 'Low Stock Report';
-            $data = $pdo->query('SELECT p.*,c.name as category_name FROM products p LEFT JOIN categories c ON p.category_id=c.id WHERE p.current_stock<=p.min_stock AND p.status=1 ORDER BY (p.current_stock/GREATEST(p.min_stock,1)) ASC')->fetchAll();
-            break;
-        case 'profit_loss':
-            $title = 'Profit & Loss Report';
-            $data = $pdo->query("SELECT ii.product_id,p.name,p.sku,SUM(ii.quantity) as total_qty,SUM(ii.total_price) as total_revenue,SUM(ii.quantity*p.purchase_price) as total_cost,SUM(ii.total_price-(ii.quantity*p.purchase_price)) as profit FROM invoice_items ii JOIN products p ON ii.product_id=p.id JOIN invoices i ON ii.invoice_id=i.id WHERE i.invoice_date BETWEEN '$dateFrom' AND '$dateTo' AND i.is_return=0 GROUP BY ii.product_id,p.name,p.sku ORDER BY profit DESC")->fetchAll();
-            break;
-        case 'valuation':
-            $title = 'Inventory Valuation';
-            $data = $pdo->query('SELECT p.*,c.name as category_name,(p.current_stock*p.purchase_price) as purchase_value,(p.current_stock*p.selling_price) as selling_value FROM products p LEFT JOIN categories c ON p.category_id=c.id WHERE p.status=1 ORDER BY p.name')->fetchAll();
-            break;
-        case 'supplier_purchases':
-            $title = 'Supplier-wise Purchases';
-            $data = $pdo->query("SELECT s.company_name,COUNT(po.id) as order_count,SUM(po.total_amount) as total_amount,SUM(CASE WHEN po.payment_status='Paid' THEN po.total_amount ELSE 0 END) as paid_amount,SUM(CASE WHEN po.payment_status!='Paid' THEN po.total_amount ELSE 0 END) as unpaid_amount FROM purchase_orders po JOIN suppliers s ON po.supplier_id=s.id WHERE po.po_date BETWEEN '$dateFrom' AND '$dateTo' GROUP BY s.id,s.company_name ORDER BY total_amount DESC")->fetchAll();
-            break;
-        case 'customer_sales':
-            $title = 'Customer-wise Sales';
-            $data = $pdo->query("SELECT c.name,c.customer_type,COUNT(i.id) as invoice_count,SUM(i.total_amount) as total_amount,SUM(CASE WHEN i.payment_status='Paid' THEN i.total_amount ELSE 0 END) as paid_amount,SUM(CASE WHEN i.payment_status!='Paid' THEN i.total_amount ELSE 0 END) as unpaid_amount FROM invoices i JOIN customers c ON i.customer_id=c.id WHERE i.invoice_date BETWEEN '$dateFrom' AND '$dateTo' AND i.is_return=0 GROUP BY c.id,c.name,c.customer_type ORDER BY total_amount DESC")->fetchAll();
-            break;
-        case 'product_sales':
-            $title = 'Product-wise Sales';
-            $data = $pdo->query("SELECT p.name,p.sku,p.unit,SUM(ii.quantity) as total_qty,SUM(ii.total_price) as total_revenue FROM invoice_items ii JOIN products p ON ii.product_id=p.id JOIN invoices i ON ii.invoice_id=i.id WHERE i.invoice_date BETWEEN '$dateFrom' AND '$dateTo' AND i.is_return=0 GROUP BY p.id,p.name,p.sku,p.unit ORDER BY total_revenue DESC")->fetchAll();
-            break;
-        case 'dead_stock':
-            $title = 'Dead Stock Report (No movement 60+ days)';
-            $data = $pdo->query('SELECT p.*,c.name as category_name,MAX(i.invoice_date) as last_sale FROM products p LEFT JOIN categories c ON p.category_id=c.id LEFT JOIN invoice_items ii ON p.id=ii.product_id LEFT JOIN invoices i ON ii.invoice_id=i.id WHERE p.status=1 GROUP BY p.id HAVING last_sale IS NULL OR last_sale < DATE_SUB(NOW(),INTERVAL 60 DAY) ORDER BY p.current_stock DESC')->fetchAll();
-            break;
-        case 'stock_movement':
-            $title = 'Stock Movement Report';
-            $data = $pdo->query("SELECT sa.*,p.name as product_name,p.sku,u.full_name as created_by_name FROM stock_adjustments sa JOIN products p ON sa.product_id=p.id JOIN users u ON sa.created_by=u.id WHERE sa.created_at BETWEEN '$dateFrom 00:00:00' AND '$dateTo 23:59:59' ORDER BY sa.created_at DESC")->fetchAll();
-            break;
-    }
-    if ($export === 'csv') {
-        header('Content-Type: text/csv');
-        header('Content-Disposition: attachment; filename="' . str_replace(' ', '_', $title) . '_' . date('Ymd') . '.csv"');
-        $out = fopen('php://output', 'w');
-        if (!empty($data)) {
-            fputcsv($out, array_keys($data[0]));
-            foreach ($data as $row)
-                fputcsv($out, $row);
-        }
-        fclose($out);
-        exit;
-    }
-    renderReports($report, $title, $data, $dateFrom, $dateTo);
-}
-
-function handleUsers($action)
-{
-    requireRole(['Admin']);
-    $pdo = getDB();
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        if (!verifyCSRF($_POST[CSRF_TOKEN_NAME] ?? '')) {
-            setFlash('error', 'Invalid CSRF.');
-            header('Location: ?page=users');
-            exit;
-        }
-        if ($action === 'add' || $action === 'edit') {
-            $id = (int) ($_POST['id'] ?? 0);
-            $username = trim($_POST['username'] ?? '');
-            $fullName = trim($_POST['full_name'] ?? '');
-            $email = trim($_POST['email'] ?? '');
-            $role = $_POST['role'] ?? 'Staff';
-            $status = (int) ($_POST['status'] ?? 1);
-            $password = $_POST['password'] ?? '';
-            if (strlen($username) < 3 || strlen($fullName) < 2) {
-                setFlash('error', 'Username and full name required.');
-                header('Location: ?page=users');
-                exit;
-            }
-            if (!$id && strlen($password) < 8) {
-                setFlash('error', 'Password min 8 characters required.');
-                header('Location: ?page=users');
-                exit;
-            }
-            if ($password && !preg_match('/[^a-zA-Z0-9]/', $password)) {
-                setFlash('error', 'Password must contain at least 1 special character.');
-                header('Location: ?page=users');
-                exit;
-            }
-            if ($id) {
-                $fields = 'username=?,full_name=?,email=?,role=?,status=?';
-                $params = [$username, $fullName, $email, $role, $status];
-                if ($password) {
-                    $fields .= ',password=?';
-                    $params[] = password_hash($password, PASSWORD_BCRYPT);
-                }
-                $params[] = $id;
-                $pdo->prepare("UPDATE users SET $fields WHERE id=?")->execute($params);
-                setFlash('success', 'User updated.');
-            } else {
-                $hash = password_hash($password, PASSWORD_BCRYPT);
-                try {
-                    $pdo->prepare('INSERT INTO users (username,password,full_name,email,role,status) VALUES (?,?,?,?,?,?)')->execute([$username, $hash, $fullName, $email, $role, $status]);
-                    setFlash('success', 'User created.');
-                } catch (PDOException $e) {
-                    setFlash('error', 'Username or email already exists.');
-                }
-            }
-            logActivity($_SESSION['user_id'], $_SESSION['username'], ($id ? 'Update' : 'Add') . ' User', 'Users', "Username: $username");
-            header('Location: ?page=users');
-            exit;
-        }
-        if ($action === 'delete') {
-            $id = (int) ($_POST['id'] ?? 0);
-            if ($id == $_SESSION['user_id']) {
-                setFlash('error', 'Cannot delete your own account.');
-                header('Location: ?page=users');
-                exit;
-            }
-            $pdo->prepare('DELETE FROM users WHERE id=?')->execute([$id]);
-            setFlash('success', 'User deleted.');
-            header('Location: ?page=users');
-            exit;
-        }
-        if ($action === 'reset_attempts') {
-            $id = (int) ($_POST['id'] ?? 0);
-            $pdo->prepare('UPDATE users SET login_attempts=0,locked_until=NULL WHERE id=?')->execute([$id]);
-            setFlash('success', 'Login attempts reset.');
-            header('Location: ?page=users');
-            exit;
-        }
-        if ($action === 'toggle') {
-            $id = (int) ($_POST['id'] ?? 0);
-            if ($id == $_SESSION['user_id']) {
-                setFlash('error', 'Cannot change your own status.');
-                header('Location: ?page=users');
-                exit;
-            }
-            $pdo->prepare('UPDATE users SET status = 1 - status WHERE id=?')->execute([$id]);
-            setFlash('success', 'User status toggled.');
-            header('Location: ?page=users');
-            exit;
-        }
-    }
-    $users = $pdo->query('SELECT * FROM users ORDER BY full_name')->fetchAll();
-    renderUsers($users);
-}
-
-function handleSettings()
-{
-    requireRole(['Admin']);
-    $pdo = getDB();
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        if (!verifyCSRF($_POST[CSRF_TOKEN_NAME] ?? '')) {
-            setFlash('error', 'Invalid CSRF.');
-            header('Location: ?page=settings');
-            exit;
-        }
-        $keys = ['company_name', 'company_address', 'company_phone', 'company_email', 'company_website', 'tax_number', 'currency', 'currency_symbol', 'date_format', 'timezone', 'low_stock_threshold', 'items_per_page', 'invoice_prefix', 'invoice_start', 'default_tax', 'default_payment_terms', 'company_logo'];
-        foreach ($keys as $k) {
-            if (isset($_POST[$k])) {
-                $val = trim($_POST[$k]);
-                $pdo->prepare('INSERT INTO settings (setting_key,setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=?')->execute([$k, $val, $val]);
-            }
-        }
-        logActivity($_SESSION['user_id'], $_SESSION['username'], 'Update Settings', 'Settings', 'System settings updated.');
-        setFlash('success', 'Settings saved.');
-        header('Location: ?page=settings');
-        exit;
-    }
-    $settings = [];
-    $rows = $pdo->query('SELECT setting_key,setting_value FROM settings')->fetchAll();
-    foreach ($rows as $r)
-        $settings[$r['setting_key']] = $r['setting_value'];
-    renderSettings($settings);
-}
-
-function handleActivity()
-{
-    requireRole(['Admin', 'Manager']);
-    $pdo = getDB();
-    $search = trim($_GET['search'] ?? '');
-    $module = $_GET['module'] ?? '';
-    $dateFrom = $_GET['date_from'] ?? '';
-    $dateTo = $_GET['date_to'] ?? '';
-    $pg = max(1, (int) ($_GET['pg'] ?? 1));
-    $perPage = (int) getSetting('items_per_page', 20);
-    $where = '1=1';
-    $params = [];
-    if ($search) {
-        $where .= ' AND (username LIKE ? OR action LIKE ? OR description LIKE ?)';
-        $params = ["%$search%", "%$search%", "%$search%"];
-    }
-    if ($module) {
-        $where .= ' AND module=?';
-        $params[] = $module;
-    }
-    if ($dateFrom) {
-        $where .= ' AND DATE(created_at)>=?';
-        $params[] = $dateFrom;
-    }
-    if ($dateTo) {
-        $where .= ' AND DATE(created_at)<=?';
-        $params[] = $dateTo;
-    }
-    $total = $pdo->prepare("SELECT COUNT(*) FROM activity_log WHERE $where");
-    $total->execute($params);
-    $total = $total->fetchColumn();
-    $offset = ($pg - 1) * $perPage;
-    $stmt = $pdo->prepare("SELECT * FROM activity_log WHERE $where ORDER BY created_at DESC LIMIT $perPage OFFSET $offset");
-    $stmt->execute($params);
-    $logs = $stmt->fetchAll();
-    $modules = $pdo->query('SELECT DISTINCT module FROM activity_log ORDER BY module')->fetchAll(PDO::FETCH_COLUMN);
-    $baseUrl = '?page=activity&search=' . urlencode($search) . "&module=$module&date_from=$dateFrom&date_to=$dateTo";
-    renderActivity($logs, $modules, $search, $module, $dateFrom, $dateTo, $total, $pg, $perPage, $baseUrl);
-}
-
-function handleProfile($action)
-{
-    requireLogin();
-    $pdo = getDB();
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        if (!verifyCSRF($_POST[CSRF_TOKEN_NAME] ?? '')) {
-            setFlash('error', 'Invalid CSRF.');
-            header('Location: ?page=profile');
-            exit;
-        }
-
-        if (isset($_POST['full_name'])) {  // Profile update form
-            $fullName = trim($_POST['full_name'] ?? '');
-            $email = trim($_POST['email'] ?? '');
-            $pdo->prepare('UPDATE users SET full_name=?,email=? WHERE id=?')->execute([$fullName, $email, $_SESSION['user_id']]);
-            $_SESSION['full_name'] = $fullName;
-            logActivity($_SESSION['user_id'], $_SESSION['username'], 'Update Profile', 'Profile', 'Profile updated.');
-            setFlash('success', 'Profile updated.');
-        } elseif (isset($_POST['current_password'])) {  // Password change form
-            $currentPass = $_POST['current_password'] ?? '';
-            $newPass = $_POST['new_password'] ?? '';
-            $confirmPass = $_POST['confirm_password'] ?? '';
-
-            if (empty($newPass)) {
-                setFlash('error', 'New password cannot be empty.');
-                header('Location: ?page=profile');
-                exit;
-            }
-
-            $user = $pdo->prepare('SELECT * FROM users WHERE id=?');
-            $user->execute([$_SESSION['user_id']]);
-            $user = $user->fetch();
-
-            if (!password_verify($currentPass, $user['password'])) {
-                setFlash('error', 'Current password is incorrect.');
-                header('Location: ?page=profile');
-                exit;
-            }
-            if (strlen($newPass) < 8) {
-                setFlash('error', 'Password min 8 chars.');
-                header('Location: ?page=profile');
-                exit;
-            }
-            if (!preg_match('/[^a-zA-Z0-9]/', $newPass)) {
-                setFlash('error', 'Password needs 1 special character.');
-                header('Location: ?page=profile');
-                exit;
-            }
-            if ($newPass !== $confirmPass) {
-                setFlash('error', 'Passwords do not match.');
-                header('Location: ?page=profile');
-                exit;
-            }
-            $pdo->prepare('UPDATE users SET password=? WHERE id=?')->execute([password_hash($newPass, PASSWORD_BCRYPT), $_SESSION['user_id']]);
-            logActivity($_SESSION['user_id'], $_SESSION['username'], 'Update Password', 'Profile', 'Password updated.');
-            setFlash('success', 'Password updated.');
-        }
-
-        header('Location: ?page=profile');
-        exit;
-    }
-    $user = $pdo->prepare('SELECT * FROM users WHERE id=?');
-    $user->execute([$_SESSION['user_id']]);
-    $user = $user->fetch();
-    renderProfile($user);
-}
-
-function handleBackup()
-{
-    requireRole(['Admin']);
-    $pdo = getDB();
-    $tables = $pdo->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN);
-    $sql = "-- InventoryPro Database Backup\n-- Generated: " . date('Y-m-d H:i:s') . "\n-- Database: " . DB_NAME . "\n\nSET FOREIGN_KEY_CHECKS=0;\n\n";
-    foreach ($tables as $table) {
-        $create = $pdo->query("SHOW CREATE TABLE `$table`")->fetch();
-        $sql .= "DROP TABLE IF EXISTS `$table`;\n" . $create['Create Table'] . ";\n\n";
-        $rows = $pdo->query("SELECT * FROM `$table`")->fetchAll();
-        foreach ($rows as $row) {
-            $vals = array_map(function ($v) use ($pdo) {
-                return $v === null ? 'NULL' : $pdo->quote($v);
-            }, $row);
-            $sql .= "INSERT INTO `$table` VALUES (" . implode(',', $vals) . ");\n";
-        }
-        $sql .= "\n";
-    }
-    $sql .= "SET FOREIGN_KEY_CHECKS=1;\n";
-    logActivity($_SESSION['user_id'], $_SESSION['username'], 'Database Backup', 'Settings', 'Database backup downloaded.');
-    header('Content-Type: application/sql');
-    header('Content-Disposition: attachment; filename="inventorypro_backup_' . date('Ymd_His') . '.sql"');
-    echo $sql;
-    exit;
-}
-
-function getDashboardStats()
-{
-    $pdo = getDB();
-    $today = date('Y-m-d');
-    $stats = [];
-    $stats['total_products'] = $pdo->query('SELECT COUNT(*) FROM products WHERE status=1')->fetchColumn();
-    $threshold = (int) getSetting('low_stock_threshold', 10);
-    $stats['low_stock'] = $pdo->query('SELECT COUNT(*) FROM products WHERE current_stock<=min_stock AND status=1')->fetchColumn();
-    $stats['today_sales'] = $pdo->query("SELECT COALESCE(SUM(total_amount),0) FROM invoices WHERE DATE(created_at)='$today' AND is_return=0")->fetchColumn();
-    $stats['today_purchases'] = $pdo->query("SELECT COALESCE(SUM(total_amount),0) FROM purchase_orders WHERE DATE(created_at)='$today'")->fetchColumn();
-    $stats['total_revenue'] = $pdo->query("SELECT COALESCE(SUM(total_amount),0) FROM invoices WHERE is_return=0 AND payment_status='Paid'")->fetchColumn();
-    $stats['total_customers'] = $pdo->query('SELECT COUNT(*) FROM customers WHERE status=1')->fetchColumn();
-    $stats['total_suppliers'] = $pdo->query('SELECT COUNT(*) FROM suppliers WHERE status=1')->fetchColumn();
-    $stats['pending_orders'] = $pdo->query("SELECT COUNT(*) FROM purchase_orders WHERE order_status='Pending'")->fetchColumn();
-    $stats['inventory_value'] = $pdo->query('SELECT COALESCE(SUM(current_stock*purchase_price),0) FROM products WHERE status=1')->fetchColumn();
-    $stats['unpaid_invoices'] = $pdo->query("SELECT COALESCE(SUM(total_amount),0) FROM invoices WHERE payment_status!='Paid' AND is_return=0")->fetchColumn();
-    return $stats;
-}
-
-function getRecentTransactions()
-{
-    $pdo = getDB();
-    $sales = $pdo->query("SELECT 'Sale' as type,invoice_number as ref_no,c.name as party,total_amount,payment_status,i.created_at FROM invoices i JOIN customers c ON i.customer_id=c.id WHERE i.is_return=0 ORDER BY i.created_at DESC LIMIT 5")->fetchAll();
-    $purchases = $pdo->query("SELECT 'Purchase' as type,po_number as ref_no,s.company_name as party,total_amount,payment_status,po.created_at FROM purchase_orders po JOIN suppliers s ON po.supplier_id=s.id ORDER BY po.created_at DESC LIMIT 5")->fetchAll();
-    $combined = array_merge($sales, $purchases);
-    usort($combined, fn($a, $b) => strtotime($b['created_at']) - strtotime($a['created_at']));
-    return array_slice($combined, 0, 10);
-}
-
-function getLowStockProducts()
-{
-    $pdo = getDB();
-    return $pdo->query('SELECT p.*,c.name as category_name FROM products p LEFT JOIN categories c ON p.category_id=c.id WHERE p.current_stock<=p.min_stock AND p.status=1 ORDER BY (p.current_stock/GREATEST(p.min_stock,1)) ASC LIMIT 10')->fetchAll();
-}
-
-function getSalesChartData()
-{
-    $pdo = getDB();
-    $data = [];
-    for ($i = 6; $i >= 0; $i--) {
-        $date = date('Y-m-d', strtotime("-$i days"));
-        $label = date('D', strtotime($date));
-        $amount = $pdo->prepare('SELECT COALESCE(SUM(total_amount),0) FROM invoices WHERE DATE(created_at)=? AND is_return=0');
-        $amount->execute([$date]);
-        $amount = $amount->fetchColumn();
-        $data[] = ['label' => $label, 'date' => $date, 'amount' => (float) $amount];
-    }
-    return $data;
-}
-
-function getTopProducts()
-{
-    $pdo = getDB();
-    return $pdo->query('SELECT p.name,p.sku,SUM(ii.quantity) as total_qty,SUM(ii.total_price) as total_revenue FROM invoice_items ii JOIN products p ON ii.product_id=p.id JOIN invoices i ON ii.invoice_id=i.id WHERE i.is_return=0 GROUP BY p.id,p.name,p.sku ORDER BY total_revenue DESC LIMIT 5')->fetchAll();
-}
-
-function getNotificationCount()
-{
-    $pdo = getDB();
-    $lowStock = $pdo->query('SELECT COUNT(*) FROM products WHERE current_stock<=min_stock AND status=1')->fetchColumn();
-    $overdueInv = $pdo->query("SELECT COUNT(*) FROM invoices WHERE payment_status!='Paid' AND due_date<NOW() AND is_return=0")->fetchColumn();
-    $overduePO = $pdo->query("SELECT COUNT(*) FROM purchase_orders WHERE payment_status!='Paid' AND expected_delivery<NOW()")->fetchColumn();
-    return (int) $lowStock + (int) $overdueInv + (int) $overduePO;
-}
-
-function renderHeader($pageTitle = '')
-{
-    $user = $_SESSION['full_name'] ?? 'User';
-    $role = $_SESSION['user_role'] ?? 'Staff';
-    $csrf = generateCSRF();
-    $notifCount = getNotificationCount();
-    $flashSuccess = getFlash('success');
-    $flashError = getFlash('error');
-    $currentPage = $_GET['page'] ?? 'dashboard';
-    ?>
+?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="<?= $db_exists ? (get_setting('theme') ?? 'dark') : 'dark' ?>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="csrf-token" content="<?= h($csrf) ?>">
-<title><?= APP_NAME ?><?= $pageTitle ? ' - ' . h($pageTitle) : '' ?></title>
+<title>BNI Enterprises - Bike Dealer Management System</title>
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
---bg:#f0f0f0;--surface:#e8e8e8;--surface2:#f5f5f5;--border:#999;--border-dark:#666;
---text:#1a1a1a;--text-muted:#555;--text-light:#888;
---blue:#4a90d9;--blue-dark:#2c6fad;--blue-light:#d0e6f7;
---green:#5cb85c;--green-dark:#3d8b3d;--green-light:#d4edda;
---red:#d9534f;--red-dark:#a02020;--red-light:#f8d7da;
---orange:#f0ad4e;--orange-dark:#c07a00;--orange-light:#fff3cd;
---gray-btn:#c0c0c0;--gray-btn-dark:#888;
---sidebar-w:220px;--header-h:42px;--status-h:26px;
---font:'Segoe UI',Arial,sans-serif;
+:root {
+--bg: #2b2b2b;
+--bg2: #1e1e1e;
+--bg3: #333333;
+--surface: #3c3c3c;
+--border: #555555;
+--text: #d4d4d4;
+--text2: #aaaaaa;
+--text3: #777777;
+--accent: #4a9eff;
+--accent-h: #2a7edf;
+--success: #4ec94e;
+--success-h: #3aab3a;
+--danger: #e74c3c;
+--danger-h: #c0392b;
+--warning: #e0a800;
+--input-bg: #ffffff;
+--input-text: #222222;
+--input-border: #888888;
+--sidebar-w: 220px;
+--topbar-h: 48px;
+--font: 'Segoe UI', Arial, Consolas, monospace;
 }
-html,body{height:100%;overflow:hidden}
-body{font-family:var(--font);font-size:13px;background:var(--bg);color:var(--text);display:flex;flex-direction:column}
-a{color:var(--blue-dark);text-decoration:none}
+[data-theme="light"] {
+--bg: #f0f0f0;
+--bg2: #e0e0e0;
+--bg3: #d8d8d8;
+--surface: #ffffff;
+--border: #bbbbbb;
+--text: #222222;
+--text2: #555555;
+--text3: #888888;
+--accent: #1a6fc4;
+--accent-h: #0d5aad;
+--success: #2a8a2a;
+--success-h: #1e6e1e;
+--danger: #c0392b;
+--danger-h: #962d22;
+--warning: #b07d00;
+--input-bg: #ffffff;
+--input-text: #111111;
+--input-border: #aaaaaa;
+--bg2: #e8e8e8;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:14px;-webkit-text-size-adjust:none}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column}
+a{color:var(--accent);text-decoration:none}
 a:hover{text-decoration:underline}
-button,input,select,textarea{font-family:var(--font);font-size:13px}
-input[type=text],input[type=email],input[type=number],input[type=password],input[type=date],input[type=search],textarea,select{
-border:2px inset #aaa;background:#fff;padding:4px 6px;color:var(--text);width:100%;outline:none;
-}
-input[type=text]:focus,input[type=email]:focus,input[type=number]:focus,input[type=password]:focus,input[type=date]:focus,input[type=search]:focus,textarea:focus,select:focus{
-border-color:#4a90d9;background:#fffff8;
-}
-input[type=checkbox],input[type=radio]{width:auto;margin-right:4px;accent-color:var(--blue)}
-.btn{
-display:inline-block;padding:5px 12px;border:2px outset #bbb;cursor:pointer;
-font-size:12px;font-weight:600;letter-spacing:0.2px;
-background:var(--gray-btn);color:var(--text);text-align:center;
-}
-.btn:hover{filter:brightness(0.95)}
-.btn:active{border-style:inset}
-.btn-primary{background:var(--blue);color:#fff;border-color:#3a7fc9}
-.btn-primary:hover{background:var(--blue-dark)}
-.btn-success{background:var(--green);color:#fff;border-color:#4a9a4a}
-.btn-success:hover{background:var(--green-dark)}
-.btn-danger{background:var(--red);color:#fff;border-color:#b03030}
-.btn-danger:hover{background:var(--red-dark)}
-.btn-warning{background:var(--orange);color:#333;border-color:#c0802e}
-.btn-warning:hover{background:var(--orange-dark);color:#fff}
-.btn-sm{padding:3px 8px;font-size:11px}
-.btn-xs{padding:2px 6px;font-size:11px}
-.btn-icon{padding:4px 8px;min-width:28px}
-#app-header{
-height:var(--header-h);background:#2c2c2c;color:#eee;
-display:flex;align-items:center;padding:0 8px;gap:8px;
-border-bottom:2px solid #111;flex-shrink:0;
-}
-#app-header .app-logo{font-size:15px;font-weight:700;color:#fff;letter-spacing:1px;white-space:nowrap}
-#app-header .app-logo span{color:var(--orange)}
-#app-header .header-spacer{flex:1}
-.notif-btn{position:relative;background:none;border:1px solid #555;padding:3px 8px;color:#ddd;cursor:pointer;font-size:12px;border-radius:2px}
-.notif-btn:hover{background:#444}
-.notif-badge{position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:1px 4px;border-radius:10px;min-width:16px;text-align:center}
-.user-menu-wrap{position:relative}
-.user-btn{background:none;border:1px solid #555;padding:3px 10px;color:#ddd;cursor:pointer;font-size:12px}
-.user-btn:hover{background:#444}
-.user-dropdown{
-display:none;position:absolute;right:0;top:100%;background:#3a3a3a;border:1px solid #555;
-min-width:160px;z-index:9999;
-}
-.user-dropdown.open{display:block}
-.user-dropdown a,.user-dropdown button{
-display:block;width:100%;padding:7px 12px;color:#ddd;background:none;
-border:none;text-align:left;cursor:pointer;font-size:12px;
-}
-.user-dropdown a:hover,.user-dropdown button:hover{background:#555;text-decoration:none}
-.hamburger{display:block;background:none;border:1px solid #555;padding:4px 8px;color:#ddd;cursor:pointer;font-size:16px}
-#sidebar { transition: width 0.25s; overflow-x: hidden; overflow-y: auto !important; padding-bottom: 60px; }
-#sidebar::-webkit-scrollbar { width: 4px; }
-#sidebar::-webkit-scrollbar-thumb { background: #666; border-radius: 4px; }
-#sidebar.collapsed { width: 44px; }
-#sidebar.collapsed .sidebar-section-title { opacity: 0; pointer-events: none; }
-#sidebar .sidebar-section-title { white-space: nowrap; overflow: hidden; transition: opacity 0.25s; }
-#sidebar a.nav-item { white-space: nowrap; overflow: hidden; }
-#main-container{display:flex;flex:1;overflow:hidden}
-#sidebar{
-width:var(--sidebar-w);background:#2a2a2a;color:#ccc;
-display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;
-border-right:2px solid #111;
-}
-#sidebar .sidebar-section-title{
-font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;
-color:#888;padding:10px 10px 4px;border-top:1px solid #3a3a3a;
-}
-#sidebar .sidebar-section-title:first-child{border-top:none}
-#sidebar a.nav-item{
-display:flex;align-items:center;gap:8px;padding:7px 14px;
-color:#bbb;font-size:12px;font-weight:500;
-border:none;background:none;cursor:pointer;width:100%;text-align:left;
-border-left:3px solid transparent;
-}
-#sidebar a.nav-item:hover{background:#3a3a3a;color:#fff;text-decoration:none}
-#sidebar a.nav-item.active{background:#1a3a5a;color:#fff;border-left-color:var(--blue)}
-#sidebar a.nav-item .nav-icon{width:16px;text-align:center;font-size:14px;flex-shrink:0}
-#main-content{flex:1;overflow-y:auto;display:flex;flex-direction:column}
-#content-area{flex:1;padding:10px;overflow-y:auto}
-#status-bar{
-height:var(--status-h);background:#2a2a2a;color:#aaa;
-display:flex;align-items:center;padding:0 10px;gap:16px;
-border-top:1px solid #111;flex-shrink:0;font-size:11px;
-}
-#status-bar .sb-item{display:flex;align-items:center;gap:4px}
-.page-title{
-background:#ddd;border-bottom:2px solid #999;padding:6px 10px;
-font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px;
-flex-shrink:0;
-}
-.page-title .page-title-actions{margin-left:auto;display:flex;gap:6px;align-items:center}
-.card{background:var(--surface2);border:1px solid var(--border);padding:10px;margin-bottom:8px}
-.card-title{font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);border-bottom:1px solid var(--border);padding-bottom:5px;margin-bottom:8px}
-.stat-card{background:var(--surface2);border:2px solid var(--border);padding:10px 14px;display:flex;flex-direction:column;gap:4px}
-.stat-card .stat-value{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
-.stat-card .stat-label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px}
-.stat-card.blue{border-left:4px solid var(--blue)}
-.stat-card.green{border-left:4px solid var(--green)}
-.stat-card.red{border-left:4px solid var(--red)}
-.stat-card.orange{border-left:4px solid var(--orange)}
-.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-bottom:10px}
-table.data-table{width:100%;border-collapse:collapse;font-size:12px;background:var(--surface2)}
-table.data-table thead tr{background:#2c2c2c;color:#eee}
-table.data-table th{padding:7px 8px;text-align:left;font-size:11px;font-weight:700;letter-spacing:0.3px;border:1px solid #444;white-space:nowrap}
-table.data-table td{padding:5px 8px;border:1px solid #ccc;vertical-align:middle}
-table.data-table tbody tr:nth-child(even){background:#ebebeb}
-table.data-table tbody tr:hover{background:#d0e6f7}
-table.data-table tbody tr.selected{background:#b8d4f0}
-.table-wrap{overflow-x:auto;width:100%}
-.badge{display:inline-block;padding:2px 7px;font-size:11px;font-weight:600;border:1px solid transparent}
-.badge-success{background:var(--green-light);color:var(--green-dark);border-color:var(--green-dark)}
-.badge-danger{background:var(--red-light);color:var(--red-dark);border-color:var(--red-dark)}
-.badge-warning{background:var(--orange-light);color:var(--orange-dark);border-color:var(--orange-dark)}
-.badge-info{background:var(--blue-light);color:var(--blue-dark);border-color:var(--blue-dark)}
-.badge-secondary{background:#e0e0e0;color:#555;border-color:#999}
-.stock-good{color:var(--green-dark);font-weight:700}
-.stock-low{color:var(--orange-dark);font-weight:700}
-.stock-critical{color:var(--red-dark);font-weight:700}
-.form-group{margin-bottom:10px}
-.form-group label{display:block;font-size:12px;font-weight:600;margin-bottom:3px;color:var(--text-muted)}
-.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.form-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
-.form-section{border:1px solid var(--border);padding:10px;margin-bottom:10px}
-.form-section legend{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);padding:0 4px;background:var(--bg)}
-.filter-bar{background:var(--surface);border:1px solid var(--border);padding:8px 10px;margin-bottom:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
-.filter-bar .filter-group{display:flex;flex-direction:column;gap:2px;min-width:120px}
-.filter-bar .filter-group label{font-size:11px;font-weight:600;color:var(--text-muted)}
-.filter-bar .filter-group input,.filter-bar .filter-group select{width:100%}
-.pagination{display:flex;gap:3px;align-items:center;padding:6px 0;flex-wrap:wrap}
-.page-btn{padding:3px 8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;cursor:pointer;display:inline-block}
-.page-btn:hover{background:var(--blue-light);text-decoration:none}
-.page-btn.active{background:var(--blue);color:#fff;border-color:var(--blue-dark)}
-.page-dots{padding:3px 4px;font-size:12px}
-.page-info{font-size:11px;color:var(--text-muted);margin-left:6px}
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
+input,select,textarea,button{font-family:var(--font);font-size:0.9rem}
+button{cursor:pointer}
+table{border-collapse:collapse;width:100%}
+img{display:block;max-width:100%}
+
+.layout{display:flex;min-height:100vh;flex-direction:row}
+.sidebar{width:var(--sidebar-w);background:var(--bg2);border-right:2px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;z-index:100;overflow-y:auto;transition:transform 0.2s}
+.sidebar-header{padding:12px 10px;border-bottom:2px solid var(--border);text-align:center}
+.sidebar-header .company{font-size:0.85rem;font-weight:700;color:var(--accent);line-height:1.3}
+.sidebar-header .branch{font-size:0.72rem;color:var(--text2);margin-top:2px}
+.sidebar nav ul{list-style:none;padding:0;margin:0}
+.sidebar nav ul li a{display:flex;align-items:center;gap:8px;padding:10px 14px;color:var(--text);font-size:0.83rem;border-bottom:1px solid var(--border);transition:background 0.15s}
+.sidebar nav ul li a:hover{background:var(--surface);text-decoration:none}
+.sidebar nav ul li a.active{background:var(--accent);color:#fff}
+.sidebar nav ul li a .icon{font-size:1rem;min-width:18px;text-align:center}
+.sidebar-footer{margin-top:auto;padding:10px;border-top:2px solid var(--border)}
+.sidebar-footer form{display:inline}
+.sidebar-footer button{background:var(--danger);color:#fff;border:1px solid var(--danger-h);padding:6px 14px;font-size:0.8rem;border-radius:2px;width:100%}
+
+.main-wrap{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-height:100vh}
+.topbar{height:var(--topbar-h);background:var(--bg2);border-bottom:2px solid var(--border);display:flex;align-items:center;padding:0 16px;position:sticky;top:0;z-index:50;gap:10px}
+.topbar .hamburger{display:none;background:none;border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:2px;font-size:1.1rem;cursor:pointer}
+.topbar .page-title{font-size:0.95rem;font-weight:700;color:var(--text);flex:1}
+.topbar .topbar-actions{display:flex;gap:8px;align-items:center}
+.topbar .topbar-actions form button{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:4px 10px;font-size:0.78rem;border-radius:2px}
+.topbar .topbar-actions form button:hover{background:var(--bg3)}
+
+.content{flex:1;padding:16px;overflow-x:hidden}
+
+.toast-wrap{position:fixed;top:60px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+.toast{padding:10px 18px;border-radius:2px;font-size:0.85rem;border:1px solid;min-width:220px;max-width:340px;animation:fadeIn 0.3s;font-weight:600}
+.toast.success{background:#1e4d1e;border-color:var(--success);color:#b8f0b8}
+.toast.error{background:#4d1e1e;border-color:var(--danger);color:#f0b8b8}
+[data-theme="light"] .toast.success{background:#d4f4d4;border-color:var(--success);color:#1a4d1a}
+[data-theme="light"] .toast.error{background:#f4d4d4;border-color:var(--danger);color:#4d1a1a}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+
+.fieldset{border:2px solid var(--border);padding:12px 14px;margin-bottom:14px;border-radius:2px}
+.fieldset legend{font-size:0.8rem;font-weight:700;padding:0 6px;color:var(--accent);text-transform:uppercase;letter-spacing:0.5px}
+.form-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.form-group{display:flex;flex-direction:column;gap:3px;flex:1;min-width:140px}
+.form-group label{font-size:0.78rem;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.3px}
+.form-group label .req{color:var(--danger);margin-left:2px}
+.form-group input,.form-group select,.form-group textarea{background:var(--input-bg);color:var(--input-text);border:1px solid var(--input-border);padding:7px 9px;border-radius:1px;font-size:0.87rem;outline:none;transition:border-color 0.15s}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--accent)}
+.form-group textarea{resize:vertical;min-height:60px}
+.form-group select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;padding-right:26px}
+
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border:1px solid;border-radius:2px;font-size:0.83rem;font-weight:600;cursor:pointer;text-decoration:none;white-space:nowrap;min-height:34px;transition:background 0.15s,border-color 0.15s}
+.btn-primary{background:var(--accent);border-color:var(--accent-h);color:#fff}
+.btn-primary:hover{background:var(--accent-h);text-decoration:none;color:#fff}
+.btn-success{background:var(--success);border-color:var(--success-h);color:#fff}
+.btn-success:hover{background:var(--success-h);text-decoration:none;color:#fff}
+.btn-danger{background:var(--danger);border-color:var(--danger-h);color:#fff}
+.btn-danger:hover{background:var(--danger-h);text-decoration:none;color:#fff}
+.btn-default{background:var(--surface);border-color:var(--border);color:var(--text)}
+.btn-default:hover{background:var(--bg3);text-decoration:none}
+.btn-warning{background:var(--warning);border-color:#a06000;color:#fff}
+.btn-warning:hover{background:#a06000;text-decoration:none;color:#fff}
+.btn-sm{padding:4px 9px;font-size:0.77rem;min-height:28px}
+
+.card-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.card{background:var(--bg2);border:2px solid var(--border);padding:12px 14px;border-radius:2px;display:flex;align-items:center;gap:12px}
+.card .card-icon{font-size:1.8rem;min-width:40px;text-align:center}
+.card .card-body .card-label{font-size:0.73rem;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;font-weight:700}
+.card .card-body .card-value{font-size:1.3rem;font-weight:700;color:var(--text)}
+.card .card-body .card-sub{font-size:0.75rem;color:var(--text3)}
+.card.accent{border-color:var(--accent)}
+.card.success{border-color:var(--success)}
+.card.danger{border-color:var(--danger)}
+.card.warning{border-color:var(--warning)}
+
+.data-table-wrap{overflow-x:auto;margin-bottom:14px}
+.data-table{width:100%;border:1px solid var(--border);font-size:0.82rem}
+.data-table th,.data-table td{border:1px solid var(--border);padding:6px 9px;white-space:nowrap}
+.data-table th{background:var(--bg2);color:var(--text);font-weight:700;text-align:left;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.3px;cursor:pointer;user-select:none}
+.data-table th:hover{background:var(--surface)}
+.data-table tbody tr:nth-child(even){background:var(--bg)}
+.data-table tbody tr:nth-child(odd){background:var(--surface)}
+.data-table tbody tr:hover{background:var(--bg3)}
+.data-table tbody tr.row-sold{background:#1a3d1a !important}
+.data-table tbody tr.row-returned{background:#3d1a1a !important}
+.data-table tbody tr.row-reserved{background:#3d3000 !important}
+[data-theme="light"] .data-table tbody tr.row-sold{background:#d4f4d4 !important}
+[data-theme="light"] .data-table tbody tr.row-returned{background:#f4d4d4 !important}
+[data-theme="light"] .data-table tbody tr.row-reserved{background:#f4f0d4 !important}
+.data-table tfoot tr{background:var(--bg2);font-weight:700}
+.data-table .actions-col{white-space:nowrap;display:flex;gap:4px;flex-wrap:wrap}
+
+.pagination{display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.pagination a,.pagination span{padding:5px 10px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.8rem;border-radius:1px;text-decoration:none}
+.pagination a:hover{background:var(--accent);color:#fff;border-color:var(--accent-h)}
+.pagination .active-page{background:var(--accent);color:#fff;border-color:var(--accent-h)}
+
+.badge{display:inline-block;padding:2px 7px;border-radius:1px;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.3px}
+.badge-success{background:#1a4d1a;color:#8af08a}
+.badge-danger{background:#4d1a1a;color:#f08a8a}
+.badge-warning{background:#4d3a00;color:#f0c858}
+.badge-info{background:#1a2d4d;color:#8ab8f0}
+.badge-default{background:var(--surface);color:var(--text2);border:1px solid var(--border)}
+[data-theme="light"] .badge-success{background:#d4f4d4;color:#1a4d1a}
+[data-theme="light"] .badge-danger{background:#f4d4d4;color:#4d1a1a}
+[data-theme="light"] .badge-warning{background:#f4e8d4;color:#4d2a00}
+[data-theme="light"] .badge-info{background:#d4e8f4;color:#1a2d4d}
+
+.filter-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;padding:10px;background:var(--bg2);border:1px solid var(--border)}
+.filter-bar .form-group{min-width:120px;flex:0 0 auto}
+.filter-bar .form-group label{font-size:0.72rem}
+.filter-bar .form-group input,.filter-bar .form-group select{font-size:0.82rem;padding:5px 7px}
+
+.modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:500;align-items:center;justify-content:center}
 .modal-overlay.open{display:flex}
-.modal{background:var(--bg);border:2px solid #555;width:100%;max-width:600px;margin:auto}
-.modal-title-bar{background:#2c2c2c;color:#fff;padding:6px 10px;display:flex;align-items:center;justify-content:space-between;font-weight:700;font-size:13px}
-.modal-title-bar .modal-close{background:var(--red);border:none;color:#fff;padding:2px 8px;cursor:pointer;font-size:14px;font-weight:700}
-.modal-body{padding:12px}
-.modal-footer{padding:8px 12px;background:var(--surface);border-top:1px solid var(--border);display:flex;gap:6px;justify-content:flex-end}
-.alert{padding:8px 12px;margin-bottom:8px;border:1px solid transparent;font-size:12px}
-.alert-success{background:var(--green-light);border-color:var(--green-dark);color:var(--green-dark)}
-.alert-error{background:var(--red-light);border-color:var(--red-dark);color:var(--red-dark)}
-.alert-warning{background:var(--orange-light);border-color:var(--orange-dark);color:var(--orange-dark)}
-.toast-container{position:fixed;top:50px;right:10px;z-index:9999;display:flex;flex-direction:column;gap:6px;pointer-events:none}
-.toast{background:#2c2c2c;color:#fff;padding:8px 14px;border-left:4px solid var(--blue);font-size:12px;min-width:250px;max-width:380px;pointer-events:all;border:1px solid #555;border-left:4px solid var(--blue)}
-.toast.toast-success{border-left-color:var(--green)}
-.toast.toast-error{border-left-color:var(--red)}
-.toast.toast-warning{border-left-color:var(--orange)}
-.chart-bar-wrap{display:flex;align-items:flex-end;gap:4px;height:120px;padding:0 4px}
-.chart-bar-col{display:flex;flex-direction:column;align-items:center;flex:1;height:100%}
-.chart-bar{width:100%;background:var(--blue);min-height:2px;transition:height 0.3s}
-.chart-bar-label{font-size:10px;color:var(--text-muted);margin-top:3px;white-space:nowrap}
-.chart-bar-val{font-size:9px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;text-align:center}
-.two-col-layout{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.three-col-layout{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
-.detail-table{width:100%;border-collapse:collapse;font-size:12px}
-.detail-table td{padding:5px 8px;border:1px solid #ccc}
-.detail-table td:first-child{font-weight:600;background:#eee;width:35%;white-space:nowrap}
-.items-table-wrap{overflow-x:auto}
-.items-table{width:100%;border-collapse:collapse;font-size:12px}
-.items-table th{background:#2c2c2c;color:#eee;padding:5px 8px;text-align:left;border:1px solid #444}
-.items-table td{padding:4px 8px;border:1px solid #ccc}
-.items-table .remove-row-btn{background:var(--red);color:#fff;border:none;padding:2px 7px;cursor:pointer;font-size:11px}
-.items-table tfoot td{background:#eee;font-weight:700}
-#add-item-btn{background:var(--green);color:#fff;border:2px outset #3a8a3a;padding:4px 10px;cursor:pointer;font-size:12px;margin-bottom:8px}
-#add-item-btn:active{border-style:inset}
-.print-header{display:none}
-.barcode-svg{font-family:monospace;display:inline-block}
-.progress-bar-wrap{background:#ddd;border:1px solid #bbb;height:14px;position:relative;overflow:hidden}
-.progress-bar-fill{height:100%;background:var(--blue);transition:width 0.3s}
-.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:899}
-@media(max-width:768px){
-.hamburger{display:block}
-#sidebar{position:fixed;left:-240px;top:0;bottom:0;z-index:900;transition:left 0.25s;width:220px}
-#sidebar.collapsed{width:220px}
-#sidebar.open{left:0}
-.sidebar-overlay.open{display:block}
-.form-row,.form-row-3{grid-template-columns:1fr}
-.two-col-layout,.three-col-layout{grid-template-columns:1fr}
-.stats-grid{grid-template-columns:1fr 1fr}
-.modal{max-width:100%;margin:0}
-.modal-overlay{padding:0;align-items:flex-start}
-.filter-bar{flex-direction:column}
-.filter-bar .filter-group{min-width:100%}
-.page-title{flex-wrap:wrap}
-.page-title .page-title-actions{margin-left:0;width:100%;margin-top:4px}
-table.data-table thead{display:none}
-table.data-table tbody tr{display:block;border:1px solid #ccc;margin-bottom:6px;background:#fff}
-table.data-table tbody td{display:flex;justify-content:space-between;align-items:center;padding:4px 8px;border:none;border-bottom:1px solid #eee;font-size:12px}
-table.data-table tbody td::before{content:attr(data-label);font-weight:700;font-size:11px;color:var(--text-muted);flex-shrink:0;margin-right:8px}
-table.data-table tbody td:last-child{border-bottom:none}
-#status-bar .sb-item:not(:first-child){display:none}
-}
-@media(max-width:480px){.stats-grid{grid-template-columns:1fr}}
+.modal{background:var(--bg2);border:2px solid var(--border);padding:18px;width:90%;max-width:500px;max-height:90vh;overflow-y:auto;border-radius:2px;position:relative}
+.modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;border-bottom:1px solid var(--border);padding-bottom:8px}
+.modal-header h3{font-size:0.9rem;font-weight:700;color:var(--accent);text-transform:uppercase}
+.modal-close{background:var(--danger);border:none;color:#fff;padding:3px 8px;font-size:0.9rem;cursor:pointer;border-radius:1px}
+
+.bike-row{background:var(--surface);border:1px solid var(--border);padding:10px;margin-bottom:8px;border-radius:2px;position:relative}
+.bike-row-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.bike-row-num{font-size:0.78rem;font-weight:700;color:var(--accent);text-transform:uppercase}
+.bike-row-del{background:var(--danger);border:none;color:#fff;padding:2px 8px;font-size:0.78rem;cursor:pointer;border-radius:1px}
+
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg)}
+.login-box{background:var(--bg2);border:2px solid var(--border);padding:30px;width:340px;border-radius:2px}
+.login-box h2{font-size:1.1rem;font-weight:700;color:var(--accent);text-align:center;margin-bottom:4px;text-transform:uppercase}
+.login-box .login-sub{font-size:0.78rem;color:var(--text2);text-align:center;margin-bottom:20px}
+.login-box .form-group{margin-bottom:12px}
+.login-box .login-btn{width:100%;background:var(--accent);border:1px solid var(--accent-h);color:#fff;padding:9px;font-size:0.9rem;font-weight:700;border-radius:2px;cursor:pointer;margin-top:4px}
+.login-box .login-btn:hover{background:var(--accent-h)}
+.login-err{color:var(--danger);font-size:0.82rem;text-align:center;margin-bottom:10px;padding:6px;background:#3d1a1a;border:1px solid var(--danger);border-radius:1px}
+[data-theme="light"] .login-err{background:#f4d4d4}
+
+.install-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg)}
+.install-box{background:var(--bg2);border:2px solid var(--accent);padding:30px;width:400px;border-radius:2px;text-align:center}
+.install-box h2{color:var(--accent);font-size:1.1rem;margin-bottom:8px}
+.install-box p{color:var(--text2);font-size:0.83rem;margin-bottom:18px}
+
+.sub-tabs{display:flex;gap:0;margin-bottom:14px;border-bottom:2px solid var(--border);flex-wrap:wrap}
+.sub-tab{padding:7px 14px;background:var(--surface);border:1px solid var(--border);border-bottom:none;color:var(--text);font-size:0.8rem;font-weight:600;cursor:pointer;text-decoration:none;border-radius:2px 2px 0 0;margin-right:2px}
+.sub-tab:hover{background:var(--bg3);text-decoration:none;color:var(--text)}
+.sub-tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.sub-panel{display:none}
+.sub-panel.active{display:block}
+
+.invoice-wrap{background:#fff;color:#111;padding:20px;font-family:Arial,sans-serif;font-size:12px;max-width:700px;margin:0 auto;border:1px solid #ccc}
+.invoice-header{text-align:center;margin-bottom:16px;border-bottom:2px solid #333;padding-bottom:10px}
+.invoice-header h1{font-size:1.3rem;color:#1a1a1a;font-weight:700}
+.invoice-header h2{font-size:0.85rem;color:#555;font-weight:400}
+.invoice-section{margin-bottom:12px}
+.invoice-section h3{font-size:0.78rem;text-transform:uppercase;font-weight:700;border-bottom:1px solid #ccc;padding-bottom:3px;margin-bottom:6px}
+.invoice-table{width:100%;border-collapse:collapse;font-size:0.83rem}
+.invoice-table th,.invoice-table td{border:1px solid #ccc;padding:5px 8px}
+.invoice-table th{background:#f0f0f0;font-weight:700}
+.invoice-total{text-align:right;font-size:0.95rem;font-weight:700;margin-top:10px;padding:8px;background:#f0f0f0;border:1px solid #ccc}
+.invoice-footer{text-align:center;margin-top:16px;border-top:1px solid #ccc;padding-top:8px;font-size:0.75rem;color:#777}
+
+.timeline{list-style:none;padding:0;margin:0}
+.timeline li{display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)}
+.timeline-dot{width:12px;height:12px;border-radius:50%;background:var(--accent);margin-top:4px;flex-shrink:0}
+.timeline-content{flex:1}
+.timeline-date{font-size:0.75rem;color:var(--text3)}
+.timeline-text{font-size:0.83rem;color:var(--text)}
+
+.stats-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.stat-box{background:var(--bg2);border:1px solid var(--border);padding:8px 14px;border-radius:1px;flex:1;min-width:100px;text-align:center}
+.stat-box .stat-val{font-size:1.1rem;font-weight:700;color:var(--accent)}
+.stat-box .stat-lbl{font-size:0.72rem;color:var(--text2);text-transform:uppercase}
+
+.sidebar-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:90}
+
+.print-btn-wrap{margin-bottom:10px}
 @media print{
-#app-header,#sidebar,#status-bar,.btn,.filter-bar,.pagination,.page-title-actions,.no-print{display:none!important}
-#main-container{display:block}
-#main-content,#content-area{overflow:visible;padding:0}
-body{background:#fff;color:#000;font-size:11px}
-.print-header{display:block!important;text-align:center;margin-bottom:16px}
-.print-header h2{font-size:18px;margin-bottom:4px}
-table.data-table thead{display:table-header-group!important}
-table.data-table tbody tr{display:table-row!important;border:none}
-table.data-table tbody td{display:table-cell!important;border:1px solid #ccc}
-table.data-table tbody td::before{display:none}
+.sidebar,.topbar,.filter-bar,.pagination,.btn,.actions-col,.print-btn-wrap,.no-print{display:none!important}
+.main-wrap{margin-left:0!important}
+.content{padding:0!important}
+body{background:#fff!important;color:#111!important}
+.data-table th,.data-table td{color:#111!important;background:#fff!important;border-color:#666!important}
+.invoice-wrap{border:none!important;padding:0!important}
+}
+@media(max-width:900px){
+.card-grid{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:600px){
+.card-grid{grid-template-columns:1fr}
+.topbar .hamburger{display:flex}
+.sidebar{transform:translateX(-100%)}
+.sidebar.open{transform:translateX(0)}
+.sidebar-overlay.open{display:block}
+.main-wrap{margin-left:0}
+.form-row{flex-direction:column}
+.form-group{min-width:0}
+.filter-bar{flex-direction:column}
+.data-table th,.data-table td{font-size:0.75rem;padding:4px 6px}
+.btn{font-size:0.78rem;padding:6px 10px}
+.modal{width:98%;padding:12px}
+.stats-row{flex-direction:column}
 }
 </style>
 </head>
 <body>
-<div id="app-header">
-    <button class="hamburger" onclick="toggleSidebar()" title="Menu">&#9776;</button>
-    <div class="app-logo"><?= APP_NAME ?><span>&#9632;</span></div>
-    <div class="header-spacer"></div>
-    <button class="notif-btn" onclick="openNotifications()" title="Notifications">
-        &#128276;<?php if ($notifCount > 0): ?><span class="notif-badge"><?= h($notifCount) ?></span><?php endif; ?>
-    </button>
-    <div class="user-menu-wrap">
-        <button class="user-btn" onclick="toggleUserMenu()">&#128100; <?= h($user) ?> [<?= h($role) ?>] &#9660;</button>
-        <div class="user-dropdown" id="userDropdown">
-            <a href="?page=profile">&#9881; Profile</a>
-            <a href="?page=settings">&#9965; Settings</a>
-            <?php if (hasRole(['Admin'])): ?>
-            <a href="?page=backup">&#128190; Backup DB</a>
-            <?php endif; ?>
-            <a href="?page=logout" onclick="return confirm('Logout?')">&#10148; Logout</a>
-        </div>
-    </div>
-</div>
-<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
-<div id="main-container">
-<nav id="sidebar">
-    <script>if(window.innerWidth > 768 && localStorage.getItem('sidebarCollapsed') === '1') document.getElementById('sidebar').classList.add('collapsed');</script>
-    <div class="sidebar-section-title">Main</div>
-    <a href="?page=dashboard" class="nav-item <?= $currentPage === 'dashboard' ? 'active' : '' ?>"><span class="nav-icon">&#9632;</span> Dashboard</a>
-    <div class="sidebar-section-title">Inventory</div>
-    <a href="?page=products" class="nav-item <?= $currentPage === 'products' ? 'active' : '' ?>"><span class="nav-icon">&#128230;</span> Products</a>
-    <a href="?page=categories" class="nav-item <?= $currentPage === 'categories' ? 'active' : '' ?>"><span class="nav-icon">&#128193;</span> Categories</a>
-    <a href="?page=adjustments" class="nav-item <?= $currentPage === 'adjustments' ? 'active' : '' ?>"><span class="nav-icon">&#9881;</span> Adjustments</a>
-    <a href="?page=transfers" class="nav-item <?= $currentPage === 'transfers' ? 'active' : '' ?>"><span class="nav-icon">&#8646;</span> Transfers</a>
-    <div class="sidebar-section-title">Transactions</div>
-    <a href="?page=purchases" class="nav-item <?= $currentPage === 'purchases' ? 'active' : '' ?>"><span class="nav-icon">&#128722;</span> Purchases</a>
-    <a href="?page=sales" class="nav-item <?= $currentPage === 'sales' ? 'active' : '' ?>"><span class="nav-icon">&#128176;</span> Sales / Invoices</a>
-    <div class="sidebar-section-title">Parties</div>
-    <a href="?page=suppliers" class="nav-item <?= $currentPage === 'suppliers' ? 'active' : '' ?>"><span class="nav-icon">&#128663;</span> Suppliers</a>
-    <a href="?page=customers" class="nav-item <?= $currentPage === 'customers' ? 'active' : '' ?>"><span class="nav-icon">&#128101;</span> Customers</a>
-    <div class="sidebar-section-title">Reports</div>
-    <a href="?page=reports" class="nav-item <?= $currentPage === 'reports' ? 'active' : '' ?>"><span class="nav-icon">&#128202;</span> Reports</a>
-    <?php if (hasRole(['Admin', 'Manager'])): ?>
-    <a href="?page=activity" class="nav-item <?= $currentPage === 'activity' ? 'active' : '' ?>"><span class="nav-icon">&#128203;</span> Activity Log</a>
-    <?php endif; ?>
-    <?php if (hasRole(['Admin'])): ?>
-    <div class="sidebar-section-title">Admin</div>
-    <a href="?page=users" class="nav-item <?= $currentPage === 'users' ? 'active' : '' ?>"><span class="nav-icon">&#128100;</span> Users</a>
-    <a href="?page=settings" class="nav-item <?= $currentPage === 'settings' ? 'active' : '' ?>"><span class="nav-icon">&#9965;</span> Settings</a>
-    <a href="?page=backup" class="nav-item"><span class="nav-icon">&#128190;</span> Backup DB</a>
-    <?php endif; ?>
-</nav>
-<div id="main-content">
-    <div id="content-area">
-    <?php if ($flashSuccess): ?><div class="alert alert-success" id="flashMsg">&#10003; <?= h($flashSuccess) ?></div><?php endif; ?>
-    <?php if ($flashError): ?><div class="alert alert-error" id="flashMsg">&#10007; <?= h($flashError) ?></div><?php endif; ?>
-    <?php
-}
-
-function renderFooter()
-{
-    $user = $_SESSION['full_name'] ?? '';
-    $role = $_SESSION['user_role'] ?? '';
-    $page = $_GET['page'] ?? 'dashboard';
-    ?>
-    </div>
-    <div id="status-bar">
-        <span class="sb-item">&#128100; <?= h($user) ?> (<?= h($role) ?>)</span>
-        <span class="sb-item">&#128197; <?= date('D, d M Y') ?></span>
-        <span class="sb-item">&#128336; <span id="clock"><?= date('H:i:s') ?></span></span>
-        <span class="sb-item">&#127759; <?= h(ucfirst($page)) ?></span>
-    </div>
+<?php if (!$db_exists): ?>
+<div class="install-wrap">
+<div class="install-box">
+<div style="font-size:2.5rem;margin-bottom:10px">⚡</div>
+<h2>BNI Enterprises Setup</h2>
+<p>Welcome! The database needs to be installed. Click the button below to create the database and all required tables automatically.</p>
+<?php if (isset($_GET['db_error'])): ?>
+<div class="login-err">Database connection failed. Please check your credentials in index.php.</div>
+<?php endif; ?>
+<form method="POST">
+<button type="submit" name="do_install" class="btn btn-primary" style="width:100%;font-size:0.95rem;padding:10px">⚡ Install Database</button>
+</form>
+<p style="margin-top:14px;font-size:0.75rem;color:var(--text3)">Author: <?= $author ?> | v<?= $app_version ?></p>
 </div>
 </div>
-<div class="toast-container" id="toastContainer"></div>
-<div id="notifModal" class="modal-overlay">
-    <div class="modal" style="max-width:480px">
-        <div class="modal-title-bar">&#128276; Notifications <button class="modal-close" onclick="closeModal('notifModal')">&#10005;</button></div>
-        <div class="modal-body" id="notifContent">Loading...</div>
-    </div>
-</div>
-<script>
-function toggleSidebar(){
-    if(window.innerWidth <= 768){
-        document.getElementById('sidebar').classList.toggle('open');
-        document.getElementById('sidebarOverlay').classList.toggle('open');
-    } else {
-        var sb = document.getElementById('sidebar');
-        sb.classList.toggle('collapsed');
-        localStorage.setItem('sidebarCollapsed', sb.classList.contains('collapsed') ? '1' : '0');
-    }
-}
-function toggleUserMenu(){
-    document.getElementById('userDropdown').classList.toggle('open');
-}
-document.addEventListener('click',function(e){
-    var wrap=document.querySelector('.user-menu-wrap');
-    if(wrap&&!wrap.contains(e.target)) document.getElementById('userDropdown').classList.remove('open');
-});
-function openModal(id){document.getElementById(id).classList.add('open')}
-function closeModal(id){document.getElementById(id).classList.remove('open')}
-document.querySelectorAll('.modal-overlay').forEach(function(m){
-    m.addEventListener('click',function(e){if(e.target===m)m.classList.remove('open');});
-});
-function showToast(msg,type){
-    type=type||'info';
-    var c=document.getElementById('toastContainer');
-    var t=document.createElement('div');
-    t.className='toast toast-'+type;
-    t.textContent=msg;
-    c.appendChild(t);
-    setTimeout(function(){t.style.opacity='0';t.style.transition='opacity 0.5s';setTimeout(function(){t.remove()},500)},3500);
-}
-function confirmDelete(formId){
-    if(confirm('Are you sure you want to delete this record? This action cannot be undone.')){
-        document.getElementById(formId).submit();
-    }
-}
-function confirmAction(msg,formId){
-    if(confirm(msg)){document.getElementById(formId).submit();}
-}
-setInterval(function(){
-    var el=document.getElementById('clock');
-    if(el) el.textContent=new Date().toLocaleTimeString('en-GB');
-},1000);
-setTimeout(function(){
-    var el=document.getElementById('flashMsg');
-    if(el){el.style.transition='opacity 1s';el.style.opacity='0';setTimeout(function(){el&&el.remove()},1000);}
-},4000);
-function openNotifications(){
-    var m=document.getElementById('notifModal');
-    m.classList.add('open');
-    fetch('?page=products&action=low_stock_json')
-    .then(function(r){return r.json()})
-    .catch(function(){return null})
-    .then(function(d){
-        var c=document.getElementById('notifContent');
-        c.innerHTML='<p style="font-size:12px;color:#555;margin-bottom:8px">System notifications and alerts:</p>'
-        +'<a href="?page=products&status=1" style="display:block;padding:6px;background:#fff3cd;border:1px solid #c07a00;margin-bottom:4px;font-size:12px">&#9888; Check Low Stock Products — go to Products and filter by low stock.</a>'
-        +'<a href="?page=sales&status=Unpaid" style="display:block;padding:6px;background:#f8d7da;border:1px solid #a02020;margin-bottom:4px;font-size:12px">&#9940; Overdue Invoices — review unpaid sales invoices.</a>'
-        +'<a href="?page=purchases&status=Pending" style="display:block;padding:6px;background:#d0e6f7;border:1px solid #2c6fad;font-size:12px">&#8505; Pending Purchase Orders — review pending POs.</a>';
-    });
-}
-function toggleSelectAll(source){
-    var checkboxes=document.querySelectorAll('input[name="selected_ids[]"]');
-    checkboxes.forEach(function(cb){cb.checked=source.checked});
-}
-function exportCSV(url){window.location.href=url}
-function printPage(){window.print()}
-var idleTimer;
-function resetIdle(){
-    clearTimeout(idleTimer);
-    idleTimer=setTimeout(function(){
-        alert('Session expired due to inactivity. You will be logged out.');
-        window.location.href='?page=logout';
-    },<?= SESSION_TIMEOUT * 1000 ?>);
-}
-document.addEventListener('mousemove',resetIdle);
-document.addEventListener('keypress',resetIdle);
-resetIdle();
-</script>
-<?php
-}
-
-function renderLogin($error, $captcha)
-{
-    $captchaHtml = generateCaptchaImage($captcha['q']);
-?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title><?= APP_NAME ?> - Login</title>
-<style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--blue:#4a90d9;--red:#d9534f;--font:'Segoe UI',Arial,sans-serif}
-body{font-family:var(--font);background:#c8c8c8;display:flex;align-items:center;justify-content:center;min-height:100vh;background-image:repeating-linear-gradient(0deg,transparent,transparent 24px,rgba(0,0,0,0.05) 24px,rgba(0,0,0,0.05) 25px),repeating-linear-gradient(90deg,transparent,transparent 24px,rgba(0,0,0,0.05) 24px,rgba(0,0,0,0.05) 25px)}
-.login-box{background:#f0f0f0;border:2px solid #999;border-bottom-color:#444;border-right-color:#444;width:100%;max-width:380px;padding:0}
-.login-title-bar{background:#2c2c2c;color:#fff;padding:8px 14px;font-size:14px;font-weight:700;letter-spacing:1px;display:flex;align-items:center;gap:8px}
-.login-title-bar span{color:#f0ad4e}
-.login-body{padding:20px}
-.form-group{margin-bottom:12px}
-.form-group label{display:block;font-size:12px;font-weight:700;margin-bottom:3px;color:#444}
-.form-group input{width:100%;border:2px inset #aaa;padding:6px 8px;font-size:13px;background:#fff}
-.form-group input:focus{outline:none;border-color:#4a90d9;background:#fffff8}
-.btn-login{width:100%;background:#4a90d9;color:#fff;border:2px outset #3a7fc9;padding:8px;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:0.5px}
-.btn-login:hover{background:#2c6fad}
-.btn-login:active{border-style:inset}
-.error-msg{background:#f8d7da;border:1px solid #a02020;color:#a02020;padding:7px 10px;font-size:12px;margin-bottom:12px}
-.captcha-wrap{display:flex;align-items:center;gap:8px;margin-bottom:4px}
-.captcha-img-wrap{flex-shrink:0}
-.captcha-refresh{background:#c0c0c0;border:2px outset #aaa;padding:3px 8px;cursor:pointer;font-size:11px}
-.captcha-refresh:active{border-style:inset}
-.login-footer{font-size:11px;color:#666;padding:8px 14px;background:#e0e0e0;border-top:1px solid #bbb;text-align:center}
-@media(max-width:420px){.login-box{margin:10px;max-width:100%}}
-</style>
-</head>
-<body>
+<?php elseif (!isset($_SESSION['logged_in'])): ?>
+<div class="login-wrap">
 <div class="login-box">
-    <div class="login-title-bar"><span>&#9632;</span> <?= APP_NAME ?> — Sign In</div>
-    <div class="login-body">
-        <?php if ($error): ?><div class="error-msg">&#10007; <?= h($error) ?></div><?php endif; ?>
-        <form method="POST" action="?page=login">
-            <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= generateCSRF() ?>">
-            <div class="form-group">
-                <label>Username</label>
-                <input type="text" name="username" value="<?= h($_POST['username'] ?? '') ?>" required autofocus autocomplete="username">
-            </div>
-            <div class="form-group">
-                <label>Password</label>
-                <input type="password" name="password" required autocomplete="current-password">
-            </div>
-            <div class="form-group">
-                <label>Security Code</label>
-                <div class="captcha-wrap">
-                    <div class="captcha-img-wrap" id="captchaImg"><?= $captchaHtml ?></div>
-                    <button type="button" class="captcha-refresh" onclick="refreshCaptcha()">&#8635; Refresh</button>
-                </div>
-                <input type="number" name="captcha" placeholder="Enter the answer above" required>
-            </div>
-            <button type="submit" class="btn-login">LOGIN</button>
-        </form>
-    </div>
-    <div class="login-footer">Default: admin / admin123</div>
+<div style="font-size:2.5rem;text-align:center;margin-bottom:8px">⚡</div>
+<h2>BNI Enterprises</h2>
+<div class="login-sub"><?= sanitize(get_setting('branch_name') ?? 'Dera (Ahmed Metro)') ?></div>
+<?php if (isset($_GET['msg'])): ?>
+<div class="login-err"><?= $_GET['msg'] === 'idle_logout' ? 'Session expired due to inactivity.' : 'Your session has expired. Please login again.' ?></div>
+<?php endif; ?>
+<?php if (isset($login_error)): ?>
+<div class="login-err"><?= $login_error ?></div>
+<?php endif; ?>
+<form method="POST">
+<div class="form-group"><label>Username <span class="req">*</span></label><input type="text" name="username" required autocomplete="username" placeholder="admin"></div>
+<div class="form-group" style="margin-top:10px"><label>Password <span class="req">*</span></label><input type="password" name="password" required autocomplete="current-password" placeholder="••••••••"></div>
+<button type="submit" name="do_login" class="login-btn" style="margin-top:14px">🔐 Login</button>
+</form>
+<p style="margin-top:14px;font-size:0.75rem;color:var(--text3);text-align:center">Author: <?= $author ?> | v<?= $app_version ?></p>
 </div>
+</div>
+<?php
+else:
+    $company_name = get_setting('company_name') ?? 'BNI Enterprises';
+    $branch_name = get_setting('branch_name') ?? 'Dera (Ahmed Metro)';
+    $currency = get_setting('currency') ?? 'Rs.';
+    $pages_nav = [
+        ['dashboard', '⌂', 'Dashboard'],
+        ['purchase', '📦', 'Purchase Entry'],
+        ['inventory', '📋', 'Inventory / Stock'],
+        ['sale', '🛒', 'Sales Entry'],
+        ['returns', '↩', 'Returns'],
+        ['cheques', '💳', 'Cheque Register'],
+        ['customer_ledger', '👤', 'Customer Ledger'],
+        ['supplier_ledger', '🏭', 'Supplier Ledger'],
+        ['reports', '📊', 'Reports'],
+        ['models', '🚲', 'Models'],
+        ['customers', '👥', 'Customers'],
+        ['suppliers', '🏢', 'Suppliers'],
+        ['settings', '⚙', 'Settings'],
+    ];
+?>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+<div class="sidebar" id="sidebar">
+<div class="sidebar-header">
+<div class="company">⚡ <?= sanitize($company_name) ?></div>
+<div class="branch"><?= sanitize($branch_name) ?></div>
+</div>
+<nav>
+<ul>
+<?php foreach ($pages_nav as $pn): ?>
+<li><a href="index.php?page=<?= $pn[0] ?>" class="<?= $page === $pn[0] ? 'active' : '' ?>"><span class="icon"><?= $pn[1] ?></span><?= $pn[2] ?></a></li>
+<?php endforeach; ?>
+</ul>
+</nav>
+<div class="sidebar-footer">
+<form method="GET" action="index.php"><input type="hidden" name="logout" value="1"><button type="submit">🚪 Logout</button></form>
+</div>
+</div>
+<div class="main-wrap">
+<div class="topbar">
+<button class="hamburger" onclick="toggleSidebar()">☰</button>
+<div class="page-title">
+<?php foreach ($pages_nav as $pn) { if ($pn[0] === $page) echo $pn[1] . ' ' . $pn[2]; } ?>
+</div>
+<div class="topbar-actions">
+<form method="POST" action="index.php?<?= http_build_query(array_merge($_GET, [])) ?>">
+<button type="submit" name="toggle_theme" title="Toggle Theme"><?= ($theme ?? 'dark') === 'dark' ? '☀' : '🌙' ?> Theme</button>
+</form>
+<span style="font-size:0.75rem;color:var(--text3)"><?= date('d/m/Y H:i') ?></span>
+</div>
+</div>
+<div class="content">
+<?php if ($msg): ?><div class="toast-wrap" id="toastWrap"><div class="toast success"><?= sanitize($msg) ?></div></div><?php endif; ?>
+<?php if ($err): ?><div class="toast-wrap" id="toastWrap"><div class="toast error"><?= sanitize($err) ?></div></div><?php endif; ?>
+
+<?php
+    $per_page = 20;
+    $current_pg = max(1, (int) ($_GET['pg'] ?? 1));
+    $offset = ($current_pg - 1) * $per_page;
+
+    if ($page === 'dashboard'):
+        $total_stock = $conn->query("SELECT COUNT(*) as c FROM bikes WHERE status='in_stock'")->fetch_assoc()['c'];
+        $total_sold = $conn->query("SELECT COUNT(*) as c FROM bikes WHERE status='sold'")->fetch_assoc()['c'];
+        $total_returned = $conn->query("SELECT COUNT(*) as c FROM bikes WHERE status='returned'")->fetch_assoc()['c'];
+        $total_purchase_val = $conn->query('SELECT SUM(purchase_price) as s FROM bikes')->fetch_assoc()['s'] ?? 0;
+        $total_sales_val = $conn->query("SELECT SUM(selling_price) as s FROM bikes WHERE status='sold'")->fetch_assoc()['s'] ?? 0;
+        $total_tax = $conn->query("SELECT SUM(tax_amount) as s FROM bikes WHERE status='sold'")->fetch_assoc()['s'] ?? 0;
+        $total_margin = $conn->query("SELECT SUM(margin) as s FROM bikes WHERE status='sold'")->fetch_assoc()['s'] ?? 0;
+        $chq_issued = $conn->query("SELECT COUNT(*) as c, SUM(amount) as s FROM cheque_register WHERE type='payment'")->fetch_assoc();
+        $chq_received = $conn->query("SELECT COUNT(*) as c, SUM(amount) as s FROM cheque_register WHERE type='receipt'")->fetch_assoc();
+        $pending_cheques = $conn->query("SELECT COUNT(*) as c, SUM(amount) as s FROM cheque_register WHERE status='pending'")->fetch_assoc();
+?>
+<div class="card-grid">
+<div class="card accent"><div class="card-icon">📦</div><div class="card-body"><div class="card-label">In Stock</div><div class="card-value"><?= number_format($total_stock) ?></div><div class="card-sub">bikes</div></div></div>
+<div class="card success"><div class="card-icon">✅</div><div class="card-body"><div class="card-label">Total Sold</div><div class="card-value"><?= number_format($total_sold) ?></div><div class="card-sub">bikes</div></div></div>
+<div class="card danger"><div class="card-icon">↩</div><div class="card-body"><div class="card-label">Returned</div><div class="card-value"><?= number_format($total_returned) ?></div><div class="card-sub">bikes</div></div></div>
+<div class="card warning"><div class="card-icon">💰</div><div class="card-body"><div class="card-label">Purchase Value</div><div class="card-value" style="font-size:1rem"><?= $currency ?> <?= number_format($total_purchase_val) ?></div></div></div>
+<div class="card success"><div class="card-icon">💵</div><div class="card-body"><div class="card-label">Sales Value</div><div class="card-value" style="font-size:1rem"><?= $currency ?> <?= number_format($total_sales_val) ?></div></div></div>
+<div class="card"><div class="card-icon">🧾</div><div class="card-body"><div class="card-label">Total Tax Paid</div><div class="card-value" style="font-size:1rem"><?= $currency ?> <?= number_format($total_tax, 2) ?></div></div></div>
+<div class="card success"><div class="card-icon">📈</div><div class="card-body"><div class="card-label">Total Profit</div><div class="card-value" style="font-size:1rem;color:var(--success)"><?= $currency ?> <?= number_format($total_margin) ?></div></div></div>
+<div class="card"><div class="card-icon">💳</div><div class="card-body"><div class="card-label">Pending Cheques</div><div class="card-value" style="font-size:1rem;color:var(--warning)"><?= number_format($pending_cheques['c']) ?></div><div class="card-sub"><?= $currency ?> <?= number_format($pending_cheques['s'] ?? 0) ?></div></div></div>
+</div>
+<?php if ($pending_cheques['c'] > 0): ?>
+<div style="background:#3d2a00;border:1px solid var(--warning);padding:8px 14px;margin-bottom:12px;border-radius:2px;font-size:0.82rem;color:#f0c858">
+⚠ <strong><?= $pending_cheques['c'] ?> pending cheque(s)</strong> totaling <?= $currency ?> <?= number_format($pending_cheques['s'] ?? 0) ?> — <a href="index.php?page=cheques">View Cheques →</a>
+</div>
+<?php endif; ?>
+
+<fieldset class="fieldset"><legend>📊 Model-wise Stock Summary</legend>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Model</th><th>Category</th><th>Inventory</th><th>Sold</th><th>Returned</th><th>Available</th></tr></thead>
+<tbody>
+<?php
+        $model_summary = $conn->query("SELECT m.model_name, m.category,
+    SUM(CASE WHEN 1=1 THEN 1 ELSE 0 END) as total_inv,
+    SUM(CASE WHEN b.status='sold' THEN 1 ELSE 0 END) as sold_cnt,
+    SUM(CASE WHEN b.status='returned' THEN 1 ELSE 0 END) as ret_cnt,
+    SUM(CASE WHEN b.status='in_stock' THEN 1 ELSE 0 END) as avail_cnt
+    FROM models m LEFT JOIN bikes b ON m.id=b.model_id
+    GROUP BY m.id, m.model_name, m.category ORDER BY m.model_name");
+        $ms_totals = [0, 0, 0, 0];
+        while ($ms = $model_summary->fetch_assoc()):
+            $ms_totals[0] += $ms['total_inv'];
+            $ms_totals[1] += $ms['sold_cnt'];
+            $ms_totals[2] += $ms['ret_cnt'];
+            $ms_totals[3] += $ms['avail_cnt'];
+?>
+<tr>
+<td><?= sanitize($ms['model_name']) ?></td>
+<td><?= sanitize($ms['category']) ?></td>
+<td><?= $ms['total_inv'] ?></td>
+<td><span class="badge badge-success"><?= $ms['sold_cnt'] ?></span></td>
+<td><span class="badge badge-danger"><?= $ms['ret_cnt'] ?></span></td>
+<td><span class="badge badge-info"><?= $ms['avail_cnt'] ?></span></td>
+</tr>
+<?php endwhile; ?>
+</tbody>
+<tfoot><tr><td><strong>TOTAL</strong></td><td></td><td><strong><?= $ms_totals[0] ?></strong></td><td><strong><?= $ms_totals[1] ?></strong></td><td><strong><?= $ms_totals[2] ?></strong></td><td><strong><?= $ms_totals[3] ?></strong></td></tr></tfoot>
+</table>
+</div>
+</fieldset>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;flex-wrap:wrap">
+<fieldset class="fieldset"><legend>🛒 Recent 10 Sales</legend>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Date</th><th>Chassis</th><th>Model</th><th>Price</th><th>Margin</th></tr></thead>
+<tbody>
+<?php
+        $recent_sales = $conn->query("SELECT b.chassis_number, b.selling_date, b.selling_price, b.margin, m.model_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.status='sold' ORDER BY b.selling_date DESC LIMIT 10");
+        while ($rs = $recent_sales->fetch_assoc()):
+?>
+<tr class="row-sold">
+<td><?= fmt_date($rs['selling_date']) ?></td>
+<td><?= sanitize($rs['chassis_number']) ?></td>
+<td><?= sanitize($rs['model_name']) ?></td>
+<td><?= $currency ?> <?= number_format($rs['selling_price']) ?></td>
+<td style="color:<?= $rs['margin'] >= 0 ? 'var(--success)' : 'var(--danger)' ?>"><?= $currency ?> <?= number_format($rs['margin']) ?></td>
+</tr>
+<?php endwhile; ?>
+</tbody>
+</table>
+</div>
+</fieldset>
+
+<fieldset class="fieldset"><legend>📦 Recent 10 Purchases</legend>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Date</th><th>Chassis</th><th>Model</th><th>Price</th><th>Status</th></tr></thead>
+<tbody>
+<?php
+        $recent_purch = $conn->query('SELECT b.chassis_number, b.inventory_date, b.purchase_price, b.status, m.model_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id ORDER BY b.created_at DESC LIMIT 10');
+        while ($rp = $recent_purch->fetch_assoc()):
+            $st_badge = $rp['status'] === 'sold' ? 'badge-success' : ($rp['status'] === 'returned' ? 'badge-danger' : ($rp['status'] === 'reserved' ? 'badge-warning' : 'badge-info'));
+?>
+<tr class="row-<?= $rp['status'] ?>">
+<td><?= fmt_date($rp['inventory_date']) ?></td>
+<td><?= sanitize($rp['chassis_number']) ?></td>
+<td><?= sanitize($rp['model_name']) ?></td>
+<td><?= $currency ?> <?= number_format($rp['purchase_price']) ?></td>
+<td><span class="badge <?= $st_badge ?>"><?= strtoupper($rp['status']) ?></span></td>
+</tr>
+<?php endwhile; ?>
+</tbody>
+</table>
+</div>
+</fieldset>
+</div>
+
+<?php elseif ($page === 'purchase'): ?>
+<?php
+        $suppliers_list = $conn->query('SELECT id, name FROM suppliers ORDER BY name');
+        $models_list = $conn->query('SELECT id, model_code, model_name FROM models ORDER BY model_name');
+?>
+<form method="POST" id="purchaseForm">
+<fieldset class="fieldset"><legend>📦 Purchase Order Details</legend>
+<div class="form-row">
+<div class="form-group"><label>Order Date <span class="req">*</span></label><input type="date" name="order_date" value="<?= date('Y-m-d') ?>" required></div>
+<div class="form-group"><label>Inventory Date <span class="req">*</span></label><input type="date" name="inventory_date" value="<?= date('Y-m-d') ?>" required></div>
+<div class="form-group">
+<label>Supplier <span class="req">*</span></label>
+<div style="display:flex;gap:4px">
+<select name="supplier_id" required style="flex:1">
+<option value="">-- Select Supplier --</option>
+<?php $suppliers_list->data_seek(0);
+        while ($sup = $suppliers_list->fetch_assoc()): ?>
+<option value="<?= $sup['id'] ?>"><?= sanitize($sup['name']) ?></option>
+<?php endwhile; ?>
+</select>
+<button type="button" class="btn btn-default btn-sm" onclick="document.getElementById('addSupplierModal').classList.add('open')">+</button>
+</div>
+</div>
+</div>
+<div class="form-row">
+<div class="form-group"><label>Cheque Number</label><input type="text" name="cheque_number" placeholder="CHQ-001"></div>
+<div class="form-group"><label>Bank Name</label><input type="text" name="bank_name" placeholder="HBL, MCB, etc."></div>
+<div class="form-group"><label>Cheque Date</label><input type="date" name="cheque_date"></div>
+<div class="form-group"><label>Cheque Amount</label><input type="number" name="cheque_amount" step="0.01" min="0" placeholder="0.00"></div>
+</div>
+<div class="form-row">
+<div class="form-group"><label>Notes</label><textarea name="po_notes" rows="2" placeholder="Any additional notes..."></textarea></div>
+</div>
+</fieldset>
+
+<fieldset class="fieldset"><legend>🚲 Bike Units</legend>
+<div id="bikesList"></div>
+<button type="button" class="btn btn-success" onclick="addBikeRow()" style="margin-top:6px">+ Add Bike</button>
+</fieldset>
+
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+<button type="submit" name="save_purchase" class="btn btn-primary">💾 Save Purchase Order</button>
+<a href="index.php?page=inventory" class="btn btn-default">← Back to Inventory</a>
+</div>
+</form>
+
+<div class="modal-overlay" id="addSupplierModal">
+<div class="modal">
+<div class="modal-header"><h3>Add New Supplier</h3><button class="modal-close" onclick="document.getElementById('addSupplierModal').classList.remove('open')">✕</button></div>
+<form method="POST" action="index.php?page=suppliers&action=add">
+<div class="form-group" style="margin-bottom:8px"><label>Name <span class="req">*</span></label><input type="text" name="name" required></div>
+<div class="form-group" style="margin-bottom:8px"><label>Contact</label><input type="text" name="contact"></div>
+<div class="form-group" style="margin-bottom:12px"><label>Address</label><textarea name="address" rows="2"></textarea></div>
+<button type="submit" class="btn btn-primary">Save Supplier</button>
+</form>
+</div>
+</div>
+
+<div class="modal-overlay" id="addModelModal">
+<div class="modal">
+<div class="modal-header"><h3>Add New Model</h3><button class="modal-close" onclick="document.getElementById('addModelModal').classList.remove('open')">✕</button></div>
+<form method="POST" action="index.php?page=models&action=add">
+<div class="form-group" style="margin-bottom:8px"><label>Model Code <span class="req">*</span></label><input type="text" name="model_code" required></div>
+<div class="form-group" style="margin-bottom:8px"><label>Model Name <span class="req">*</span></label><input type="text" name="model_name" required></div>
+<div class="form-group" style="margin-bottom:8px"><label>Category</label><input type="text" name="category" value="Electric Bike"></div>
+<div class="form-group" style="margin-bottom:12px"><label>Short Code</label><input type="text" name="short_code"></div>
+<button type="submit" class="btn btn-primary">Save Model</button>
+</form>
+</div>
+</div>
+
 <script>
-function refreshCaptcha(){
-    fetch('?page=captcha_refresh').then(r=>r.json()).then(d=>{
-        document.getElementById('captchaImg').innerHTML=d.html;
+var bikeCount = 0;
+var modelsOptions = `<?php $models_list->data_seek(0);
+        $mo = '';
+        while ($m = $models_list->fetch_assoc())
+            $mo .= '<option value="' . $m['id'] . '">' . $m['model_code'] . ' - ' . $m['model_name'] . '</option>';
+        echo $mo; ?>`;
+function addBikeRow() {
+    bikeCount++;
+    var d = document.createElement('div');
+    d.className = 'bike-row';
+    d.id = 'bikeRow_'+bikeCount;
+    d.innerHTML = `<div class="bike-row-header"><span class="bike-row-num">🚲 Bike #${bikeCount}</span><button type="button" class="bike-row-del" onclick="removeBikeRow(${bikeCount})">✕ Remove</button></div>
+    <div class="form-row">
+    <div class="form-group"><label>Chassis Number <span class="req">*</span></label><input type="text" name="bikes[${bikeCount}][chassis]" required placeholder="e.g. KIU-2024-001" onblur="checkChassis(this)"></div>
+    <div class="form-group"><label>Motor Number</label><input type="text" name="bikes[${bikeCount}][motor]" placeholder="e.g. MT-001"></div>
+    <div class="form-group"><label>Model <span class="req">*</span></label>
+    <div style="display:flex;gap:4px"><select name="bikes[${bikeCount}][model_id]" required style="flex:1"><option value="">-- Model --</option>${modelsOptions}</select>
+    <button type="button" class="btn btn-default btn-sm" onclick="document.getElementById('addModelModal').classList.add('open')">+</button></div></div>
+    </div>
+    <div class="form-row">
+    <div class="form-group"><label>Color</label><input type="text" name="bikes[${bikeCount}][color]" placeholder="Red, Black, White..."></div>
+    <div class="form-group"><label>Purchase Price (Rs.) <span class="req">*</span></label><input type="number" name="bikes[${bikeCount}][purchase_price]" step="0.01" min="0" required placeholder="0.00"></div>
+    <div class="form-group"><label>Safeguard Notes</label><input type="text" name="bikes[${bikeCount}][safeguard_notes]" placeholder="Helmet, Tyre, Warranty..."></div>
+    </div>
+    <div class="form-row">
+    <div class="form-group"><label>Accessories</label><input type="text" name="bikes[${bikeCount}][accessories]" placeholder="Helmet, Charger, Basket..."></div>
+    <div class="form-group"><label>Notes</label><input type="text" name="bikes[${bikeCount}][notes]" placeholder="Any notes..."></div>
+    </div>`;
+    document.getElementById('bikesList').appendChild(d);
+}
+function removeBikeRow(n) {
+    var el = document.getElementById('bikeRow_'+n);
+    if (el) el.remove();
+}
+function checkChassis(inp) {
+    var val = inp.value.trim();
+    if (!val) return;
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', 'index.php?ajax=check_chassis&chassis='+encodeURIComponent(val));
+    xhr.onload = function() {
+        if (xhr.responseText === '1') {
+            inp.style.borderColor = '#e74c3c';
+            inp.title = 'WARNING: This chassis number already exists!';
+            alert('WARNING: Chassis number "' + val + '" already exists in the system!');
+        } else {
+            inp.style.borderColor = '#4ec94e';
+            inp.title = 'Chassis number is unique.';
+        }
+    };
+    xhr.send();
+}
+addBikeRow();
+</script>
+
+<?php
+    elseif ($page === 'inventory'):
+        $status_f = sanitize($_GET['status_f'] ?? '');
+        $model_f = (int) ($_GET['model_f'] ?? 0);
+        $color_f = sanitize($_GET['color_f'] ?? '');
+        $search_f = sanitize($_GET['search_f'] ?? '');
+        $date_from = $_GET['date_from'] ?? '';
+        $date_to = $_GET['date_to'] ?? '';
+
+        $where_parts = ['1=1'];
+        if ($status_f && in_array($status_f, ['in_stock', 'sold', 'returned', 'reserved']))
+            $where_parts[] = "b.status='$status_f'";
+        if ($model_f)
+            $where_parts[] = "b.model_id=$model_f";
+        if ($color_f)
+            $where_parts[] = "b.color LIKE '%" . mysqli_real_escape_string($conn, $color_f) . "%'";
+        if ($search_f)
+            $where_parts[] = "(b.chassis_number LIKE '%" . mysqli_real_escape_string($conn, $search_f) . "%' OR b.motor_number LIKE '%" . mysqli_real_escape_string($conn, $search_f) . "%' OR m.model_name LIKE '%" . mysqli_real_escape_string($conn, $search_f) . "%' OR b.color LIKE '%" . mysqli_real_escape_string($conn, $search_f) . "%')";
+        if ($date_from)
+            $where_parts[] = "b.inventory_date >= '" . mysqli_real_escape_string($conn, $date_from) . "'";
+        if ($date_to)
+            $where_parts[] = "b.inventory_date <= '" . mysqli_real_escape_string($conn, $date_to) . "'";
+        $where = implode(' AND ', $where_parts);
+
+        $total_rows_r = $conn->query("SELECT COUNT(*) as c FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE $where");
+        $total_rows = $total_rows_r->fetch_assoc()['c'];
+        $total_pages = ceil($total_rows / $per_page);
+
+        $bikes_result = $conn->query("SELECT b.*, m.model_name, m.model_code, c.name as cust_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id WHERE $where ORDER BY b.created_at DESC LIMIT $per_page OFFSET $offset");
+        $models_filter_list = $conn->query('SELECT id, model_code FROM models ORDER BY model_name');
+        $sort_col = sanitize($_GET['sort'] ?? 'id');
+        $sort_dir = sanitize($_GET['dir'] ?? 'desc');
+        $edit_bike_id = (int) ($_GET['edit_id'] ?? 0);
+        $edit_bike = null;
+        if ($edit_bike_id) {
+            $er = $conn->query("SELECT * FROM bikes WHERE id=$edit_bike_id");
+            $edit_bike = $er ? $er->fetch_assoc() : null;
+        }
+        $view_bike_id = (int) ($_GET['view_id'] ?? 0);
+        $view_bike = null;
+        if ($view_bike_id) {
+            $vr = $conn->query("SELECT b.*, m.model_name, m.model_code, m.category, c.name as cust_name, c.phone as cust_phone, c.cnic as cust_cnic, s.name as sup_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id LEFT JOIN purchase_orders po ON b.purchase_order_id=po.id LEFT JOIN suppliers s ON po.supplier_id=s.id WHERE b.id=$view_bike_id");
+            $view_bike = $vr ? $vr->fetch_assoc() : null;
+        }
+?>
+<?php if ($view_bike): ?>
+<div class="print-btn-wrap no-print"><button onclick="window.print()" class="btn btn-default btn-sm">🖨 Print</button> <a href="index.php?page=inventory" class="btn btn-default btn-sm">← Back</a></div>
+<fieldset class="fieldset"><legend>🚲 Bike Details — <?= sanitize($view_bike['chassis_number']) ?></legend>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
+<?php
+            $detail_fields = [
+                ['Chassis Number', $view_bike['chassis_number']],
+                ['Motor Number', $view_bike['motor_number']],
+                ['Model', $view_bike['model_name'] . ' (' . $view_bike['model_code'] . ')'],
+                ['Category', $view_bike['category']],
+                ['Color', $view_bike['color']],
+                ['Status', strtoupper($view_bike['status'])],
+                ['Purchase Price', fmt_money($view_bike['purchase_price'])],
+                ['Selling Price', $view_bike['selling_price'] ? fmt_money($view_bike['selling_price']) : '-'],
+                ['Tax Amount', fmt_money($view_bike['tax_amount'])],
+                ['Margin', $view_bike['margin'] ? fmt_money($view_bike['margin']) : '-'],
+                ['Order Date', fmt_date($view_bike['order_date'])],
+                ['Inventory Date', fmt_date($view_bike['inventory_date'])],
+                ['Selling Date', fmt_date($view_bike['selling_date'])],
+                ['Customer', $view_bike['cust_name'] ?? '-'],
+                ['Customer Phone', $view_bike['cust_phone'] ?? '-'],
+                ['Supplier', $view_bike['sup_name'] ?? '-'],
+                ['Accessories', $view_bike['accessories'] ?? '-'],
+                ['Safeguard Notes', $view_bike['safeguard_notes'] ?? '-'],
+            ];
+            foreach ($detail_fields as $df):
+?>
+<div style="background:var(--bg2);border:1px solid var(--border);padding:8px 10px;border-radius:1px">
+<div style="font-size:0.72rem;color:var(--text2);text-transform:uppercase;font-weight:700;margin-bottom:3px"><?= $df[0] ?></div>
+<div style="font-size:0.87rem;color:var(--text)"><?= sanitize($df[1] ?? '-') ?></div>
+</div>
+<?php endforeach; ?>
+</div>
+<?php if ($view_bike['notes']): ?>
+<div style="margin-top:8px"><strong style="font-size:0.78rem;color:var(--text2)">NOTES:</strong> <span style="font-size:0.85rem"><?= sanitize($view_bike['notes']) ?></span></div>
+<?php endif; ?>
+<hr style="border-color:var(--border);margin:14px 0">
+<h4 style="font-size:0.82rem;color:var(--accent);text-transform:uppercase;margin-bottom:10px">📅 Bike History Timeline</h4>
+<ul class="timeline">
+<li><div class="timeline-dot" style="background:#4a9eff"></div><div class="timeline-content"><div class="timeline-date"><?= fmt_date($view_bike['order_date']) ?></div><div class="timeline-text">📦 <strong>Purchased</strong> — <?= sanitize($view_bike['sup_name'] ?? 'Unknown Supplier') ?> | <?= fmt_money($view_bike['purchase_price']) ?></div></div></li>
+<li><div class="timeline-dot" style="background:#4ec94e"></div><div class="timeline-content"><div class="timeline-date"><?= fmt_date($view_bike['inventory_date']) ?></div><div class="timeline-text">📋 <strong>Added to Inventory</strong> — Status: IN STOCK</div></div></li>
+<?php if ($view_bike['status'] === 'sold' || $view_bike['selling_date']): ?>
+<li><div class="timeline-dot" style="background:#4ec94e"></div><div class="timeline-content"><div class="timeline-date"><?= fmt_date($view_bike['selling_date']) ?></div><div class="timeline-text">🛒 <strong>Sold</strong> to <?= sanitize($view_bike['cust_name'] ?? 'Cash Customer') ?> — <?= fmt_money($view_bike['selling_price']) ?> | Margin: <?= fmt_money($view_bike['margin']) ?></div></div></li>
+<?php endif; ?>
+<?php if ($view_bike['status'] === 'returned' || $view_bike['return_date']): ?>
+<li><div class="timeline-dot" style="background:#e74c3c"></div><div class="timeline-content"><div class="timeline-date"><?= fmt_date($view_bike['return_date']) ?></div><div class="timeline-text">↩ <strong>Returned</strong> — Amount: <?= fmt_money($view_bike['return_amount']) ?> | Notes: <?= sanitize($view_bike['return_notes'] ?? '-') ?></div></div></li>
+<?php endif; ?>
+</ul>
+</fieldset>
+<?php else: ?>
+
+<form method="POST" id="bulkForm" action="index.php?page=inventory&action=bulk_delete">
+<div class="filter-bar no-print">
+<div class="form-group"><label>Search</label><input type="text" name="search_f" value="<?= sanitize($search_f) ?>" placeholder="Chassis, Motor, Model, Color" onchange="this.form.submit()" form="filterForm"></div>
+<div class="form-group"><label>Status</label>
+<select name="status_f" onchange="this.form.submit()" form="filterForm">
+<option value="">All</option>
+<option value="in_stock" <?= $status_f === 'in_stock' ? 'selected' : '' ?>>In Stock</option>
+<option value="sold" <?= $status_f === 'sold' ? 'selected' : '' ?>>Sold</option>
+<option value="returned" <?= $status_f === 'returned' ? 'selected' : '' ?>>Returned</option>
+<option value="reserved" <?= $status_f === 'reserved' ? 'selected' : '' ?>>Reserved</option>
+</select>
+</div>
+<div class="form-group"><label>Model</label>
+<select name="model_f" onchange="this.form.submit()" form="filterForm">
+<option value="0">All Models</option>
+<?php $models_filter_list->data_seek(0);
+            while ($mf = $models_filter_list->fetch_assoc()): ?>
+<option value="<?= $mf['id'] ?>" <?= $model_f == $mf['id'] ? 'selected' : '' ?>><?= sanitize($mf['model_code']) ?></option>
+<?php endwhile; ?>
+</select>
+</div>
+<div class="form-group"><label>Color</label><input type="text" name="color_f" value="<?= sanitize($color_f) ?>" placeholder="Color" onchange="this.form.submit()" form="filterForm"></div>
+<div class="form-group"><label>From</label><input type="date" name="date_from" value="<?= $date_from ?>" onchange="this.form.submit()" form="filterForm"></div>
+<div class="form-group"><label>To</label><input type="date" name="date_to" value="<?= $date_to ?>" onchange="this.form.submit()" form="filterForm"></div>
+<div class="form-group" style="justify-content:flex-end">
+<a href="index.php?page=inventory&export_csv=1&status_f=<?= urlencode($status_f) ?>&model_f=<?= $model_f ?>&color_f=<?= urlencode($color_f) ?>&search_f=<?= urlencode($search_f) ?>" class="btn btn-default btn-sm">⬇ CSV</a>
+</div>
+</div>
+<form method="GET" id="filterForm" action="index.php">
+<input type="hidden" name="page" value="inventory">
+</form>
+
+<div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center" class="no-print">
+<span style="font-size:0.8rem;color:var(--text2)">Showing <?= $total_rows ?> record(s)</span>
+<a href="index.php?page=purchase" class="btn btn-success btn-sm">+ New Purchase</a>
+<button type="submit" name="bulk_action" value="bulk_delete" class="btn btn-danger btn-sm" onclick="return confirm('Delete selected bikes?')">🗑 Delete Selected</button>
+<button type="submit" form="bulkExportForm" class="btn btn-default btn-sm">⬇ Export Selected</button>
+<button onclick="window.print()" type="button" class="btn btn-default btn-sm">🖨 Print</button>
+<button type="button" class="btn btn-default btn-sm" onclick="toggleSelectAll()">☑ Select All</button>
+</div>
+
+<div class="data-table-wrap">
+<table class="data-table" id="invTable">
+<thead>
+<tr>
+<th style="width:30px"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
+<th onclick="sortTable(1)">Sr#</th>
+<th onclick="sortTable(2)">Chassis</th>
+<th onclick="sortTable(3)">Motor#</th>
+<th onclick="sortTable(4)">Model</th>
+<th onclick="sortTable(5)">Color</th>
+<th onclick="sortTable(6)">Purchase Price</th>
+<th onclick="sortTable(7)">Status</th>
+<th onclick="sortTable(8)">Selling Price</th>
+<th onclick="sortTable(9)">Selling Date</th>
+<th onclick="sortTable(10)">Margin</th>
+<th>Actions</th>
+</tr>
+</thead>
+<tbody>
+<?php
+            $sr = $offset + 1;
+            $total_pp = 0;
+            $total_sp = 0;
+            $total_mg = 0;
+            while ($bike = $bikes_result->fetch_assoc()):
+                $st_badge = $bike['status'] === 'sold' ? 'badge-success' : ($bike['status'] === 'returned' ? 'badge-danger' : ($bike['status'] === 'reserved' ? 'badge-warning' : 'badge-info'));
+                $total_pp += $bike['purchase_price'];
+                $total_sp += $bike['selling_price'] ?? 0;
+                $total_mg += $bike['margin'] ?? 0;
+?>
+<tr class="row-<?= $bike['status'] ?>">
+<td><input type="checkbox" name="selected_bikes[]" value="<?= $bike['id'] ?>" class="bike-check"></td>
+<td><?= $sr++ ?></td>
+<td style="font-family:Consolas,monospace;font-size:0.8rem"><?= sanitize($bike['chassis_number']) ?></td>
+<td style="font-family:Consolas,monospace;font-size:0.8rem"><?= sanitize($bike['motor_number'] ?? '-') ?></td>
+<td><?= sanitize($bike['model_name'] ?? '-') ?></td>
+<td><?= sanitize($bike['color'] ?? '-') ?></td>
+<td><?= fmt_money($bike['purchase_price']) ?></td>
+<td><span class="badge <?= $st_badge ?>"><?= strtoupper($bike['status']) ?></span></td>
+<td><?= $bike['selling_price'] ? fmt_money($bike['selling_price']) : '-' ?></td>
+<td><?= fmt_date($bike['selling_date']) ?></td>
+<td style="color:<?= ($bike['margin'] ?? 0) >= 0 ? 'var(--success)' : 'var(--danger)' ?>"><?= $bike['status'] === 'sold' ? fmt_money($bike['margin']) : '-' ?></td>
+<td>
+<div class="actions-col">
+<a href="index.php?page=inventory&view_id=<?= $bike['id'] ?>" class="btn btn-default btn-sm" title="View">👁</a>
+<?php if ($bike['status'] === 'in_stock'): ?>
+<a href="index.php?page=sale&bike_id=<?= $bike['id'] ?>" class="btn btn-success btn-sm" title="Sell">🛒</a>
+<?php endif; ?>
+<?php if ($bike['status'] === 'sold'): ?>
+<a href="index.php?page=returns&bike_id=<?= $bike['id'] ?>" class="btn btn-warning btn-sm" title="Return">↩</a>
+<?php endif; ?>
+<a href="index.php?page=inventory&edit_id=<?= $bike['id'] ?>" class="btn btn-primary btn-sm" title="Edit">✏</a>
+<form method="POST" action="index.php?page=inventory&action=delete" style="display:inline" onsubmit="return confirm('Delete this bike? This cannot be undone.')">
+<input type="hidden" name="id" value="<?= $bike['id'] ?>">
+<button type="submit" class="btn btn-danger btn-sm" title="Delete">🗑</button>
+</form>
+</div>
+</td>
+</tr>
+<?php endwhile; ?>
+</tbody>
+<tfoot>
+<tr>
+<td colspan="6"><strong>PAGE TOTAL</strong></td>
+<td><strong><?= fmt_money($total_pp) ?></strong></td>
+<td></td>
+<td><strong><?= fmt_money($total_sp) ?></strong></td>
+<td></td>
+<td style="color:<?= $total_mg >= 0 ? 'var(--success)' : 'var(--danger)' ?>"><strong><?= fmt_money($total_mg) ?></strong></td>
+<td></td>
+</tr>
+</tfoot>
+</table>
+</div>
+</form>
+
+<form method="POST" id="bulkExportForm" action="index.php?page=inventory&action=bulk_export">
+<div id="hiddenBikeIds"></div>
+</form>
+
+<?php
+            $qstr = http_build_query(['page' => 'inventory', 'status_f' => $status_f, 'model_f' => $model_f, 'color_f' => $color_f, 'search_f' => $search_f, 'date_from' => $date_from, 'date_to' => $date_to]);
+            if ($total_pages > 1):
+?>
+<div class="pagination no-print">
+<?php if ($current_pg > 1): ?><a href="index.php?<?= $qstr ?>&pg=<?= $current_pg - 1 ?>">‹ Prev</a><?php endif; ?>
+<?php for ($i = max(1, $current_pg - 2); $i <= min($total_pages, $current_pg + 2); $i++): ?>
+<a href="index.php?<?= $qstr ?>&pg=<?= $i ?>" class="<?= $i == $current_pg ? 'active-page' : '' ?>"><?= $i ?></a>
+<?php endfor; ?>
+<?php if ($current_pg < $total_pages): ?><a href="index.php?<?= $qstr ?>&pg=<?= $current_pg + 1 ?>">Next ›</a><?php endif; ?>
+<span>Page <?= $current_pg ?> of <?= $total_pages ?> | Total: <?= $total_rows ?> bikes</span>
+</div>
+<?php endif; ?>
+
+<?php if ($edit_bike): ?>
+<div class="modal-overlay open" id="editBikeModal">
+<div class="modal">
+<div class="modal-header"><h3>✏ Edit Bike — <?= sanitize($edit_bike['chassis_number']) ?></h3><a href="index.php?page=inventory" class="modal-close">✕</a></div>
+<form method="POST" action="index.php?page=inventory&action=edit">
+<input type="hidden" name="id" value="<?= $edit_bike['id'] ?>">
+<div class="form-group" style="margin-bottom:8px"><label>Color</label><input type="text" name="color" value="<?= sanitize($edit_bike['color']) ?>"></div>
+<div class="form-group" style="margin-bottom:8px"><label>Purchase Price</label><input type="number" name="purchase_price" step="0.01" value="<?= $edit_bike['purchase_price'] ?>"></div>
+<div class="form-group" style="margin-bottom:8px"><label>Status</label>
+<select name="status">
+<option value="in_stock" <?= $edit_bike['status'] === 'in_stock' ? 'selected' : '' ?>>In Stock</option>
+<option value="sold" <?= $edit_bike['status'] === 'sold' ? 'selected' : '' ?>>Sold</option>
+<option value="returned" <?= $edit_bike['status'] === 'returned' ? 'selected' : '' ?>>Returned</option>
+<option value="reserved" <?= $edit_bike['status'] === 'reserved' ? 'selected' : '' ?>>Reserved</option>
+</select>
+</div>
+<div class="form-group" style="margin-bottom:8px"><label>Safeguard Notes</label><input type="text" name="safeguard_notes" value="<?= sanitize($edit_bike['safeguard_notes'] ?? '') ?>"></div>
+<div class="form-group" style="margin-bottom:12px"><label>Notes</label><textarea name="notes" rows="2"><?= sanitize($edit_bike['notes'] ?? '') ?></textarea></div>
+<button type="submit" class="btn btn-primary">💾 Save Changes</button>
+</form>
+</div>
+</div>
+<?php endif; ?>
+
+<script>
+function toggleSelectAll() {
+    var chk = document.getElementById('selectAll').checked;
+    document.querySelectorAll('.bike-check').forEach(function(c){ c.checked = chk; });
+}
+document.getElementById('bulkExportForm').addEventListener('submit', function(){
+    var hidden = document.getElementById('hiddenBikeIds');
+    hidden.innerHTML = '';
+    document.querySelectorAll('.bike-check:checked').forEach(function(c){
+        var inp = document.createElement('input');
+        inp.type='hidden'; inp.name='selected_bikes[]'; inp.value=c.value;
+        hidden.appendChild(inp);
     });
+});
+function sortTable(col) {
+    var table = document.getElementById('invTable');
+    var tbody = table.tBodies[0];
+    var rows = Array.from(tbody.rows);
+    var asc = table.dataset.sortCol == col && table.dataset.sortDir == 'asc';
+    rows.sort(function(a,b){
+        var av = a.cells[col]?a.cells[col].innerText.replace(/[^0-9.-]/g,''):'';
+        var bv = b.cells[col]?b.cells[col].innerText.replace(/[^0-9.-]/g,''):'';
+        var an = parseFloat(av), bn = parseFloat(bv);
+        if (!isNaN(an) && !isNaN(bn)) return asc ? an-bn : bn-an;
+        return asc ? av.localeCompare(bv) : bv.localeCompare(av);
+    });
+    rows.forEach(function(r){ tbody.appendChild(r); });
+    table.dataset.sortCol = col;
+    table.dataset.sortDir = asc ? 'desc' : 'asc';
 }
 </script>
+<?php endif; ?>
+
+<?php
+    elseif ($page === 'sale'):
+        $prefill_bike_id = (int) ($_GET['bike_id'] ?? 0);
+        $prefill_bike = null;
+        if ($prefill_bike_id) {
+            $pr = $conn->query("SELECT b.*, m.model_name, m.model_code FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.id=$prefill_bike_id AND b.status='in_stock'");
+            $prefill_bike = $pr ? $pr->fetch_assoc() : null;
+        }
+        $bikes_instock = $conn->query("SELECT b.id, b.chassis_number, b.color, b.purchase_price, m.model_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.status='in_stock' ORDER BY b.created_at DESC");
+        $customers_list = $conn->query('SELECT id, name, phone FROM customers ORDER BY name');
+        $last_sale_bike_id = $_SESSION['last_sale_bike_id'] ?? 0;
+        unset($_SESSION['last_sale_bike_id']);
+?>
+<form method="POST" id="saleForm">
+<fieldset class="fieldset"><legend>🛒 Sale Details</legend>
+<div class="form-row">
+<div class="form-group">
+<label>Select Bike <span class="req">*</span></label>
+<select name="bike_id" id="bikeSelect" required onchange="fillBikeDetails(this)">
+<option value="">-- Select Bike (Chassis / Model / Color) --</option>
+<?php while ($bs = $bikes_instock->fetch_assoc()): ?>
+<option value="<?= $bs['id'] ?>" data-pp="<?= $bs['purchase_price'] ?>" <?= $prefill_bike_id == $bs['id'] ? 'selected' : '' ?>>
+<?= sanitize($bs['chassis_number']) ?> | <?= sanitize($bs['model_name']) ?> | <?= sanitize($bs['color']) ?> | Pp: <?= fmt_money($bs['purchase_price']) ?>
+</option>
+<?php endwhile; ?>
+</select>
+</div>
+<div class="form-group"><label>Selling Date <span class="req">*</span></label><input type="date" name="selling_date" value="<?= date('Y-m-d') ?>" required></div>
+</div>
+<div class="form-row">
+<div class="form-group"><label>Selling Price (<?= $currency ?>) <span class="req">*</span></label><input type="number" name="selling_price" id="sellingPrice" step="0.01" min="0" required placeholder="0.00" oninput="calcMargin()"></div>
+<div class="form-group"><label>Purchase Price</label><input type="number" id="purchasePriceDisplay" readonly style="background:var(--bg3);color:var(--text2)" placeholder="Auto-filled"></div>
+<div class="form-group"><label>Tax Amount (<?= get_setting('tax_rate') ?? 0.1 ?>% of <?= get_setting('tax_on') === 'selling_price' ? 'Selling' : 'Purchase' ?> Price)</label><input type="text" id="taxDisplay" readonly style="background:var(--bg3);color:var(--text2)" placeholder="Auto-calculated"></div>
+<div class="form-group"><label>Margin / Profit</label><input type="text" id="marginDisplay" readonly style="background:var(--bg3);font-weight:700" placeholder="Auto-calculated"></div>
+</div>
+<div class="form-row">
+<div class="form-group">
+<label>Customer</label>
+<div style="display:flex;gap:4px">
+<select name="customer_id" id="customerSel" style="flex:1">
+<option value="0">-- Walk-in / Cash Customer --</option>
+<?php $customers_list->data_seek(0);
+        while ($cl = $customers_list->fetch_assoc()): ?>
+<option value="<?= $cl['id'] ?>"><?= sanitize($cl['name']) ?> — <?= sanitize($cl['phone']) ?></option>
+<?php endwhile; ?>
+</select>
+<button type="button" class="btn btn-default btn-sm" onclick="document.getElementById('addCustModal').classList.add('open')">+</button>
+</div>
+</div>
+<div class="form-group"><label>Payment Method <span class="req">*</span></label>
+<select name="payment_type" id="payType" onchange="toggleChequeFields(this.value)">
+<option value="cash">Cash</option>
+<option value="cheque">Cheque</option>
+<option value="bank_transfer">Bank Transfer</option>
+<option value="online">Online</option>
+</select>
+</div>
+</div>
+<div id="chequeFields" style="display:none">
+<div class="form-row">
+<div class="form-group"><label>Cheque Number</label><input type="text" name="cheque_number" placeholder="CHQ-001"></div>
+<div class="form-group"><label>Bank Name</label><input type="text" name="bank_name" placeholder="HBL, MCB..."></div>
+<div class="form-group"><label>Cheque Date</label><input type="date" name="cheque_date"></div>
+<div class="form-group"><label>Cheque Amount</label><input type="number" name="cheque_amount" step="0.01" min="0" placeholder="0.00"></div>
+</div>
+</div>
+<div class="form-row">
+<div class="form-group"><label>Accessories Given</label><input type="text" name="accessories" placeholder="Helmet, Charger, Lock..."></div>
+<div class="form-group"><label>Notes</label><input type="text" name="sale_notes" placeholder="Any notes..."></div>
+</div>
+</fieldset>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+<button type="submit" name="save_sale" class="btn btn-success">💾 Record Sale</button>
+<a href="index.php?page=inventory" class="btn btn-default">← Back to Inventory</a>
+</div>
+</form>
+
+<?php if ($last_sale_bike_id): ?>
+<div style="margin-top:16px">
+<a href="index.php?page=sale&print_invoice=<?= $last_sale_bike_id ?>" class="btn btn-primary" target="_blank">🖨 Print Invoice</a>
+</div>
+<?php endif; ?>
+
+<?php
+        $print_inv_id = (int) ($_GET['print_invoice'] ?? 0);
+        if ($print_inv_id):
+            $inv_r = $conn->query("SELECT b.*, m.model_name, m.model_code, m.category, c.name as cust_name, c.phone as cust_phone, c.cnic as cust_cnic, c.address as cust_addr FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id WHERE b.id=$print_inv_id");
+            $inv = $inv_r ? $inv_r->fetch_assoc() : null;
+            $show_pp = get_setting('show_purchase_on_invoice') == '1';
+            $inv_no = 'INV-' . date('Ymd') . '-' . str_pad($print_inv_id, 3, '0', STR_PAD_LEFT);
+            if ($inv):
+?>
+<div class="invoice-wrap" id="invoiceArea">
+<div class="invoice-header">
+<h1>⚡ <?= sanitize(get_setting('company_name') ?? 'BNI Enterprises') ?></h1>
+<h2><?= sanitize(get_setting('branch_name') ?? 'Dera (Ahmed Metro)') ?></h2>
+<div style="font-size:0.8rem;margin-top:4px">Sale Invoice</div>
+</div>
+<div style="display:flex;justify-content:space-between;margin-bottom:12px;font-size:0.82rem">
+<div><strong>Invoice #:</strong> <?= $inv_no ?><br><strong>Date:</strong> <?= fmt_date($inv['selling_date']) ?></div>
+<div style="text-align:right"><strong>Customer:</strong> <?= sanitize($inv['cust_name'] ?? 'Walk-in Customer') ?><br>
+<?php if ($inv['cust_phone']): ?><strong>Phone:</strong> <?= sanitize($inv['cust_phone']) ?><br><?php endif; ?>
+<?php if ($inv['cust_cnic']): ?><strong>CNIC:</strong> <?= sanitize($inv['cust_cnic']) ?><?php endif; ?>
+</div>
+</div>
+<div class="invoice-section">
+<h3>Bike Details</h3>
+<table class="invoice-table">
+<thead><tr><th>Field</th><th>Details</th></tr></thead>
+<tbody>
+<tr><td>Model</td><td><?= sanitize($inv['model_name']) ?> (<?= sanitize($inv['model_code']) ?>)</td></tr>
+<tr><td>Category</td><td><?= sanitize($inv['category']) ?></td></tr>
+<tr><td>Chassis No.</td><td style="font-family:Consolas,monospace"><?= sanitize($inv['chassis_number']) ?></td></tr>
+<tr><td>Motor No.</td><td style="font-family:Consolas,monospace"><?= sanitize($inv['motor_number'] ?? '-') ?></td></tr>
+<tr><td>Color</td><td><?= sanitize($inv['color']) ?></td></tr>
+<?php if ($inv['accessories']): ?><tr><td>Accessories</td><td><?= sanitize($inv['accessories']) ?></td></tr><?php endif; ?>
+</tbody>
+</table>
+</div>
+<div class="invoice-section">
+<h3>Payment Details</h3>
+<table class="invoice-table">
+<thead><tr><th>Description</th><th style="text-align:right">Amount</th></tr></thead>
+<tbody>
+<?php if ($show_pp): ?>
+<tr><td>Purchase Price</td><td style="text-align:right"><?= fmt_money($inv['purchase_price']) ?></td></tr>
+<?php endif; ?>
+<tr><td>Selling Price</td><td style="text-align:right"><?= fmt_money($inv['selling_price']) ?></td></tr>
+<tr><td>Tax (<?= get_setting('tax_rate') ?? 0.1 ?>%)</td><td style="text-align:right"><?= fmt_money($inv['tax_amount']) ?></td></tr>
+</tbody>
+</table>
+<div class="invoice-total">Total Amount: <?= fmt_money($inv['selling_price']) ?></div>
+</div>
+<div class="invoice-footer">Thank you for your purchase! — <?= sanitize(get_setting('company_name') ?? 'BNI Enterprises') ?>, <?= sanitize(get_setting('branch_name') ?? '') ?></div>
+</div>
+<div class="no-print" style="margin-top:10px"><button onclick="window.print()" class="btn btn-primary">🖨 Print Invoice</button></div>
+<?php endif; ?>
+<?php endif; ?>
+
+<div class="modal-overlay" id="addCustModal">
+<div class="modal">
+<div class="modal-header"><h3>Add New Customer</h3><button class="modal-close" onclick="document.getElementById('addCustModal').classList.remove('open')">✕</button></div>
+<form method="POST" action="index.php?page=customers&action=add">
+<div class="form-group" style="margin-bottom:8px"><label>Name <span class="req">*</span></label><input type="text" name="name" required></div>
+<div class="form-group" style="margin-bottom:8px"><label>Phone</label><input type="text" name="phone"></div>
+<div class="form-group" style="margin-bottom:8px"><label>CNIC</label><input type="text" name="cnic" placeholder="XXXXX-XXXXXXX-X"></div>
+<div class="form-group" style="margin-bottom:12px"><label>Address</label><textarea name="address" rows="2"></textarea></div>
+<button type="submit" class="btn btn-primary">Save Customer</button>
+</form>
+</div>
+</div>
+
+<script>
+var taxRate = <?= (float) (get_setting('tax_rate') ?? 0.1) ?>;
+var taxOn = '<?= get_setting('tax_on') ?? 'purchase_price' ?>';
+function fillBikeDetails(sel) {
+    var opt = sel.options[sel.selectedIndex];
+    var pp = opt.dataset.pp || 0;
+    document.getElementById('purchasePriceDisplay').value = pp ? parseFloat(pp).toLocaleString('en-PK',{minimumFractionDigits:2}) : '';
+    calcMargin();
+}
+function calcMargin() {
+    var sp = parseFloat(document.getElementById('sellingPrice').value) || 0;
+    var pp = parseFloat(document.getElementById('purchasePriceDisplay').value.replace(/,/g,'')) || 0;
+    var base = taxOn === 'selling_price' ? sp : pp;
+    var tax = (base * taxRate) / 100;
+    var margin = sp - pp;
+    document.getElementById('taxDisplay').value = 'Rs. ' + tax.toFixed(2);
+    var md = document.getElementById('marginDisplay');
+    md.value = 'Rs. ' + margin.toFixed(2);
+    md.style.color = margin >= 0 ? '#4ec94e' : '#e74c3c';
+}
+function toggleChequeFields(val) {
+    document.getElementById('chequeFields').style.display = val === 'cheque' ? 'block' : 'none';
+}
+window.onload = function() {
+    var sel = document.getElementById('bikeSelect');
+    if (sel.value) fillBikeDetails(sel);
+};
+</script>
+
+<?php
+    elseif ($page === 'returns'):
+        $sold_bikes = $conn->query("SELECT b.id, b.chassis_number, b.color, b.selling_price, b.purchase_price, m.model_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.status='sold' ORDER BY b.selling_date DESC");
+        $prefill_ret_id = (int) ($_GET['bike_id'] ?? 0);
+?>
+<form method="POST">
+<fieldset class="fieldset"><legend>↩ Return / Adjustment</legend>
+<div class="form-row">
+<div class="form-group">
+<label>Select Sold Bike <span class="req">*</span></label>
+<select name="bike_id" required>
+<option value="">-- Select Bike --</option>
+<?php while ($sb = $sold_bikes->fetch_assoc()): ?>
+<option value="<?= $sb['id'] ?>" <?= $prefill_ret_id == $sb['id'] ? 'selected' : '' ?>><?= sanitize($sb['chassis_number']) ?> | <?= sanitize($sb['model_name']) ?> | <?= sanitize($sb['color']) ?> | Sold: <?= fmt_money($sb['selling_price']) ?></option>
+<?php endwhile; ?>
+</select>
+</div>
+<div class="form-group"><label>Return Date <span class="req">*</span></label><input type="date" name="return_date" value="<?= date('Y-m-d') ?>" required></div>
+<div class="form-group"><label>Return Amount (<?= $currency ?>) <span class="req">*</span></label><input type="number" name="return_amount" step="0.01" min="0" required placeholder="0.00"></div>
+</div>
+<div class="form-row">
+<div class="form-group"><label>Refund Method <span class="req">*</span></label>
+<select name="refund_method" id="refundMethod" onchange="toggleRetCheque(this.value)">
+<option value="cash">Cash</option>
+<option value="cheque">Cheque</option>
+</select>
+</div>
+</div>
+<div id="retChequeFields" style="display:none">
+<div class="form-row">
+<div class="form-group"><label>Cheque Number</label><input type="text" name="cheque_number" placeholder="CHQ-001"></div>
+<div class="form-group"><label>Bank Name</label><input type="text" name="bank_name" placeholder="HBL, MCB..."></div>
+<div class="form-group"><label>Cheque Date</label><input type="date" name="cheque_date"></div>
+</div>
+</div>
+<div class="form-row">
+<div class="form-group"><label>Return Notes</label><textarea name="return_notes" rows="3" placeholder="Reason for return, cheque details, account number, etc."></textarea></div>
+</div>
+</fieldset>
+<button type="submit" name="save_return" class="btn btn-warning">↩ Process Return</button>
+<a href="index.php?page=inventory" class="btn btn-default">← Cancel</a>
+</form>
+<script>
+function toggleRetCheque(v) {
+    document.getElementById('retChequeFields').style.display = v==='cheque'?'block':'none';
+}
+</script>
+
+<?php
+    elseif ($page === 'cheques'):
+        $chq_status_f = sanitize($_GET['chq_status'] ?? '');
+        $chq_type_f = sanitize($_GET['chq_type'] ?? '');
+        $chq_bank_f = sanitize($_GET['chq_bank'] ?? '');
+        $chq_from = $_GET['chq_from'] ?? '';
+        $chq_to = $_GET['chq_to'] ?? '';
+        $chq_where = ['1=1'];
+        if ($chq_status_f && in_array($chq_status_f, ['pending', 'cleared', 'bounced', 'cancelled']))
+            $chq_where[] = "status='$chq_status_f'";
+        if ($chq_type_f && in_array($chq_type_f, ['payment', 'receipt', 'refund']))
+            $chq_where[] = "type='$chq_type_f'";
+        if ($chq_bank_f)
+            $chq_where[] = "bank_name LIKE '%" . mysqli_real_escape_string($conn, $chq_bank_f) . "%'";
+        if ($chq_from)
+            $chq_where[] = "cheque_date >= '" . mysqli_real_escape_string($conn, $chq_from) . "'";
+        if ($chq_to)
+            $chq_where[] = "cheque_date <= '" . mysqli_real_escape_string($conn, $chq_to) . "'";
+        $chq_wstr = implode(' AND ', $chq_where);
+        $chq_total_rows = $conn->query("SELECT COUNT(*) as c FROM cheque_register WHERE $chq_wstr")->fetch_assoc()['c'];
+        $chq_total_pages = ceil($chq_total_rows / $per_page);
+        $cheques_result = $conn->query("SELECT * FROM cheque_register WHERE $chq_wstr ORDER BY cheque_date DESC LIMIT $per_page OFFSET $offset");
+        $chq_summary = $conn->query('SELECT status, COUNT(*) as cnt, SUM(amount) as total FROM cheque_register GROUP BY status');
+        $chq_sum_data = [];
+        while ($cs = $chq_summary->fetch_assoc())
+            $chq_sum_data[$cs['status']] = $cs;
+?>
+<div class="stats-row no-print">
+<div class="stat-box"><div class="stat-val" style="color:var(--warning)"><?= number_format($chq_sum_data['pending']['cnt'] ?? 0) ?></div><div class="stat-lbl">Pending</div><div style="font-size:0.75rem;color:var(--text2)"><?= fmt_money($chq_sum_data['pending']['total'] ?? 0) ?></div></div>
+<div class="stat-box"><div class="stat-val" style="color:var(--success)"><?= number_format($chq_sum_data['cleared']['cnt'] ?? 0) ?></div><div class="stat-lbl">Cleared</div><div style="font-size:0.75rem;color:var(--text2)"><?= fmt_money($chq_sum_data['cleared']['total'] ?? 0) ?></div></div>
+<div class="stat-box"><div class="stat-val" style="color:var(--danger)"><?= number_format($chq_sum_data['bounced']['cnt'] ?? 0) ?></div><div class="stat-lbl">Bounced</div><div style="font-size:0.75rem;color:var(--text2)"><?= fmt_money($chq_sum_data['bounced']['total'] ?? 0) ?></div></div>
+<div class="stat-box"><div class="stat-val"><?= number_format($chq_sum_data['cancelled']['cnt'] ?? 0) ?></div><div class="stat-lbl">Cancelled</div></div>
+</div>
+<div class="filter-bar no-print">
+<form method="GET" action="index.php" style="display:contents">
+<input type="hidden" name="page" value="cheques">
+<div class="form-group"><label>Status</label>
+<select name="chq_status" onchange="this.form.submit()">
+<option value="">All Status</option>
+<option value="pending" <?= $chq_status_f === 'pending' ? 'selected' : '' ?>>Pending</option>
+<option value="cleared" <?= $chq_status_f === 'cleared' ? 'selected' : '' ?>>Cleared</option>
+<option value="bounced" <?= $chq_status_f === 'bounced' ? 'selected' : '' ?>>Bounced</option>
+<option value="cancelled" <?= $chq_status_f === 'cancelled' ? 'selected' : '' ?>>Cancelled</option>
+</select>
+</div>
+<div class="form-group"><label>Type</label>
+<select name="chq_type" onchange="this.form.submit()">
+<option value="">All Types</option>
+<option value="payment" <?= $chq_type_f === 'payment' ? 'selected' : '' ?>>Payment</option>
+<option value="receipt" <?= $chq_type_f === 'receipt' ? 'selected' : '' ?>>Receipt</option>
+<option value="refund" <?= $chq_type_f === 'refund' ? 'selected' : '' ?>>Refund</option>
+</select>
+</div>
+<div class="form-group"><label>Bank</label><input type="text" name="chq_bank" value="<?= sanitize($chq_bank_f) ?>" placeholder="Bank name" onchange="this.form.submit()"></div>
+<div class="form-group"><label>From</label><input type="date" name="chq_from" value="<?= $chq_from ?>" onchange="this.form.submit()"></div>
+<div class="form-group"><label>To</label><input type="date" name="chq_to" value="<?= $chq_to ?>" onchange="this.form.submit()"></div>
+</form>
+</div>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Sr#</th><th>Cheque #</th><th>Bank</th><th>Date</th><th>Amount</th><th>Type</th><th>Status</th><th>Party</th><th>Reference</th><th class="no-print">Actions</th></tr></thead>
+<tbody>
+<?php
+        $sr = $offset + 1;
+        $chq_total_amt = 0;
+        while ($chq = $cheques_result->fetch_assoc()):
+            $chq_total_amt += $chq['amount'];
+            $st_badge = $chq['status'] === 'cleared' ? 'badge-success' : ($chq['status'] === 'bounced' ? 'badge-danger' : ($chq['status'] === 'cancelled' ? 'badge-default' : 'badge-warning'));
+            $tp_badge = $chq['type'] === 'receipt' ? 'badge-success' : ($chq['type'] === 'refund' ? 'badge-warning' : 'badge-info');
+?>
+<tr>
+<td><?= $sr++ ?></td>
+<td style="font-family:Consolas,monospace"><?= sanitize($chq['cheque_number']) ?></td>
+<td><?= sanitize($chq['bank_name']) ?></td>
+<td><?= fmt_date($chq['cheque_date']) ?></td>
+<td><?= fmt_money($chq['amount']) ?></td>
+<td><span class="badge <?= $tp_badge ?>"><?= strtoupper($chq['type']) ?></span></td>
+<td><span class="badge <?= $st_badge ?>"><?= strtoupper($chq['status']) ?></span></td>
+<td><?= sanitize($chq['party_name']) ?></td>
+<td style="font-size:0.75rem"><?= sanitize($chq['reference_type']) ?> #<?= $chq['reference_id'] ?></td>
+<td class="no-print">
+<div class="actions-col">
+<?php if ($chq['status'] === 'pending'): ?>
+<form method="POST" action="index.php?page=cheques&action=clear" style="display:inline">
+<input type="hidden" name="id" value="<?= $chq['id'] ?>">
+<button type="submit" class="btn btn-success btn-sm" title="Mark Cleared">✓ Clear</button>
+</form>
+<form method="POST" action="index.php?page=cheques&action=bounce" style="display:inline">
+<input type="hidden" name="id" value="<?= $chq['id'] ?>">
+<button type="submit" class="btn btn-danger btn-sm" title="Mark Bounced" onclick="return confirm('Mark this cheque as bounced?')">✗ Bounce</button>
+</form>
+<?php endif; ?>
+<form method="POST" action="index.php?page=cheques&action=delete" style="display:inline">
+<input type="hidden" name="id" value="<?= $chq['id'] ?>">
+<button type="submit" class="btn btn-danger btn-sm" title="Delete" onclick="return confirm('Delete this cheque entry?')">🗑</button>
+</form>
+</div>
+</td>
+</tr>
+<?php endwhile; ?>
+</tbody>
+<tfoot><tr><td colspan="4"><strong>TOTAL</strong></td><td><strong><?= fmt_money($chq_total_amt) ?></strong></td><td colspan="5"></td></tr></tfoot>
+</table>
+</div>
+<?php
+        $qstr2 = http_build_query(['page' => 'cheques', 'chq_status' => $chq_status_f, 'chq_type' => $chq_type_f, 'chq_bank' => $chq_bank_f, 'chq_from' => $chq_from, 'chq_to' => $chq_to]);
+        if ($chq_total_pages > 1):
+?>
+<div class="pagination no-print">
+<?php if ($current_pg > 1): ?><a href="index.php?<?= $qstr2 ?>&pg=<?= $current_pg - 1 ?>">‹ Prev</a><?php endif; ?>
+<?php for ($i = max(1, $current_pg - 2); $i <= min($chq_total_pages, $current_pg + 2); $i++): ?>
+<a href="index.php?<?= $qstr2 ?>&pg=<?= $i ?>" class="<?= $i == $current_pg ? 'active-page' : '' ?>"><?= $i ?></a>
+<?php endfor; ?>
+<?php if ($current_pg < $chq_total_pages): ?><a href="index.php?<?= $qstr2 ?>&pg=<?= $current_pg + 1 ?>">Next ›</a><?php endif; ?>
+</div>
+<?php endif; ?>
+
+<?php
+    elseif ($page === 'customer_ledger'):
+        $sel_cust = (int) ($_GET['cust_id'] ?? 0);
+        $customers_for_led = $conn->query('SELECT id, name, phone FROM customers ORDER BY name');
+?>
+<div class="filter-bar no-print">
+<form method="GET" action="index.php" style="display:contents">
+<input type="hidden" name="page" value="customer_ledger">
+<div class="form-group"><label>Select Customer <span class="req">*</span></label>
+<select name="cust_id" onchange="this.form.submit()">
+<option value="0">-- Select Customer --</option>
+<?php while ($cl = $customers_for_led->fetch_assoc()): ?>
+<option value="<?= $cl['id'] ?>" <?= $sel_cust == $cl['id'] ? 'selected' : '' ?>><?= sanitize($cl['name']) ?> — <?= sanitize($cl['phone']) ?></option>
+<?php endwhile; ?>
+</select>
+</div>
+</form>
+</div>
+<?php
+        if ($sel_cust > 0):
+            $cust_info = $conn->query("SELECT * FROM customers WHERE id=$sel_cust")->fetch_assoc();
+            $ledger_entries = $conn->query("SELECT * FROM ledger WHERE party_type='customer' AND party_id=$sel_cust ORDER BY entry_date ASC, id ASC");
+            $running_bal = 0;
+?>
+<div class="print-btn-wrap no-print">
+<button onclick="window.print()" class="btn btn-default btn-sm">🖨 Print Ledger</button>
+</div>
+<fieldset class="fieldset"><legend>👤 Customer Ledger — <?= sanitize($cust_info['name']) ?></legend>
+<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;font-size:0.83rem">
+<span><strong>Phone:</strong> <?= sanitize($cust_info['phone'] ?? '-') ?></span>
+<span><strong>CNIC:</strong> <?= sanitize($cust_info['cnic'] ?? '-') ?></span>
+<span><strong>Address:</strong> <?= sanitize($cust_info['address'] ?? '-') ?></span>
+</div>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Sr#</th><th>Date</th><th>Description</th><th>Debit</th><th>Credit</th><th>Balance</th></tr></thead>
+<tbody>
+<?php
+            $sr = 1;
+            $total_dr = 0;
+            $total_cr = 0;
+            while ($le = $ledger_entries->fetch_assoc()):
+                if ($le['entry_type'] === 'debit') {
+                    $running_bal -= $le['amount'];
+                    $total_dr += $le['amount'];
+                } else {
+                    $running_bal += $le['amount'];
+                    $total_cr += $le['amount'];
+                }
+?>
+<tr>
+<td><?= $sr++ ?></td>
+<td><?= fmt_date($le['entry_date']) ?></td>
+<td><?= sanitize($le['description']) ?></td>
+<td><?= $le['entry_type'] === 'debit' ? fmt_money($le['amount']) : '-' ?></td>
+<td><?= $le['entry_type'] === 'credit' ? fmt_money($le['amount']) : '-' ?></td>
+<td style="color:<?= $running_bal >= 0 ? 'var(--success)' : 'var(--danger)' ?>;font-weight:700"><?= fmt_money(abs($running_bal)) ?> <?= $running_bal >= 0 ? 'Cr' : 'Dr' ?></td>
+</tr>
+<?php endwhile; ?>
+</tbody>
+<tfoot>
+<tr>
+<td colspan="3"><strong>TOTAL</strong></td>
+<td><strong><?= fmt_money($total_dr) ?></strong></td>
+<td><strong><?= fmt_money($total_cr) ?></strong></td>
+<td style="color:<?= $running_bal >= 0 ? 'var(--success)' : 'var(--danger)' ?>;font-weight:700"><strong><?= fmt_money(abs($running_bal)) ?> <?= $running_bal >= 0 ? 'Cr' : 'Dr' ?></strong></td>
+</tr>
+</tfoot>
+</table>
+</div>
+<h4 style="font-size:0.82rem;color:var(--accent);margin:14px 0 8px;text-transform:uppercase">🚲 Purchase History</h4>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Date</th><th>Chassis</th><th>Model</th><th>Color</th><th>Selling Price</th><th>Status</th></tr></thead>
+<tbody>
+<?php
+            $cust_bikes = $conn->query("SELECT b.*, m.model_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.customer_id=$sel_cust ORDER BY b.selling_date DESC");
+            while ($cb = $cust_bikes->fetch_assoc()):
+?>
+<tr class="row-<?= $cb['status'] ?>">
+<td><?= fmt_date($cb['selling_date']) ?></td>
+<td><?= sanitize($cb['chassis_number']) ?></td>
+<td><?= sanitize($cb['model_name']) ?></td>
+<td><?= sanitize($cb['color']) ?></td>
+<td><?= fmt_money($cb['selling_price']) ?></td>
+<td><span class="badge badge-<?= $cb['status'] === 'sold' ? 'success' : ($cb['status'] === 'returned' ? 'danger' : 'info') ?>"><?= strtoupper($cb['status']) ?></span></td>
+</tr>
+<?php endwhile; ?>
+</tbody>
+</table>
+</div>
+</fieldset>
+<?php endif; ?>
+
+<?php
+    elseif ($page === 'supplier_ledger'):
+        $sel_sup = (int) ($_GET['sup_id'] ?? 0);
+        $suppliers_for_led = $conn->query('SELECT id, name FROM suppliers ORDER BY name');
+?>
+<div class="filter-bar no-print">
+<form method="GET" action="index.php" style="display:contents">
+<input type="hidden" name="page" value="supplier_ledger">
+<div class="form-group"><label>Select Supplier</label>
+<select name="sup_id" onchange="this.form.submit()">
+<option value="0">-- Select Supplier --</option>
+<?php while ($sl = $suppliers_for_led->fetch_assoc()): ?>
+<option value="<?= $sl['id'] ?>" <?= $sel_sup == $sl['id'] ? 'selected' : '' ?>><?= sanitize($sl['name']) ?></option>
+<?php endwhile; ?>
+</select>
+</div>
+</form>
+</div>
+<?php
+        if ($sel_sup > 0):
+            $sup_info = $conn->query("SELECT * FROM suppliers WHERE id=$sel_sup")->fetch_assoc();
+            $sup_orders = $conn->query("SELECT po.*, SUM(b.purchase_price) as bikes_total, COUNT(b.id) as bike_count FROM purchase_orders po LEFT JOIN bikes b ON po.id=b.purchase_order_id WHERE po.supplier_id=$sel_sup GROUP BY po.id ORDER BY po.order_date ASC");
+            $sup_running = 0;
+            $sup_sr = 1;
+            $sup_total = 0;
+?>
+<fieldset class="fieldset"><legend>🏭 Supplier Ledger — <?= sanitize($sup_info['name']) ?></legend>
+<div style="margin-bottom:10px;font-size:0.83rem">
+<strong>Contact:</strong> <?= sanitize($sup_info['contact'] ?? '-') ?> | <strong>Address:</strong> <?= sanitize($sup_info['address'] ?? '-') ?>
+</div>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Sr#</th><th>Order Date</th><th>Cheque #</th><th>Bank</th><th>Cheque Date</th><th>Units</th><th>Cheque Amount</th><th>Bikes Total</th><th>Balance</th></tr></thead>
+<tbody>
+<?php
+            while ($so = $sup_orders->fetch_assoc()):
+                $sup_running += $so['cheque_amount'];
+                $sup_total += $so['cheque_amount'];
+?>
+<tr>
+<td><?= $sup_sr++ ?></td>
+<td><?= fmt_date($so['order_date']) ?></td>
+<td style="font-family:Consolas,monospace"><?= sanitize($so['cheque_number']) ?></td>
+<td><?= sanitize($so['bank_name']) ?></td>
+<td><?= fmt_date($so['cheque_date']) ?></td>
+<td><?= $so['bike_count'] ?></td>
+<td><?= fmt_money($so['cheque_amount']) ?></td>
+<td><?= fmt_money($so['bikes_total'] ?? 0) ?></td>
+<td style="font-weight:700"><?= fmt_money($sup_running) ?></td>
+</tr>
+<?php endwhile; ?>
+</tbody>
+<tfoot><tr><td colspan="6"><strong>TOTAL</strong></td><td><strong><?= fmt_money($sup_total) ?></strong></td><td></td><td></td></tr></tfoot>
+</table>
+</div>
+</fieldset>
+<?php endif; ?>
+
+<?php
+    elseif ($page === 'reports'):
+        $sub = sanitize($_GET['sub'] ?? 'stock');
+        $rep_from = $_GET['rep_from'] ?? date('Y-01-01');
+        $rep_to = $_GET['rep_to'] ?? date('Y-12-31');
+        $rep_year = (int) ($_GET['rep_year'] ?? date('Y'));
+        $rep_month = (int) ($_GET['rep_month'] ?? date('n'));
+?>
+<div class="sub-tabs no-print">
+<?php
+        $sub_items = [
+            ['stock', '📦 Current Stock'],
+            ['sold', '✅ Sold Bikes'],
+            ['model_wise', '📊 Model-wise'],
+            ['tax', '🧾 Tax Report'],
+            ['profit', '📈 Profit/Margin'],
+            ['bank', '💳 Bank/Cheque'],
+            ['monthly', '📅 Monthly Summary'],
+            ['daily', '📆 Daily Ledger'],
+            ['purchase_vs_sales', '🔄 Purchase vs Sales'],
+        ];
+        foreach ($sub_items as $si):
+?>
+<a href="index.php?page=reports&sub=<?= $si[0] ?>&rep_from=<?= $rep_from ?>&rep_to=<?= $rep_to ?>" class="sub-tab <?= $sub === $si[0] ? 'active' : '' ?>"><?= $si[1] ?></a>
+<?php endforeach; ?>
+</div>
+
+<div class="filter-bar no-print">
+<form method="GET" action="index.php" style="display:contents">
+<input type="hidden" name="page" value="reports">
+<input type="hidden" name="sub" value="<?= $sub ?>">
+<div class="form-group"><label>From Date</label><input type="date" name="rep_from" value="<?= $rep_from ?>"></div>
+<div class="form-group"><label>To Date</label><input type="date" name="rep_to" value="<?= $rep_to ?>"></div>
+<div class="form-group"><label>Year</label><input type="number" name="rep_year" value="<?= $rep_year ?>" min="2000" max="2100" style="width:90px"></div>
+<div class="form-group"><label>Month</label>
+<select name="rep_month">
+<?php for ($m = 1; $m <= 12; $m++): ?>
+<option value="<?= $m ?>" <?= $rep_month == $m ? 'selected' : '' ?>><?= date('F', mktime(0, 0, 0, $m, 1)) ?></option>
+<?php endfor; ?>
+</select>
+</div>
+<button type="submit" class="btn btn-primary btn-sm" style="align-self:flex-end">🔍 Filter</button>
+</form>
+<button onclick="window.print()" class="btn btn-default btn-sm" style="align-self:flex-end">🖨 Print</button>
+</div>
+
+<?php
+        if ($sub === 'stock'):
+            $stock_bikes = $conn->query("SELECT b.*, m.model_name, m.category, m.short_code FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.status='in_stock' ORDER BY m.model_name, b.inventory_date");
+            $stk_total = 0;
+?>
+<fieldset class="fieldset"><legend>📦 Current Stock Report</legend>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Sr#</th><th>Chassis</th><th>Motor#</th><th>Model</th><th>Category</th><th>Color</th><th>Purchase Price</th><th>Inventory Date</th><th>Days in Stock</th></tr></thead>
+<tbody>
+<?php
+            $sr = 1;
+            while ($bk = $stock_bikes->fetch_assoc()):
+                $days = (int) ((time() - strtotime($bk['inventory_date'])) / 86400);
+                $stk_total += $bk['purchase_price'];
+?>
+<tr>
+<td><?= $sr++ ?></td>
+<td style="font-family:Consolas,monospace"><?= sanitize($bk['chassis_number']) ?></td>
+<td style="font-family:Consolas,monospace"><?= sanitize($bk['motor_number'] ?? '-') ?></td>
+<td><?= sanitize($bk['model_name']) ?></td>
+<td><?= sanitize($bk['category']) ?></td>
+<td><?= sanitize($bk['color']) ?></td>
+<td><?= fmt_money($bk['purchase_price']) ?></td>
+<td><?= fmt_date($bk['inventory_date']) ?></td>
+<td><?= $days ?> days</td>
+</tr>
+<?php endwhile; ?>
+</tbody>
+<tfoot><tr><td colspan="6"><strong>TOTAL</strong></td><td><strong><?= fmt_money($stk_total) ?></strong></td><td colspan="2"></td></tr></tfoot>
+</table>
+</div>
+</fieldset>
+
+<?php
+        elseif ($sub === 'sold'):
+            $sold_bikes_r = $conn->query("SELECT b.*, m.model_name, m.short_code, c.name as cust_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id WHERE b.status='sold' AND b.selling_date BETWEEN '" . mysqli_real_escape_string($conn, $rep_from) . "' AND '" . mysqli_real_escape_string($conn, $rep_to) . "' ORDER BY b.selling_date DESC");
+            $sold_total_sp = 0;
+            $sold_total_pp = 0;
+            $sold_total_mg = 0;
+            $sold_total_tax = 0;
+?>
+<fieldset class="fieldset"><legend>✅ Sold Bikes Report (<?= fmt_date($rep_from) ?> - <?= fmt_date($rep_to) ?>)</legend>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Sr#</th><th>Chassis</th><th>Model</th><th>Color</th><th>Customer</th><th>Selling Date</th><th>Purchase Price</th><th>Selling Price</th><th>Tax</th><th>Margin</th></tr></thead>
+<tbody>
+<?php
+            $sr = 1;
+            while ($sb = $sold_bikes_r->fetch_assoc()):
+                $sold_total_sp += $sb['selling_price'];
+                $sold_total_pp += $sb['purchase_price'];
+                $sold_total_mg += $sb['margin'];
+                $sold_total_tax += $sb['tax_amount'];
+?>
+<tr class="row-sold">
+<td><?= $sr++ ?></td>
+<td style="font-family:Consolas,monospace"><?= sanitize($sb['chassis_number']) ?></td>
+<td><?= sanitize($sb['model_name']) ?></td>
+<td><?= sanitize($sb['color']) ?></td>
+<td><?= sanitize($sb['cust_name'] ?? 'Walk-in') ?></td>
+<td><?= fmt_date($sb['selling_date']) ?></td>
+<td><?= fmt_money($sb['purchase_price']) ?></td>
+<td><?= fmt_money($sb['selling_price']) ?></td>
+<td><?= fmt_money($sb['tax_amount']) ?></td>
+<td style="color:<?= $sb['margin'] >= 0 ? 'var(--success)' : 'var(--danger)' ?>"><?= fmt_money($sb['margin']) ?></td>
+</tr>
+<?php endwhile; ?>
+</tbody>
+<tfoot>
+<tr>
+<td colspan="6"><strong>TOTAL</strong></td>
+<td><strong><?= fmt_money($sold_total_pp) ?></strong></td>
+<td><strong><?= fmt_money($sold_total_sp) ?></strong></td>
+<td><strong><?= fmt_money($sold_total_tax) ?></strong></td>
+<td style="color:<?= $sold_total_mg >= 0 ? 'var(--success)' : 'var(--danger)' ?>"><strong><?= fmt_money($sold_total_mg) ?></strong></td>
+</tr>
+</tfoot>
+</table>
+</div>
+</fieldset>
+
+<?php
+        elseif ($sub === 'model_wise'):
+            $mw_result = $conn->query("SELECT m.model_name, m.short_code, m.category,
+    COUNT(b.id) as total_inv,
+    SUM(CASE WHEN b.status='sold' THEN 1 ELSE 0 END) as sold_cnt,
+    SUM(CASE WHEN b.status='in_stock' THEN 1 ELSE 0 END) as avail_cnt,
+    SUM(CASE WHEN b.status='returned' THEN 1 ELSE 0 END) as ret_cnt,
+    SUM(b.purchase_price) as total_pp,
+    SUM(CASE WHEN b.status='sold' THEN b.selling_price ELSE 0 END) as total_sp,
+    SUM(CASE WHEN b.status='sold' THEN b.margin ELSE 0 END) as total_mg
+    FROM models m LEFT JOIN bikes b ON m.id=b.model_id
+    GROUP BY m.id ORDER BY m.model_name");
+            $mw_t = [0, 0, 0, 0, 0, 0, 0];
+?>
+<fieldset class="fieldset"><legend>📊 Model-wise Sales Report</legend>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Model</th><th>Short Code</th><th>Category</th><th>Inventory</th><th>Sold</th><th>Available</th><th>Returned</th><th>Total Purchase</th><th>Total Sales</th><th>Total Margin</th></tr></thead>
+<tbody>
+<?php
+            while ($mw = $mw_result->fetch_assoc()):
+                $mw_t[0] += $mw['total_inv'];
+                $mw_t[1] += $mw['sold_cnt'];
+                $mw_t[2] += $mw['avail_cnt'];
+                $mw_t[3] += $mw['ret_cnt'];
+                $mw_t[4] += $mw['total_pp'];
+                $mw_t[5] += $mw['total_sp'];
+                $mw_t[6] += $mw['total_mg'];
+?>
+<tr>
+<td><strong><?= sanitize($mw['model_name']) ?></strong></td>
+<td><?= sanitize($mw['short_code']) ?></td>
+<td><?= sanitize($mw['category']) ?></td>
+<td><?= $mw['total_inv'] ?></td>
+<td><span class="badge badge-success"><?= $mw['sold_cnt'] ?></span></td>
+<td><span class="badge badge-info"><?= $mw['avail_cnt'] ?></span></td>
+<td><span class="badge badge-danger"><?= $mw['ret_cnt'] ?></span></td>
+<td><?= fmt_money($mw['total_pp']) ?></td>
+<td><?= fmt_money($mw['total_sp']) ?></td>
+<td style="color:<?= $mw['total_mg'] >= 0 ? 'var(--success)' : 'var(--danger)' ?>"><?= fmt_money($mw['total_mg']) ?></td>
+</tr>
+<?php endwhile; ?>
+</tbody>
+<tfoot><tr><td><strong>TOTAL</strong></td><td colspan="3"><strong><?= $mw_t[0] ?></strong></td><td><strong><?= $mw_t[1] ?></strong></td><td><strong><?= $mw_t[2] ?></strong></td><td><strong><?= $mw_t[3] ?></strong></td><td><strong><?= fmt_money($mw_t[4]) ?></strong></td><td><strong><?= fmt_money($mw_t[5]) ?></strong></td><td style="color:var(--success)"><strong><?= fmt_money($mw_t[6]) ?></strong></td></tr></tfoot>
+</table>
+</div>
+</fieldset>
+
+<?php
+        elseif ($sub === 'tax'):
+            $tax_result = $conn->query("SELECT DATE_FORMAT(selling_date,'%Y-%m') as ym, COUNT(*) as cnt, SUM(tax_amount) as total_tax, SUM(purchase_price) as total_pp FROM bikes WHERE status='sold' AND selling_date BETWEEN '" . mysqli_real_escape_string($conn, $rep_from) . "' AND '" . mysqli_real_escape_string($conn, $rep_to) . "' GROUP BY ym ORDER BY ym DESC");
+            $tax_total = 0;
+?>
+<fieldset class="fieldset"><legend>🧾 Tax Report by Month</legend>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Month</th><th>Bikes Sold</th><th>Total Purchase Value</th><th>Tax Amount (<?= get_setting('tax_rate') ?? 0.1 ?>%)</th></tr></thead>
+<tbody>
+<?php
+            while ($tr = $tax_result->fetch_assoc()):
+                $tax_total += $tr['total_tax'];
+?>
+<tr>
+<td><?= date('F Y', strtotime($tr['ym'] . '-01')) ?></td>
+<td><?= $tr['cnt'] ?></td>
+<td><?= fmt_money($tr['total_pp']) ?></td>
+<td><?= fmt_money($tr['total_tax']) ?></td>
+</tr>
+<?php endwhile; ?>
+</tbody>
+<tfoot><tr><td colspan="3"><strong>TOTAL TAX</strong></td><td><strong><?= fmt_money($tax_total) ?></strong></td></tr></tfoot>
+</table>
+</div>
+</fieldset>
+
+<?php
+        elseif ($sub === 'profit'):
+            $profit_monthly = $conn->query("SELECT DATE_FORMAT(selling_date,'%Y-%m') as ym, COUNT(*) as cnt, SUM(selling_price) as total_sp, SUM(purchase_price) as total_pp, SUM(margin) as total_margin, SUM(tax_amount) as total_tax FROM bikes WHERE status='sold' AND selling_date BETWEEN '" . mysqli_real_escape_string($conn, $rep_from) . "' AND '" . mysqli_real_escape_string($conn, $rep_to) . "' GROUP BY ym ORDER BY ym DESC");
+            $profit_t = [0, 0, 0, 0, 0];
+?>
+<fieldset class="fieldset"><legend>📈 Profit / Margin Report</legend>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Month</th><th>Bikes Sold</th><th>Total Purchase</th><th>Total Sales</th><th>Total Tax</th><th>Net Profit</th><th>Avg Margin</th></tr></thead>
+<tbody>
+<?php
+            while ($pm = $profit_monthly->fetch_assoc()):
+                $profit_t[0] += $pm['cnt'];
+                $profit_t[1] += $pm['total_pp'];
+                $profit_t[2] += $pm['total_sp'];
+                $profit_t[3] += $pm['total_tax'];
+                $profit_t[4] += $pm['total_margin'];
+                $avg_margin = $pm['cnt'] > 0 ? $pm['total_margin'] / $pm['cnt'] : 0;
+?>
+<tr>
+<td><?= date('F Y', strtotime($pm['ym'] . '-01')) ?></td>
+<td><?= $pm['cnt'] ?></td>
+<td><?= fmt_money($pm['total_pp']) ?></td>
+<td><?= fmt_money($pm['total_sp']) ?></td>
+<td><?= fmt_money($pm['total_tax']) ?></td>
+<td style="color:<?= $pm['total_margin'] >= 0 ? 'var(--success)' : 'var(--danger)' ?>;font-weight:700"><?= fmt_money($pm['total_margin']) ?></td>
+<td><?= fmt_money($avg_margin) ?></td>
+</tr>
+<?php endwhile; ?>
+</tbody>
+<tfoot>
+<tr>
+<td><strong>TOTAL</strong></td>
+<td><strong><?= $profit_t[0] ?></strong></td>
+<td><strong><?= fmt_money($profit_t[1]) ?></strong></td>
+<td><strong><?= fmt_money($profit_t[2]) ?></strong></td>
+<td><strong><?= fmt_money($profit_t[3]) ?></strong></td>
+<td style="color:var(--success)"><strong><?= fmt_money($profit_t[4]) ?></strong></td>
+<td><strong><?= $profit_t[0] > 0 ? fmt_money($profit_t[4] / $profit_t[0]) : fmt_money(0) ?></strong></td>
+</tr>
+</tfoot>
+</table>
+</div>
+</fieldset>
+
+<?php
+        elseif ($sub === 'bank'):
+            $bank_result = $conn->query('SELECT bank_name, type, status, COUNT(*) as cnt, SUM(amount) as total FROM cheque_register GROUP BY bank_name, type, status ORDER BY bank_name, type');
+            $bank_data = [];
+            while ($br2 = $bank_result->fetch_assoc()) {
+                $bank_data[$br2['bank_name']][$br2['type']][$br2['status']] = $br2;
+            }
+?>
+<fieldset class="fieldset"><legend>💳 Bank / Cheque Report</legend>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Bank</th><th>Type</th><th>Pending</th><th>Cleared</th><th>Bounced</th><th>Cancelled</th><th>Total Count</th><th>Total Amount</th></tr></thead>
+<tbody>
+<?php
+            $bank_totals = [0, 0];
+            foreach ($bank_data as $bank => $types):
+                foreach ($types as $type => $statuses):
+                    $pending = $statuses['pending']['total'] ?? 0;
+                    $cleared = $statuses['cleared']['total'] ?? 0;
+                    $bounced = $statuses['bounced']['total'] ?? 0;
+                    $cancelled = $statuses['cancelled']['total'] ?? 0;
+                    $cnt = array_sum(array_column($statuses, 'cnt'));
+                    $ttl = $pending + $cleared + $bounced + $cancelled;
+                    $bank_totals[0] += $cnt;
+                    $bank_totals[1] += $ttl;
+?>
+<tr>
+<td><?= sanitize($bank) ?></td>
+<td><span class="badge badge-<?= $type === 'receipt' ? 'success' : ($type === 'refund' ? 'warning' : 'info') ?>"><?= strtoupper($type) ?></span></td>
+<td style="color:var(--warning)"><?= fmt_money($pending) ?></td>
+<td style="color:var(--success)"><?= fmt_money($cleared) ?></td>
+<td style="color:var(--danger)"><?= fmt_money($bounced) ?></td>
+<td><?= fmt_money($cancelled) ?></td>
+<td><?= $cnt ?></td>
+<td><?= fmt_money($ttl) ?></td>
+</tr>
+<?php endforeach;
+            endforeach; ?>
+</tbody>
+<tfoot><tr><td colspan="6"><strong>TOTAL</strong></td><td><strong><?= $bank_totals[0] ?></strong></td><td><strong><?= fmt_money($bank_totals[1]) ?></strong></td></tr></tfoot>
+</table>
+</div>
+</fieldset>
+
+<?php
+        elseif ($sub === 'monthly'):
+            $monthly_r = $conn->query("SELECT DATE_FORMAT(order_date,'%Y-%m') as ym, COUNT(*) as purchased, SUM(purchase_price) as pp_total FROM bikes WHERE YEAR(order_date)=$rep_year GROUP BY ym");
+            $sold_monthly_r = $conn->query("SELECT DATE_FORMAT(selling_date,'%Y-%m') as ym, COUNT(*) as sold_cnt, SUM(selling_price) as sp_total, SUM(margin) as mg_total FROM bikes WHERE status='sold' AND YEAR(selling_date)=$rep_year GROUP BY ym");
+            $monthly_purch = [];
+            $monthly_sales = [];
+            while ($mr = $monthly_r->fetch_assoc())
+                $monthly_purch[$mr['ym']] = $mr;
+            while ($mr2 = $sold_monthly_r->fetch_assoc())
+                $monthly_sales[$mr2['ym']] = $mr2;
+            $all_months = array_unique(array_merge(array_keys($monthly_purch), array_keys($monthly_sales)));
+            sort($all_months);
+?>
+<fieldset class="fieldset"><legend>📅 Monthly Summary — <?= $rep_year ?></legend>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Month</th><th>Purchased Units</th><th>Purchase Value</th><th>Sold Units</th><th>Sales Value</th><th>Profit</th></tr></thead>
+<tbody>
+<?php
+            $mt = [0, 0, 0, 0, 0];
+            foreach ($all_months as $ym):
+                $p = $monthly_purch[$ym] ?? null;
+                $s = $monthly_sales[$ym] ?? null;
+                $mt[0] += $p['purchased'] ?? 0;
+                $mt[1] += $p['pp_total'] ?? 0;
+                $mt[2] += $s['sold_cnt'] ?? 0;
+                $mt[3] += $s['sp_total'] ?? 0;
+                $mt[4] += $s['mg_total'] ?? 0;
+?>
+<tr>
+<td><?= date('F Y', strtotime($ym . '-01')) ?></td>
+<td><?= $p['purchased'] ?? 0 ?></td>
+<td><?= fmt_money($p['pp_total'] ?? 0) ?></td>
+<td><?= $s['sold_cnt'] ?? 0 ?></td>
+<td><?= fmt_money($s['sp_total'] ?? 0) ?></td>
+<td style="color:<?= ($s['mg_total'] ?? 0) >= 0 ? 'var(--success)' : 'var(--danger)' ?>"><?= fmt_money($s['mg_total'] ?? 0) ?></td>
+</tr>
+<?php endforeach; ?>
+</tbody>
+<tfoot><tr><td><strong>TOTAL</strong></td><td><strong><?= $mt[0] ?></strong></td><td><strong><?= fmt_money($mt[1]) ?></strong></td><td><strong><?= $mt[2] ?></strong></td><td><strong><?= fmt_money($mt[3]) ?></strong></td><td style="color:var(--success)"><strong><?= fmt_money($mt[4]) ?></strong></td></tr></tfoot>
+</table>
+</div>
+</fieldset>
+
+<?php
+        elseif ($sub === 'daily'):
+            $daily_date = $_GET['daily_date'] ?? date('Y-m-d');
+            $daily_sales = $conn->query("SELECT b.*, m.model_name, c.name as cust_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id WHERE b.selling_date='" . mysqli_real_escape_string($conn, $daily_date) . "' AND b.status='sold'");
+            $daily_purch = $conn->query("SELECT b.*, m.model_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.inventory_date='" . mysqli_real_escape_string($conn, $daily_date) . "'");
+?>
+<div class="filter-bar no-print" style="margin-bottom:8px">
+<form method="GET" action="index.php" style="display:contents">
+<input type="hidden" name="page" value="reports">
+<input type="hidden" name="sub" value="daily">
+<div class="form-group"><label>Select Date</label><input type="date" name="daily_date" value="<?= $daily_date ?>"></div>
+<button type="submit" class="btn btn-primary btn-sm" style="align-self:flex-end">🔍 View</button>
+</form>
+</div>
+<fieldset class="fieldset"><legend>📆 Daily Ledger — <?= fmt_date($daily_date) ?></legend>
+<h4 style="font-size:0.82rem;color:var(--success);margin-bottom:6px">Sales</h4>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Chassis</th><th>Model</th><th>Customer</th><th>Selling Price</th><th>Tax</th><th>Margin</th></tr></thead>
+<tbody>
+<?php $d_sp = 0;
+            $d_mg = 0;
+            while ($ds = $daily_sales->fetch_assoc()):
+                $d_sp += $ds['selling_price'];
+                $d_mg += $ds['margin']; ?>
+<tr class="row-sold"><td><?= sanitize($ds['chassis_number']) ?></td><td><?= sanitize($ds['model_name']) ?></td><td><?= sanitize($ds['cust_name'] ?? 'Walk-in') ?></td><td><?= fmt_money($ds['selling_price']) ?></td><td><?= fmt_money($ds['tax_amount']) ?></td><td style="color:var(--success)"><?= fmt_money($ds['margin']) ?></td></tr>
+<?php endwhile; ?>
+</tbody>
+<tfoot><tr><td colspan="3"><strong>TOTAL</strong></td><td><strong><?= fmt_money($d_sp) ?></strong></td><td></td><td style="color:var(--success)"><strong><?= fmt_money($d_mg) ?></strong></td></tr></tfoot>
+</table>
+</div>
+<h4 style="font-size:0.82rem;color:var(--accent);margin:10px 0 6px">Inventory Added</h4>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Chassis</th><th>Motor#</th><th>Model</th><th>Color</th><th>Purchase Price</th><th>Status</th></tr></thead>
+<tbody>
+<?php $d_pp = 0;
+            while ($dp = $daily_purch->fetch_assoc()):
+                $d_pp += $dp['purchase_price']; ?>
+<tr><td><?= sanitize($dp['chassis_number']) ?></td><td><?= sanitize($dp['motor_number'] ?? '-') ?></td><td><?= sanitize($dp['model_name']) ?></td><td><?= sanitize($dp['color']) ?></td><td><?= fmt_money($dp['purchase_price']) ?></td><td><span class="badge badge-<?= $dp['status'] === 'in_stock' ? 'info' : ($dp['status'] === 'sold' ? 'success' : 'danger') ?>"><?= strtoupper($dp['status']) ?></span></td></tr>
+<?php endwhile; ?>
+</tbody>
+<tfoot><tr><td colspan="4"><strong>TOTAL</strong></td><td><strong><?= fmt_money($d_pp) ?></strong></td><td></td></tr></tfoot>
+</table>
+</div>
+</fieldset>
+
+<?php
+        elseif ($sub === 'purchase_vs_sales'):
+            $pvs = $conn->query("SELECT DATE_FORMAT(order_date,'%Y-%m') as ym, COUNT(*) as p_cnt, SUM(purchase_price) as p_val FROM bikes WHERE YEAR(order_date)=$rep_year GROUP BY ym");
+            $svp = $conn->query("SELECT DATE_FORMAT(selling_date,'%Y-%m') as ym, COUNT(*) as s_cnt, SUM(selling_price) as s_val FROM bikes WHERE status='sold' AND YEAR(selling_date)=$rep_year GROUP BY ym");
+            $pvs_data = [];
+            $svp_data = [];
+            while ($r = $pvs->fetch_assoc())
+                $pvs_data[$r['ym']] = $r;
+            while ($r = $svp->fetch_assoc())
+                $svp_data[$r['ym']] = $r;
+            $all_m = array_unique(array_merge(array_keys($pvs_data), array_keys($svp_data)));
+            sort($all_m);
+?>
+<fieldset class="fieldset"><legend>🔄 Purchase vs Sales — <?= $rep_year ?></legend>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Month</th><th>Purchased</th><th>Purchase Value</th><th>Sold</th><th>Sales Value</th><th>Difference</th></tr></thead>
+<tbody>
+<?php
+            $pt = [0, 0, 0, 0];
+            foreach ($all_m as $ym):
+                $p = $pvs_data[$ym] ?? null;
+                $s = $svp_data[$ym] ?? null;
+                $diff = ($s['s_val'] ?? 0) - ($p['p_val'] ?? 0);
+                $pt[0] += $p['p_cnt'] ?? 0;
+                $pt[1] += $p['p_val'] ?? 0;
+                $pt[2] += $s['s_cnt'] ?? 0;
+                $pt[3] += $s['s_val'] ?? 0;
+?>
+<tr>
+<td><?= date('F Y', strtotime($ym . '-01')) ?></td>
+<td><?= $p['p_cnt'] ?? 0 ?></td>
+<td><?= fmt_money($p['p_val'] ?? 0) ?></td>
+<td><?= $s['s_cnt'] ?? 0 ?></td>
+<td><?= fmt_money($s['s_val'] ?? 0) ?></td>
+<td style="color:<?= $diff >= 0 ? 'var(--success)' : 'var(--danger)' ?>"><?= fmt_money($diff) ?></td>
+</tr>
+<?php endforeach; ?>
+</tbody>
+<tfoot><tr><td><strong>TOTAL</strong></td><td><strong><?= $pt[0] ?></strong></td><td><strong><?= fmt_money($pt[1]) ?></strong></td><td><strong><?= $pt[2] ?></strong></td><td><strong><?= fmt_money($pt[3]) ?></strong></td><td style="color:<?= ($pt[3] - $pt[1]) >= 0 ? 'var(--success)' : 'var(--danger)' ?>"><strong><?= fmt_money($pt[3] - $pt[1]) ?></strong></td></tr></tfoot>
+</table>
+</div>
+</fieldset>
+<?php endif; ?>
+
+<?php
+    elseif ($page === 'models'):
+        $models_result = $conn->query("SELECT m.*, COUNT(b.id) as bike_count, SUM(CASE WHEN b.status='in_stock' THEN 1 ELSE 0 END) as in_stock, SUM(CASE WHEN b.status='sold' THEN 1 ELSE 0 END) as sold_cnt FROM models m LEFT JOIN bikes b ON m.id=b.model_id GROUP BY m.id ORDER BY m.model_name");
+        $edit_model_id = (int) ($_GET['edit_id'] ?? 0);
+        $edit_model = null;
+        if ($edit_model_id) {
+            $em = $conn->query("SELECT * FROM models WHERE id=$edit_model_id");
+            $edit_model = $em ? $em->fetch_assoc() : null;
+        }
+?>
+<div style="display:flex;gap:8px;margin-bottom:10px" class="no-print">
+<button class="btn btn-success" onclick="document.getElementById('addModelFormArea').style.display='block';document.getElementById('addModelFormArea').scrollIntoView()">+ Add Model</button>
+</div>
+<div id="addModelFormArea" style="display:<?= $edit_model ? 'block' : 'none' ?>;margin-bottom:14px">
+<fieldset class="fieldset"><legend><?= $edit_model ? '✏ Edit Model' : '+ Add New Model' ?></legend>
+<form method="POST" action="index.php?page=models&action=<?= $edit_model ? 'edit' : 'add' ?>">
+<?php if ($edit_model): ?><input type="hidden" name="id" value="<?= $edit_model['id'] ?>"><?php endif; ?>
+<div class="form-row">
+<div class="form-group"><label>Model Code <span class="req">*</span></label><input type="text" name="model_code" value="<?= sanitize($edit_model['model_code'] ?? '') ?>" required></div>
+<div class="form-group"><label>Model Name <span class="req">*</span></label><input type="text" name="model_name" value="<?= sanitize($edit_model['model_name'] ?? '') ?>" required></div>
+<div class="form-group"><label>Category</label><input type="text" name="category" value="<?= sanitize($edit_model['category'] ?? 'Electric Bike') ?>"></div>
+<div class="form-group"><label>Short Code</label><input type="text" name="short_code" value="<?= sanitize($edit_model['short_code'] ?? '') ?>"></div>
+</div>
+<button type="submit" class="btn btn-primary">💾 Save</button>
+<button type="button" class="btn btn-default" onclick="document.getElementById('addModelFormArea').style.display='none'">Cancel</button>
+</form>
+</fieldset>
+</div>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Sr#</th><th>Model Code</th><th>Model Name</th><th>Category</th><th>Short Code</th><th>Total Inventory</th><th>In Stock</th><th>Sold</th><th class="no-print">Actions</th></tr></thead>
+<tbody>
+<?php $sr = 1;
+        while ($mdl = $models_result->fetch_assoc()): ?>
+<tr>
+<td><?= $sr++ ?></td>
+<td><strong><?= sanitize($mdl['model_code']) ?></strong></td>
+<td><?= sanitize($mdl['model_name']) ?></td>
+<td><?= sanitize($mdl['category']) ?></td>
+<td><code><?= sanitize($mdl['short_code']) ?></code></td>
+<td><?= $mdl['bike_count'] ?></td>
+<td><span class="badge badge-info"><?= $mdl['in_stock'] ?></span></td>
+<td><span class="badge badge-success"><?= $mdl['sold_cnt'] ?></span></td>
+<td class="no-print">
+<div class="actions-col">
+<a href="index.php?page=models&edit_id=<?= $mdl['id'] ?>" class="btn btn-primary btn-sm">✏ Edit</a>
+<form method="POST" action="index.php?page=models&action=delete" style="display:inline" onsubmit="return confirm('Delete this model? Only possible if no bikes are linked.')">
+<input type="hidden" name="id" value="<?= $mdl['id'] ?>">
+<button type="submit" class="btn btn-danger btn-sm">🗑</button>
+</form>
+</div>
+</td>
+</tr>
+<?php endwhile; ?>
+</tbody>
+</table>
+</div>
+
+<?php
+    elseif ($page === 'customers'):
+        $cust_result = $conn->query("SELECT c.*, COUNT(b.id) as bike_count, SUM(CASE WHEN b.status='sold' THEN b.selling_price ELSE 0 END) as total_purchases FROM customers c LEFT JOIN bikes b ON c.id=b.customer_id GROUP BY c.id ORDER BY c.name");
+        $edit_cust_id = (int) ($_GET['edit_id'] ?? 0);
+        $edit_cust = null;
+        if ($edit_cust_id) {
+            $ec = $conn->query("SELECT * FROM customers WHERE id=$edit_cust_id");
+            $edit_cust = $ec ? $ec->fetch_assoc() : null;
+        }
+        $search_cust = sanitize($_GET['search_cust'] ?? '');
+        $where_cust = '1=1';
+        if ($search_cust)
+            $where_cust = "(c.name LIKE '%" . mysqli_real_escape_string($conn, $search_cust) . "%' OR c.phone LIKE '%" . mysqli_real_escape_string($conn, $search_cust) . "%' OR c.cnic LIKE '%" . mysqli_real_escape_string($conn, $search_cust) . "%')";
+        $cust_result = $conn->query("SELECT c.*, COUNT(b.id) as bike_count, SUM(CASE WHEN b.status='sold' THEN b.selling_price ELSE 0 END) as total_purchases FROM customers c LEFT JOIN bikes b ON c.id=b.customer_id WHERE $where_cust GROUP BY c.id ORDER BY c.name");
+?>
+<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center" class="no-print">
+<form method="GET" action="index.php" style="display:flex;gap:6px;align-items:center">
+<input type="hidden" name="page" value="customers">
+<input type="text" name="search_cust" value="<?= $search_cust ?>" placeholder="Search by name, phone, CNIC..." style="padding:6px 10px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--input-text);border-radius:1px">
+<button type="submit" class="btn btn-default btn-sm">🔍</button>
+</form>
+<button class="btn btn-success" onclick="document.getElementById('addCustFormArea').style.display='block'">+ Add Customer</button>
+</div>
+<div id="addCustFormArea" style="display:<?= $edit_cust ? 'block' : 'none' ?>;margin-bottom:14px">
+<fieldset class="fieldset"><legend><?= $edit_cust ? '✏ Edit Customer' : '+ Add New Customer' ?></legend>
+<form method="POST" action="index.php?page=customers&action=<?= $edit_cust ? 'edit' : 'add' ?>">
+<?php if ($edit_cust): ?><input type="hidden" name="id" value="<?= $edit_cust['id'] ?>"><?php endif; ?>
+<div class="form-row">
+<div class="form-group"><label>Name <span class="req">*</span></label><input type="text" name="name" value="<?= sanitize($edit_cust['name'] ?? '') ?>" required></div>
+<div class="form-group"><label>Phone</label><input type="text" name="phone" value="<?= sanitize($edit_cust['phone'] ?? '') ?>"></div>
+<div class="form-group"><label>CNIC</label><input type="text" name="cnic" value="<?= sanitize($edit_cust['cnic'] ?? '') ?>" placeholder="XXXXX-XXXXXXX-X"></div>
+</div>
+<div class="form-row">
+<div class="form-group"><label>Address</label><textarea name="address" rows="2"><?= sanitize($edit_cust['address'] ?? '') ?></textarea></div>
+</div>
+<button type="submit" class="btn btn-primary">💾 Save</button>
+<button type="button" class="btn btn-default" onclick="document.getElementById('addCustFormArea').style.display='none'">Cancel</button>
+</form>
+</fieldset>
+</div>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Sr#</th><th>Name</th><th>Phone</th><th>CNIC</th><th>Address</th><th>Bikes Purchased</th><th>Total Amount</th><th class="no-print">Actions</th></tr></thead>
+<tbody>
+<?php $sr = 1;
+        while ($cu = $cust_result->fetch_assoc()): ?>
+<tr>
+<td><?= $sr++ ?></td>
+<td><strong><?= sanitize($cu['name']) ?></strong></td>
+<td><?= sanitize($cu['phone'] ?? '-') ?></td>
+<td style="font-family:Consolas,monospace"><?= sanitize($cu['cnic'] ?? '-') ?></td>
+<td><?= sanitize($cu['address'] ?? '-') ?></td>
+<td><?= $cu['bike_count'] ?></td>
+<td><?= fmt_money($cu['total_purchases'] ?? 0) ?></td>
+<td class="no-print">
+<div class="actions-col">
+<a href="index.php?page=customer_ledger&cust_id=<?= $cu['id'] ?>" class="btn btn-default btn-sm" title="Ledger">📒</a>
+<a href="index.php?page=customers&edit_id=<?= $cu['id'] ?>" class="btn btn-primary btn-sm">✏</a>
+<form method="POST" action="index.php?page=customers&action=delete" style="display:inline" onsubmit="return confirm('Delete customer?')">
+<input type="hidden" name="id" value="<?= $cu['id'] ?>">
+<button type="submit" class="btn btn-danger btn-sm">🗑</button>
+</form>
+</div>
+</td>
+</tr>
+<?php endwhile; ?>
+</tbody>
+</table>
+</div>
+
+<?php
+    elseif ($page === 'suppliers'):
+        $sup_result = $conn->query('SELECT s.*, COUNT(po.id) as order_count, SUM(po.cheque_amount) as total_paid FROM suppliers s LEFT JOIN purchase_orders po ON s.id=po.supplier_id GROUP BY s.id ORDER BY s.name');
+        $edit_sup_id = (int) ($_GET['edit_id'] ?? 0);
+        $edit_sup = null;
+        if ($edit_sup_id) {
+            $es = $conn->query("SELECT * FROM suppliers WHERE id=$edit_sup_id");
+            $edit_sup = $es ? $es->fetch_assoc() : null;
+        }
+?>
+<div style="display:flex;gap:8px;margin-bottom:10px" class="no-print">
+<button class="btn btn-success" onclick="document.getElementById('addSupFormArea').style.display='block'">+ Add Supplier</button>
+</div>
+<div id="addSupFormArea" style="display:<?= $edit_sup ? 'block' : 'none' ?>;margin-bottom:14px">
+<fieldset class="fieldset"><legend><?= $edit_sup ? '✏ Edit Supplier' : '+ Add New Supplier' ?></legend>
+<form method="POST" action="index.php?page=suppliers&action=<?= $edit_sup ? 'edit' : 'add' ?>">
+<?php if ($edit_sup): ?><input type="hidden" name="id" value="<?= $edit_sup['id'] ?>"><?php endif; ?>
+<div class="form-row">
+<div class="form-group"><label>Name <span class="req">*</span></label><input type="text" name="name" value="<?= sanitize($edit_sup['name'] ?? '') ?>" required></div>
+<div class="form-group"><label>Contact</label><input type="text" name="contact" value="<?= sanitize($edit_sup['contact'] ?? '') ?>"></div>
+</div>
+<div class="form-row">
+<div class="form-group"><label>Address</label><textarea name="address" rows="2"><?= sanitize($edit_sup['address'] ?? '') ?></textarea></div>
+</div>
+<button type="submit" class="btn btn-primary">💾 Save</button>
+<button type="button" class="btn btn-default" onclick="document.getElementById('addSupFormArea').style.display='none'">Cancel</button>
+</form>
+</fieldset>
+</div>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Sr#</th><th>Name</th><th>Contact</th><th>Address</th><th>Orders</th><th>Total Paid</th><th class="no-print">Actions</th></tr></thead>
+<tbody>
+<?php $sr = 1;
+        while ($sv = $sup_result->fetch_assoc()): ?>
+<tr>
+<td><?= $sr++ ?></td>
+<td><strong><?= sanitize($sv['name']) ?></strong></td>
+<td><?= sanitize($sv['contact'] ?? '-') ?></td>
+<td><?= sanitize($sv['address'] ?? '-') ?></td>
+<td><?= $sv['order_count'] ?></td>
+<td><?= fmt_money($sv['total_paid'] ?? 0) ?></td>
+<td class="no-print">
+<div class="actions-col">
+<a href="index.php?page=supplier_ledger&sup_id=<?= $sv['id'] ?>" class="btn btn-default btn-sm" title="Ledger">📒</a>
+<a href="index.php?page=suppliers&edit_id=<?= $sv['id'] ?>" class="btn btn-primary btn-sm">✏</a>
+<form method="POST" action="index.php?page=suppliers&action=delete" style="display:inline" onsubmit="return confirm('Delete supplier?')">
+<input type="hidden" name="id" value="<?= $sv['id'] ?>">
+<button type="submit" class="btn btn-danger btn-sm">🗑</button>
+</form>
+</div>
+</td>
+</tr>
+<?php endwhile; ?>
+</tbody>
+</table>
+</div>
+
+<?php
+    elseif ($page === 'settings'):
+        $s_company = get_setting('company_name') ?? 'BNI Enterprises';
+        $s_branch = get_setting('branch_name') ?? 'Dera (Ahmed Metro)';
+        $s_tax = get_setting('tax_rate') ?? '0.1';
+        $s_curr = get_setting('currency') ?? 'Rs.';
+        $s_taxon = get_setting('tax_on') ?? 'purchase_price';
+        $s_show_pp = get_setting('show_purchase_on_invoice') ?? '0';
+?>
+<form method="POST">
+<fieldset class="fieldset"><legend>⚙ Company Settings</legend>
+<div class="form-row">
+<div class="form-group"><label>Company Name</label><input type="text" name="company_name" value="<?= sanitize($s_company) ?>"></div>
+<div class="form-group"><label>Branch Name</label><input type="text" name="branch_name" value="<?= sanitize($s_branch) ?>"></div>
+</div>
+<div class="form-row">
+<div class="form-group"><label>Currency Symbol</label><input type="text" name="currency" value="<?= sanitize($s_curr) ?>" style="max-width:80px"></div>
+<div class="form-group"><label>Tax Rate (%)</label><input type="number" name="tax_rate" value="<?= $s_tax ?>" step="0.01" min="0" max="100" style="max-width:100px"></div>
+<div class="form-group"><label>Tax Calculated On</label>
+<select name="tax_on">
+<option value="purchase_price" <?= $s_taxon === 'purchase_price' ? 'selected' : '' ?>>Purchase Price</option>
+<option value="selling_price" <?= $s_taxon === 'selling_price' ? 'selected' : '' ?>>Selling Price</option>
+</select>
+</div>
+</div>
+<div class="form-row">
+<div class="form-group"><label>Show Purchase Price on Invoice</label>
+<select name="show_purchase_on_invoice">
+<option value="0" <?= $s_show_pp === '0' ? 'selected' : '' ?>>No (Hidden)</option>
+<option value="1" <?= $s_show_pp === '1' ? 'selected' : '' ?>>Yes (Visible)</option>
+</select>
+</div>
+</div>
+</fieldset>
+<fieldset class="fieldset"><legend>🔐 Change Admin Password</legend>
+<div class="form-row">
+<div class="form-group"><label>New Password (min 8 characters, leave blank to keep current)</label><input type="password" name="new_password" minlength="8" placeholder="Leave blank to keep existing password"></div>
+</div>
+<div style="font-size:0.78rem;color:var(--text2);margin-top:4px">⚠ Password must be at least 8 characters. Leave empty to keep the current password unchanged.</div>
+</fieldset>
+<fieldset class="fieldset"><legend>💾 Database Backup</legend>
+<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+<a href="index.php?page=settings&action=backup" class="btn btn-primary">⬇ Download SQL Backup</a>
+<span style="font-size:0.8rem;color:var(--text2)">Downloads a full SQL dump of the database.</span>
+</div>
+</fieldset>
+<fieldset class="fieldset"><legend>ℹ System Info</legend>
+<div style="font-size:0.82rem;color:var(--text2);display:grid;grid-template-columns:1fr 1fr;gap:8px">
+<div><strong>App Version:</strong> <?= $app_version ?></div>
+<div><strong>Author:</strong> <?= $author ?></div>
+<div><strong>PHP Version:</strong> <?= phpversion() ?></div>
+<div><strong>MySQL Version:</strong> <?= $conn->server_info ?></div>
+<div><strong>Database:</strong> <?= $db_name ?></div>
+<div><strong>Server Time:</strong> <?= date('d/m/Y H:i:s') ?></div>
+</div>
+</fieldset>
+<button type="submit" name="save_settings" class="btn btn-primary">💾 Save Settings</button>
+</form>
+
+<?php endif; ?>
+</div>
+</div>
+</div>
+<?php endif; ?>
+
+<?php if ($db_exists && isset($_SESSION['logged_in'])): ?>
+<script>
+function toggleSidebar() {
+    var s = document.getElementById('sidebar');
+    var o = document.getElementById('sidebarOverlay');
+    s.classList.toggle('open');
+    o.classList.toggle('open');
+}
+function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebarOverlay').classList.remove('open');
+}
+var toastWrap = document.getElementById('toastWrap');
+if (toastWrap) {
+    setTimeout(function() {
+        toastWrap.style.opacity = '0';
+        toastWrap.style.transition = 'opacity 0.5s';
+        setTimeout(function(){ toastWrap.remove(); }, 500);
+    }, 3500);
+}
+setInterval(function() {
+    if (window.location.href.indexOf('page=dashboard') !== -1) {
+        document.querySelectorAll('.card-value').forEach(function(el) {});
+    }
+}, 60000);
+</script>
+<?php endif; ?>
+
+<?php
+if (isset($conn) && $conn) {
+    if (isset($_GET['ajax']) && $_GET['ajax'] === 'check_chassis') {
+        $chassis = sanitize($_GET['chassis'] ?? '');
+        $r = $conn->query("SELECT id FROM bikes WHERE chassis_number='" . mysqli_real_escape_string($conn, $chassis) . "'");
+        echo ($r && $r->num_rows > 0) ? '1' : '0';
+        $conn->close();
+        exit;
+    }
+    $conn->close();
+}
+?>
 </body>
 </html>
-<?php
-    exit;
-}
-
-function renderDashboard()
-{
-    $stats = getDashboardStats();
-    $recentTx = getRecentTransactions();
-    $lowStock = getLowStockProducts();
-    $chartData = getSalesChartData();
-    $topProducts = getTopProducts();
-    $maxSale = max(array_column($chartData, 'amount') ?: [1]);
-    renderHeader('Dashboard');
-    ?>
-    <div class="page-title">
-        &#9632; Dashboard
-        <div class="page-title-actions">
-            <a href="?page=products&action=add" class="btn btn-primary btn-sm">+ Add Product</a>
-            <a href="?page=sales&action=add" class="btn btn-success btn-sm">+ New Invoice</a>
-            <a href="?page=purchases&action=add" class="btn btn-warning btn-sm">+ New PO</a>
-        </div>
-    </div>
-    <div class="stats-grid">
-        <div class="stat-card blue"><span class="stat-value"><?= h($stats['total_products']) ?></span><span class="stat-label">Total Products</span></div>
-        <div class="stat-card red"><span class="stat-value"><?= h($stats['low_stock']) ?></span><span class="stat-label">Low Stock Alerts</span></div>
-        <div class="stat-card green"><span class="stat-value"><?= formatCurrency($stats['today_sales']) ?></span><span class="stat-label">Today's Sales</span></div>
-        <div class="stat-card orange"><span class="stat-value"><?= formatCurrency($stats['today_purchases']) ?></span><span class="stat-label">Today's Purchases</span></div>
-        <div class="stat-card green"><span class="stat-value"><?= formatCurrency($stats['total_revenue']) ?></span><span class="stat-label">Total Revenue (Paid)</span></div>
-        <div class="stat-card blue"><span class="stat-value"><?= h($stats['total_customers']) ?></span><span class="stat-label">Total Customers</span></div>
-        <div class="stat-card blue"><span class="stat-value"><?= h($stats['total_suppliers']) ?></span><span class="stat-label">Total Suppliers</span></div>
-        <div class="stat-card orange"><span class="stat-value"><?= h($stats['pending_orders']) ?></span><span class="stat-label">Pending Orders</span></div>
-    </div>
-    <div class="two-col-layout">
-        <div class="card">
-            <div class="card-title">&#128202; Sales — Last 7 Days</div>
-            <div class="chart-bar-wrap">
-                <?php
-                foreach ($chartData as $day):
-                    $pct = $maxSale > 0 ? ($day['amount'] / $maxSale) * 100 : 0;
-                    ?>
-                <div class="chart-bar-col">
-                    <div style="flex:1;display:flex;align-items:flex-end;width:100%">
-                        <div class="chart-bar" style="height:<?= max(2, round($pct)) ?>%;width:100%" title="<?= $day['date'] ?>: <?= formatCurrency($day['amount']) ?>"></div>
-                    </div>
-                    <div class="chart-bar-label"><?= h($day['label']) ?></div>
-                    <div class="chart-bar-val"><?= formatCurrency($day['amount']) ?></div>
-                </div>
-                <?php endforeach; ?>
-            </div>
-        </div>
-        <div class="card">
-            <div class="card-title">&#127942; Top Selling Products</div>
-            <?php if (empty($topProducts)): ?>
-            <p style="font-size:12px;color:#888">No sales data yet.</p>
-            <?php else: ?>
-            <table class="data-table">
-                <thead><tr><th>Product</th><th>Qty</th><th>Revenue</th></tr></thead>
-                <tbody>
-                <?php foreach ($topProducts as $tp): ?>
-                <tr>
-                    <td data-label="Product"><?= h($tp['name']) ?></td>
-                    <td data-label="Qty"><?= h($tp['total_qty']) ?></td>
-                    <td data-label="Revenue"><?= formatCurrency($tp['total_revenue']) ?></td>
-                </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-            <?php endif; ?>
-        </div>
-    </div>
-    <div class="two-col-layout">
-        <div class="card">
-            <div class="card-title">&#128260; Recent Transactions</div>
-            <?php if (empty($recentTx)): ?><p style="font-size:12px;color:#888">No transactions yet.</p>
-            <?php else: ?>
-            <table class="data-table">
-                <thead><tr><th>Type</th><th>Ref</th><th>Party</th><th>Amount</th><th>Status</th></tr></thead>
-                <tbody>
-                <?php
-                foreach ($recentTx as $tx):
-                    $cls = $tx['type'] === 'Sale' ? 'badge-success' : 'badge-info';
-                    $pcls = $tx['payment_status'] === 'Paid' ? 'badge-success' : ($tx['payment_status'] === 'Partial' ? 'badge-warning' : 'badge-danger');
-                    ?>
-                <tr>
-                    <td data-label="Type"><span class="badge <?= $cls ?>"><?= h($tx['type']) ?></span></td>
-                    <td data-label="Ref" style="font-size:11px"><?= h($tx['ref_no']) ?></td>
-                    <td data-label="Party"><?= h($tx['party']) ?></td>
-                    <td data-label="Amount"><?= formatCurrency($tx['total_amount']) ?></td>
-                    <td data-label="Status"><span class="badge <?= $pcls ?>"><?= h($tx['payment_status']) ?></span></td>
-                </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-            <?php endif; ?>
-        </div>
-        <div class="card">
-            <div class="card-title">&#9888; Low Stock Alerts</div>
-            <?php if (empty($lowStock)): ?><p style="font-size:12px;color:var(--green-dark)">&#10003; All products are adequately stocked.</p>
-            <?php else: ?>
-            <table class="data-table">
-                <thead><tr><th>Product</th><th>Stock</th><th>Min</th></tr></thead>
-                <tbody>
-                <?php
-                foreach ($lowStock as $lp):
-                    $cls = $lp['current_stock'] <= 0 ? 'stock-critical' : ($lp['current_stock'] <= $lp['min_stock'] / 2 ? 'stock-critical' : 'stock-low');
-                    ?>
-                <tr>
-                    <td data-label="Product"><a href="?page=products&action=view&id=<?= h($lp['id']) ?>"><?= h($lp['name']) ?></a></td>
-                    <td data-label="Stock"><span class="<?= $cls ?>"><?= h($lp['current_stock']) ?></span></td>
-                    <td data-label="Min"><?= h($lp['min_stock']) ?></td>
-                </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-            <?php endif; ?>
-            <div style="margin-top:6px"><a href="?page=reports&report=low_stock" class="btn btn-warning btn-sm">View Full Report</a></div>
-        </div>
-    </div>
-    <div class="two-col-layout">
-        <div class="card">
-            <div class="card-title">&#128184; Financial Summary</div>
-            <table class="detail-table">
-                <tr><td>Inventory Value (Cost)</td><td><strong><?= formatCurrency($stats['inventory_value']) ?></strong></td></tr>
-                <tr><td>Total Revenue Collected</td><td><strong style="color:var(--green-dark)"><?= formatCurrency($stats['total_revenue']) ?></strong></td></tr>
-                <tr><td>Receivables (Unpaid)</td><td><strong style="color:var(--red-dark)"><?= formatCurrency($stats['unpaid_invoices']) ?></strong></td></tr>
-            </table>
-        </div>
-        <div class="card">
-            <div class="card-title">&#9889; Quick Actions</div>
-            <div style="display:flex;flex-wrap:wrap;gap:6px">
-                <a href="?page=products&action=add" class="btn btn-primary">+ Product</a>
-                <a href="?page=sales&action=add" class="btn btn-success">+ Invoice</a>
-                <a href="?page=purchases&action=add" class="btn btn-warning">+ Purchase</a>
-                <a href="?page=customers&action=add" class="btn">+ Customer</a>
-                <a href="?page=suppliers&action=add" class="btn">+ Supplier</a>
-                <a href="?page=adjustments&action=add" class="btn">+ Adjustment</a>
-                <a href="?page=reports&report=stock" class="btn btn-primary">Stock Report</a>
-                <a href="?page=reports&report=low_stock" class="btn btn-danger">Low Stock</a>
-            </div>
-        </div>
-    </div>
-    <?php
-    renderFooter();
-}
-
-function renderProductList($products, $categories, $search, $catFilter, $statusFilter, $total, $page, $perPage, $baseUrl)
-{
-    renderHeader('Products');
-    $csrf = generateCSRF();
-    ?>
-    <div class="page-title">
-        &#128230; Products
-        <div class="page-title-actions">
-            <?php if (hasRole(['Admin', 'Manager'])): ?>
-            <a href="?page=products&action=add" class="btn btn-primary btn-sm">+ Add Product</a>
-            <?php endif; ?>
-            <a href="?page=products&action=export_csv" class="btn btn-sm">&#8595; CSV</a>
-            <button onclick="printPage()" class="btn btn-sm">&#128424; Print</button>
-        </div>
-    </div>
-    <form method="GET" action="">
-        <input type="hidden" name="page" value="products">
-        <div class="filter-bar">
-            <div class="filter-group"><label>Search</label><input type="search" name="search" value="<?= h($search) ?>" placeholder="Name, SKU, Brand..."></div>
-            <div class="filter-group"><label>Category</label>
-                <select name="cat"><option value="">All Categories</option><?php foreach ($categories as $c): ?><option value="<?= h($c['id']) ?>" <?= $catFilter == $c['id'] ? 'selected' : '' ?>><?= h($c['name']) ?></option><?php endforeach; ?></select>
-            </div>
-            <div class="filter-group"><label>Status</label>
-                <select name="status"><option value="">All</option><option value="1" <?= $statusFilter === '1' ? 'selected' : '' ?>>Active</option><option value="0" <?= $statusFilter === '0' ? 'selected' : '' ?>>Inactive</option></select>
-            </div>
-            <div class="filter-group" style="justify-content:flex-end"><label>&nbsp;</label><button type="submit" class="btn btn-primary">Filter</button></div>
-            <div class="filter-group" style="justify-content:flex-end"><label>&nbsp;</label><a href="?page=products" class="btn">Clear</a></div>
-        </div>
-    </form>
-    <?php if (hasRole(['Admin', 'Manager'])): ?>
-    <form method="POST" action="?page=products&action=bulk" id="bulkForm">
-        <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= $csrf ?>">
-        <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
-            <select name="bulk_action" style="width:auto;min-width:140px">
-                <option value="">-- Bulk Action --</option>
-                <option value="activate">Activate</option>
-                <option value="deactivate">Deactivate</option>
-                <?php if (hasRole(['Admin'])): ?><option value="delete">Delete</option><?php endif; ?>
-            </select>
-            <button type="button" class="btn btn-sm" onclick="applyBulk()">Apply</button>
-            <span style="font-size:11px;color:#888"><?= h($total) ?> records found</span>
-        </div>
-    <?php endif; ?>
-    <div class="table-wrap">
-    <table class="data-table">
-        <thead>
-            <tr>
-                <?php if (hasRole(['Admin', 'Manager'])): ?><th><input type="checkbox" onclick="toggleSelectAll(this)" title="Select All"></th><?php endif; ?>
-                <th>SKU</th><th>Name</th><th>Category</th><th>Brand</th><th>Unit</th>
-                <th>Purchase</th><th>Selling</th><th>Stock</th><th>Min</th><th>Status</th><th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-        <?php if (empty($products)): ?>
-        <tr><td colspan="12" style="text-align:center;padding:20px;color:#888">No products found.</td></tr>
-        <?php
-    else:
-        foreach ($products as $p):
-            $stockClass = $p['current_stock'] <= 0 ? 'stock-critical' : ($p['current_stock'] <= $p['min_stock'] ? 'stock-low' : 'stock-good');
-            ?>
-        <tr>
-            <?php if (hasRole(['Admin', 'Manager'])): ?><td data-label="Sel"><input type="checkbox" name="selected_ids[]" value="<?= h($p['id']) ?>"></td><?php endif; ?>
-            <td data-label="SKU" style="font-size:11px;font-family:monospace"><?= h($p['sku']) ?></td>
-            <td data-label="Name"><a href="?page=products&action=view&id=<?= h($p['id']) ?>"><?= h($p['name']) ?></a></td>
-            <td data-label="Category"><?= h($p['category_name'] ?? '-') ?></td>
-            <td data-label="Brand"><?= h($p['brand'] ?? '-') ?></td>
-            <td data-label="Unit"><?= h($p['unit']) ?></td>
-            <td data-label="Purchase"><?= formatCurrency($p['purchase_price']) ?></td>
-            <td data-label="Selling"><?= formatCurrency($p['selling_price']) ?></td>
-            <td data-label="Stock"><span class="<?= $stockClass ?>"><?= h($p['current_stock']) ?></span></td>
-            <td data-label="Min"><?= h($p['min_stock']) ?></td>
-            <td data-label="Status"><span class="badge <?= $p['status'] ? 'badge-success' : 'badge-danger' ?>"><?= $p['status'] ? 'Active' : 'Inactive' ?></span></td>
-            <td data-label="Actions" style="white-space:nowrap">
-                <a href="?page=products&action=view&id=<?= h($p['id']) ?>" class="btn btn-xs">View</a>
-                <?php if (hasRole(['Admin', 'Manager'])): ?>
-                <a href="?page=products&action=edit&id=<?= h($p['id']) ?>" class="btn btn-xs btn-warning">Edit</a>
-                <form method="POST" action="?page=products&action=delete" style="display:inline" id="del_p_<?= h($p['id']) ?>">
-                    <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= $csrf ?>">
-                    <input type="hidden" name="id" value="<?= h($p['id']) ?>">
-                    <button type="button" class="btn btn-xs btn-danger" onclick="confirmDelete('del_p_<?= h($p['id']) ?>')">Del</button>
-                </form>
-                <?php endif; ?>
-            </td>
-        </tr>
-        <?php endforeach;
-    endif; ?>
-        </tbody>
-    </table>
-    </div>
-    <?php if (hasRole(['Admin', 'Manager'])): ?></form><?php endif; ?>
-    <?= paginate($total, $page, $perPage, $baseUrl) ?>
-    <script>
-    function applyBulk(){
-        var sel=document.querySelectorAll('input[name="selected_ids[]"]:checked');
-        if(sel.length===0){alert('Please select at least one item.');return;}
-        var act=document.querySelector('select[name="bulk_action"]').value;
-        if(!act){alert('Please choose a bulk action.');return;}
-        if(act==='delete'&&!confirm('Delete '+sel.length+' selected items? This cannot be undone.')){return;}
-        document.getElementById('bulkForm').submit();
-    }
-    </script>
-    <?php
-    renderFooter();
-}
-
-function renderProductForm($product, $categories)
-{
-    $title = $product ? 'Edit Product: ' . h($product['name']) : 'Add New Product';
-    $action = $product ? 'edit' : 'add';
-    renderHeader($title);
-    $csrf = generateCSRF();
-    $units = ['pcs', 'kg', 'ltr', 'box', 'dozen', 'meter', 'feet', 'gram', 'ml', 'ton'];
-    ?>
-    <div class="page-title">
-        <?= $product ? '&#9998; Edit Product' : '&#43; Add Product' ?>
-        <div class="page-title-actions"><a href="?page=products" class="btn btn-sm">&#8592; Back</a></div>
-    </div>
-    <form method="POST" action="?page=products&action=<?= $action ?>">
-        <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= $csrf ?>">
-        <?php if ($product): ?><input type="hidden" name="id" value="<?= h($product['id']) ?>"> <?php endif; ?>
-        <fieldset class="form-section"><legend>Basic Information</legend>
-            <div class="form-row-3">
-                <div class="form-group"><label>Product Name *</label><input type="text" name="name" value="<?= h($product['name'] ?? '') ?>" required minlength="2"></div>
-                <div class="form-group"><label>Category</label>
-                    <select name="category_id">
-                        <option value="">-- Select Category --</option>
-                        <?php foreach ($categories as $c): ?><option value="<?= h($c['id']) ?>" <?= ($product['category_id'] ?? '') == $c['id'] ? 'selected' : '' ?>><?= h($c['name']) ?></option><?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="form-group"><label>Brand</label><input type="text" name="brand" value="<?= h($product['brand'] ?? '') ?>"></div>
-            </div>
-            <div class="form-group"><label>Description</label><textarea name="description" rows="2" style="resize:vertical"><?= h($product['description'] ?? '') ?></textarea></div>
-        </fieldset>
-        <fieldset class="form-section"><legend>Pricing & Unit</legend>
-            <div class="form-row-3">
-                <div class="form-group"><label>Unit</label>
-                    <select name="unit">
-                        <?php foreach ($units as $u): ?><option value="<?= h($u) ?>" <?= ($product['unit'] ?? 'pcs') === $u ? 'selected' : '' ?>><?= h($u) ?></option><?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="form-group"><label>Purchase Price *</label><input type="number" name="purchase_price" value="<?= h($product['purchase_price'] ?? 0) ?>" step="0.01" min="0" required></div>
-                <div class="form-group"><label>Selling Price *</label><input type="number" name="selling_price" value="<?= h($product['selling_price'] ?? 0) ?>" step="0.01" min="0" required></div>
-            </div>
-        </fieldset>
-        <fieldset class="form-section"><legend>Stock Levels</legend>
-            <div class="form-row-3">
-                <div class="form-group"><label>Min Stock Level</label><input type="number" name="min_stock" value="<?= h($product['min_stock'] ?? 0) ?>" step="0.01" min="0"></div>
-                <div class="form-group"><label>Max Stock Level</label><input type="number" name="max_stock" value="<?= h($product['max_stock'] ?? 0) ?>" step="0.01" min="0"></div>
-                <div class="form-group"><label>Location / Warehouse</label><input type="text" name="location" value="<?= h($product['location'] ?? '') ?>"></div>
-            </div>
-        </fieldset>
-        <fieldset class="form-section"><legend>Additional</legend>
-            <div class="form-row">
-                <div class="form-group"><label>Barcode</label><input type="text" name="barcode" value="<?= h($product['barcode'] ?? '') ?>"></div>
-                <div class="form-group"><label>Image URL</label><input type="text" name="image_url" value="<?= h($product['image_url'] ?? '') ?>"></div>
-            </div>
-            <div class="form-group"><label>Status</label>
-                <select name="status">
-                    <option value="1" <?= ($product['status'] ?? 1) == 1 ? 'selected' : '' ?>>Active</option>
-                    <option value="0" <?= ($product['status'] ?? 1) == 0 ? 'selected' : '' ?>>Inactive</option>
-                </select>
-            </div>
-        </fieldset>
-        <div style="display:flex;gap:8px;margin-top:10px">
-            <button type="submit" class="btn btn-primary">&#10003; Save Product</button>
-            <a href="?page=products" class="btn">Cancel</a>
-        </div>
-    </form>
-    <?php
-    renderFooter();
-}
-
-function renderProductDetail($product)
-{
-    renderHeader('Product: ' . $product['name']);
-    $pdo = getDB();
-    $adjHistory = $pdo->prepare('SELECT sa.*,u.full_name as created_by_name FROM stock_adjustments sa JOIN users u ON sa.created_by=u.id WHERE sa.product_id=? ORDER BY sa.created_at DESC LIMIT 20');
-    $adjHistory->execute([$product['id']]);
-    $adjHistory = $adjHistory->fetchAll();
-    $salesHistory = $pdo->prepare('SELECT ii.*,i.invoice_number,i.invoice_date,c.name as customer_name FROM invoice_items ii JOIN invoices i ON ii.invoice_id=i.id JOIN customers c ON i.customer_id=c.id WHERE ii.product_id=? ORDER BY i.invoice_date DESC LIMIT 10');
-    $salesHistory->execute([$product['id']]);
-    $salesHistory = $salesHistory->fetchAll();
-    $stockClass = $product['current_stock'] <= 0 ? 'stock-critical' : ($product['current_stock'] <= $product['min_stock'] ? 'stock-low' : 'stock-good');
-    ?>
-    <div class="page-title">
-        &#128230; <?= h($product['name']) ?>
-        <div class="page-title-actions">
-            <?php if (hasRole(['Admin', 'Manager'])): ?>
-            <a href="?page=products&action=edit&id=<?= h($product['id']) ?>" class="btn btn-warning btn-sm">Edit</a>
-            <a href="?page=adjustments&action=add" class="btn btn-sm">Adjust Stock</a>
-            <?php endif; ?>
-            <a href="?page=products" class="btn btn-sm">&#8592; Back</a>
-        </div>
-    </div>
-    <div class="two-col-layout">
-        <div class="card">
-            <div class="card-title">Product Details</div>
-            <table class="detail-table">
-                <tr><td>SKU</td><td><strong style="font-family:monospace"><?= h($product['sku']) ?></strong></td></tr>
-                <tr><td>Name</td><td><?= h($product['name']) ?></td></tr>
-                <tr><td>Category</td><td><?= h($product['category_name'] ?? '-') ?></td></tr>
-                <tr><td>Brand</td><td><?= h($product['brand'] ?? '-') ?></td></tr>
-                <tr><td>Unit</td><td><?= h($product['unit']) ?></td></tr>
-                <tr><td>Purchase Price</td><td><?= formatCurrency($product['purchase_price']) ?></td></tr>
-                <tr><td>Selling Price</td><td><?= formatCurrency($product['selling_price']) ?></td></tr>
-                <tr><td>Current Stock</td><td><span class="<?= $stockClass ?>"><?= h($product['current_stock']) ?> <?= h($product['unit']) ?></span></td></tr>
-                <tr><td>Min Stock</td><td><?= h($product['min_stock']) ?></td></tr>
-                <tr><td>Max Stock</td><td><?= h($product['max_stock']) ?></td></tr>
-                <tr><td>Location</td><td><?= h($product['location'] ?? '-') ?></td></tr>
-                <tr><td>Barcode</td><td style="font-family:monospace"><?= h($product['barcode'] ?? '-') ?></td></tr>
-                <tr><td>Status</td><td><span class="badge <?= $product['status'] ? 'badge-success' : 'badge-danger' ?>"><?= $product['status'] ? 'Active' : 'Inactive' ?></span></td></tr>
-                <tr><td>Stock Value</td><td><strong><?= formatCurrency($product['current_stock'] * $product['purchase_price']) ?></strong></td></tr>
-                <tr><td>Last Updated</td><td><?= formatDate($product['updated_at']) ?></td></tr>
-            </table>
-        </div>
-        <div>
-            <?php if ($product['barcode']): ?>
-            <div class="card">
-                <div class="card-title">Barcode</div>
-                <div style="text-align:center;padding:10px">
-                    <?php
-                    $bc = $product['barcode'];
-                    $bars = '';
-                    $pattern = [
-                        '0' => '3211', '1' => '2221', '2' => '2122', '3' => '1411', '4' => '1132',
-                        '5' => '1231', '6' => '1114', '7' => '1312', '8' => '1213', '9' => '3112'
-                    ];
-                    $x = 10;
-                    $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="60" style="background:#fff;border:1px solid #ccc">';
-                    foreach (str_split($bc) as $digit) {
-                        if (!isset($pattern[$digit]))
-                            continue;
-                        foreach (str_split($pattern[$digit]) as $i => $w) {
-                            $w = (int) $w * 2;
-                            if ($i % 2 === 0)
-                                $svg .= '<rect x="' . $x . '" y="4" width="' . $w . '" height="40" fill="#000"/>';
-                            $x += $w;
-                        }
-                    }
-                    $svg .= '<text x="100" y="57" text-anchor="middle" font-family="monospace" font-size="10">' . h($bc) . '</text></svg>';
-                    echo $svg;
-                    ?>
-                    <br><button onclick="printPage()" class="btn btn-sm" style="margin-top:6px">Print Label</button>
-                </div>
-            </div>
-            <?php endif; ?>
-            <div class="card">
-                <div class="card-title">Stock Progress</div>
-                <?php $pct = ($product['max_stock'] > 0) ? min(100, ($product['current_stock'] / $product['max_stock']) * 100) : 0; ?>
-                <div style="margin-bottom:4px;font-size:12px">
-                    Stock: <strong><?= h($product['current_stock']) ?></strong> / Max: <strong><?= h($product['max_stock']) ?></strong>
-                </div>
-                <div class="progress-bar-wrap">
-                    <div class="progress-bar-fill" style="width:<?= round($pct) ?>%;background:<?= $pct < 20 ? 'var(--red)' : ($pct < 50 ? 'var(--orange)' : 'var(--green)') ?>"></div>
-                </div>
-                <div style="font-size:11px;color:#888;margin-top:3px"><?= round($pct, 1) ?>% of max stock</div>
-            </div>
-        </div>
-    </div>
-    <div class="two-col-layout">
-        <div class="card">
-            <div class="card-title">Recent Sales</div>
-            <?php if (empty($salesHistory)): ?><p style="font-size:12px;color:#888">No sales recorded.</p>
-            <?php else: ?>
-            <table class="data-table">
-                <thead><tr><th>Invoice</th><th>Date</th><th>Customer</th><th>Qty</th><th>Price</th></tr></thead>
-                <tbody>
-                <?php foreach ($salesHistory as $s): ?>
-                <tr>
-                    <td data-label="Invoice"><a href="?page=sales&action=view&id=<?= h($s['invoice_id']) ?>"><?= h($s['invoice_number']) ?></a></td>
-                    <td data-label="Date"><?= formatDate($s['invoice_date']) ?></td>
-                    <td data-label="Customer"><?= h($s['customer_name']) ?></td>
-                    <td data-label="Qty"><?= h($s['quantity']) ?></td>
-                    <td data-label="Price"><?= formatCurrency($s['total_price']) ?></td>
-                </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-            <?php endif; ?>
-        </div>
-        <div class="card">
-            <div class="card-title">Stock Adjustment History</div>
-            <?php if (empty($adjHistory)): ?><p style="font-size:12px;color:#888">No adjustments recorded.</p>
-            <?php else: ?>
-            <table class="data-table">
-                <thead><tr><th>Ref</th><th>Type</th><th>Qty</th><th>New Stock</th><th>Status</th><th>Date</th></tr></thead>
-                <tbody>
-                <?php
-                foreach ($adjHistory as $a):
-                    $negTypes = ['Subtraction', 'Damage', 'Expired'];
-                    $color = in_array($a['adjustment_type'], $negTypes) ? 'var(--red-dark)' : 'var(--green-dark)';
-                    ?>
-                <tr>
-                    <td data-label="Ref" style="font-size:11px"><?= h($a['reference_no']) ?></td>
-                    <td data-label="Type"><?= h($a['adjustment_type']) ?></td>
-                    <td data-label="Qty" style="color:<?= $color ?>;font-weight:700"><?= in_array($a['adjustment_type'], $negTypes) ? '-' : '+' ?><?= h($a['quantity']) ?></td>
-                    <td data-label="New Stock"><?= h($a['new_stock']) ?></td>
-                    <td data-label="Status"><span class="badge <?= $a['status'] === 'Approved' ? 'badge-success' : ($a['status'] === 'Pending' ? 'badge-warning' : 'badge-danger') ?>"><?= h($a['status']) ?></span></td>
-                    <td data-label="Date"><?= formatDate($a['created_at']) ?></td>
-                </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-            <?php endif; ?>
-        </div>
-    </div>
-    <?php
-    renderFooter();
-}
-
-function renderCategories($cats, $parentCats)
-{
-    renderHeader('Categories');
-    $csrf = generateCSRF();
-    ?>
-    <div class="page-title">
-        &#128193; Categories
-        <div class="page-title-actions">
-            <?php if (hasRole(['Admin', 'Manager'])): ?>
-            <button onclick="openModal('addCatModal')" class="btn btn-primary btn-sm">+ Add Category</button>
-            <?php endif; ?>
-        </div>
-    </div>
-    <div class="table-wrap">
-    <table class="data-table">
-        <thead><tr><th>ID</th><th>Name</th><th>Parent</th><th>Description</th><th>Products</th><th>Status</th><th>Actions</th></tr></thead>
-        <tbody>
-        <?php if (empty($cats)): ?>
-        <tr><td colspan="7" style="text-align:center;padding:20px;color:#888">No categories found.</td></tr>
-        <?php else:
-        foreach ($cats as $c): ?>
-        <tr>
-            <td data-label="ID"><?= h($c['id']) ?></td>
-            <td data-label="Name"><strong><?= h($c['name']) ?></strong></td>
-            <td data-label="Parent"><?= h($c['parent_name'] ?? '-') ?></td>
-            <td data-label="Description" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><?= h($c['description'] ?? '-') ?></td>
-            <td data-label="Products"><span class="badge badge-info"><?= h($c['product_count']) ?></span></td>
-            <td data-label="Status"><span class="badge <?= $c['status'] ? 'badge-success' : 'badge-danger' ?>"><?= $c['status'] ? 'Active' : 'Inactive' ?></span></td>
-            <td data-label="Actions" style="white-space:nowrap">
-                <?php if (hasRole(['Admin', 'Manager'])): ?>
-                <button onclick="editCategory(<?= h(json_encode($c)) ?>)" class="btn btn-xs btn-warning">Edit</button>
-                <form method="POST" action="?page=categories&action=toggle" style="display:inline" id="tog_c_<?= h($c['id']) ?>">
-                    <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= $csrf ?>">
-                    <input type="hidden" name="id" value="<?= h($c['id']) ?>">
-                    <button type="submit" class="btn btn-xs"><?= $c['status'] ? 'Disable' : 'Enable' ?></button>
-                </form>
-                <?php if (hasRole(['Admin'])): ?>
-                <form method="POST" action="?page=categories&action=delete" style="display:inline" id="del_c_<?= h($c['id']) ?>">
-                    <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= $csrf ?>">
-                    <input type="hidden" name="id" value="<?= h($c['id']) ?>">
-                    <button type="button" class="btn btn-xs btn-danger" onclick="confirmDelete('del_c_<?= h($c['id']) ?>')">Del</button>
-                </form>
-                <?php endif; ?>
-                <?php endif; ?>
-            </td>
-        </tr>
-        <?php endforeach;
-    endif; ?>
-        </tbody>
-    </table>
-    </div>
-    <?php if (hasRole(['Admin', 'Manager'])): ?>
-    <div id="addCatModal" class="modal-overlay">
-        <div class="modal">
-            <div class="modal-title-bar">Add Category <button class="modal-close" onclick="closeModal('addCatModal')">&#10005;</button></div>
-            <form method="POST" action="?page=categories&action=add">
-                <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= $csrf ?>">
-                <div class="modal-body">
-                    <div class="form-group"><label>Category Name *</label><input type="text" name="name" required minlength="2"></div>
-                    <div class="form-group"><label>Parent Category</label>
-                        <select name="parent_id"><option value="">-- None (Top Level) --</option>
-                            <?php foreach ($parentCats as $pc): ?><option value="<?= h($pc['id']) ?>"><?= h($pc['name']) ?></option><?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="form-group"><label>Description</label><textarea name="description" rows="2"></textarea></div>
-                    <div class="form-group"><label>Status</label><select name="status"><option value="1">Active</option><option value="0">Inactive</option></select></div>
-                </div>
-                <div class="modal-footer"><button type="submit" class="btn btn-primary">Save</button><button type="button" class="btn" onclick="closeModal('addCatModal')">Cancel</button></div>
-            </form>
-        </div>
-    </div>
-    <div id="editCatModal" class="modal-overlay">
-        <div class="modal">
-            <div class="modal-title-bar">Edit Category <button class="modal-close" onclick="closeModal('editCatModal')">&#10005;</button></div>
-            <form method="POST" action="?page=categories&action=edit" id="editCatForm">
-                <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= $csrf ?>">
-                <input type="hidden" name="id" id="editCatId">
-                <div class="modal-body">
-                    <div class="form-group"><label>Category Name *</label><input type="text" name="name" id="editCatName" required minlength="2"></div>
-                    <div class="form-group"><label>Parent Category</label>
-                        <select name="parent_id" id="editCatParent"><option value="">-- None --</option>
-                            <?php foreach ($parentCats as $pc): ?><option value="<?= h($pc['id']) ?>"><?= h($pc['name']) ?></option><?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="form-group"><label>Description</label><textarea name="description" id="editCatDesc" rows="2"></textarea></div>
-                    <div class="form-group"><label>Status</label><select name="status" id="editCatStatus"><option value="1">Active</option><option value="0">Inactive</option></select></div>
-                </div>
-                <div class="modal-footer"><button type="submit" class="btn btn-primary">Update</button><button type="button" class="btn" onclick="closeModal('editCatModal')">Cancel</button></div>
-            </form>
-        </div>
-    </div>
-    <script>
-    function editCategory(c){
-        document.getElementById('editCatId').value=c.id;
-        document.getElementById('editCatName').value=c.name;
-        document.getElementById('editCatParent').value=c.parent_id||'';
-        document.getElementById('editCatDesc').value=c.description||'';
-        document.getElementById('editCatStatus').value=c.status;
-        openModal('editCatModal');
-    }
-    </script>
-    <?php endif; ?>
-    <?php
-    renderFooter();
-}
-
-function renderSuppliers($suppliers, $search, $total, $page, $perPage)
-{
-    renderHeader('Suppliers');
-    $csrf = generateCSRF();
-    ?>
-    <div class="page-title">
-        &#128663; Suppliers
-        <div class="page-title-actions">
-            <?php if (hasRole(['Admin', 'Manager'])): ?>
-            <button onclick="openModal('addSupModal')" class="btn btn-primary btn-sm">+ Add Supplier</button>
-            <?php endif; ?>
-        </div>
-    </div>
-    <form method="GET" action="">
-        <input type="hidden" name="page" value="suppliers">
-        <div class="filter-bar">
-            <div class="filter-group"><label>Search</label><input type="search" name="search" value="<?= h($search) ?>" placeholder="Company, Contact, Email..."></div>
-            <div class="filter-group" style="justify-content:flex-end"><label>&nbsp;</label><button type="submit" class="btn btn-primary">Search</button></div>
-            <div class="filter-group" style="justify-content:flex-end"><label>&nbsp;</label><a href="?page=suppliers" class="btn">Clear</a></div>
-        </div>
-    </form>
-    <div class="table-wrap">
-    <table class="data-table">
-        <thead><tr><th>Company</th><th>Contact</th><th>Email</th><th>Phone</th><th>City</th><th>Terms</th><th>Balance</th><th>Status</th><th>Actions</th></tr></thead>
-        <tbody>
-        <?php if (empty($suppliers)): ?>
-        <tr><td colspan="9" style="text-align:center;padding:20px;color:#888">No suppliers found.</td></tr>
-        <?php else:
-        foreach ($suppliers as $s): ?>
-        <tr>
-            <td data-label="Company"><a href="?page=suppliers&action=view&id=<?= h($s['id']) ?>"><?= h($s['company_name']) ?></a></td>
-            <td data-label="Contact"><?= h($s['contact_person'] ?? '-') ?></td>
-            <td data-label="Email"><?= h($s['email'] ?? '-') ?></td>
-            <td data-label="Phone"><?= h($s['phone'] ?? '-') ?></td>
-            <td data-label="City"><?= h($s['city'] ?? '-') ?></td>
-            <td data-label="Terms"><?= h($s['payment_terms'] ?? '-') ?></td>
-            <td data-label="Balance"><span style="color:<?= $s['balance'] > 0 ? 'var(--red-dark)' : 'var(--green-dark)' ?>"><?= formatCurrency($s['balance']) ?></span></td>
-            <td data-label="Status"><span class="badge <?= $s['status'] ? 'badge-success' : 'badge-danger' ?>"><?= $s['status'] ? 'Active' : 'Inactive' ?></span></td>
-            <td data-label="Actions" style="white-space:nowrap">
-                <a href="?page=suppliers&action=view&id=<?= h($s['id']) ?>" class="btn btn-xs">View</a>
-                <?php if (hasRole(['Admin', 'Manager'])): ?>
-                <button onclick="editSupplier(<?= h(json_encode($s)) ?>)" class="btn btn-xs btn-warning">Edit</button>
-                <form method="POST" action="?page=suppliers&action=delete" style="display:inline" id="del_s_<?= h($s['id']) ?>">
-                    <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= $csrf ?>">
-                    <input type="hidden" name="id" value="<?= h($s['id']) ?>">
-                    <button type="button" class="btn btn-xs btn-danger" onclick="confirmDelete('del_s_<?= h($s['id']) ?>')">Del</button>
-                </form>
-                <?php endif; ?>
-            </td>
-        </tr>
-        <?php endforeach;
-    endif; ?>
-        </tbody>
-    </table>
-    </div>
-    <?= paginate($total, $page, $perPage, '?page=suppliers&search=' . urlencode($search)) ?>
-    <?php if (hasRole(['Admin', 'Manager'])):
-        $terms = ['Net 7', 'Net 14', 'Net 30', 'Net 45', 'Net 60', 'COD', 'Prepaid']; ?>
-    <?php foreach (['add' => null, 'edit' => 'edit'] as $modalType => $prefix): ?>
-    <div id="<?= $modalType ?>SupModal" class="modal-overlay">
-        <div class="modal" style="max-width:700px">
-            <div class="modal-title-bar"><?= ucfirst($modalType) ?> Supplier <button class="modal-close" onclick="closeModal('<?= $modalType ?>SupModal')">&#10005;</button></div>
-            <form method="POST" action="?page=suppliers&action=<?= $modalType ?>">
-                <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= $csrf ?>">
-                <?php if ($modalType === 'edit'): ?><input type="hidden" name="id" id="editSupId"><?php endif; ?>
-                <div class="modal-body">
-                    <div class="form-row">
-                        <div class="form-group"><label>Company Name *</label><input type="text" name="company_name" id="<?= $modalType ?>SupCompany" required></div>
-                        <div class="form-group"><label>Contact Person</label><input type="text" name="contact_person" id="<?= $modalType ?>SupContact"></div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group"><label>Email</label><input type="email" name="email" id="<?= $modalType ?>SupEmail"></div>
-                        <div class="form-group"><label>Phone</label><input type="text" name="phone" id="<?= $modalType ?>SupPhone"></div>
-                    </div>
-                    <div class="form-group"><label>Address</label><textarea name="address" id="<?= $modalType ?>SupAddress" rows="2"></textarea></div>
-                    <div class="form-row-3">
-                        <div class="form-group"><label>City</label><input type="text" name="city" id="<?= $modalType ?>SupCity"></div>
-                        <div class="form-group"><label>Country</label><input type="text" name="country" id="<?= $modalType ?>SupCountry"></div>
-                        <div class="form-group"><label>Tax ID</label><input type="text" name="tax_id" id="<?= $modalType ?>SupTaxId"></div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group"><label>Payment Terms</label>
-                            <select name="payment_terms" id="<?= $modalType ?>SupTerms">
-                                <?php foreach ($terms as $t): ?><option value="<?= h($t) ?>"><?= h($t) ?></option><?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="form-group"><label>Status</label><select name="status" id="<?= $modalType ?>SupStatus"><option value="1">Active</option><option value="0">Inactive</option></select></div>
-                    </div>
-                    <div class="form-group"><label>Notes</label><textarea name="notes" id="<?= $modalType ?>SupNotes" rows="2"></textarea></div>
-                </div>
-                <div class="modal-footer"><button type="submit" class="btn btn-primary">Save</button><button type="button" class="btn" onclick="closeModal('<?= $modalType ?>SupModal')">Cancel</button></div>
-            </form>
-        </div>
-    </div>
-    <?php endforeach; ?>
-    <script>
-    function editSupplier(s){
-        document.getElementById('editSupId').value=s.id;
-        document.getElementById('editSupCompany').value=s.company_name||'';
-        document.getElementById('editSupContact').value=s.contact_person||'';
-        document.getElementById('editSupEmail').value=s.email||'';
-        document.getElementById('editSupPhone').value=s.phone||'';
-        document.getElementById('editSupAddress').value=s.address||'';
-        document.getElementById('editSupCity').value=s.city||'';
-        document.getElementById('editSupCountry').value=s.country||'';
-        document.getElementById('editSupTaxId').value=s.tax_id||'';
-        document.getElementById('editSupTerms').value=s.payment_terms||'';
-        document.getElementById('editSupStatus').value=s.status;
-        document.getElementById('editSupNotes').value=s.notes||'';
-        openModal('editSupModal');
-    }
-    </script>
-    <?php endif; ?>
-    <?php
-    renderFooter();
-}
-
-function renderSupplierDetail($sup, $pos)
-{
-    renderHeader('Supplier: ' . ($sup['company_name'] ?? ''));
-    ?>
-    <div class="page-title">&#128663; <?= h($sup['company_name']) ?> <div class="page-title-actions"><a href="?page=suppliers" class="btn btn-sm">&#8592; Back</a></div></div>
-    <div class="two-col-layout">
-        <div class="card">
-            <div class="card-title">Supplier Details</div>
-            <table class="detail-table">
-                <tr><td>Company</td><td><?= h($sup['company_name']) ?></td></tr>
-                <tr><td>Contact</td><td><?= h($sup['contact_person'] ?? '-') ?></td></tr>
-                <tr><td>Email</td><td><?= h($sup['email'] ?? '-') ?></td></tr>
-                <tr><td>Phone</td><td><?= h($sup['phone'] ?? '-') ?></td></tr>
-                <tr><td>Address</td><td><?= h($sup['address'] ?? '-') ?></td></tr>
-                <tr><td>City / Country</td><td><?= h($sup['city'] ?? '') ?>, <?= h($sup['country'] ?? '') ?></td></tr>
-                <tr><td>Tax ID</td><td><?= h($sup['tax_id'] ?? '-') ?></td></tr>
-                <tr><td>Payment Terms</td><td><?= h($sup['payment_terms'] ?? '-') ?></td></tr>
-                <tr><td>Outstanding Balance</td><td><strong style="color:var(--red-dark)"><?= formatCurrency($sup['balance']) ?></strong></td></tr>
-                <tr><td>Status</td><td><span class="badge <?= $sup['status'] ? 'badge-success' : 'badge-danger' ?>"><?= $sup['status'] ? 'Active' : 'Inactive' ?></span></td></tr>
-                <tr><td>Notes</td><td><?= h($sup['notes'] ?? '-') ?></td></tr>
-            </table>
-        </div>
-        <div class="card">
-            <div class="card-title">Recent Purchase Orders</div>
-            <?php if (empty($pos)): ?><p style="font-size:12px;color:#888">No purchase orders.</p><?php else: ?>
-            <table class="data-table">
-                <thead><tr><th>PO#</th><th>Date</th><th>Total</th><th>Status</th></tr></thead>
-                <tbody>
-                <?php foreach ($pos as $po): ?>
-                <tr>
-                    <td data-label="PO#"><a href="?page=purchases&action=view&id=<?= h($po['id']) ?>"><?= h($po['po_number']) ?></a></td>
-                    <td data-label="Date"><?= formatDate($po['po_date']) ?></td>
-                    <td data-label="Total"><?= formatCurrency($po['total_amount']) ?></td>
-                    <td data-label="Status"><span class="badge <?= $po['order_status'] === 'Received' ? 'badge-success' : ($po['order_status'] === 'Pending' ? 'badge-warning' : 'badge-info') ?>"><?= h($po['order_status']) ?></span></td>
-                </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-            <?php endif; ?>
-        </div>
-    </div>
-    <?php
-    renderFooter();
-}
-
-function renderCustomers($customers, $search, $total, $page, $perPage)
-{
-    renderHeader('Customers');
-    $csrf = generateCSRF();
-    ?>
-    <div class="page-title">&#128101; Customers
-        <div class="page-title-actions">
-            <?php if (hasRole(['Admin', 'Manager'])): ?>
-            <button onclick="openModal('addCustModal')" class="btn btn-primary btn-sm">+ Add Customer</button>
-            <?php endif; ?>
-        </div>
-    </div>
-    <form method="GET" action=""><input type="hidden" name="page" value="customers">
-        <div class="filter-bar">
-            <div class="filter-group"><label>Search</label><input type="search" name="search" value="<?= h($search) ?>" placeholder="Name, Email, Phone..."></div>
-            <div class="filter-group" style="justify-content:flex-end"><label>&nbsp;</label><button type="submit" class="btn btn-primary">Search</button></div>
-            <div class="filter-group" style="justify-content:flex-end"><label>&nbsp;</label><a href="?page=customers" class="btn">Clear</a></div>
-        </div>
-    </form>
-    <div class="table-wrap">
-    <table class="data-table">
-        <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Type</th><th>City</th><th>Credit Limit</th><th>Balance</th><th>Status</th><th>Actions</th></tr></thead>
-        <tbody>
-        <?php if (empty($customers)): ?>
-        <tr><td colspan="9" style="text-align:center;padding:20px;color:#888">No customers found.</td></tr>
-        <?php else:
-        foreach ($customers as $c): ?>
-        <tr>
-            <td data-label="Name"><a href="?page=customers&action=view&id=<?= h($c['id']) ?>"><?= h($c['name']) ?></a></td>
-            <td data-label="Email"><?= h($c['email'] ?? '-') ?></td>
-            <td data-label="Phone"><?= h($c['phone'] ?? '-') ?></td>
-            <td data-label="Type"><span class="badge badge-info"><?= h($c['customer_type']) ?></span></td>
-            <td data-label="City"><?= h($c['city'] ?? '-') ?></td>
-            <td data-label="Credit"><?= formatCurrency($c['credit_limit']) ?></td>
-            <td data-label="Balance"><span style="color:<?= $c['current_balance'] > 0 ? 'var(--red-dark)' : 'var(--green-dark)' ?>"><?= formatCurrency($c['current_balance']) ?></span></td>
-            <td data-label="Status"><span class="badge <?= $c['status'] ? 'badge-success' : 'badge-danger' ?>"><?= $c['status'] ? 'Active' : 'Inactive' ?></span></td>
-            <td data-label="Actions" style="white-space:nowrap">
-                <a href="?page=customers&action=view&id=<?= h($c['id']) ?>" class="btn btn-xs">View</a>
-                <?php if (hasRole(['Admin', 'Manager'])): ?>
-                <button onclick="editCustomer(<?= h(json_encode($c)) ?>)" class="btn btn-xs btn-warning">Edit</button>
-                <form method="POST" action="?page=customers&action=delete" style="display:inline" id="del_cu_<?= h($c['id']) ?>">
-                    <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= $csrf ?>">
-                    <input type="hidden" name="id" value="<?= h($c['id']) ?>">
-                    <button type="button" class="btn btn-xs btn-danger" onclick="confirmDelete('del_cu_<?= h($c['id']) ?>')">Del</button>
-                </form>
-                <?php endif; ?>
-            </td>
-        </tr>
-        <?php endforeach;
-    endif; ?>
-        </tbody>
-    </table>
-    </div>
-    <?= paginate($total, $page, $perPage, '?page=customers&search=' . urlencode($search)) ?>
-    <?php if (hasRole(['Admin', 'Manager'])):
-        foreach (['add', 'edit'] as $mt): ?>
-    <div id="<?= $mt ?>CustModal" class="modal-overlay">
-        <div class="modal" style="max-width:650px">
-            <div class="modal-title-bar"><?= ucfirst($mt) ?> Customer <button class="modal-close" onclick="closeModal('<?= $mt ?>CustModal')">&#10005;</button></div>
-            <form method="POST" action="?page=customers&action=<?= $mt ?>">
-                <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= $csrf ?>">
-                <?php if ($mt === 'edit'): ?><input type="hidden" name="id" id="editCustId"><?php endif; ?>
-                <div class="modal-body">
-                    <div class="form-row">
-                        <div class="form-group"><label>Full Name *</label><input type="text" name="name" id="<?= $mt ?>CustName" required></div>
-                        <div class="form-group"><label>Customer Type</label>
-                            <select name="customer_type" id="<?= $mt ?>CustType">
-                                <?php foreach (['Walk-in', 'Regular', 'Wholesale'] as $ct): ?><option value="<?= h($ct) ?>"><?= h($ct) ?></option><?php endforeach; ?>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group"><label>Email</label><input type="email" name="email" id="<?= $mt ?>CustEmail"></div>
-                        <div class="form-group"><label>Phone</label><input type="text" name="phone" id="<?= $mt ?>CustPhone"></div>
-                    </div>
-                    <div class="form-group"><label>Address</label><textarea name="address" id="<?= $mt ?>CustAddress" rows="2"></textarea></div>
-                    <div class="form-row-3">
-                        <div class="form-group"><label>City</label><input type="text" name="city" id="<?= $mt ?>CustCity"></div>
-                        <div class="form-group"><label>Country</label><input type="text" name="country" id="<?= $mt ?>CustCountry"></div>
-                        <div class="form-group"><label>Credit Limit</label><input type="number" name="credit_limit" id="<?= $mt ?>CustCredit" step="0.01" min="0" value="0"></div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group"><label>Status</label><select name="status" id="<?= $mt ?>CustStatus"><option value="1">Active</option><option value="0">Inactive</option></select></div>
-                    </div>
-                    <div class="form-group"><label>Notes</label><textarea name="notes" id="<?= $mt ?>CustNotes" rows="2"></textarea></div>
-                </div>
-                <div class="modal-footer"><button type="submit" class="btn btn-primary">Save</button><button type="button" class="btn" onclick="closeModal('<?= $mt ?>CustModal')">Cancel</button></div>
-            </form>
-        </div>
-    </div>
-    <?php endforeach;
-    endif; ?>
-    <script>
-    function editCustomer(c){
-        document.getElementById('editCustId').value=c.id;
-        document.getElementById('editCustName').value=c.name||'';
-        document.getElementById('editCustEmail').value=c.email||'';
-        document.getElementById('editCustPhone').value=c.phone||'';
-        document.getElementById('editCustAddress').value=c.address||'';
-        document.getElementById('editCustCity').value=c.city||'';
-        document.getElementById('editCustCountry').value=c.country||'';
-        document.getElementById('editCustType').value=c.customer_type||'Walk-in';
-        document.getElementById('editCustCredit').value=c.credit_limit||0;
-        document.getElementById('editCustStatus').value=c.status;
-        document.getElementById('editCustNotes').value=c.notes||'';
-        openModal('editCustModal');
-    }
-    </script>
-    <?php
-    renderFooter();
-}
-
-function renderCustomerDetail($cust, $invs)
-{
-    renderHeader('Customer: ' . ($cust['name'] ?? ''));
-    ?>
-    <div class="page-title">&#128101; <?= h($cust['name']) ?> <div class="page-title-actions"><a href="?page=customers" class="btn btn-sm">&#8592; Back</a></div></div>
-    <div class="two-col-layout">
-        <div class="card">
-            <div class="card-title">Customer Details</div>
-            <table class="detail-table">
-                <tr><td>Name</td><td><?= h($cust['name']) ?></td></tr>
-                <tr><td>Type</td><td><span class="badge badge-info"><?= h($cust['customer_type']) ?></span></td></tr>
-                <tr><td>Email</td><td><?= h($cust['email'] ?? '-') ?></td></tr>
-                <tr><td>Phone</td><td><?= h($cust['phone'] ?? '-') ?></td></tr>
-                <tr><td>Address</td><td><?= h($cust['address'] ?? '-') ?></td></tr>
-                <tr><td>City / Country</td><td><?= h($cust['city'] ?? '') . ' / ' . h($cust['country'] ?? '') ?></td></tr>
-                <tr><td>Credit Limit</td><td><?= formatCurrency($cust['credit_limit']) ?></td></tr>
-                <tr><td>Current Balance</td><td><strong style="color:<?= $cust['current_balance'] > 0 ? 'var(--red-dark)' : 'var(--green-dark)' ?>"><?= formatCurrency($cust['current_balance']) ?></strong></td></tr>
-                <tr><td>Status</td><td><span class="badge <?= $cust['status'] ? 'badge-success' : 'badge-danger' ?>"><?= $cust['status'] ? 'Active' : 'Inactive' ?></span></td></tr>
-                <tr><td>Notes</td><td><?= h($cust['notes'] ?? '-') ?></td></tr>
-            </table>
-        </div>
-        <div class="card">
-            <div class="card-title">Sales History</div>
-            <?php if (empty($invs)): ?><p style="font-size:12px;color:#888">No invoices.</p><?php else: ?>
-            <table class="data-table">
-                <thead><tr><th>Invoice#</th><th>Date</th><th>Total</th><th>Status</th></tr></thead>
-                <tbody>
-                <?php foreach ($invs as $inv): ?>
-                <tr>
-                    <td data-label="Inv#"><a href="?page=sales&action=view&id=<?= h($inv['id']) ?>"><?= h($inv['invoice_number']) ?></a></td>
-                    <td data-label="Date"><?= formatDate($inv['invoice_date']) ?></td>
-                    <td data-label="Total"><?= formatCurrency($inv['total_amount']) ?></td>
-                    <td data-label="Status"><span class="badge <?= $inv['payment_status'] === 'Paid' ? 'badge-success' : ($inv['payment_status'] === 'Partial' ? 'badge-warning' : 'badge-danger') ?>"><?= h($inv['payment_status']) ?></span></td>
-                </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-            <?php endif; ?>
-        </div>
-    </div>
-    <?php
-    renderFooter();
-}
-
-function renderPurchaseList($orders, $search, $status, $dateFrom, $dateTo, $total, $page, $perPage, $baseUrl)
-{
-    renderHeader('Purchase Orders');
-    $csrf = generateCSRF();
-    ?>
-    <div class="page-title">&#128722; Purchase Orders
-        <div class="page-title-actions">
-            <?php if (hasRole(['Admin', 'Manager'])): ?>
-            <a href="?page=purchases&action=add" class="btn btn-primary btn-sm">+ New PO</a>
-            <?php endif; ?>
-        </div>
-    </div>
-    <form method="GET" action=""><input type="hidden" name="page" value="purchases">
-        <div class="filter-bar">
-            <div class="filter-group"><label>Search</label><input type="search" name="search" value="<?= h($search) ?>" placeholder="PO Number, Supplier..."></div>
-            <div class="filter-group"><label>Status</label>
-                <select name="status"><option value="">All</option><?php foreach (['Pending', 'Received', 'Partial', 'Cancelled'] as $s): ?><option value="<?= h($s) ?>" <?= $status === $s ? 'selected' : '' ?>><?= h($s) ?></option><?php endforeach; ?></select>
-            </div>
-            <div class="filter-group"><label>From</label><input type="date" name="date_from" value="<?= h($dateFrom) ?>"></div>
-            <div class="filter-group"><label>To</label><input type="date" name="date_to" value="<?= h($dateTo) ?>"></div>
-            <div class="filter-group" style="justify-content:flex-end"><label>&nbsp;</label><button type="submit" class="btn btn-primary">Filter</button></div>
-            <div class="filter-group" style="justify-content:flex-end"><label>&nbsp;</label><a href="?page=purchases" class="btn">Clear</a></div>
-        </div>
-    </form>
-    <div class="table-wrap">
-    <table class="data-table">
-        <thead><tr><th>PO Number</th><th>Supplier</th><th>Date</th><th>Expected</th><th>Total</th><th>Payment</th><th>Order Status</th><th>Actions</th></tr></thead>
-        <tbody>
-        <?php if (empty($orders)): ?>
-        <tr><td colspan="8" style="text-align:center;padding:20px;color:#888">No purchase orders found.</td></tr>
-        <?php
-    else:
-        foreach ($orders as $o):
-            $pClass = $o['payment_status'] === 'Paid' ? 'badge-success' : ($o['payment_status'] === 'Partial' ? 'badge-warning' : 'badge-danger');
-            $oClass = $o['order_status'] === 'Received' ? 'badge-success' : ($o['order_status'] === 'Pending' ? 'badge-warning' : ($o['order_status'] === 'Cancelled' ? 'badge-danger' : 'badge-info'));
-            ?>
-        <tr>
-            <td data-label="PO#"><a href="?page=purchases&action=view&id=<?= h($o['id']) ?>"><?= h($o['po_number']) ?></a></td>
-            <td data-label="Supplier"><?= h($o['company_name']) ?></td>
-            <td data-label="Date"><?= formatDate($o['po_date']) ?></td>
-            <td data-label="Expected"><?= formatDate($o['expected_delivery']) ?></td>
-            <td data-label="Total"><?= formatCurrency($o['total_amount']) ?></td>
-            <td data-label="Payment"><span class="badge <?= $pClass ?>"><?= h($o['payment_status']) ?></span></td>
-            <td data-label="Status"><span class="badge <?= $oClass ?>"><?= h($o['order_status']) ?></span></td>
-            <td data-label="Actions" style="white-space:nowrap">
-                <a href="?page=purchases&action=view&id=<?= h($o['id']) ?>" class="btn btn-xs">View</a>
-                <?php if (hasRole(['Admin']) && in_array($o['order_status'], ['Pending', 'Partial'])): ?>
-                <?php endif; ?>
-                <?php if (hasRole(['Admin'])): ?>
-                <form method="POST" action="?page=purchases&action=delete" style="display:inline" id="del_po_<?= h($o['id']) ?>">
-                    <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= $csrf ?>">
-                    <input type="hidden" name="id" value="<?= h($o['id']) ?>">
-                    <button type="button" class="btn btn-xs btn-danger" onclick="confirmDelete('del_po_<?= h($o['id']) ?>')">Del</button>
-                </form>
-                <?php endif; ?>
-            </td>
-        </tr>
-        <?php endforeach;
-    endif; ?>
-        </tbody>
-    </table>
-    </div>
-    <?= paginate($total, $page, $perPage, $baseUrl) ?>
-    <?php
-    renderFooter();
-}
-
-function renderPurchaseForm($suppliers, $products)
-{
-    renderHeader('New Purchase Order');
-    $csrf = generateCSRF();
-    ?>
-    <div class="page-title">&#128722; New Purchase Order <div class="page-title-actions"><a href="?page=purchases" class="btn btn-sm">&#8592; Back</a></div></div>
-    <form method="POST" action="?page=purchases&action=add" id="poForm">
-        <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= $csrf ?>">
-        <fieldset class="form-section"><legend>Order Information</legend>
-            <div class="form-row-3">
-                <div class="form-group"><label>Supplier *</label>
-                    <select name="supplier_id" required>
-                        <option value="">-- Select Supplier --</option>
-                        <?php foreach ($suppliers as $s): ?><option value="<?= h($s['id']) ?>"><?= h($s['company_name']) ?></option><?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="form-group"><label>PO Date *</label><input type="date" name="po_date" value="<?= date('Y-m-d') ?>" required></div>
-                <div class="form-group"><label>Expected Delivery</label><input type="date" name="expected_delivery"></div>
-            </div>
-        </fieldset>
-        <fieldset class="form-section"><legend>Order Items</legend>
-            <button type="button" id="add-item-btn" onclick="addPOItem()">+ Add Item</button>
-            <div class="items-table-wrap">
-            <table class="items-table" id="poItemsTable">
-                <thead><tr><th>Product</th><th>Qty</th><th>Unit Price</th><th>Total</th><th>Remove</th></tr></thead>
-                <tbody id="poItemsBody"></tbody>
-                <tfoot><tr><td colspan="3" style="text-align:right">Subtotal:</td><td id="poSubtotal" colspan="2">0.00</td></tr></tfoot>
-            </table>
-            </div>
-        </fieldset>
-        <fieldset class="form-section"><legend>Totals & Payment</legend>
-            <div class="form-row-3">
-                <div class="form-group"><label>Tax %</label><input type="number" name="tax_percent" id="poTax" value="0" step="0.01" min="0" max="100" onchange="recalcPO()"></div>
-                <div class="form-group"><label>Discount</label><input type="number" name="discount" id="poDiscount" value="0" step="0.01" min="0" onchange="recalcPO()"></div>
-                <div class="form-group"><label>Payment Status</label>
-                    <select name="payment_status">
-                        <option value="Unpaid">Unpaid</option><option value="Partial">Partial</option><option value="Paid">Paid</option>
-                    </select>
-                </div>
-            </div>
-            <div style="background:#eee;border:1px solid #ccc;padding:8px;margin-top:6px">
-                <strong>Grand Total: </strong><span id="poGrandTotal" style="font-size:16px;font-weight:700;color:var(--blue-dark)">0.00</span>
-            </div>
-        </fieldset>
-        <div class="form-group"><label>Notes</label><textarea name="notes" rows="2"></textarea></div>
-        <div style="display:flex;gap:8px;margin-top:10px">
-            <button type="submit" class="btn btn-primary">&#10003; Create Purchase Order</button>
-            <a href="?page=purchases" class="btn">Cancel</a>
-        </div>
-    </form>
-    <script>
-    var poProducts=<?= json_encode(array_map(fn($p) => ['id' => $p['id'], 'name' => $p['name'] . ' (' . $p['sku'] . ')', 'price' => $p['purchase_price']], $products)) ?>;
-    var poRowCount=0;
-    function addPOItem(){
-        var opts=poProducts.map(p=>'<option value="'+p.id+'" data-price="'+p.price+'">'+p.name+'</option>').join('');
-        var row=document.createElement('tr');
-        row.id='poRow'+poRowCount;
-        row.innerHTML='<td><select name="product_id[]" onchange="updatePOPrice(this)" required><option value="">-- Select --</option>'+opts+'</select></td>'
-            +'<td><input type="number" name="quantity[]" value="1" min="1" step="0.01" style="width:80px" onchange="recalcPO()" required></td>'
-            +'<td><input type="number" name="unit_price[]" value="0" min="0" step="0.01" style="width:100px" onchange="recalcPO()" required></td>'
-            +'<td class="rowTotal">0.00</td>'
-            +'<td><button type="button" class="remove-row-btn" onclick="removePORow(\'poRow'+poRowCount+'\')">&#10005;</button></td>';
-        document.getElementById('poItemsBody').appendChild(row);
-        poRowCount++;
-    }
-    function updatePOPrice(sel){
-        var opt=sel.options[sel.selectedIndex];
-        var row=sel.closest('tr');
-        row.querySelector('input[name="unit_price[]"]').value=opt.dataset.price||0;
-        recalcPO();
-    }
-    function removePORow(id){document.getElementById(id).remove();recalcPO();}
-    function recalcPO(){
-        var subtotal=0;
-        document.querySelectorAll('#poItemsBody tr').forEach(function(row){
-            var qty=parseFloat(row.querySelector('input[name="quantity[]"]').value)||0;
-            var up=parseFloat(row.querySelector('input[name="unit_price[]"]').value)||0;
-            var t=qty*up;
-            row.querySelector('.rowTotal').textContent=t.toFixed(2);
-            subtotal+=t;
-        });
-        document.getElementById('poSubtotal').textContent=subtotal.toFixed(2);
-        var tax=parseFloat(document.getElementById('poTax').value)||0;
-        var disc=parseFloat(document.getElementById('poDiscount').value)||0;
-        var total=subtotal+(subtotal*tax/100)-disc;
-        document.getElementById('poGrandTotal').textContent=total.toFixed(2);
-    }
-    addPOItem();
-    </script>
-    <?php
-    renderFooter();
-}
-
-function renderPurchaseDetail($po, $items)
-{
-    renderHeader('PO: ' . ($po['po_number'] ?? ''));
-    $csrf = generateCSRF();
-    $canReceive = in_array($po['order_status'], ['Pending', 'Partial']);
-    ?>
-    <div class="page-title">&#128722; <?= h($po['po_number']) ?>
-        <div class="page-title-actions">
-            <?php if ($canReceive && hasRole(['Admin', 'Manager'])): ?>
-            <button onclick="openModal('receiveModal')" class="btn btn-success btn-sm">Receive Stock</button>
-            <?php endif; ?>
-            <button onclick="printPage()" class="btn btn-sm">&#128424; Print</button>
-            <a href="?page=purchases" class="btn btn-sm">&#8592; Back</a>
-        </div>
-    </div>
-    <div class="print-header"><h2><?= h(getSetting('company_name')) ?></h2><p><?= h(getSetting('company_address')) ?></p><h3>PURCHASE ORDER</h3></div>
-    <div class="two-col-layout">
-        <div class="card">
-            <div class="card-title">PO Details</div>
-            <table class="detail-table">
-                <tr><td>PO Number</td><td><strong><?= h($po['po_number']) ?></strong></td></tr>
-                <tr><td>Supplier</td><td><?= h($po['company_name']) ?></td></tr>
-                <tr><td>Contact</td><td><?= h($po['contact_person'] ?? '-') ?></td></tr>
-                <tr><td>Phone</td><td><?= h($po['phone'] ?? '-') ?></td></tr>
-                <tr><td>PO Date</td><td><?= formatDate($po['po_date']) ?></td></tr>
-                <tr><td>Expected Delivery</td><td><?= formatDate($po['expected_delivery']) ?></td></tr>
-                <tr><td>Order Status</td><td><span class="badge <?= $po['order_status'] === 'Received' ? 'badge-success' : ($po['order_status'] === 'Cancelled' ? 'badge-danger' : 'badge-warning') ?>"><?= h($po['order_status']) ?></span></td></tr>
-                <tr><td>Payment Status</td><td><span class="badge <?= $po['payment_status'] === 'Paid' ? 'badge-success' : ($po['payment_status'] === 'Partial' ? 'badge-warning' : 'badge-danger') ?>"><?= h($po['payment_status']) ?></span></td></tr>
-            </table>
-        </div>
-        <div class="card">
-            <div class="card-title">Financial Summary</div>
-            <table class="detail-table">
-                <tr><td>Subtotal</td><td><?= formatCurrency($po['subtotal']) ?></td></tr>
-                <tr><td>Tax (<?= h($po['tax_percent']) ?>%)</td><td><?= formatCurrency($po['subtotal'] * $po['tax_percent'] / 100) ?></td></tr>
-                <tr><td>Discount</td><td><?= formatCurrency($po['discount']) ?></td></tr>
-                <tr><td><strong>Total</strong></td><td><strong style="font-size:16px"><?= formatCurrency($po['total_amount']) ?></strong></td></tr>
-            </table>
-            <?php if ($po['notes']): ?><div style="margin-top:8px;padding:6px;background:#fffff8;border:1px solid #ccc;font-size:12px"><strong>Notes:</strong> <?= h($po['notes']) ?></div><?php endif; ?>
-        </div>
-    </div>
-    <div class="card">
-        <div class="card-title">Order Items</div>
-        <div class="items-table-wrap">
-        <table class="items-table">
-            <thead><tr><th>#</th><th>SKU</th><th>Product</th><th>Unit</th><th>Qty</th><th>Received</th><th>Pending</th><th>Unit Price</th><th>Total</th></tr></thead>
-            <tbody>
-            <?php
-            $i = 1;
-            foreach ($items as $item):
-                $pending = max(0, $item['quantity'] - $item['received_qty']);
-                ?>
-            <tr>
-                <td><?= $i++ ?></td>
-                <td style="font-family:monospace;font-size:11px"><?= h($item['sku']) ?></td>
-                <td><?= h($item['product_name']) ?></td>
-                <td><?= h($item['unit']) ?></td>
-                <td><?= h($item['quantity']) ?></td>
-                <td style="color:var(--green-dark)"><?= h($item['received_qty']) ?></td>
-                <td style="color:<?= ($pending > 0 ? 'var(--red-dark)' : 'var(--green-dark)') ?>">
-                    <?= h($pending) ?>
-                </td>
-                <td><?= formatCurrency($item['unit_price']) ?></td>
-                <td><?= formatCurrency($item['total_price']) ?></td>
-            </tr>
-            <?php endforeach; ?>
-            </tbody>
-        </table>
-        </div>
-    </div>
-    <?php if ($canReceive && hasRole(['Admin', 'Manager'])): ?>
-    <div id="receiveModal" class="modal-overlay">
-        <div class="modal" style="max-width:600px">
-            <div class="modal-title-bar">Receive Stock <button class="modal-close" onclick="closeModal('receiveModal')">&#10005;</button></div>
-            <form method="POST" action="?page=purchases&action=receive">
-                <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= $csrf ?>">
-                <input type="hidden" name="po_id" value="<?= h($po['id']) ?>">
-                <div class="modal-body">
-                    <p style="font-size:12px;color:#666;margin-bottom:8px">Enter quantities received for each item:</p>
-                    <table class="items-table">
-                        <thead><tr><th>Product</th><th>Ordered</th><th>Already Received</th><th>Receive Now</th></tr></thead>
-                        <tbody>
-                        <?php
-                        foreach ($items as $item):
-                            $pending = max(0, $item['quantity'] - $item['received_qty']);
-                            ?>
-                        <tr>
-                            <td><?= h($item['product_name']) ?></td>
-                            <td><?= h($item['quantity']) ?></td>
-                            <td><?= h($item['received_qty']) ?></td>
-                            <td><input type="number" name="recv_qty[<?= h($item['id']) ?>]" value="<?= h($pending) ?>" min="0" max="<?= h($pending) ?>" step="0.01" style="width:80px"></td>
-                        </tr>
-                        <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-                <div class="modal-footer"><button type="submit" class="btn btn-success">Confirm Receipt</button><button type="button" class="btn" onclick="closeModal('receiveModal')">Cancel</button></div>
-            </form>
-        </div>
-    </div>
-    <?php endif; ?>
-    <?php
-    renderFooter();
-}
-
-function renderSalesList($invoices, $search, $status, $dateFrom, $dateTo, $total, $page, $perPage, $baseUrl)
-{
-    renderHeader('Sales & Invoices');
-    $csrf = generateCSRF();
-    ?>
-    <div class="page-title">&#128176; Sales / Invoices
-        <div class="page-title-actions">
-            <a href="?page=sales&action=add" class="btn btn-primary btn-sm">+ New Invoice</a>
-        </div>
-    </div>
-    <form method="GET" action=""><input type="hidden" name="page" value="sales">
-        <div class="filter-bar">
-            <div class="filter-group"><label>Search</label><input type="search" name="search" value="<?= h($search) ?>" placeholder="Invoice#, Customer..."></div>
-            <div class="filter-group"><label>Payment</label>
-                <select name="status"><option value="">All</option><?php foreach (['Paid', 'Partial', 'Unpaid'] as $s): ?><option value="<?= h($s) ?>" <?= $status === $s ? 'selected' : '' ?>><?= h($s) ?></option><?php endforeach; ?></select>
-            </div>
-            <div class="filter-group"><label>From</label><input type="date" name="date_from" value="<?= h($dateFrom) ?>"></div>
-            <div class="filter-group"><label>To</label><input type="date" name="date_to" value="<?= h($dateTo) ?>"></div>
-            <div class="filter-group" style="justify-content:flex-end"><label>&nbsp;</label><button type="submit" class="btn btn-primary">Filter</button></div>
-            <div class="filter-group" style="justify-content:flex-end"><label>&nbsp;</label><a href="?page=sales" class="btn">Clear</a></div>
-        </div>
-    </form>
-    <div class="table-wrap">
-    <table class="data-table">
-        <thead><tr><th>Invoice#</th><th>Customer</th><th>Date</th><th>Due</th><th>Total</th><th>Payment</th><th>Method</th><th>Actions</th></tr></thead>
-        <tbody>
-        <?php if (empty($invoices)): ?>
-        <tr><td colspan="8" style="text-align:center;padding:20px;color:#888">No invoices found.</td></tr>
-        <?php
-    else:
-        foreach ($invoices as $inv):
-            $pClass = $inv['payment_status'] === 'Paid' ? 'badge-success' : ($inv['payment_status'] === 'Partial' ? 'badge-warning' : 'badge-danger');
-            ?>
-        <tr>
-            <td data-label="Inv#"><a href="?page=sales&action=view&id=<?= h($inv['id']) ?>"><?= h($inv['invoice_number']) ?></a></td>
-            <td data-label="Customer"><?= h($inv['customer_name']) ?></td>
-            <td data-label="Date"><?= formatDate($inv['invoice_date']) ?></td>
-            <td data-label="Due"><?= formatDate($inv['due_date']) ?></td>
-            <td data-label="Total"><?= formatCurrency($inv['total_amount']) ?></td>
-            <td data-label="Payment"><span class="badge <?= $pClass ?>"><?= h($inv['payment_status']) ?></span></td>
-            <td data-label="Method"><?= h($inv['payment_method']) ?></td>
-            <td data-label="Actions" style="white-space:nowrap">
-                <a href="?page=sales&action=view&id=<?= h($inv['id']) ?>" class="btn btn-xs">View</a>
-                <?php if (hasRole(['Admin'])): ?>
-                <form method="POST" action="?page=sales&action=delete" style="display:inline" id="del_inv_<?= h($inv['id']) ?>">
-                    <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= $csrf ?>">
-                    <input type="hidden" name="id" value="<?= h($inv['id']) ?>">
-                    <button type="button" class="btn btn-xs btn-danger" onclick="confirmDelete('del_inv_<?= h($inv['id']) ?>')">Del</button>
-                </form>
-                <?php endif; ?>
-            </td>
-        </tr>
-        <?php endforeach;
-    endif; ?>
-        </tbody>
-    </table>
-    </div>
-    <?= paginate($total, $page, $perPage, $baseUrl) ?>
-    <?php
-    renderFooter();
-}
-
-function renderSalesForm($customers, $products)
-{
-    renderHeader('New Invoice');
-    $csrf = generateCSRF();
-    ?>
-    <div class="page-title">&#128176; New Invoice <div class="page-title-actions"><a href="?page=sales" class="btn btn-sm">&#8592; Back</a></div></div>
-    <form method="POST" action="?page=sales&action=add" id="invForm">
-        <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= $csrf ?>">
-        <fieldset class="form-section"><legend>Invoice Information</legend>
-            <div class="form-row-3">
-                <div class="form-group"><label>Customer *</label>
-                    <select name="customer_id" required>
-                        <option value="">-- Select Customer --</option>
-                        <?php foreach ($customers as $c): ?><option value="<?= h($c['id']) ?>"><?= h($c['name']) ?></option><?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="form-group"><label>Invoice Date *</label><input type="date" name="invoice_date" value="<?= date('Y-m-d') ?>" required></div>
-                <div class="form-group"><label>Due Date</label><input type="date" name="due_date" value="<?= date('Y-m-d', strtotime('+30 days')) ?>"></div>
-            </div>
-            <div class="form-row">
-                <div class="form-group"><label>Payment Method</label>
-                    <select name="payment_method">
-                        <?php foreach (['Cash', 'Card', 'Bank Transfer', 'Credit'] as $pm): ?><option value="<?= h($pm) ?>"><?= h($pm) ?></option><?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="form-group"><label>Payment Status</label>
-                    <select name="payment_status">
-                        <option value="Unpaid">Unpaid</option><option value="Partial">Partial</option><option value="Paid">Paid</option>
-                    </select>
-                </div>
-            </div>
-        </fieldset>
-        <fieldset class="form-section"><legend>Invoice Items</legend>
-            <button type="button" id="add-item-btn" onclick="addInvItem()">+ Add Item</button>
-            <div class="items-table-wrap">
-            <table class="items-table" id="invItemsTable">
-                <thead><tr><th>Product</th><th>Stock</th><th>Qty</th><th>Unit Price</th><th>Disc%</th><th>Total</th><th>Remove</th></tr></thead>
-                <tbody id="invItemsBody"></tbody>
-                <tfoot><tr><td colspan="5" style="text-align:right">Subtotal:</td><td id="invSubtotal" colspan="2">0.00</td></tr></tfoot>
-            </table>
-            </div>
-        </fieldset>
-        <fieldset class="form-section"><legend>Totals</legend>
-            <div class="form-row-3">
-                <div class="form-group"><label>Tax %</label><input type="number" name="tax_percent" id="invTax" value="0" step="0.01" min="0" max="100" onchange="recalcInv()"></div>
-                <div class="form-group"><label>Discount</label><input type="number" name="discount" id="invDiscount" value="0" step="0.01" min="0" onchange="recalcInv()"></div>
-                <div class="form-group">&nbsp;</div>
-            </div>
-            <div style="background:#eee;border:1px solid #ccc;padding:8px;margin-top:6px">
-                <strong>Grand Total: </strong><span id="invGrandTotal" style="font-size:16px;font-weight:700;color:var(--blue-dark)">0.00</span>
-            </div>
-        </fieldset>
-        <div class="form-group"><label>Notes</label><textarea name="notes" rows="2"></textarea></div>
-        <div style="display:flex;gap:8px;margin-top:10px">
-            <button type="submit" class="btn btn-primary">&#10003; Create Invoice</button>
-            <a href="?page=sales" class="btn">Cancel</a>
-        </div>
-    </form>
-    <script>
-    var invProducts=<?= json_encode(array_map(fn($p) => ['id' => $p['id'], 'name' => $p['name'] . ' (' . $p['sku'] . ')', 'price' => $p['selling_price'], 'stock' => $p['current_stock']], $products)) ?>;
-    var invRowCount=0;
-    function addInvItem(){
-        var opts=invProducts.map(p=>'<option value="'+p.id+'" data-price="'+p.price+'" data-stock="'+p.stock+'">'+p.name+'</option>').join('');
-        var row=document.createElement('tr');
-        row.id='invRow'+invRowCount;
-        row.innerHTML='<td><select name="product_id[]" onchange="updateInvPrice(this)" required><option value="">-- Select --</option>'+opts+'</select></td>'
-            +'<td class="rowStock" style="font-size:11px;color:#888">-</td>'
-            +'<td><input type="number" name="quantity[]" value="1" min="0.01" step="0.01" style="width:80px" onchange="recalcInv()" required></td>'
-            +'<td><input type="number" name="unit_price[]" value="0" min="0" step="0.01" style="width:100px" onchange="recalcInv()" required></td>'
-            +'<td><input type="number" name="item_discount[]" value="0" min="0" max="100" step="0.01" style="width:65px" onchange="recalcInv()"></td>'
-            +'<td class="rowTotal">0.00</td>'
-            +'<td><button type="button" class="remove-row-btn" onclick="removeInvRow(\'invRow'+invRowCount+'\')">&#10005;</button></td>';
-        document.getElementById('invItemsBody').appendChild(row);
-        invRowCount++;
-    }
-    function updateInvPrice(sel){
-        var opt=sel.options[sel.selectedIndex];
-        var row=sel.closest('tr');
-        row.querySelector('input[name="unit_price[]"]').value=opt.dataset.price||0;
-        row.querySelector('.rowStock').textContent='Stock: '+(opt.dataset.stock||0);
-        recalcInv();
-    }
-    function removeInvRow(id){document.getElementById(id).remove();recalcInv();}
-    function recalcInv(){
-        var subtotal=0;
-        document.querySelectorAll('#invItemsBody tr').forEach(function(row){
-            var qty=parseFloat(row.querySelector('input[name="quantity[]"]').value)||0;
-            var up=parseFloat(row.querySelector('input[name="unit_price[]"]').value)||0;
-            var disc=parseFloat(row.querySelector('input[name="item_discount[]"]').value)||0;
-            var t=qty*up*(1-disc/100);
-            row.querySelector('.rowTotal').textContent=t.toFixed(2);
-            subtotal+=t;
-        });
-        document.getElementById('invSubtotal').textContent=subtotal.toFixed(2);
-        var tax=parseFloat(document.getElementById('invTax').value)||0;
-        var disc=parseFloat(document.getElementById('invDiscount').value)||0;
-        var total=subtotal+(subtotal*tax/100)-disc;
-        document.getElementById('invGrandTotal').textContent=total.toFixed(2);
-    }
-    addInvItem();
-    </script>
-    <?php
-    renderFooter();
-}
-
-function renderSalesDetail($inv, $items)
-{
-    renderHeader('Invoice: ' . ($inv['invoice_number'] ?? ''));
-    $csrf = generateCSRF();
-    ?>
-    <div class="page-title">&#128176; <?= h($inv['invoice_number']) ?>
-        <div class="page-title-actions">
-            <?php if ($inv['payment_status'] !== 'Paid' && hasRole(['Admin', 'Manager'])): ?>
-            <button onclick="openModal('payModal')" class="btn btn-success btn-sm">Mark Paid</button>
-            <?php endif; ?>
-            <?php if (hasRole(['Admin', 'Manager'])): ?>
-            <button onclick="openModal('returnModal')" class="btn btn-warning btn-sm">Return/Refund</button>
-            <?php endif; ?>
-            <button onclick="printPage()" class="btn btn-sm">&#128424; Print</button>
-            <a href="?page=sales" class="btn btn-sm">&#8592; Back</a>
-        </div>
-    </div>
-    <div class="print-header">
-        <h2><?= h(getSetting('company_name')) ?></h2>
-        <p><?= h(getSetting('company_address')) ?> | <?= h(getSetting('company_phone')) ?> | <?= h(getSetting('company_email')) ?></p>
-        <h3>INVOICE</h3>
-    </div>
-    <div class="two-col-layout">
-        <div class="card">
-            <div class="card-title">Invoice Details</div>
-            <table class="detail-table">
-                <tr><td>Invoice#</td><td><strong><?= h($inv['invoice_number']) ?></strong></td></tr>
-                <tr><td>Customer</td><td><?= h($inv['customer_name']) ?></td></tr>
-                <tr><td>Email</td><td><?= h($inv['customer_email'] ?? '-') ?></td></tr>
-                <tr><td>Phone</td><td><?= h($inv['customer_phone'] ?? '-') ?></td></tr>
-                <tr><td>Invoice Date</td><td><?= formatDate($inv['invoice_date']) ?></td></tr>
-                <tr><td>Due Date</td><td><?= formatDate($inv['due_date']) ?></td></tr>
-                <tr><td>Payment Method</td><td><?= h($inv['payment_method']) ?></td></tr>
-                <tr><td>Payment Status</td><td><span class="badge <?= $inv['payment_status'] === 'Paid' ? 'badge-success' : ($inv['payment_status'] === 'Partial' ? 'badge-warning' : 'badge-danger') ?>"><?= h($inv['payment_status']) ?></span></td></tr>
-                <tr><td>Created By</td><td><?= h($inv['created_by_name'] ?? '-') ?></td></tr>
-            </table>
-        </div>
-        <div class="card">
-            <div class="card-title">Financial Summary</div>
-            <table class="detail-table">
-                <tr><td>Subtotal</td><td><?= formatCurrency($inv['subtotal']) ?></td></tr>
-                <tr><td>Tax (<?= h($inv['tax_percent']) ?>%)</td><td><?= formatCurrency($inv['subtotal'] * $inv['tax_percent'] / 100) ?></td></tr>
-                <tr><td>Discount</td><td><?= formatCurrency($inv['discount']) ?></td></tr>
-                <tr><td><strong>Total</strong></td><td><strong style="font-size:16px"><?= formatCurrency($inv['total_amount']) ?></strong></td></tr>
-            </table>
-            <?php if ($inv['notes']): ?><div style="margin-top:8px;padding:6px;background:#fffff8;border:1px solid #ccc;font-size:12px"><strong>Notes:</strong> <?= h($inv['notes']) ?></div><?php endif; ?>
-        </div>
-    </div>
-    <div class="card">
-        <div class="card-title">Invoice Items</div>
-        <div class="items-table-wrap">
-        <table class="items-table">
-            <thead><tr><th>#</th><th>SKU</th><th>Product</th><th>Unit</th><th>Qty</th><th>Unit Price</th><th>Disc%</th><th>Total</th></tr></thead>
-            <tbody>
-            <?php $i = 1;
-            foreach ($items as $item): ?>
-            <tr>
-                <td><?= $i++ ?></td>
-                <td style="font-family:monospace;font-size:11px"><?= h($item['sku']) ?></td>
-                <td><?= h($item['product_name']) ?></td>
-                <td><?= h($item['unit']) ?></td>
-                <td><?= h($item['quantity']) ?></td>
-                <td><?= formatCurrency($item['unit_price']) ?></td>
-                <td><?= ($item['quantity'] * $item['unit_price'] > 0) ? round(100 * $item['discount'] / ($item['quantity'] * $item['unit_price']), 2) : '0' ?>%</td>
-                <td><?= formatCurrency($item['total_price']) ?></td>
-            </tr>
-            <?php endforeach; ?>
-            </tbody>
-            <tfoot>
-                <tr><td colspan="7" style="text-align:right">Subtotal:</td><td><?= formatCurrency($inv['subtotal']) ?></td></tr>
-                <tr><td colspan="7" style="text-align:right">Tax (<?= h($inv['tax_percent']) ?>%):</td><td><?= formatCurrency($inv['subtotal'] * $inv['tax_percent'] / 100) ?></td></tr>
-                <tr><td colspan="7" style="text-align:right">Discount:</td><td><?= formatCurrency($inv['discount']) ?></td></tr>
-                <tr><td colspan="7" style="text-align:right"><strong>TOTAL:</strong></td><td><strong><?= formatCurrency($inv['total_amount']) ?></strong></td></tr>
-            </tfoot>
-        </table>
-        </div>
-    </div>
-    <?php if ($inv['payment_status'] !== 'Paid' && hasRole(['Admin', 'Manager'])): ?>
-    <div id="payModal" class="modal-overlay">
-        <div class="modal" style="max-width:400px">
-            <div class="modal-title-bar">Mark as Paid <button class="modal-close" onclick="closeModal('payModal')">&#10005;</button></div>
-            <form method="POST" action="?page=sales&action=mark_paid">
-                <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= $csrf ?>">
-                <input type="hidden" name="id" value="<?= h($inv['id']) ?>">
-                <div class="modal-body">
-                    <div class="form-group"><label>Payment Method</label>
-                        <select name="payment_method">
-                            <?php foreach (['Cash', 'Card', 'Bank Transfer', 'Credit'] as $pm): ?><option value="<?= h($pm) ?>"><?= h($pm) ?></option><?php endforeach; ?>
-                        </select>
-                    </div>
-                    <p>This action will mark the invoice as fully paid.</p>
-                    <input type="hidden" name="payment_status" value="Paid">
-                </div>
-                <div class="modal-footer"><button type="submit" class="btn btn-success">Confirm</button><button type="button" class="btn" onclick="closeModal('payModal')">Cancel</button></div>
-            </form>
-        </div>
-    </div>
-    <?php endif; ?>
-    <?php if (hasRole(['Admin', 'Manager'])): ?>
-    <div id="returnModal" class="modal-overlay">
-        <div class="modal" style="max-width:550px">
-            <div class="modal-title-bar">Return / Refund Items <button class="modal-close" onclick="closeModal('returnModal')">&#10005;</button></div>
-            <form method="POST" action="?page=sales&action=return">
-                <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= $csrf ?>">
-                <input type="hidden" name="invoice_id" value="<?= h($inv['id']) ?>">
-                <div class="modal-body">
-                    <p style="font-size:12px;color:#666;margin-bottom:8px">Enter quantities to return (stock will be added back):</p>
-                    <table class="items-table">
-                        <thead><tr><th>Product</th><th>Sold Qty</th><th>Return Qty</th></tr></thead>
-                        <tbody>
-                        <?php foreach ($items as $item): ?>
-                        <tr>
-                            <td><?= h($item['product_name']) ?></td>
-                            <td><?= h($item['quantity']) ?></td>
-                            <td><input type="number" name="ret_qty[<?= h($item['id']) ?>]" value="0" min="0" max="<?= h($item['quantity']) ?>" step="0.01" style="width:80px"></td>
-                        </tr>
-                        <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                    <div class="form-group" style="margin-top:8px"><label>Reason</label><textarea name="reason" rows="2" required></textarea></div>
-                </div>
-                <div class="modal-footer"><button type="submit" class="btn btn-warning">Process Return</button><button type="button" class="btn" onclick="closeModal('returnModal')">Cancel</button></div>
-            </form>
-        </div>
-    </div>
-    <?php endif; ?>
-    <?php
-    renderFooter();
-}
-
-function renderAdjustmentForm($products)
-{
-    renderHeader('New Stock Adjustment');
-    $csrf = generateCSRF();
-    ?>
-    <div class="page-title">&#9881; New Stock Adjustment
-        <div class="page-title-actions">
-            <a href="?page=adjustments" class="btn btn-sm">&#8592; Back to List</a>
-        </div>
-    </div>
-    <form method="POST" action="?page=adjustments&action=add">
-        <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= $csrf ?>">
-        <div class="modal-body" style="max-width: 600px; margin: auto; background: var(--surface2); border: 1px solid var(--border); padding: 10px;">
-            <div class="form-group"><label>Product *</label>
-                <select name="product_id" required>
-                    <option value="">-- Select Product --</option>
-                    <?php foreach ($products as $p): ?><option value="<?= h($p['id']) ?>"><?= h($p['name']) ?> (Stock: <?= h($p['current_stock']) ?>)</option><?php endforeach; ?>
-                </select>
-            </div>
-            <div class="form-row">
-                <div class="form-group"><label>Adjustment Type *</label>
-                    <select name="adjustment_type" required>
-                        <?php foreach (['Addition', 'Subtraction', 'Damage', 'Expired', 'Correction', 'Opening Stock'] as $at): ?>
-                        <option value="<?= h($at) ?>"><?= h($at) ?></option><?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="form-group"><label>Quantity *</label><input type="number" name="quantity" required min="0.01" step="0.01"></div>
-            </div>
-            <div class="form-group"><label>Reason *</label><textarea name="reason" rows="2" required></textarea></div>
-            <div style="margin-top:10px">
-                <button type="submit" class="btn btn-primary">Submit Adjustment</button>
-                <a href="?page=adjustments" class="btn">Cancel</a>
-            </div>
-        </div>
-    </form>
-    <?php
-    renderFooter();
-}
-function renderAdjustmentList($adjs, $total, $pg, $perPage)
-{
-    renderHeader('Stock Adjustments');
-    $csrf = generateCSRF();
-    ?>
-    <div class="page-title">&#9881; Stock Adjustments
-        <div class="page-title-actions">
-            <?php if (hasRole(['Admin', 'Manager', 'Staff'])): ?>
-            <a href="?page=adjustments&action=add" class="btn btn-primary btn-sm">+ New Adjustment</a>
-            <?php endif; ?>
-        </div>
-    </div>
-    <div class="table-wrap">
-    <table class="data-table">
-        <thead><tr><th>Ref</th><th>Product</th><th>Type</th><th>Qty</th><th>Status</th><th>Date</th><th>Created By</th><th>Actions</th></tr></thead>
-        <tbody>
-        <?php if (empty($adjs)): ?>
-        <tr><td colspan="8" style="text-align:center;padding:20px;color:#888">No adjustments found.</td></tr>
-        <?php else:
-        foreach ($adjs as $a):
-            $negTypes = ['Subtraction', 'Damage', 'Expired'];
-            $color = in_array($a['adjustment_type'], $negTypes) ? 'var(--red-dark)' : 'var(--green-dark)';
-            ?>
-        <tr>
-            <td data-label="Ref" style="font-size:11px;font-family:monospace"><?= h($a['reference_no']) ?></td>
-            <td data-label="Product"><?= h($a['product_name']) ?> <small>(<?= h($a['sku']) ?>)</small></td>
-            <td data-label="Type"><?= h($a['adjustment_type']) ?></td>
-            <td data-label="Qty" style="color:<?= $color ?>;font-weight:700"><?= in_array($a['adjustment_type'], $negTypes) ? '-' : '+' ?><?= h($a['quantity']) ?></td>
-            <td data-label="Status"><span class="badge <?= $a['status'] === 'Approved' ? 'badge-success' : ($a['status'] === 'Pending' ? 'badge-warning' : 'badge-danger') ?>"><?= h($a['status']) ?></span></td>
-            <td data-label="Date"><?= formatDate($a['created_at']) ?></td>
-            <td data-label="Created By"><?= h($a['created_by_name']) ?></td>
-            <td data-label="Actions" style="white-space:nowrap">
-                <?php if ($a['status'] === 'Pending' && hasRole(['Admin', 'Manager'])): ?>
-                <form method="POST" action="?page=adjustments&action=approve" style="display:inline" id="app_adj_<?= h($a['id']) ?>">
-                    <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= $csrf ?>">
-                    <input type="hidden" name="id" value="<?= h($a['id']) ?>">
-                    <button type="button" class="btn btn-xs btn-success" onclick="confirmAction('Approve this adjustment?','app_adj_<?= h($a['id']) ?>')">Approve</button>
-                </form>
-                <form method="POST" action="?page=adjustments&action=reject" style="display:inline" id="rej_adj_<?= h($a['id']) ?>">
-                    <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= $csrf ?>">
-                    <input type="hidden" name="id" value="<?= h($a['id']) ?>">
-                    <button type="button" class="btn btn-xs btn-danger" onclick="confirmAction('Reject this adjustment?','rej_adj_<?= h($a['id']) ?>')">Reject</button>
-                </form>
-                <?php endif; ?>
-            </td>
-        </tr>
-        <?php endforeach;
-    endif; ?>
-        </tbody>
-    </table>
-    </div>
-    <?= paginate($total, $pg, $perPage, '?page=adjustments') ?>
-    <?php
-    renderFooter();
-}
-function renderTransferList($transfers, $total, $page, $perPage, $baseUrl)
-{
-    renderHeader('Stock Transfers');
-    $csrf = generateCSRF();
-    ?>
-    <div class="page-title">&#8646; Stock Transfers
-        <div class="page-title-actions">
-            <?php if (hasRole(['Admin', 'Manager'])): ?>
-            <a href="?page=transfers&action=add" class="btn btn-primary btn-sm">+ New Transfer</a>
-            <?php endif; ?>
-        </div>
-    </div>
-    <div class="table-wrap">
-    <table class="data-table">
-        <thead><tr><th>Reference</th><th>From</th><th>To</th><th>Date</th><th>Status</th><th>By</th><th>Actions</th></tr></thead>
-        <tbody>
-        <?php if (empty($transfers)): ?>
-        <tr><td colspan="7" style="text-align:center;padding:20px;color:#888">No transfers found.</td></tr>
-        <?php else:
-        foreach ($transfers as $t): ?>
-        <tr>
-            <td data-label="Ref" style="font-size:11px;font-family:monospace"><?= h($t['reference_no']) ?></td>
-            <td data-label="From"><?= h($t['from_location']) ?></td>
-            <td data-label="To"><?= h($t['to_location']) ?></td>
-            <td data-label="Date"><?= formatDate($t['transfer_date']) ?></td>
-            <td data-label="Status"><span class="badge <?= $t['status'] === 'Completed' ? 'badge-success' : ($t['status'] === 'Pending' ? 'badge-warning' : ($t['status'] === 'Cancelled' ? 'badge-danger' : 'badge-info')) ?>"><?= h($t['status']) ?></span></td>
-            <td data-label="By"><?= h($t['created_by_name']) ?></td>
-            <td data-label="Actions" style="white-space:nowrap">
-                <?php if ($t['status'] === 'Pending' && hasRole(['Admin', 'Manager'])): ?>
-                <form method="POST" action="?page=transfers&action=complete" style="display:inline" id="comp_tr_<?= h($t['id']) ?>">
-                    <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= $csrf ?>">
-                    <input type="hidden" name="id" value="<?= h($t['id']) ?>">
-                    <button type="button" class="btn btn-xs btn-success" onclick="confirmAction('Complete this transfer?','comp_tr_<?= h($t['id']) ?>')">Complete</button>
-                </form>
-                <form method="POST" action="?page=transfers&action=cancel" style="display:inline" id="canc_tr_<?= h($t['id']) ?>">
-                    <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= $csrf ?>">
-                    <input type="hidden" name="id" value="<?= h($t['id']) ?>">
-                    <button type="button" class="btn btn-xs btn-danger" onclick="confirmAction('Cancel this transfer?','canc_tr_<?= h($t['id']) ?>')">Cancel</button>
-                </form>
-                <?php endif; ?>
-            </td>
-        </tr>
-        <?php endforeach;
-    endif; ?>
-        </tbody>
-    </table>
-    </div>
-    <?= paginate($total, $page, $perPage, $baseUrl) ?>
-    <?php
-    renderFooter();
-}
-
-function renderReports()
-{
-    renderHeader('Reports');
-    $pdo = getDB();
-    $report = $_GET['report'] ?? 'stock';
-    $dateFrom = $_GET['date_from'] ?? date('Y-m-01');
-    $dateTo = $_GET['date_to'] ?? date('Y-m-d');
-    ?>
-    <div class="page-title">&#128202; Reports
-        <div class="page-title-actions">
-            <button onclick="printPage()" class="btn btn-sm no-print">&#128424; Print</button>
-            <a href="?page=reports&report=<?= h($report) ?>&date_from=<?= h($dateFrom) ?>&date_to=<?= h($dateTo) ?>&export=csv" class="btn btn-sm no-print">&#8595; CSV</a>
-        </div>
-    </div>
-    <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px" class="no-print">
-        <?php $reports = [
-            'stock' => 'Stock Report', 'low_stock' => 'Low Stock', 'sales' => 'Sales', 'purchases' => 'Purchases',
-            'profit' => 'Profit & Loss', 'valuation' => 'Valuation', 'supplier' => 'Supplier-wise',
-            'customer' => 'Customer-wise', 'product_sales' => 'Product-wise Sales', 'category_sales' => 'Category-wise',
-            'payment' => 'Payment Status', 'movement' => 'Stock Movement', 'dead_stock' => 'Dead Stock'
-        ];
-        foreach ($reports as $key => $label): ?>
-        <a href="?page=reports&report=<?= h($key) ?>&date_from=<?= h($dateFrom) ?>&date_to=<?= h($dateTo) ?>" class="btn btn-sm <?= $report === $key ? 'btn-primary' : '' ?>"><?= h($label) ?></a>
-        <?php endforeach; ?>
-    </div>
-    <?php if (!in_array($report, ['stock', 'low_stock', 'valuation', 'dead_stock'])): ?>
-    <form method="GET" action="" class="no-print"><input type="hidden" name="page" value="reports"><input type="hidden" name="report" value="<?= h($report) ?>">
-        <div class="filter-bar">
-            <div class="filter-group"><label>From</label><input type="date" name="date_from" value="<?= h($dateFrom) ?>"></div>
-            <div class="filter-group"><label>To</label><input type="date" name="date_to" value="<?= h($dateTo) ?>"></div>
-            <div class="filter-group" style="justify-content:flex-end"><label>&nbsp;</label><button type="submit" class="btn btn-primary">Apply</button></div>
-        </div>
-    </form>
-    <?php endif; ?>
-    <?php
-    if ($report === 'stock') {
-        $rows = $pdo->query('SELECT p.*,c.name as cat_name FROM products p LEFT JOIN categories c ON p.category_id=c.id ORDER BY p.name')->fetchAll();
-        echo '<div class="card"><div class="card-title">Current Stock Report</div><div class="table-wrap"><table class="data-table"><thead><tr><th>SKU</th><th>Name</th><th>Category</th><th>Unit</th><th>Stock</th><th>Min</th><th>Purchase Price</th><th>Selling Price</th><th>Stock Value</th><th>Status</th></tr></thead><tbody>';
-        $totalVal = 0;
-        foreach ($rows as $r) {
-            $val = $r['current_stock'] * $r['purchase_price'];
-            $totalVal += $val;
-            $sc = $r['current_stock'] <= 0 ? 'stock-critical' : ($r['current_stock'] <= $r['min_stock'] ? 'stock-low' : 'stock-good');
-            echo '<tr><td data-label="SKU" style="font-family:monospace;font-size:11px">' . h($r['sku']) . '</td><td data-label="Name">' . h($r['name']) . '</td><td data-label="Cat">' . h($r['cat_name'] ?? '-') . '</td><td data-label="Unit">' . h($r['unit']) . '</td><td data-label="Stock"><span class="' . $sc . '">' . h($r['current_stock']) . '</span></td><td data-label="Min">' . h($r['min_stock']) . '</td><td data-label="Purchase">' . formatCurrency($r['purchase_price']) . '</td><td data-label="Selling">' . formatCurrency($r['selling_price']) . '</td><td data-label="Value">' . formatCurrency($val) . '</td><td data-label="Status"><span class="badge ' . ($r['status'] ? 'badge-success' : 'badge-danger') . '">' . ($r['status'] ? 'Active' : 'Inactive') . '</span></td></tr>';
-        }
-        echo '</tbody><tfoot><tr><td colspan="8" style="text-align:right"><strong>Total Inventory Value:</strong></td><td colspan="2"><strong>' . formatCurrency($totalVal) . '</strong></td></tr></tfoot></table></div></div>';
-    } elseif ($report === 'low_stock') {
-        $rows = $pdo->query('SELECT p.*,c.name as cat_name FROM products p LEFT JOIN categories c ON p.category_id=c.id WHERE p.current_stock<=p.min_stock ORDER BY p.current_stock ASC')->fetchAll();
-        echo '<div class="card"><div class="card-title">Low Stock Report (' . count($rows) . ' products)</div><div class="table-wrap"><table class="data-table"><thead><tr><th>SKU</th><th>Name</th><th>Category</th><th>Current Stock</th><th>Min Level</th><th>Shortage</th><th>Purchase Price</th></tr></thead><tbody>';
-        foreach ($rows as $r) {
-            $shortage = max(0, $r['min_stock'] - $r['current_stock']);
-            $sc = $r['current_stock'] <= 0 ? 'stock-critical' : 'stock-low';
-            echo '<tr><td data-label="SKU" style="font-family:monospace;font-size:11px">' . h($r['sku']) . '</td><td data-label="Name">' . h($r['name']) . '</td><td data-label="Cat">' . h($r['cat_name'] ?? '-') . '</td><td data-label="Stock"><span class="' . $sc . '">' . h($r['current_stock']) . '</span></td><td data-label="Min">' . h($r['min_stock']) . '</td><td data-label="Shortage" style="color:var(--red-dark);font-weight:700">' . h($shortage) . '</td><td data-label="Price">' . formatCurrency($r['purchase_price']) . '</td></tr>';
-        }
-        echo '</tbody></table></div></div>';
-    } elseif ($report === 'sales') {
-        $rows = $pdo->query("SELECT i.*,c.name as customer_name FROM invoices i JOIN customers c ON i.customer_id=c.id WHERE DATE(i.invoice_date) BETWEEN '" . addslashes($dateFrom) . "' AND '" . addslashes($dateTo) . "' ORDER BY i.invoice_date DESC")->fetchAll();
-        $totAmt = array_sum(array_column($rows, 'total_amount'));
-        echo '<div class="card"><div class="card-title">Sales Report: ' . h($dateFrom) . ' to ' . h($dateTo) . '</div><div class="table-wrap"><table class="data-table"><thead><tr><th>Invoice#</th><th>Customer</th><th>Date</th><th>Subtotal</th><th>Tax</th><th>Discount</th><th>Total</th><th>Payment</th><th>Method</th></tr></thead><tbody>';
-        foreach ($rows as $r) {
-            $pClass = $r['payment_status'] === 'Paid' ? 'badge-success' : ($r['payment_status'] === 'Partial' ? 'badge-warning' : 'badge-danger');
-            echo '<tr><td data-label="Inv#">' . h($r['invoice_number']) . '</td><td data-label="Customer">' . h($r['customer_name']) . '</td><td data-label="Date">' . formatDate($r['invoice_date']) . '</td><td data-label="Sub">' . formatCurrency($r['subtotal']) . '</td><td data-label="Tax">' . formatCurrency($r['subtotal'] * $r['tax_percent'] / 100) . '</td><td data-label="Disc">' . formatCurrency($r['discount']) . '</td><td data-label="Total">' . formatCurrency($r['total_amount']) . '</td><td data-label="Status"><span class="badge ' . $pClass . '">' . h($r['payment_status']) . '</span></td><td data-label="Method">' . h($r['payment_method']) . '</td></tr>';
-        }
-        echo '</tbody><tfoot><tr><td colspan="6" style="text-align:right"><strong>Total:</strong></td><td colspan="3"><strong>' . formatCurrency($totAmt) . '</strong></td></tr></tfoot></table></div></div>';
-    } elseif ($report === 'purchases') {
-        $rows = $pdo->query("SELECT po.*,s.company_name FROM purchase_orders po JOIN suppliers s ON po.supplier_id=s.id WHERE DATE(po.po_date) BETWEEN '" . addslashes($dateFrom) . "' AND '" . addslashes($dateTo) . "' ORDER BY po.po_date DESC")->fetchAll();
-        $totAmt = array_sum(array_column($rows, 'total_amount'));
-        echo '<div class="card"><div class="card-title">Purchase Report: ' . h($dateFrom) . ' to ' . h($dateTo) . '</div><div class="table-wrap"><table class="data-table"><thead><tr><th>PO#</th><th>Supplier</th><th>Date</th><th>Total</th><th>Payment</th><th>Status</th></tr></thead><tbody>';
-        foreach ($rows as $r) {
-            echo '<tr><td data-label="PO#">' . h($r['po_number']) . '</td><td data-label="Supplier">' . h($r['company_name']) . '</td><td data-label="Date">' . formatDate($r['po_date']) . '</td><td data-label="Total">' . formatCurrency($r['total_amount']) . '</td><td data-label="Payment"><span class="badge ' . ($r['payment_status'] === 'Paid' ? 'badge-success' : ($r['payment_status'] === 'Partial' ? 'badge-warning' : 'badge-danger')) . '">' . h($r['payment_status']) . '</span></td><td data-label="Status"><span class="badge ' . ($r['order_status'] === 'Received' ? 'badge-success' : 'badge-warning') . '">' . h($r['order_status']) . '</span></td></tr>';
-        }
-        echo '</tbody><tfoot><tr><td colspan="3" style="text-align:right"><strong>Total:</strong></td><td colspan="3"><strong>' . formatCurrency($totAmt) . '</strong></td></tr></tfoot></table></div></div>';
-    } elseif ($report === 'profit') {
-        $salesRow = $pdo->query("SELECT COALESCE(SUM(total_amount),0) as total_sales, COALESCE(SUM(CASE WHEN payment_status='Paid' THEN total_amount ELSE 0 END),0) as paid_sales FROM invoices WHERE DATE(invoice_date) BETWEEN '" . addslashes($dateFrom) . "' AND '" . addslashes($dateTo) . "'")->fetch();
-        $costRow = $pdo->query("SELECT COALESCE(SUM(ii.quantity*p.purchase_price),0) as total_cost FROM invoice_items ii JOIN invoices i ON ii.invoice_id=i.id JOIN products p ON ii.product_id=p.id WHERE DATE(i.invoice_date) BETWEEN '" . addslashes($dateFrom) . "' AND '" . addslashes($dateTo) . "'")->fetch();
-        $revenue = $salesRow['total_sales'];
-        $cost = $costRow['total_cost'];
-        $profit = $revenue - $cost;
-        $margin = $revenue > 0 ? ($profit / $revenue) * 100 : 0;
-        echo '<div class="card"><div class="card-title">Profit & Loss: ' . h($dateFrom) . ' to ' . h($dateTo) . '</div>';
-        echo '<table class="detail-table" style="max-width:500px">';
-        echo '<tr><td>Total Revenue (All Invoices)</td><td style="color:var(--green-dark)"><strong>' . formatCurrency($revenue) . '</strong></td></tr>';
-        echo '<tr><td>Paid Revenue</td><td>' . formatCurrency($salesRow['paid_sales']) . '</td></tr>';
-        echo '<tr><td>Cost of Goods Sold</td><td style="color:var(--red-dark)">' . formatCurrency($cost) . '</td></tr>';
-        echo '<tr><td><strong>Gross Profit</strong></td><td><strong style="color:' . ($profit >= 0 ? 'var(--green-dark)' : 'var(--red-dark)') . '">' . formatCurrency($profit) . '</strong></td></tr>';
-        echo '<tr><td>Profit Margin</td><td><strong>' . round($margin, 2) . '%</strong></td></tr>';
-        echo '</table></div>';
-    } elseif ($report === 'valuation') {
-        $rows = $pdo->query('SELECT p.*,c.name as cat_name,(p.current_stock*p.purchase_price) as cost_value,(p.current_stock*p.selling_price) as sell_value FROM products p LEFT JOIN categories c ON p.category_id=c.id ORDER BY cost_value DESC')->fetchAll();
-        $totCost = array_sum(array_column($rows, 'cost_value'));
-        $totSell = array_sum(array_column($rows, 'sell_value'));
-        echo '<div class="card"><div class="card-title">Inventory Valuation Report</div><div class="table-wrap"><table class="data-table"><thead><tr><th>SKU</th><th>Product</th><th>Category</th><th>Stock</th><th>Purchase Price</th><th>Selling Price</th><th>Cost Value</th><th>Sell Value</th></tr></thead><tbody>';
-        foreach ($rows as $r) {
-            echo '<tr><td data-label="SKU" style="font-family:monospace;font-size:11px">' . h($r['sku']) . '</td><td data-label="Product">' . h($r['name']) . '</td><td data-label="Cat">' . h($r['cat_name'] ?? '-') . '</td><td data-label="Stock">' . h($r['current_stock']) . '</td><td data-label="PPrice">' . formatCurrency($r['purchase_price']) . '</td><td data-label="SPrice">' . formatCurrency($r['selling_price']) . '</td><td data-label="CostVal">' . formatCurrency($r['cost_value']) . '</td><td data-label="SellVal">' . formatCurrency($r['sell_value']) . '</td></tr>';
-        }
-        echo '</tbody><tfoot><tr><td colspan="6" style="text-align:right"><strong>Totals:</strong></td><td><strong>' . formatCurrency($totCost) . '</strong></td><td><strong>' . formatCurrency($totSell) . '</strong></td></tr></tfoot></table></div></div>';
-    } elseif ($report === 'supplier') {
-        $rows = $pdo->query("SELECT s.company_name,COUNT(po.id) as total_orders,COALESCE(SUM(po.total_amount),0) as total_purchased,s.balance FROM suppliers s LEFT JOIN purchase_orders po ON s.id=po.supplier_id AND DATE(po.po_date) BETWEEN '" . addslashes($dateFrom) . "' AND '" . addslashes($dateTo) . "' GROUP BY s.id ORDER BY total_purchased DESC")->fetchAll();
-        echo '<div class="card"><div class="card-title">Supplier-wise Purchase Report</div><div class="table-wrap"><table class="data-table"><thead><tr><th>Supplier</th><th>Orders</th><th>Total Purchased</th><th>Balance</th></tr></thead><tbody>';
-        foreach ($rows as $r) {
-            echo '<tr><td data-label="Supplier">' . h($r['company_name']) . '</td><td data-label="Orders">' . h($r['total_orders']) . '</td><td data-label="Total">' . formatCurrency($r['total_purchased']) . '</td><td data-label="Balance" style="color:' . ($r['balance'] > 0 ? 'var(--red-dark)' : 'var(--green-dark)') . '">' . formatCurrency($r['balance']) . '</td></tr>';
-        }
-        echo '</tbody></table></div></div>';
-    } elseif ($report === 'customer') {
-        $rows = $pdo->query("SELECT c.name,COUNT(i.id) as total_invoices,COALESCE(SUM(i.total_amount),0) as total_sales,c.current_balance FROM customers c LEFT JOIN invoices i ON c.id=i.customer_id AND DATE(i.invoice_date) BETWEEN '" . addslashes($dateFrom) . "' AND '" . addslashes($dateTo) . "' GROUP BY c.id ORDER BY total_sales DESC")->fetchAll();
-        echo '<div class="card"><div class="card-title">Customer-wise Sales Report</div><div class="table-wrap"><table class="data-table"><thead><tr><th>Customer</th><th>Invoices</th><th>Total Sales</th><th>Balance</th></tr></thead><tbody>';
-        foreach ($rows as $r) {
-            echo '<tr><td data-label="Customer">' . h($r['name']) . '</td><td data-label="Inv">' . h($r['total_invoices']) . '</td><td data-label="Total">' . formatCurrency($r['total_sales']) . '</td><td data-label="Balance" style="color:' . ($r['current_balance'] > 0 ? 'var(--red-dark)' : 'var(--green-dark)') . '">' . formatCurrency($r['current_balance']) . '</td></tr>';
-        }
-        echo '</tbody></table></div></div>';
-    } elseif ($report === 'product_sales') {
-        $rows = $pdo->query("SELECT p.name,p.sku,SUM(ii.quantity) as total_qty,SUM(ii.total_price) as total_revenue FROM invoice_items ii JOIN products p ON ii.product_id=p.id JOIN invoices i ON ii.invoice_id=i.id WHERE DATE(i.invoice_date) BETWEEN '" . addslashes($dateFrom) . "' AND '" . addslashes($dateTo) . "' GROUP BY p.id ORDER BY total_revenue DESC")->fetchAll();
-        echo '<div class="card"><div class="card-title">Product-wise Sales Report</div><div class="table-wrap"><table class="data-table"><thead><tr><th>SKU</th><th>Product</th><th>Qty Sold</th><th>Revenue</th></tr></thead><tbody>';
-        foreach ($rows as $r) {
-            echo '<tr><td data-label="SKU" style="font-family:monospace;font-size:11px">' . h($r['sku']) . '</td><td data-label="Product">' . h($r['name']) . '</td><td data-label="Qty">' . h($r['total_qty']) . '</td><td data-label="Revenue">' . formatCurrency($r['total_revenue']) . '</td></tr>';
-        }
-        echo '</tbody></table></div></div>';
-    } elseif ($report === 'category_sales') {
-        $rows = $pdo->query("SELECT c.name as category,SUM(ii.quantity) as total_qty,SUM(ii.total_price) as total_revenue FROM invoice_items ii JOIN products p ON ii.product_id=p.id JOIN categories c ON p.category_id=c.id JOIN invoices i ON ii.invoice_id=i.id WHERE DATE(i.invoice_date) BETWEEN '" . addslashes($dateFrom) . "' AND '" . addslashes($dateTo) . "' GROUP BY c.id ORDER BY total_revenue DESC")->fetchAll();
-        echo '<div class="card"><div class="card-title">Category-wise Sales Report</div><div class="table-wrap"><table class="data-table"><thead><tr><th>Category</th><th>Qty Sold</th><th>Revenue</th></tr></thead><tbody>';
-        foreach ($rows as $r) {
-            echo '<tr><td data-label="Category">' . h($r['category']) . '</td><td data-label="Qty">' . h($r['total_qty']) . '</td><td data-label="Revenue">' . formatCurrency($r['total_revenue']) . '</td></tr>';
-        }
-        echo '</tbody></table></div></div>';
-    } elseif ($report === 'payment') {
-        $recvRows = $pdo->query("SELECT 'Receivable' as type,invoice_number as ref_no,c.name as party,total_amount,payment_status FROM invoices inv JOIN customers c ON inv.customer_id=c.id WHERE payment_status!='Paid' ORDER BY invoice_date")->fetchAll();
-        $payRows = $pdo->query("SELECT 'Payable' as type,po_number as ref_no,s.company_name as party,total_amount,payment_status FROM purchase_orders po JOIN suppliers s ON po.supplier_id=s.id WHERE payment_status!='Paid' ORDER BY po_date")->fetchAll();
-        $all = array_merge($recvRows, $payRows);
-        echo '<div class="card"><div class="card-title">Payment Status Report (Outstanding)</div><div class="table-wrap"><table class="data-table"><thead><tr><th>Type</th><th>Reference</th><th>Party</th><th>Amount</th><th>Status</th></tr></thead><tbody>';
-        foreach ($all as $r) {
-            echo '<tr><td data-label="Type"><span class="badge ' . ($r['type'] === 'Receivable' ? 'badge-success' : 'badge-danger') . '">' . h($r['type']) . '</span></td><td data-label="Ref">' . h($r['ref_no']) . '</td><td data-label="Party">' . h($r['party']) . '</td><td data-label="Amount">' . formatCurrency($r['total_amount']) . '</td><td data-label="Status"><span class="badge badge-warning">' . h($r['payment_status']) . '</span></td></tr>';
-        }
-        echo '</tbody></table></div></div>';
-    } elseif ($report === 'movement') {
-        $rows = $pdo->query("SELECT sa.*,p.name as product_name,u.full_name as by_name FROM stock_adjustments sa JOIN products p ON sa.product_id=p.id JOIN users u ON sa.created_by=u.id WHERE sa.status='Approved' ORDER BY sa.created_at DESC LIMIT 200")->fetchAll();
-        echo '<div class="card"><div class="card-title">Stock Movement Report</div><div class="table-wrap"><table class="data-table"><thead><tr><th>Ref</th><th>Product</th><th>Type</th><th>Qty</th><th>Before</th><th>After</th><th>By</th><th>Date</th></tr></thead><tbody>';
-        $negTypes = ['Subtraction', 'Damage', 'Expired'];
-        foreach ($rows as $r) {
-            $color = in_array($r['adjustment_type'], $negTypes) ? 'var(--red-dark)' : 'var(--green-dark)';
-            echo '<tr><td data-label="Ref" style="font-size:11px">' . h($r['reference_no']) . '</td><td data-label="Product">' . h($r['product_name']) . '</td><td data-label="Type">' . h($r['adjustment_type']) . '</td><td data-label="Qty" style="color:' . $color . ';font-weight:700">' . (in_array($r['adjustment_type'], $negTypes) ? '-' : '+') . h($r['quantity']) . '</td><td data-label="Before">' . h($r['previous_stock']) . '</td><td data-label="After">' . h($r['new_stock']) . '</td><td data-label="By">' . h($r['by_name']) . '</td><td data-label="Date">' . formatDate($r['created_at']) . '</td></tr>';
-        }
-        echo '</tbody></table></div></div>';
-    } elseif ($report === 'dead_stock') {
-        $days = (int) ($_GET['dead_days'] ?? 90);
-        $rows = $pdo->query("SELECT p.*,c.name as cat_name,MAX(i.invoice_date) as last_sale FROM products p LEFT JOIN categories c ON p.category_id=c.id LEFT JOIN invoice_items ii ON p.id=ii.product_id LEFT JOIN invoices i ON ii.invoice_id=i.id GROUP BY p.id HAVING last_sale IS NULL OR last_sale < DATE_SUB(NOW(), INTERVAL {$days} DAY) ORDER BY last_sale ASC")->fetchAll();
-        echo '<div class="card"><div class="card-title">Dead Stock Report (No movement in ' . $days . ' days)</div>';
-        echo '<form method="GET" action="" style="margin-bottom:8px"><input type="hidden" name="page" value="reports"><input type="hidden" name="report" value="dead_stock"><div class="filter-bar"><div class="filter-group"><label>No movement in (days)</label><input type="number" name="dead_days" value="' . $days . '" min="1" style="width:100px"></div><div class="filter-group" style="justify-content:flex-end"><label>&nbsp;</label><button type="submit" class="btn btn-primary">Apply</button></div></div></form>';
-        echo '<div class="table-wrap"><table class="data-table"><thead><tr><th>SKU</th><th>Product</th><th>Category</th><th>Stock</th><th>Last Sale</th><th>Stock Value</th></tr></thead><tbody>';
-        foreach ($rows as $r) {
-            echo '<tr><td data-label="SKU" style="font-family:monospace;font-size:11px">' . h($r['sku']) . '</td><td data-label="Product">' . h($r['name']) . '</td><td data-label="Cat">' . h($r['cat_name'] ?? '-') . '</td><td data-label="Stock">' . h($r['current_stock']) . '</td><td data-label="Last Sale">' . ($r['last_sale'] ? formatDate($r['last_sale']) : 'Never') . '</td><td data-label="Value">' . formatCurrency($r['current_stock'] * $r['purchase_price']) . '</td></tr>';
-        }
-        echo '</tbody></table></div></div>';
-    }
-    if (isset($_GET['export']) && $_GET['export'] === 'csv') {
-        ob_end_clean();
-        header('Content-Type: text/csv');
-        header('Content-Disposition: attachment; filename="report_' . h($report) . '_' . date('Ymd') . '.csv"');
-    }
-    ?>
-    <?php
-    renderFooter();
-}
-
-function renderUsers($users)
-{
-    renderHeader('User Management');
-    $csrf = generateCSRF();
-    ?>
-    <div class="page-title">&#128100; Users
-        <div class="page-title-actions">
-            <button onclick="openModal('addUserModal')" class="btn btn-primary btn-sm">+ Add User</button>
-        </div>
-    </div>
-    <div class="table-wrap">
-    <table class="data-table">
-        <thead><tr><th>Username</th><th>Full Name</th><th>Email</th><th>Role</th><th>Status</th><th>Last Login</th><th>Actions</th></tr></thead>
-        <tbody>
-        <?php foreach ($users as $u): ?>
-        <tr>
-            <td data-label="Username"><strong><?= h($u['username']) ?></strong></td>
-            <td data-label="Name"><?= h($u['full_name']) ?></td>
-            <td data-label="Email"><?= h($u['email'] ?? '-') ?></td>
-            <td data-label="Role"><span class="badge <?= $u['role'] === 'Admin' ? 'badge-danger' : ($u['role'] === 'Manager' ? 'badge-warning' : 'badge-info') ?>"><?= h($u['role']) ?></span></td>
-            <td data-label="Status"><span class="badge <?= $u['status'] ? 'badge-success' : 'badge-danger' ?>"><?= $u['status'] ? 'Active' : 'Inactive' ?></span></td>
-            <td data-label="Last Login" style="font-size:11px"><?= formatDate($u['last_login'] ?? '') ?></td>
-            <td data-label="Actions" style="white-space:nowrap">
-                <button onclick="editUser(<?= h(json_encode($u)) ?>)" class="btn btn-xs btn-warning">Edit</button>
-                <?php if ($u['id'] != $_SESSION['user_id']): ?>
-                <form method="POST" action="?page=users&action=toggle" style="display:inline" id="tog_u_<?= h($u['id']) ?>">
-                    <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= $csrf ?>">
-                    <input type="hidden" name="id" value="<?= h($u['id']) ?>">
-                    <button type="submit" class="btn btn-xs"><?= $u['status'] ? 'Disable' : 'Enable' ?></button>
-                </form>
-                <form method="POST" action="?page=users&action=delete" style="display:inline" id="del_u_<?= h($u['id']) ?>">
-                    <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= $csrf ?>">
-                    <input type="hidden" name="id" value="<?= h($u['id']) ?>">
-                    <button type="button" class="btn btn-xs btn-danger" onclick="confirmDelete('del_u_<?= h($u['id']) ?>')">Del</button>
-                </form>
-                <?php endif; ?>
-            </td>
-        </tr>
-        <?php endforeach; ?>
-        </tbody>
-    </table>
-    </div>
-    <?php foreach (['add', 'edit'] as $mt): ?>
-    <div id="<?= $mt ?>UserModal" class="modal-overlay">
-        <div class="modal" style="max-width:480px">
-            <div class="modal-title-bar"><?= ucfirst($mt) ?> User <button class="modal-close" onclick="closeModal('<?= $mt ?>UserModal')">&#10005;</button></div>
-            <form method="POST" action="?page=users&action=<?= $mt ?>">
-                <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= $csrf ?>">
-                <?php if ($mt === 'edit'): ?><input type="hidden" name="id" id="editUserId"><?php endif; ?>
-                <div class="modal-body">
-                    <div class="form-row">
-                        <div class="form-group"><label>Username *</label><input type="text" name="username" id="<?= $mt ?>UserUsername" required minlength="3" autocomplete="off"></div>
-                        <div class="form-group"><label>Full Name *</label><input type="text" name="full_name" id="<?= $mt ?>UserFullname" required></div>
-                    </div>
-                    <div class="form-group"><label>Email</label><input type="email" name="email" id="<?= $mt ?>UserEmail" autocomplete="off"></div>
-                    <div class="form-group"><label>Password <?= $mt === 'edit' ? '(leave blank to keep)' : ' *' ?></label>
-                        <input type="password" name="password" id="<?= $mt ?>UserPassword" <?= $mt === 'add' ? 'required' : '' ?> minlength="8" autocomplete="new-password" placeholder="Min 8 chars, 1 special char">
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group"><label>Role *</label>
-                            <select name="role" id="<?= $mt ?>UserRole">
-                                <?php foreach (['Admin', 'Manager', 'Staff'] as $r): ?><option value="<?= h($r) ?>"><?= h($r) ?></option><?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="form-group"><label>Status</label>
-                            <select name="status" id="<?= $mt ?>UserStatus"><option value="1">Active</option><option value="0">Inactive</option></select>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer"><button type="submit" class="btn btn-primary">Save</button><button type="button" class="btn" onclick="closeModal('<?= $mt ?>UserModal')">Cancel</button></div>
-            </form>
-        </div>
-    </div>
-    <?php endforeach; ?>
-    <script>
-    function editUser(u){
-        document.getElementById('editUserId').value=u.id;
-        document.getElementById('editUserUsername').value=u.username;
-        document.getElementById('editUserFullname').value=u.full_name;
-        document.getElementById('editUserEmail').value=u.email||'';
-        document.getElementById('editUserPassword').value='';
-        document.getElementById('editUserRole').value=u.role;
-        document.getElementById('editUserStatus').value=u.status;
-        openModal('editUserModal');
-    }
-    </script>
-    <?php
-    renderFooter();
-}
-
-function renderProfile($user)
-{
-    renderHeader('My Profile');
-    $csrf = generateCSRF();
-    ?>
-    <div class="page-title">&#128100; My Profile</div>
-    <div class="two-col-layout">
-        <div class="card">
-            <div class="card-title">Profile Information</div>
-            <form method="POST" action="?page=profile&action=update">
-                <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= $csrf ?>">
-                <div class="form-group"><label>Username</label><input type="text" value="<?= h($user['username']) ?>" disabled style="background:#e0e0e0"></div>
-                <div class="form-group"><label>Full Name</label><input type="text" name="full_name" value="<?= h($user['full_name']) ?>" required></div>
-                <div class="form-group"><label>Email</label><input type="email" name="email" value="<?= h($user['email'] ?? '') ?>"></div>
-                <div class="form-group"><label>Role</label><input type="text" value="<?= h($user['role']) ?>" disabled style="background:#e0e0e0"></div>
-                <button type="submit" class="btn btn-primary">Update Profile</button>
-            </form>
-        </div>
-        <div class="card">
-            <div class="card-title">Change Password</div>
-            <form method="POST" action="?page=profile&action=change_password">
-                <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= $csrf ?>">
-                <div class="form-group"><label>Current Password *</label><input type="password" name="current_password" required autocomplete="current-password"></div>
-                <div class="form-group"><label>New Password *</label><input type="password" name="new_password" required minlength="8" autocomplete="new-password" placeholder="Min 8 chars, 1 special char"></div>
-                <div class="form-group"><label>Confirm New Password *</label><input type="password" name="confirm_password" required autocomplete="new-password"></div>
-                <button type="submit" class="btn btn-warning">Change Password</button>
-            </form>
-        </div>
-    </div>
-    <?php
-    renderFooter();
-}
-
-function renderSettings($settings)
-{
-    renderHeader('System Settings');
-    $csrf = generateCSRF();
-    ?>
-    <div class="page-title">&#9965; Settings</div>
-    <form method="POST" action="?page=settings&action=save">
-        <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= $csrf ?>">
-        <div class="two-col-layout">
-            <div>
-                <fieldset class="form-section"><legend>Company Settings</legend>
-                    <div class="form-group"><label>Company Name</label><input type="text" name="company_name" value="<?= h($settings['company_name'] ?? '') ?>"></div>
-                    <div class="form-group"><label>Address</label><textarea name="company_address" rows="2"><?= h($settings['company_address'] ?? '') ?></textarea></div>
-                    <div class="form-group"><label>Phone</label><input type="text" name="company_phone" value="<?= h($settings['company_phone'] ?? '') ?>"></div>
-                    <div class="form-group"><label>Email</label><input type="email" name="company_email" value="<?= h($settings['company_email'] ?? '') ?>"></div>
-                    <div class="form-group"><label>Website</label><input type="text" name="company_website" value="<?= h($settings['company_website'] ?? '') ?>"></div>
-                    <div class="form-group"><label>Tax Number</label><input type="text" name="tax_number" value="<?= h($settings['tax_number'] ?? '') ?>"></div>
-                    <div class="form-group"><label>Logo URL</label><input type="text" name="company_logo" value="<?= h($settings['company_logo'] ?? '') ?>"></div>
-                </fieldset>
-                <fieldset class="form-section"><legend>Invoice Settings</legend>
-                    <div class="form-group"><label>Invoice Prefix</label><input type="text" name="invoice_prefix" value="<?= h($settings['invoice_prefix'] ?? 'INV') ?>"></div>
-                    <div class="form-group"><label>Invoice Start Number</label><input type="number" name="invoice_start" value="<?= h($settings['invoice_start'] ?? 1000) ?>" min="1"></div>
-                    <div class="form-group"><label>Default Tax %</label><input type="number" name="default_tax" value="<?= h($settings['default_tax'] ?? 0) ?>" step="0.01" min="0" max="100"></div>
-                    <div class="form-group"><label>Default Payment Terms</label><input type="text" name="default_payment_terms" value="<?= h($settings['default_payment_terms'] ?? 'Net 30') ?>"></div>
-                </fieldset>
-            </div>
-            <div>
-                <fieldset class="form-section"><legend>System Settings</legend>
-                    <div class="form-group"><label>Currency Code</label><input type="text" name="currency" value="<?= h($settings['currency'] ?? 'USD') ?>" maxlength="3"></div>
-                    <div class="form-group"><label>Currency Symbol</label><input type="text" name="currency_symbol" value="<?= h($settings['currency_symbol'] ?? '$') ?>" maxlength="5"></div>
-                    <div class="form-group"><label>Date Format</label>
-                        <select name="date_format">
-                            <?php foreach (['Y-m-d' => 'YYYY-MM-DD', 'd-m-Y' => 'DD-MM-YYYY', 'm/d/Y' => 'MM/DD/YYYY'] as $val => $lbl): ?>
-                            <option value="<?= h($val) ?>" <?= ($settings['date_format'] ?? 'Y-m-d') === $val ? 'selected' : '' ?>><?= h($lbl) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="form-group"><label>Timezone</label><input type="text" name="timezone" value="<?= h($settings['timezone'] ?? 'UTC') ?>"></div>
-                    <div class="form-group"><label>Default Items Per Page</label>
-                        <select name="items_per_page">
-                            <?php foreach ([10, 20, 50, 100] as $n): ?><option value="<?= h($n) ?>" <?= ($settings['items_per_page'] ?? 20) == $n ? 'selected' : '' ?>><?= h($n) ?></option><?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="form-group"><label>Low Stock Default Threshold</label><input type="number" name="low_stock_threshold" value="<?= h($settings['low_stock_threshold'] ?? 10) ?>" min="0"></div>
-                </fieldset>
-                <fieldset class="form-section"><legend>Backup & Restore</legend>
-                    <p style="font-size:12px;color:#666;margin-bottom:8px">Export a SQL dump of the entire database or restore from a previous backup.</p>
-                    <a href="?page=backup" class="btn btn-primary">&#8595; Download SQL Backup</a>
-                    <div style="margin-top:10px">
-                        <label>Restore from SQL file</label>
-                        <p style="font-size:11px;color:red;margin-bottom:4px">Restore functionality is not implemented.</p>
-                    </div>
-                </fieldset>
-            </div>
-        </div>
-        <div style="margin-top:12px"><button type="submit" class="btn btn-primary">&#10003; Save Settings</button></div>
-    </form>
-    <?php
-    renderFooter();
-}
-
-function renderActivity($logs, $modules, $search, $module, $dateFrom, $dateTo, $total, $pg, $perPage, $baseUrl)
-{
-    renderHeader('Activity Log');
-    ?>
-    <div class="page-title">&#128203; Activity Log
-        <div class="page-title-actions no-print">
-            <button onclick="printPage()" class="btn btn-sm">&#128424; Print</button>
-        </div>
-    </div>
-    <form method="GET" action="" class="no-print">
-        <input type="hidden" name="page" value="activity">
-        <div class="filter-bar">
-            <div class="filter-group"><label>Search</label><input type="search" name="search" value="<?= h($search) ?>" placeholder="User, Action, Details..."></div>
-            <div class="filter-group"><label>Module</label>
-                <select name="module"><option value="">All</option><?php foreach ($modules as $m): ?><option value="<?= h($m) ?>" <?= $module === $m ? 'selected' : '' ?>><?= h($m) ?></option><?php endforeach; ?></select>
-            </div>
-            <div class="filter-group"><label>From</label><input type="date" name="date_from" value="<?= h($dateFrom) ?>"></div>
-            <div class="filter-group"><label>To</label><input type="date" name="date_to" value="<?= h($dateTo) ?>"></div>
-            <div class="filter-group" style="justify-content:flex-end"><label>&nbsp;</label><button type="submit" class="btn btn-primary">Filter</button></div>
-            <div class="filter-group" style="justify-content:flex-end"><label>&nbsp;</label><a href="?page=activity" class="btn">Clear</a></div>
-        </div>
-    </form>
-    <div class="table-wrap">
-    <table class="data-table">
-        <thead><tr><th>Timestamp</th><th>User</th><th>Action</th><th>Module</th><th>Details</th><th>IP</th></tr></thead>
-        <tbody>
-        <?php if (empty($logs)): ?>
-        <tr><td colspan="6" style="text-align:center;padding:20px;color:#888">No activity found.</td></tr>
-        <?php else:
-        foreach ($logs as $log): ?>
-        <tr>
-            <td data-label="Time" style="font-size:11px"><?= date('Y-m-d H:i:s', strtotime($log['created_at'])) ?></td>
-            <td data-label="User"><?= h($log['username'] ?? 'System') ?></td>
-            <td data-label="Action"><span class="badge badge-info"><?= h($log['action']) ?></span></td>
-            <td data-label="Module"><?= h($log['module'] ?? '-') ?></td>
-            <td data-label="Details" style="max-width:300px;font-size:11px;word-break:break-word"><?= h($log['description'] ?? '') ?></td>
-            <td data-label="IP" style="font-size:11px;font-family:monospace"><?= h($log['ip_address'] ?? '-') ?></td>
-        </tr>
-        <?php endforeach;
-    endif; ?>
-        </tbody>
-    </table>
-    </div>
-    <?= paginate($total, $pg, $perPage, $baseUrl) ?>
-    <?php
-    renderFooter();
-}
-?>

@@ -2322,7 +2322,7 @@ Accessories: ', ?)
                             <th style="width: 15%;">Purchase Price</th>
                             <th style="width: 15%;">Selling Price <span class="required-mark">*</span></th>
                             <th style="width: 15%;">Margin</th>
-                            <th style="width: 20%;">Accessories (e.g., Helmets, Tyres)</th>
+                            <th style="width: 20%;">Accessories (e.g., Safeguards, Helmets, Tyres)</th>
                             <th style="width: 10%;">Actions</th>
                         </tr>
                     </thead>
@@ -2342,7 +2342,7 @@ Accessories: ', ?)
                                 <td><input type="text" name="bike_purchase_price[]" class="bike-pprice" readonly></td>
                                 <td><input type="number" name="bike_selling_price[]" class="bike-sprice" step="0.01" min="0" value="0.00" oninput="calculateMargin(this)" required></td>
                                 <td><input type="text" name="bike_margin[]" class="bike-margin" readonly></td>
-                                <td><input type="text" name="bike_accessories[]" placeholder="Helmets, Tyres, etc."></td>
+                                <td><input type="text" name="bike_accessories[]" placeholder="Safeguards, Helmets, Tyres, etc."></td>
                                 <td><button type="button" class="btn btn-danger btn-xs" onclick="removeBikeSaleRow(this)">X</button></td>
                             </tr>
                         <?php else: ?>
@@ -2365,7 +2365,7 @@ Accessories: ', ?)
                                     <td><input type="text" name="bike_purchase_price[]" class="bike-pprice" value="<?= h(formatCurrency($bike['purchase_price'])) ?>" readonly></td>
                                     <td><input type="number" name="bike_selling_price[]" class="bike-sprice" step="0.01" min="0" value="<?= h($bike['selling_price'] ?? $bike['purchase_price'] * 1.2) ?>" oninput="calculateMargin(this)" required></td>
                                     <td><input type="text" name="bike_margin[]" class="bike-margin" readonly></td>
-                                    <td><input type="text" name="bike_accessories[]" placeholder="Helmets, Tyres, etc."></td>
+                                    <td><input type="text" name="bike_accessories[]" placeholder="Safeguards, Helmets, Tyres, etc."></td>
                                     <td><button type="button" class="btn btn-danger btn-xs" onclick="removeBikeSaleRow(this)">X</button></td>
                                 </tr>
                             <?php endforeach; ?>
@@ -2443,7 +2443,7 @@ Accessories: ', ?)
                 <td><input type="text" name="bike_purchase_price[]" class="bike-pprice" readonly></td>
                 <td><input type="number" name="bike_selling_price[]" class="bike-sprice" step="0.01" min="0" value="0.00" oninput="calculateMargin(this)" required></td>
                 <td><input type="text" name="bike_margin[]" class="bike-margin" readonly></td>
-                <td><input type="text" name="bike_accessories[]" placeholder="Helmets, Tyres, etc."></td>
+                <td><input type="text" name="bike_accessories[]" placeholder="Safeguards, Helmets, Tyres, etc."></td>
                 <td><button type="button" class="btn btn-danger btn-xs" onclick="removeBikeSaleRow(this)">X</button></td>
             `;
             tbody.appendChild(newRow);
