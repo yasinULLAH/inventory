@@ -345,21 +345,14 @@ if ($db_exists && isset($_SESSION['logged_in'])) {
         $supplier_id = (int) ($_POST['supplier_id'] ?? 0);
         $cheque_number = sanitize($_POST['cheque_number'] ?? '');
         $bank_name = sanitize($_POST['bank_name'] ?? '');
-        $cheque_date = $_POST['cheque_date'] ?? '';
+        $cheque_date = !empty($_POST['cheque_date']) ? $_POST['cheque_date'] : null;
         $cheque_amount = (float) ($_POST['cheque_amount'] ?? 0);
         $notes = sanitize($_POST['po_notes'] ?? '');
         $bikes_data = $_POST['bikes'] ?? [];
         $total_units = count($bikes_data);
 
-        $stmt = $conn->prepare('INSERT INTO purchase_orders (order_date,supplier_id,cheque_number,bank_name,cheque_date,cheque_amount,total_units,notes) VALUES (?,?,?,?,?,?,?,?)');
-        $stmt->bind_param('siisssdis', $order_date, $supplier_id, $cheque_number, $bank_name, $cheque_date, $cheque_amount, $total_units, $notes);
-        $stmt->bind_param('sissssdis', $order_date, $supplier_id, $cheque_number, $bank_name, $cheque_date, $cheque_amount, $total_units, $notes);
-
-        $stmt2 = $conn->prepare('INSERT INTO purchase_orders (order_date,supplier_id,cheque_number,bank_name,cheque_date,cheque_amount,total_units,notes) VALUES (?,?,?,?,?,?,?,?)');
-        $stmt2->bind_param('sisssdis', $order_date, $supplier_id, $cheque_number, $bank_name, $cheque_date, $cheque_amount, $total_units, $notes);
-
         $po_stmt = $conn->prepare('INSERT INTO purchase_orders (order_date,supplier_id,cheque_number,bank_name,cheque_date,cheque_amount,total_units,notes) VALUES (?,?,?,?,?,?,?,?)');
-        $po_stmt->bind_param('sissssis', $order_date, $supplier_id, $cheque_number, $bank_name, $cheque_date, $cheque_amount, $total_units, $notes);
+        $po_stmt->bind_param('sisssdis', $order_date, $supplier_id, $cheque_number, $bank_name, $cheque_date, $cheque_amount, $total_units, $notes);
         $po_stmt->execute();
         $po_id = $conn->insert_id;
         $po_stmt->close();
@@ -382,8 +375,7 @@ if ($db_exists && isset($_SESSION['logged_in'])) {
             if (empty($chassis))
                 continue;
             $tax = ($pp * $tax_rate) / 100;
-            $bike_stmt->bind_param('ississsddss s', $po_id, $order_date, $inventory_date, $chassis, $motor, $model_id, $color, $pp, $tax, $safe_notes, $accessories, $bnotes);
-            $bike_stmt->bind_param('issssissdsss', $po_id, $order_date, $inventory_date, $chassis, $motor, $model_id, $color, $pp, $tax, $safe_notes, $accessories, $bnotes);
+            $bike_stmt->bind_param('issssisddsss', $po_id, $order_date, $inventory_date, $chassis, $motor, $model_id, $color, $pp, $tax, $safe_notes, $accessories, $bnotes);
             if (!$bike_stmt->execute()) {
                 $errors_list[] = "Chassis $chassis: " . $bike_stmt->error;
             } else {
@@ -521,7 +513,7 @@ if ($db_exists && isset($_SESSION['logged_in'])) {
         $payment_type = sanitize($_POST['payment_type'] ?? 'cash');
         $cheque_number = sanitize($_POST['cheque_number'] ?? '');
         $bank_name = sanitize($_POST['bank_name'] ?? '');
-        $cheque_date = $_POST['cheque_date'] ?? '';
+        $cheque_date = !empty($_POST['cheque_date']) ? $_POST['cheque_date'] : null;
         $cheque_amount = (float) ($_POST['cheque_amount'] ?? 0);
         $sale_notes = sanitize($_POST['sale_notes'] ?? '');
         $accessories = sanitize($_POST['accessories'] ?? '');
@@ -537,13 +529,9 @@ if ($db_exists && isset($_SESSION['logged_in'])) {
                 $margin = $selling_price - $bike['purchase_price'] - $tax_amount;
 
                 $st = $conn->prepare("UPDATE bikes SET selling_price=?,selling_date=?,customer_id=?,tax_amount=?,margin=?,status='sold',accessories=?,notes=? WHERE id=?");
-                $st->bind_param('dsiddsssi', $selling_price, $selling_date, $customer_id, $tax_amount, $margin, $accessories, $sale_notes, $bike_id);
-                $st->bind_param('dsiidssi', $selling_price, $selling_date, $customer_id, $tax_amount, $margin, $accessories, $sale_notes, $bike_id);
-
-                $st2 = $conn->prepare("UPDATE bikes SET selling_price=?,selling_date=?,customer_id=?,tax_amount=?,margin=?,status='sold',accessories=?,notes=? WHERE id=?");
-                $st2->bind_param('dsiddss i', $selling_price, $selling_date, $customer_id, $tax_amount, $margin, $accessories, $sale_notes, $bike_id);
-
-                $conn->query("UPDATE bikes SET selling_price=$selling_price, selling_date='$selling_date', customer_id=$customer_id, tax_amount=$tax_amount, margin=$margin, status='sold', accessories='" . mysqli_real_escape_string($conn, $accessories) . "', notes='" . mysqli_real_escape_string($conn, $sale_notes) . "' WHERE id=$bike_id");
+                $st->bind_param('dsiddssi', $selling_price, $selling_date, $customer_id, $tax_amount, $margin, $accessories, $sale_notes, $bike_id);
+                $st->execute();
+                $st->close();
 
                 $cust_r = $conn->query("SELECT name FROM customers WHERE id=$customer_id");
                 $cust_row = $cust_r ? $cust_r->fetch_assoc() : null;
@@ -579,12 +567,12 @@ if ($db_exists && isset($_SESSION['logged_in'])) {
 
     if ($page === 'returns' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_return'])) {
         $bike_id = (int) ($_POST['bike_id'] ?? 0);
-        $return_date = $_POST['return_date'] ?? date('Y-m-d');
+        $return_date = !empty($_POST['return_date']) ? $_POST['return_date'] : date('Y-m-d');
         $return_amount = (float) ($_POST['return_amount'] ?? 0);
         $refund_method = sanitize($_POST['refund_method'] ?? 'cash');
         $cheque_number = sanitize($_POST['cheque_number'] ?? '');
         $bank_name = sanitize($_POST['bank_name'] ?? '');
-        $cheque_date = $_POST['cheque_date'] ?? '';
+        $cheque_date = !empty($_POST['cheque_date']) ? $_POST['cheque_date'] : null;
         $return_notes = sanitize($_POST['return_notes'] ?? '');
 
         if ($bike_id && $return_date) {
@@ -2163,10 +2151,10 @@ function toggleRetCheque(v) {
 <?php
     elseif ($page === 'reports'):
         $sub = sanitize($_GET['sub'] ?? 'stock');
-        $rep_from = $_GET['rep_from'] ?? date('Y-01-01');
-        $rep_to = $_GET['rep_to'] ?? date('Y-12-31');
-        $rep_year = (int) ($_GET['rep_year'] ?? date('Y'));
-        $rep_month = (int) ($_GET['rep_month'] ?? date('n'));
+        $rep_from = !empty($_GET['rep_from']) ? $_GET['rep_from'] : date('Y-01-01');
+        $rep_to = !empty($_GET['rep_to']) ? $_GET['rep_to'] : date('Y-12-31');
+        $rep_year = !empty($_GET['rep_year']) ? (int)$_GET['rep_year'] : (int)date('Y');
+        $rep_month = !empty($_GET['rep_month']) ? (int)$_GET['rep_month'] : (int)date('n');
 ?>
 <div class="sub-tabs no-print">
 <?php
