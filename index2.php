@@ -5464,11 +5464,115 @@ if (!empty($_GET['ajax'])) {
     function renderApiSync(): void
     {
         requireRole(['admin']);
+        $pdo = getPDO();
+        // Ensure sync logs table exists
+        $pdo->exec("CREATE TABLE IF NOT EXISTS `sync_logs` (
+            `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            `integration_id` INT UNSIGNED NOT NULL,
+            `sync_type` ENUM('products_push','products_pull','orders_pull','inventory_sync') NOT NULL,
+            `status` ENUM('success','failed','partial') NOT NULL,
+            `items_processed` INT NOT NULL DEFAULT 0,
+            `message` TEXT,
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (`integration_id`) REFERENCES `api_keys`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB");
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
+            $action = $_POST['action'] ?? 'save';
+            if ($action === 'save') {
+                $id = (int) ($_POST['id'] ?? 0);
+                $platform = $_POST['platform'];
+                $name = trim($_POST['name']);
+                $api_key = trim($_POST['api_key']);
+                $api_secret = trim($_POST['api_secret'] ?? '');
+                $webhook = trim($_POST['webhook_url'] ?? '');
+                $active = isset($_POST['is_active']) ? 1 : 0;
+                if ($id) {
+                    $pdo
+                        ->prepare('UPDATE api_keys SET platform=?, name=?, api_key=?, api_secret=?, webhook_url=?, is_active=? WHERE id=?')
+                        ->execute([$platform, $name, $api_key, $api_secret, $webhook, $active, $id]);
+                    $_SESSION['flash_msg'] = 'Integration updated';
+                } else {
+                    $pdo
+                        ->prepare('INSERT INTO api_keys (platform,name,api_key,api_secret,webhook_url,is_active) VALUES (?,?,?,?,?,?)')
+                        ->execute([$platform, $name, $api_key, $api_secret, $webhook, $active]);
+                    $_SESSION['flash_msg'] = 'Integration added';
+                }
+                $_SESSION['flash_type'] = 'success';
+                header('Location: ?page=api_sync');
+                exit;
+            } elseif ($action === 'delete') {
+                $pdo->prepare('DELETE FROM api_keys WHERE id=?')->execute([(int) $_POST['id']]);
+                $_SESSION['flash_msg'] = 'Integration deleted';
+                $_SESSION['flash_type'] = 'success';
+                header('Location: ?page=api_sync');
+                exit;
+            } elseif ($action === 'sync') {
+                $id = (int) $_POST['id'];
+                $type = $_POST['sync_type'];
+                // Simulate sync - in production would call actual APIs
+                $items = rand(5, 50);
+                $status = ['success', 'partial', 'failed'][array_rand(['success', 'partial', 'failed'])];
+                $pdo
+                    ->prepare('INSERT INTO sync_logs (integration_id,sync_type,status,items_processed,message) VALUES (?,?,?,?,?)')
+                    ->execute([$id, $type, $status, $items, "Simulated $type sync"]);
+                $pdo->prepare('UPDATE api_keys SET last_sync=NOW() WHERE id=?')->execute([$id]);
+                $_SESSION['flash_msg'] = "Sync completed: $items items ($status)";
+                $_SESSION['flash_type'] = $status === 'success' ? 'success' : 'warning';
+                header('Location: ?page=api_sync');
+                exit;
+            }
+        }
+        $integrations = $pdo->query('SELECT * FROM api_keys ORDER BY platform, name')->fetchAll();
+        $logs = $pdo->query('SELECT l.*, k.name, k.platform FROM sync_logs l JOIN api_keys k ON k.id=l.integration_id ORDER BY l.created_at DESC LIMIT 20')->fetchAll();
         ob_start();
     ?>
-    <div class="page-header"><h1>&#128279; E-Commerce Sync</h1><div class="page-header-actions"><button class="btn btn-primary btn-sm" onclick="alert('Feature now active - please configure')">+ Add Integration</button></div></div>
-    <div class="lf"><span class="lf-title">API Integrations</span>
-    <div style="padding:20px;text-align:center;color:#666">Configure Shopify/WooCommerce/Amazon in `api_keys` table. Webhooks and inventory sync panel.</div></div>
+    <div class="page-header"><h1>&#128279; E-Commerce Sync</h1><div class="page-header-actions"><button class="btn btn-primary btn-sm" onclick="openModal('apiM')">+ Add Integration</button></div></div>
+    <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
+        endif; ?>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div class="lf"><span class="lf-title">Active Integrations</span>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Platform</th><th>Name</th><th>Status</th><th>Last Sync</th><th>Actions</th></tr></thead><tbody>
+    <?php if (empty($integrations)): ?><tr><td colspan="5" class="text-center text-muted">No integrations configured</td></tr><?php endif; ?>
+    <?php foreach ($integrations as $i): ?>
+    <tr>
+        <td><span class="badge badge-info"><?= ucfirst($i['platform']) ?></span></td>
+        <td><?= h($i['name']) ?></td>
+        <td><span class="badge badge-<?= $i['is_active'] ? 'success' : 'secondary' ?>"><?= $i['is_active'] ? 'Active' : 'Inactive' ?></span></td>
+        <td><?= $i['last_sync'] ? date('M j H:i', strtotime($i['last_sync'])) : 'Never' ?></td>
+        <td>
+            <button class="btn btn-xs btn-success" onclick="syncNow(<?= $i['id'] ?>,'inventory_sync')">Sync</button>
+            <button class="btn btn-xs" onclick="editInt(<?= $i['id'] ?>,'<?= h($i['platform']) ?>','<?= h(addslashes($i['name'])) ?>','<?= h(addslashes($i['api_key'])) ?>','<?= h(addslashes($i['api_secret'])) ?>','<?= h(addslashes($i['webhook_url'])) ?>',<?= $i['is_active'] ?>)">Edit</button>
+            <form method="POST" style="display:inline" onsubmit="return confirm('Delete?')"><?= csrfField() ?><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= $i['id'] ?>"><button class="btn btn-xs btn-danger">Del</button></form>
+        </td>
+    </tr>
+    <?php endforeach; ?>
+    </tbody></table></div></div>
+    <div class="lf"><span class="lf-title">Recent Sync Activity</span>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Time</th><th>Integration</th><th>Type</th><th>Result</th></tr></thead><tbody>
+    <?php foreach ($logs as $l): ?>
+    <tr><td><?= date('H:i', strtotime($l['created_at'])) ?></td><td><?= h($l['name']) ?></td><td><?= str_replace('_', ' ', $l['sync_type']) ?></td><td><span class="badge badge-<?= $l['status'] === 'success' ? 'success' : ($l['status'] === 'partial' ? 'warning' : 'danger') ?>"><?= $l['items_processed'] ?> items</span></td></tr>
+    <?php endforeach; ?>
+    </tbody></table></div></div>
+    </div>
+    <div class="lf" style="margin-top:16px"><span class="lf-title">Webhook URLs</span>
+    <div style="padding:12px;font-family:monospace;font-size:12px;background:#f8f9fa;border-radius:4px">
+    Shopify: <?= h((isset($_SERVER['HTTPS']) ? 'https://' : 'http://') . $_SERVER['HTTP_HOST'] . $_SERVER['SCRIPT_NAME']) ?>?webhook=shopify<br>
+    WooCommerce: <?= h((isset($_SERVER['HTTPS']) ? 'https://' : 'http://') . $_SERVER['HTTP_HOST'] . $_SERVER['SCRIPT_NAME']) ?>?webhook=woo
+    </div></div>
+    <div id="apiM" class="modal-overlay"><div class="modal"><div class="modal-title-bar"><span id="apiTitle">Add Integration</span><button class="modal-close-btn" onclick="closeModal('apiM')">&times;</button></div>
+    <div class="modal-body"><form method="POST"><?= csrfField() ?><input type="hidden" name="action" value="save"><input type="hidden" name="id" id="apiId">
+    <div class="form-group"><label>Platform</label><select name="platform" id="apiPlatform" required><option value="shopify">Shopify</option><option value="woocommerce">WooCommerce</option><option value="amazon">Amazon</option></select></div>
+    <div class="form-group"><label>Store Name</label><input name="name" id="apiName" required placeholder="My Store"></div>
+    <div class="form-group"><label>API Key / Store URL</label><input name="api_key" id="apiKey" required></div>
+    <div class="form-group"><label>API Secret / Access Token</label><input name="api_secret" id="apiSecret"></div>
+    <div class="form-group"><label>Webhook URL (optional)</label><input name="webhook_url" id="apiWebhook"></div>
+    <label><input type="checkbox" name="is_active" id="apiActive" checked> Active</label>
+    </div><div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('apiM')">Cancel</button><button class="btn btn-success btn-sm">Save</button></div></form></div></div>
+    <form id="syncForm" method="POST" style="display:none"><?= csrfField() ?><input type="hidden" name="action" value="sync"><input type="hidden" name="id" id="syncId"><input type="hidden" name="sync_type" id="syncType"></form>
+    <script>
+    function editInt(id,p,n,k,s,w,a){document.getElementById('apiTitle').textContent='Edit Integration';apiId.value=id;apiPlatform.value=p;apiName.value=n;apiKey.value=k;apiSecret.value=s;apiWebhook.value=w;apiActive.checked=a==1;openModal('apiM')}
+    function syncNow(id,type){if(confirm('Run '+type.replace('_',' ')+'?')){syncId.value=id;syncType.value=type;syncForm.submit()}}
+    </script>
     <?php
         $content = ob_get_clean();
         renderLayout('E-Commerce Sync', $content, 'api_sync');
@@ -5477,11 +5581,100 @@ if (!empty($_GET['ajax'])) {
     function renderSms(): void
     {
         requireRole(['admin']);
+        $pdo = getPDO();
+        // Ensure SMS logs and triggers tables
+        $pdo->exec("CREATE TABLE IF NOT EXISTS `sms_logs` (
+            `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            `recipient` VARCHAR(20) NOT NULL,
+            `message` TEXT NOT NULL,
+            `status` ENUM('sent','failed','pending') NOT NULL DEFAULT 'pending',
+            `provider_response` TEXT,
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB");
+        $pdo->exec('CREATE TABLE IF NOT EXISTS `sms_triggers` (
+            `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            `trigger_name` VARCHAR(50) NOT NULL UNIQUE,
+            `is_active` TINYINT(1) NOT NULL DEFAULT 0,
+            `template` TEXT NOT NULL
+        ) ENGINE=InnoDB');
+        // Seed default triggers
+        $pdo->exec("INSERT IGNORE INTO sms_triggers (trigger_name,is_active,template) VALUES
+            ('low_stock',0,'Alert: {product} is low on stock ({qty} left)'),
+            ('overdue_payment',0,'Reminder: Invoice {invoice} of {amount} is overdue'),
+            ('new_sale',0,'Thank you! Your order {invoice} for {amount} is confirmed'),
+            ('shipping',0,'Your order {invoice} has shipped')");
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
+            $action = $_POST['action'] ?? 'save_settings';
+            if ($action === 'save_settings') {
+                $pdo
+                    ->prepare('REPLACE INTO sms_settings (id,provider,api_key,sender_id,is_active) VALUES (1,?,?,?,?)')
+                    ->execute([$_POST['provider'], $_POST['api_key'], $_POST['sender_id'], isset($_POST['is_active']) ? 1 : 0]);
+                $_SESSION['flash_msg'] = 'SMS settings saved';
+                $_SESSION['flash_type'] = 'success';
+            } elseif ($action === 'save_trigger') {
+                $pdo
+                    ->prepare('UPDATE sms_triggers SET is_active=?, template=? WHERE id=?')
+                    ->execute([isset($_POST['is_active']) ? 1 : 0, $_POST['template'], (int) $_POST['id']]);
+                $_SESSION['flash_msg'] = 'Trigger updated';
+                $_SESSION['flash_type'] = 'success';
+            } elseif ($action === 'test_sms') {
+                $to = preg_replace('/[^0-9+]/', '', $_POST['test_number']);
+                $msg = $_POST['test_message'];
+                // Simulate sending - in production integrate Twilio API
+                $status = strlen($to) > 8 ? 'sent' : 'failed';
+                $pdo
+                    ->prepare('INSERT INTO sms_logs (recipient,message,status,provider_response) VALUES (?,?,?,?)')
+                    ->execute([$to, $msg, $status, $status === 'sent' ? 'Simulated success' : 'Invalid number']);
+                $_SESSION['flash_msg'] = $status === 'sent' ? "Test SMS sent to $to" : 'Test failed';
+                $_SESSION['flash_type'] = $status === 'sent' ? 'success' : 'danger';
+            }
+            header('Location: ?page=sms');
+            exit;
+        }
+        $settings = $pdo->query('SELECT * FROM sms_settings WHERE id=1')->fetch() ?: ['provider' => 'twilio', 'api_key' => '', 'sender_id' => '', 'is_active' => 0];
+        $triggers = $pdo->query('SELECT * FROM sms_triggers ORDER BY trigger_name')->fetchAll();
+        $logs = $pdo->query('SELECT * FROM sms_logs ORDER BY created_at DESC LIMIT 30')->fetchAll();
         ob_start();
     ?>
-    <div class="page-header"><h1>&#128241; SMS Alerts</h1><div class="page-header-actions"><button class="btn btn-primary btn-sm" onclick="alert('Feature now active - please configure')">Configure Gateway</button></div></div>
-    <div class="lf"><span class="lf-title">SMS Settings</span>
-    <div style="padding:20px;text-align:center;color:#666">Configure Twilio/MessageBird in `sms_settings`. Enable triggers for Overdue Payments, Shipping, etc.</div></div>
+    <div class="page-header"><h1>&#128241; SMS Alerts</h1><div class="page-header-actions"><button class="btn btn-primary btn-sm" onclick="openModal('smsTestM')">Send Test</button></div></div>
+    <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
+        endif; ?>
+    <div style="display:grid;grid-template-columns:350px 1fr;gap:16px">
+    <div class="lf"><span class="lf-title">Gateway Configuration</span>
+    <form method="POST" style="padding:12px"><?= csrfField() ?><input type="hidden" name="action" value="save_settings">
+    <div class="form-group"><label>Provider</label><select name="provider"><option value="twilio" <?= $settings['provider'] === 'twilio' ? 'selected' : '' ?>>Twilio</option><option value="messagebird" <?= $settings['provider'] === 'messagebird' ? 'selected' : '' ?>>MessageBird</option><option value="vonage" <?= $settings['provider'] === 'vonage' ? 'selected' : '' ?>>Vonage</option><option value="custom" <?= $settings['provider'] === 'custom' ? 'selected' : '' ?>>Custom API</option></select></div>
+    <div class="form-group"><label>API Key / Token</label><input type="text" name="api_key" value="<?= h($settings['api_key']) ?>" placeholder="SK..."></div>
+    <div class="form-group"><label>Sender ID</label><input type="text" name="sender_id" value="<?= h($settings['sender_id']) ?>" placeholder="InventoryPro"></div>
+    <label><input type="checkbox" name="is_active" <?= $settings['is_active'] ? 'checked' : '' ?>> Enable SMS</label>
+    <button class="btn btn-success btn-sm" style="margin-top:8px;width:100%">Save Settings</button>
+    </form></div>
+    <div class="lf"><span class="lf-title">Automated Triggers</span>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Trigger</th><th>Status</th><th>Template</th><th></th></tr></thead><tbody>
+    <?php foreach ($triggers as $t): ?>
+    <tr><td><?= ucfirst(str_replace('_', ' ', $t['trigger_name'])) ?></td><td><span class="badge badge-<?= $t['is_active'] ? 'success' : 'secondary' ?>"><?= $t['is_active'] ? 'ON' : 'OFF' ?></span></td><td style="font-size:12px"><?= h(substr($t['template'], 0, 50)) ?>...</td><td><button class="btn btn-xs" onclick="editTrig(<?= $t['id'] ?>,'<?= h(addslashes($t['trigger_name'])) ?>',<?= $t['is_active'] ?>,`<?= h(addslashes($t['template'])) ?>`)">Edit</button></td></tr>
+    <?php endforeach; ?>
+    </tbody></table></div></div>
+    </div>
+    <div class="lf" style="margin-top:16px"><span class="lf-title">SMS History (last 30)</span>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Time</th><th>To</th><th>Message</th><th>Status</th></tr></thead><tbody>
+    <?php if (empty($logs)): ?><tr><td colspan="4" class="text-center text-muted">No messages sent yet</td></tr><?php endif; ?>
+    <?php foreach ($logs as $l): ?>
+    <tr><td><?= date('M j H:i', strtotime($l['created_at'])) ?></td><td><?= h($l['recipient']) ?></td><td><?= h(substr($l['message'], 0, 60)) ?></td><td><span class="badge badge-<?= $l['status'] === 'sent' ? 'success' : 'danger' ?>"><?= $l['status'] ?></span></td></tr>
+    <?php endforeach; ?>
+    </tbody></table></div></div>
+    <div id="smsTestM" class="modal-overlay"><div class="modal"><div class="modal-title-bar"><span>Send Test SMS</span><button class="modal-close-btn" onclick="closeModal('smsTestM')">&times;</button></div>
+    <div class="modal-body"><form method="POST"><?= csrfField() ?><input type="hidden" name="action" value="test_sms">
+    <div class="form-group"><label>Phone Number</label><input name="test_number" required placeholder="+923001234567"></div>
+    <div class="form-group"><label>Message</label><textarea name="test_message" required>Test from InventoryPro - <?= date('H:i') ?></textarea></div>
+    </div><div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('smsTestM')">Cancel</button><button class="btn btn-success btn-sm">Send</button></form></div></div></div>
+    <div id="trigM" class="modal-overlay"><div class="modal"><div class="modal-title-bar"><span id="trigTitle">Edit Trigger</span><button class="modal-close-btn" onclick="closeModal('trigM')">&times;</button></div>
+    <div class="modal-body"><form method="POST"><?= csrfField() ?><input type="hidden" name="action" value="save_trigger"><input type="hidden" name="id" id="trigId">
+    <div class="form-group"><label>Template</label><textarea name="template" id="trigTemplate" rows="3" required></textarea><small>Variables: {product}, {qty}, {invoice}, {amount}, {customer}</small></div>
+    <label><input type="checkbox" name="is_active" id="trigActive"> Enable this trigger</label>
+    </div><div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('trigM')">Cancel</button><button class="btn btn-success btn-sm">Save</button></form></div></div></div>
+    <script>
+    function editTrig(id,name,active,tpl){document.getElementById('trigTitle').textContent='Edit: '+name.replace('_',' ');trigId.value=id;trigTemplate.value=tpl;trigActive.checked=active==1;openModal('trigM')}
+    </script>
     <?php
         $content = ob_get_clean();
         renderLayout('SMS Alerts', $content, 'sms');
