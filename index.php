@@ -56,7 +56,16 @@ function has_permission($conn, $page, $action = 'view')
 function require_permission($conn, $page, $action = 'view')
 {
     if (!has_permission($conn, $page, $action)) {
-        die('<div style="padding:40px;text-align:center;font-family:sans-serif"><h2>⛔ Access Denied</h2><p>You do not have permission to ' . $action . ' ' . $page . '.</p><a href="index.php">Back</a></div>');
+        $user = current_user($conn);
+        $fallback = 'index.php';
+        if ($user) {
+            $stmt = $conn->prepare('SELECT page FROM role_permissions WHERE role_id=? AND can_view=1 LIMIT 1');
+            $stmt->bind_param('i', $user['role_id']);
+            $stmt->execute();
+            $res = $stmt->get_result()->fetch_assoc();
+            $fallback = $res ? 'index.php?page=' . $res['page'] : 'index.php?logout=1';
+        }
+        die('<meta http-equiv="refresh" content="10;url=' . $fallback . '"><div style="padding:40px;text-align:center;font-family:sans-serif"><h2>⛔ Access Denied</h2><p>You do not have permission to ' . $action . ' ' . $page . '.</p><p style="font-size:0.9rem;color:#888">Auto-redirecting in 10 seconds...</p><a href="' . $fallback . '" style="display:inline-block;padding:8px 16px;background:#4a9eff;color:#fff;text-decoration:none;border-radius:2px;margin-top:10px">Go Back</a></div>');
     }
 }
 
@@ -365,14 +374,22 @@ if ($db_exists) {
             $uname = trim($_POST['username'] ?? '');
             $upass = $_POST['password'] ?? '';
             $conn_temp = db_connect();
-            $stmt = $conn_temp->prepare('SELECT id, password_hash, is_active FROM users WHERE username=? LIMIT 1');
+            $stmt = $conn_temp->prepare('SELECT id, password_hash, is_active, role_id FROM users WHERE username=? LIMIT 1');
             $stmt->bind_param('s', $uname);
             $stmt->execute();
             $u = $stmt->get_result()->fetch_assoc();
             if ($u && $u['is_active'] && password_verify($upass, $u['password_hash'])) {
                 $_SESSION['user_id'] = $u['id'];
                 $_SESSION['login_time'] = time();
-                header('Location: index.php');
+                $redirect = 'index.php';
+                $stmt_rp = $conn_temp->prepare('SELECT page FROM role_permissions WHERE role_id=? AND can_view=1 LIMIT 1');
+                $stmt_rp->bind_param('i', $u['role_id']);
+                $stmt_rp->execute();
+                $rp_res = $stmt_rp->get_result()->fetch_assoc();
+                if ($rp_res) {
+                    $redirect = 'index.php?page=' . $rp_res['page'];
+                }
+                header('Location: ' . $redirect);
                 exit;
             } else {
                 $login_error = 'Invalid username or password.';
@@ -1271,6 +1288,7 @@ else:
     $current_pg = max(1, (int) ($_GET['pg'] ?? 1));
     $offset = ($current_pg - 1) * $per_page;
     if ($page === 'dashboard'):
+        require_permission($conn, 'dashboard', 'view');
         $total_stock = $conn->query("SELECT COUNT(*) as c FROM bikes WHERE status='in_stock'")->fetch_assoc()['c'];
         $total_sold = $conn->query("SELECT COUNT(*) as c FROM bikes WHERE status='sold'")->fetch_assoc()['c'];
         $total_returned = $conn->query("SELECT COUNT(*) as c FROM bikes WHERE status='returned'")->fetch_assoc()['c'];
