@@ -22,44 +22,6 @@ function db_connect($create_db = false)
     return $conn;
 }
 
-function current_user($conn)
-{
-    if (!isset($_SESSION['user_id']))
-        return null;
-    $stmt = $conn->prepare('SELECT u.*, r.name as role_name FROM users u LEFT JOIN roles r ON u.role_id=r.id WHERE u.id=? LIMIT 1');
-    $stmt->bind_param('i', $_SESSION['user_id']);
-    $stmt->execute();
-    return $stmt->get_result()->fetch_assoc();
-}
-
-function has_permission($conn, $page, $action = 'view')
-{
-    $user = current_user($conn);
-    if (!$user)
-        return false;
-    if ($user['role_name'] === 'Administrator')
-        return true;
-    $col = 'can_view';
-    if ($action === 'add')
-        $col = 'can_add';
-    if ($action === 'edit')
-        $col = 'can_edit';
-    if ($action === 'delete')
-        $col = 'can_delete';
-    $stmt = $conn->prepare("SELECT $col FROM role_permissions WHERE role_id=? AND page=? LIMIT 1");
-    $stmt->bind_param('is', $user['role_id'], $page);
-    $stmt->execute();
-    $res = $stmt->get_result()->fetch_assoc();
-    return $res && $res[$col] == 1;
-}
-
-function require_permission($conn, $page, $action = 'view')
-{
-    if (!has_permission($conn, $page, $action)) {
-        die('<div style="padding:40px;text-align:center;font-family:sans-serif"><h2>⛔ Access Denied</h2><p>You do not have permission to ' . $action . ' ' . $page . '.</p><a href="index.php">Back</a></div>');
-    }
-}
-
 function install_database()
 {
     global $db_name;
@@ -178,46 +140,6 @@ function install_database()
             `reference_id` INT,
             `balance` DECIMAL(15,2),
             `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-        'CREATE TABLE IF NOT EXISTS `roles` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `name` VARCHAR(100) UNIQUE NOT NULL,
-            `description` TEXT,
-            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
-        'CREATE TABLE IF NOT EXISTS `role_permissions` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `role_id` INT NOT NULL,
-            `page` VARCHAR(50) NOT NULL,
-            `can_view` TINYINT(1) DEFAULT 0,
-            `can_add` TINYINT(1) DEFAULT 0,
-            `can_edit` TINYINT(1) DEFAULT 0,
-            `can_delete` TINYINT(1) DEFAULT 0,
-            UNIQUE KEY `role_page` (`role_id`,`page`),
-            FOREIGN KEY (`role_id`) REFERENCES `roles`(`id`) ON DELETE CASCADE
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
-        'CREATE TABLE IF NOT EXISTS `users` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `username` VARCHAR(50) UNIQUE NOT NULL,
-            `password_hash` VARCHAR(255) NOT NULL,
-            `full_name` VARCHAR(255),
-            `role_id` INT,
-            `is_active` TINYINT(1) DEFAULT 1,
-            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (`role_id`) REFERENCES `roles`(`id`) ON DELETE SET NULL
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
-        "CREATE TABLE IF NOT EXISTS `income_expenses` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `entry_date` DATE NOT NULL,
-            `type` ENUM('income','expense') NOT NULL,
-            `category` VARCHAR(100) NOT NULL,
-            `amount` DECIMAL(15,2) NOT NULL,
-            `payment_method` ENUM('cash','cheque','bank_transfer','online','other') DEFAULT 'cash',
-            `reference` VARCHAR(255),
-            `notes` TEXT,
-            `created_by` INT,
-            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     ];
 
@@ -243,19 +165,6 @@ function install_database()
         $stmt->bind_param('ss', $d[0], $d[1]);
         $stmt->execute();
     }
-    $stmt->close();
-    // Create default roles and admin user
-    $conn->query("INSERT IGNORE INTO roles (id, name, description) VALUES (1,'Administrator','Full access')");
-    $conn->query("INSERT IGNORE INTO roles (id, name, description) VALUES (2,'Manager','Limited access')");
-    $admin_hash = password_hash('admin123', PASSWORD_DEFAULT);
-    $conn->query("INSERT IGNORE INTO users (id, username, password_hash, full_name, role_id, is_active) VALUES (1,'admin','$admin_hash','System Administrator',1,1)");
-    // Grant all permissions to Administrator
-    $pages = ['dashboard', 'inventory', 'purchase', 'sale', 'customers', 'suppliers', 'models', 'reports', 'returns', 'cheques', 'settings', 'roles', 'users', 'income_expense'];
-    foreach ($pages as $p) {
-        $conn->query("INSERT IGNORE INTO role_permissions (role_id, page, can_view, can_add, can_edit, can_delete) VALUES (1,'$p',1,1,1,1)");
-    }
-    $conn->query("INSERT IGNORE INTO role_permissions (role_id, page, can_view, can_add, can_edit, can_delete) VALUES (2,'dashboard',1,0,0,0)");
-
     $stmt->close();
 
     $models_seed = [
@@ -373,24 +282,19 @@ if (isset($_POST['do_install'])) {
 if ($db_exists) {
     $theme = get_setting('theme') ?? 'dark';
 
-    if (!isset($_SESSION['user_id'])) {
+    if (!isset($_SESSION['logged_in'])) {
         if (isset($_POST['do_login'])) {
-            $uname = trim($_POST['username'] ?? '');
+            $uname = $_POST['username'] ?? '';
             $upass = $_POST['password'] ?? '';
-            $conn_temp = db_connect();
-            $stmt = $conn_temp->prepare('SELECT id, password_hash, is_active FROM users WHERE username=? LIMIT 1');
-            $stmt->bind_param('s', $uname);
-            $stmt->execute();
-            $u = $stmt->get_result()->fetch_assoc();
-            if ($u && $u['is_active'] && password_verify($upass, $u['password_hash'])) {
-                $_SESSION['user_id'] = $u['id'];
+            $stored_pass = get_setting('admin_password');
+            if ($uname === 'admin' && password_verify($upass, $stored_pass)) {
+                $_SESSION['logged_in'] = true;
                 $_SESSION['login_time'] = time();
                 header('Location: index.php');
                 exit;
             } else {
                 $login_error = 'Invalid username or password.';
             }
-            $conn_temp->close();
         }
     } else {
         if (time() - $_SESSION['login_time'] > 28800) {
@@ -414,146 +318,12 @@ if ($db_exists) {
 }
 
 $page = $_GET['page'] ?? 'dashboard';
-
-if (isset($_SESSION['user_id']) && $db_exists) {
-    $conn_perm = db_connect();
-    if ($page !== 'dashboard' && !in_array($page, ['roles', 'users', 'income_expense', 'settings'])) {
-        // check basic view permission for core pages, skip for now to avoid breaking
-    }
-    // Enforce permission for sensitive pages
-    $protected = ['purchase', 'inventory', 'sale', 'returns', 'cheques', 'customers', 'suppliers', 'models', 'reports', 'customer_ledger', 'supplier_ledger', 'settings', 'roles', 'users', 'income_expense'];
-    if (in_array($page, $protected)) {
-        // permission checked inside each page
-    }
-    $conn_perm->close();
-}
 $action = $_GET['action'] ?? '';
 $msg = '';
 $err = '';
 
-if ($db_exists && isset($_SESSION['user_id'])) {
+if ($db_exists && isset($_SESSION['logged_in'])) {
     $conn = db_connect();
-
-    // ===== ROLES & USERS & INCOME HANDLERS =====
-    if ($page === 'roles' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        require_permission($conn, 'roles', 'edit');
-        if (isset($_POST['save_role'])) {
-            $id = (int) ($_POST['id'] ?? 0);
-            $name = sanitize($_POST['name'] ?? '');
-            $desc = sanitize($_POST['description'] ?? '');
-            if ($id) {
-                $stmt = $conn->prepare('UPDATE roles SET name=?, description=? WHERE id=?');
-                $stmt->bind_param('ssi', $name, $desc, $id);
-                $stmt->execute();
-            } else {
-                $stmt = $conn->prepare('INSERT INTO roles (name, description) VALUES (?,?)');
-                $stmt->bind_param('ss', $name, $desc);
-                $stmt->execute();
-                $id = $conn->insert_id;
-            }
-            // save permissions
-            $conn->query("DELETE FROM role_permissions WHERE role_id=$id");
-            $pages = ['dashboard', 'inventory', 'purchase', 'sale', 'customers', 'suppliers', 'models', 'reports', 'returns', 'cheques', 'settings', 'roles', 'users', 'income_expense'];
-            $stmtp = $conn->prepare('INSERT INTO role_permissions (role_id, page, can_view, can_add, can_edit, can_delete) VALUES (?,?,?,?,?,?)');
-            foreach ($pages as $p) {
-                $v = isset($_POST['perm'][$p]['view']) ? 1 : 0;
-                $a = isset($_POST['perm'][$p]['add']) ? 1 : 0;
-                $e = isset($_POST['perm'][$p]['edit']) ? 1 : 0;
-                $d = isset($_POST['perm'][$p]['delete']) ? 1 : 0;
-                $stmtp->bind_param('isiiii', $id, $p, $v, $a, $e, $d);
-                $stmtp->execute();
-            }
-            header('Location: index.php?page=roles&msg=saved');
-            exit;
-        }
-        if (isset($_POST['delete_role'])) {
-            require_permission($conn, 'roles', 'delete');
-            $id = (int) $_POST['id'];
-            if ($id != 1) {  // protect admin
-                $conn->query("DELETE FROM roles WHERE id=$id");
-            }
-            header('Location: index.php?page=roles');
-            exit;
-        }
-    }
-
-    if ($page === 'users' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        require_permission($conn, 'users', 'edit');
-        if (isset($_POST['save_user'])) {
-            $id = (int) ($_POST['id'] ?? 0);
-            $username = sanitize($_POST['username'] ?? '');
-            $full_name = sanitize($_POST['full_name'] ?? '');
-            $role_id = (int) ($_POST['role_id'] ?? 2);
-            $is_active = isset($_POST['is_active']) ? 1 : 0;
-            $pass = $_POST['password'] ?? '';
-            // strong password check
-            if ($pass && strlen($pass) < 8) {
-                die('Password must be at least 8 characters');
-            }
-            if ($id) {
-                if ($pass) {
-                    $hash = password_hash($pass, PASSWORD_DEFAULT);
-                    $stmt = $conn->prepare('UPDATE users SET username=?, full_name=?, role_id=?, is_active=?, password_hash=? WHERE id=?');
-                    $stmt->bind_param('ssissi', $username, $full_name, $role_id, $is_active, $hash, $id);
-                } else {
-                    $stmt = $conn->prepare('UPDATE users SET username=?, full_name=?, role_id=?, is_active=? WHERE id=?');
-                    $stmt->bind_param('ssiii', $username, $full_name, $role_id, $is_active, $id);
-                }
-                $stmt->execute();
-            } else {
-                if (!$pass || strlen($pass) < 8)
-                    die('Password required (min 8 chars)');
-                $hash = password_hash($pass, PASSWORD_DEFAULT);
-                $stmt = $conn->prepare('INSERT INTO users (username, password_hash, full_name, role_id, is_active) VALUES (?,?,?,?,?)');
-                $stmt->bind_param('sssii', $username, $hash, $full_name, $role_id, $is_active);
-                $stmt->execute();
-            }
-            header('Location: index.php?page=users&msg=saved');
-            exit;
-        }
-        if (isset($_POST['delete_user'])) {
-            require_permission($conn, 'users', 'delete');
-            $id = (int) $_POST['id'];
-            if ($id != 1 && $id != $_SESSION['user_id']) {
-                $conn->query("DELETE FROM users WHERE id=$id");
-            }
-            header('Location: index.php?page=users');
-            exit;
-        }
-    }
-
-    if ($page === 'income_expense' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        require_permission($conn, 'income_expense', 'add');
-        if (isset($_POST['save_entry'])) {
-            $id = (int) ($_POST['id'] ?? 0);
-            $entry_date = $_POST['entry_date'] ?? date('Y-m-d');
-            $type = $_POST['type'] ?? 'expense';
-            $category = sanitize($_POST['category'] ?? '');
-            $amount = (float) ($_POST['amount'] ?? 0);
-            $payment_method = $_POST['payment_method'] ?? 'cash';
-            $reference = sanitize($_POST['reference'] ?? '');
-            $notes = sanitize($_POST['notes'] ?? '');
-            $created_by = $_SESSION['user_id'];
-            if ($id) {
-                require_permission($conn, 'income_expense', 'edit');
-                $stmt = $conn->prepare('UPDATE income_expenses SET entry_date=?, type=?, category=?, amount=?, payment_method=?, reference=?, notes=? WHERE id=?');
-                $stmt->bind_param('sssdsssi', $entry_date, $type, $category, $amount, $payment_method, $reference, $notes, $id);
-            } else {
-                $stmt = $conn->prepare('INSERT INTO income_expenses (entry_date, type, category, amount, payment_method, reference, notes, created_by) VALUES (?,?,?,?,?,?,?,?)');
-                $stmt->bind_param('sssdsssi', $entry_date, $type, $category, $amount, $payment_method, $reference, $notes, $created_by);
-            }
-            $stmt->execute();
-            header('Location: index.php?page=income_expense');
-            exit;
-        }
-        if (isset($_POST['delete_entry'])) {
-            require_permission($conn, 'income_expense', 'delete');
-            $id = (int) $_POST['id'];
-            $conn->query("DELETE FROM income_expenses WHERE id=$id");
-            header('Location: index.php?page=income_expense');
-            exit;
-        }
-    }
 
     if (isset($_POST['toggle_theme'])) {
         $new_theme = ($theme === 'dark') ? 'light' : 'dark';
@@ -1254,7 +1024,7 @@ if (localStorage.getItem('sidebarCollapsed') === '1' && window.innerWidth > 600)
 <p style="margin-top:14px;font-size:0.75rem;color:var(--text3)">Author: <?= $author ?> | v<?= $app_version ?></p>
 </div>
 </div>
-<?php elseif (!isset($_SESSION['user_id'])): ?>
+<?php elseif (!isset($_SESSION['logged_in'])): ?>
 <div class="login-wrap">
 <div class="login-box">
 <div style="font-size:2.5rem;text-align:center;margin-bottom:8px">⚡</div>
@@ -1279,30 +1049,21 @@ else:
     $company_name = get_setting('company_name') ?? 'BNI Enterprises';
     $branch_name = get_setting('branch_name') ?? 'Dera (Ahmed Metro)';
     $currency = get_setting('currency') ?? 'Rs.';
-    $all_nav = [
+    $pages_nav = [
         ['dashboard', '⌂', 'Dashboard'],
         ['purchase', '📦', 'Purchase Entry'],
         ['inventory', '📋', 'Inventory / Stock'],
         ['sale', '🛒', 'Sales Entry'],
         ['returns', '↩', 'Returns'],
         ['cheques', '💳', 'Cheque Register'],
-        ['income_expense', '💰', 'Income/Expense'],
         ['customer_ledger', '👤', 'Customer Ledger'],
         ['supplier_ledger', '🏭', 'Supplier Ledger'],
         ['reports', '📊', 'Reports'],
         ['models', '🚲', 'Models'],
         ['customers', '👥', 'Customers'],
         ['suppliers', '🏢', 'Suppliers'],
-        ['users', '👨‍💼', 'Users'],
-        ['roles', '🔑', 'Roles & Permissions'],
         ['settings', '⚙', 'Settings'],
     ];
-    $pages_nav = [];
-    foreach ($all_nav as $nav) {
-        if (has_permission($conn, $nav[0], 'view')) {
-            $pages_nav[] = $nav;
-        }
-    }
 ?>
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
 <div class="sidebar" id="sidebar">
@@ -1328,8 +1089,6 @@ else:
 <?php foreach ($pages_nav as $pn) { if ($pn[0] === $page) echo $pn[1] . ' ' . $pn[2]; } ?>
 </div>
 <div class="topbar-actions">
-<?php $cu = current_user($conn);
-    if ($cu): ?><span style="font-size:0.8rem;color:var(--text2);margin-right:10px">👤 <?= sanitize($cu['full_name'] ?: $cu['username']) ?> (<?= sanitize($cu['role_name']) ?>)</span><?php endif; ?>
 <form method="POST" action="index.php?<?= http_build_query(array_merge($_GET, [])) ?>">
 <button type="submit" name="toggle_theme" title="Toggle Theme"><?= ($theme ?? 'dark') === 'dark' ? '☀' : '🌙' ?> Theme</button>
 </form>
@@ -2390,8 +2149,8 @@ function toggleRetCheque(v) {
         $sub = sanitize($_GET['sub'] ?? 'stock');
         $rep_from = !empty($_GET['rep_from']) ? $_GET['rep_from'] : date('Y-01-01');
         $rep_to = !empty($_GET['rep_to']) ? $_GET['rep_to'] : date('Y-12-31');
-        $rep_year = !empty($_GET['rep_year']) ? (int) $_GET['rep_year'] : (int) date('Y');
-        $rep_month = !empty($_GET['rep_month']) ? (int) $_GET['rep_month'] : (int) date('n');
+        $rep_year = !empty($_GET['rep_year']) ? (int)$_GET['rep_year'] : (int)date('Y');
+        $rep_month = !empty($_GET['rep_month']) ? (int)$_GET['rep_month'] : (int)date('n');
 ?>
 <div class="sub-tabs no-print">
 <?php
@@ -3001,253 +2760,6 @@ function toggleRetCheque(v) {
 </table>
 </div>
 
-
-<?php
-    elseif ($page === 'roles'):
-        require_permission($conn, 'roles', 'view');
-        $roles = $conn->query('SELECT * FROM roles ORDER BY id');
-        $edit_id = (int) ($_GET['edit_id'] ?? 0);
-        $edit_role = null;
-        $perms = [];
-        if ($edit_id) {
-            $er = $conn->query("SELECT * FROM roles WHERE id=$edit_id");
-            $edit_role = $er->fetch_assoc();
-            $pr = $conn->query("SELECT * FROM role_permissions WHERE role_id=$edit_id");
-            while ($p = $pr->fetch_assoc())
-                $perms[$p['page']] = $p;
-        }
-        $all_pages = ['dashboard' => 'Dashboard', 'inventory' => 'Inventory', 'purchase' => 'Purchase Orders', 'sale' => 'Sales', 'customers' => 'Customers', 'suppliers' => 'Suppliers', 'models' => 'Models', 'reports' => 'Reports', 'returns' => 'Returns', 'cheques' => 'Cheques', 'settings' => 'Settings', 'roles' => 'Roles', 'users' => 'Users', 'income_expense' => 'Income/Expense'];
-?>
-<div style="display:flex;gap:8px;margin-bottom:10px" class="no-print">
-    <?php if (has_permission($conn, 'roles', 'add')): ?>
-    <button class="btn btn-success" onclick="document.getElementById('roleForm').style.display='block'">+ Add Role</button>
-    <?php endif; ?>
-</div>
-<div id="roleForm" style="display:<?= $edit_role ? 'block' : 'none' ?>;margin-bottom:14px">
-<fieldset class="fieldset"><legend><?= $edit_role ? '✏ Edit Role' : ' + Add New Role' ?></legend>
-<form method="POST">
-<input type="hidden" name="id" value="<?= $edit_role['id'] ?? 0 ?>">
-<input type="hidden" name="save_role" value="1">
-<div class="form-row">
-<div class="form-group"><label>Role Name *</label><input type="text" name="name" value="<?= sanitize($edit_role['name'] ?? '') ?>" required></div>
-<div class="form-group"><label>Description</label><input type="text" name="description" value="<?= sanitize($edit_role['description'] ?? '') ?>"></div>
-</div>
-<h4 style="margin:12px 0 6px">Permissions (check to allow)</h4>
-<div style="overflow:auto;max-height:400px;border:1px solid var(--border);padding:8px">
-<table class="data-table">
-<thead><tr><th>Page</th><th>View</th><th>Add</th><th>Edit</th><th>Delete</th></tr></thead>
-<tbody>
-<?php foreach ($all_pages as $k => $label):
-            $p = $perms[$k] ?? []; ?>
-<tr>
-<td><strong><?= $label ?></strong></td>
-<td style="text-align:center"><input type="checkbox" name="perm[<?= $k ?>][view]" <?= ($p['can_view'] ?? 0) ? 'checked' : '' ?>></td>
-<td style="text-align:center"><input type="checkbox" name="perm[<?= $k ?>][add]" <?= ($p['can_add'] ?? 0) ? 'checked' : '' ?>></td>
-<td style="text-align:center"><input type="checkbox" name="perm[<?= $k ?>][edit]" <?= ($p['can_edit'] ?? 0) ? 'checked' : '' ?>></td>
-<td style="text-align:center"><input type="checkbox" name="perm[<?= $k ?>][delete]" <?= ($p['can_delete'] ?? 0) ? 'checked' : '' ?>></td>
-</tr>
-<?php endforeach; ?>
-</tbody>
-</table>
-</div>
-<button type="submit" class="btn btn-primary" style="margin-top:10px">💾 Save Role</button>
-<button type="button" class="btn btn-default" onclick="document.getElementById('roleForm').style.display='none'">Cancel</button>
-</form>
-</fieldset>
-</div>
-<div class="data-table-wrap">
-<table class="data-table">
-<thead><tr><th>ID</th><th>Role</th><th>Description</th><th>Users</th><th class="no-print">Actions</th></tr></thead>
-<tbody>
-<?php while ($r = $roles->fetch_assoc()):
-            $uc = $conn->query('SELECT COUNT(*) c FROM users WHERE role_id=' . $r['id'])->fetch_assoc()['c']; ?>
-<tr>
-<td><?= $r['id'] ?></td>
-<td><strong><?= sanitize($r['name']) ?></strong></td>
-<td><?= sanitize($r['description']) ?></td>
-<td><?= $uc ?></td>
-<td class="no-print">
-<a href="index.php?page=roles&edit_id=<?= $r['id'] ?>" class="btn btn-primary btn-sm">✏</a>
-<?php if ($r['id'] != 1 && has_permission($conn, 'roles', 'delete')): ?>
-<form method="POST" style="display:inline" onsubmit="return confirm('Delete role?')">
-<input type="hidden" name="id" value="<?= $r['id'] ?>">
-<button name="delete_role" class="btn btn-danger btn-sm">🗑</button>
-</form>
-<?php endif; ?>
-</td>
-</tr>
-<?php endwhile; ?>
-</tbody>
-</table>
-</div>
-
-<?php
-    elseif ($page === 'users'):
-        require_permission($conn, 'users', 'view');
-        $users = $conn->query('SELECT u.*, r.name role_name FROM users u LEFT JOIN roles r ON u.role_id=r.id ORDER BY u.id');
-        $roles = $conn->query('SELECT * FROM roles ORDER BY name');
-        $edit_id = (int) ($_GET['edit_id'] ?? 0);
-        $edit_user = null;
-        if ($edit_id) {
-            $eu = $conn->query("SELECT * FROM users WHERE id=$edit_id");
-            $edit_user = $eu->fetch_assoc();
-        }
-?>
-<div style="display:flex;gap:8px;margin-bottom:10px" class="no-print">
-    <?php if (has_permission($conn, 'users', 'add')): ?>
-    <button class="btn btn-success" onclick="document.getElementById('userForm').style.display='block'">+ Add User</button>
-    <?php endif; ?>
-</div>
-<div id="userForm" style="display:<?= $edit_user ? 'block' : 'none' ?>;margin-bottom:14px">
-<fieldset class="fieldset"><legend><?= $edit_user ? '✏ Edit User' : ' + Add New User' ?></legend>
-<form method="POST">
-<input type="hidden" name="id" value="<?= $edit_user['id'] ?? 0 ?>">
-<input type="hidden" name="save_user" value="1">
-<div class="form-row">
-<div class="form-group"><label>Username *</label><input type="text" name="username" value="<?= sanitize($edit_user['username'] ?? '') ?>" required pattern="[a-zA-Z0-9_]{3,}" title="3+ chars, letters/numbers/_"></div>
-<div class="form-group"><label>Full Name</label><input type="text" name="full_name" value="<?= sanitize($edit_user['full_name'] ?? '') ?>"></div>
-</div>
-<div class="form-row">
-<div class="form-group"><label>Role *</label>
-<select name="role_id" required>
-<?php $roles2 = $conn->query('SELECT * FROM roles ORDER BY name');
-        while ($rl = $roles2->fetch_assoc()): ?>
-<option value="<?= $rl['id'] ?>" <?= ($edit_user['role_id'] ?? 2) == $rl['id'] ? 'selected' : '' ?>><?= sanitize($rl['name']) ?></option>
-<?php endwhile; ?>
-</select></div>
-<div class="form-group"><label>Password <?= $edit_user ? '(leave blank to keep)' : '(min 8 chars)' ?></label>
-<input type="password" name="password" <?= $edit_user ? '' : 'required' ?> minlength="8" placeholder="Strong password"></div>
-<div class="form-group"><label style="display:flex;align-items:center;gap:6px;margin-top:24px"><input type="checkbox" name="is_active" <?= ($edit_user['is_active'] ?? 1) ? 'checked' : '' ?>> Active</label></div>
-</div>
-<div style="font-size:0.78rem;color:var(--text2)">Strong password: min 8 chars, mix letters, numbers, symbols recommended.</div>
-<button type="submit" class="btn btn-primary" style="margin-top:10px">💾 Save User</button>
-<button type="button" class="btn btn-default" onclick="document.getElementById('userForm').style.display='none'">Cancel</button>
-</form>
-</fieldset>
-</div>
-<div class="data-table-wrap">
-<table class="data-table">
-<thead><tr><th>ID</th><th>Username</th><th>Full Name</th><th>Role</th><th>Status</th><th>Created</th><th class="no-print">Actions</th></tr></thead>
-<tbody>
-<?php while ($u = $users->fetch_assoc()): ?>
-<tr>
-<td><?= $u['id'] ?></td>
-<td><strong><?= sanitize($u['username']) ?></strong></td>
-<td><?= sanitize($u['full_name']) ?></td>
-<td><?= sanitize($u['role_name']) ?></td>
-<td><?= $u['is_active'] ? '<span style="color:var(--success)">Active</span>' : '<span style="color:var(--danger)">Disabled</span>' ?></td>
-<td><?= date('d/m/Y', strtotime($u['created_at'])) ?></td>
-<td class="no-print">
-<a href="index.php?page=users&edit_id=<?= $u['id'] ?>" class="btn btn-primary btn-sm">✏</a>
-<?php if ($u['id'] != 1 && $u['id'] != $_SESSION['user_id'] && has_permission($conn, 'users', 'delete')): ?>
-<form method="POST" style="display:inline" onsubmit="return confirm('Delete user?')">
-<input type="hidden" name="id" value="<?= $u['id'] ?>">
-<button name="delete_user" class="btn btn-danger btn-sm">🗑</button>
-</form>
-<?php endif; ?>
-</td>
-</tr>
-<?php endwhile; ?>
-</tbody>
-</table>
-</div>
-
-<?php
-    elseif ($page === 'income_expense'):
-        require_permission($conn, 'income_expense', 'view');
-        $filter_type = $_GET['type'] ?? '';
-        $filter_from = $_GET['from'] ?? date('Y-m-01');
-        $filter_to = $_GET['to'] ?? date('Y-m-d');
-        $filter_cat = $_GET['category'] ?? '';
-        $where = "WHERE entry_date BETWEEN '$filter_from' AND '$filter_to'";
-        if ($filter_type)
-            $where .= " AND type='$filter_type'";
-        if ($filter_cat)
-            $where .= " AND category='" . mysqli_real_escape_string($conn, $filter_cat) . "'";
-        $entries = $conn->query("SELECT ie.*, u.full_name FROM income_expenses ie LEFT JOIN users u ON ie.created_by=u.id $where ORDER BY entry_date DESC, id DESC");
-        $cats = $conn->query('SELECT DISTINCT category FROM income_expenses ORDER BY category');
-        $totals = $conn->query("SELECT type, SUM(amount) total FROM income_expenses $where GROUP BY type");
-        $sum_income = 0;
-        $sum_expense = 0;
-        while ($t = $totals->fetch_assoc()) {
-            if ($t['type'] == 'income')
-                $sum_income = $t['total'];
-            else
-                $sum_expense = $t['total'];
-        }
-        $edit_id = (int) ($_GET['edit_id'] ?? 0);
-        $edit_entry = null;
-        if ($edit_id) {
-            $ee = $conn->query("SELECT * FROM income_expenses WHERE id=$edit_id");
-            $edit_entry = $ee->fetch_assoc();
-        }
-?>
-<div class="no-print" style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:end">
-    <form method="GET" style="display:flex;gap:6px;align-items:end;flex-wrap:wrap">
-    <input type="hidden" name="page" value="income_expense">
-    <div class="form-group"><label>From</label><input type="date" name="from" value="<?= $filter_from ?>"></div>
-    <div class="form-group"><label>To</label><input type="date" name="to" value="<?= $filter_to ?>"></div>
-    <div class="form-group"><label>Type</label>
-    <select name="type"><option value="">All</option><option value="income" <?= $filter_type == 'income' ? 'selected' : '' ?>>Income</option><option value="expense" <?= $filter_type == 'expense' ? 'selected' : '' ?>>Expense</option></select></div>
-    <div class="form-group"><label>Category</label>
-    <select name="category"><option value="">All</option><?php $cats2 = $conn->query('SELECT DISTINCT category FROM income_expenses ORDER BY category');
-        while ($c = $cats2->fetch_assoc()): ?><option <?= $filter_cat == $c['category'] ? 'selected' : '' ?>><?= sanitize($c['category']) ?></option><?php endwhile; ?></select></div>
-    <button class="btn btn-default">Filter</button>
-    <a href="index.php?page=income_expense" class="btn btn-default">Reset</a>
-    </form>
-    <?php if (has_permission($conn, 'income_expense', 'add')): ?>
-    <button class="btn btn-success" onclick="document.getElementById('ieForm').style.display='block'">+ Add Entry</button>
-    <?php endif; ?>
-</div>
-<div class="split-grid" style="margin-bottom:12px">
-<div class="card"><div class="card-title">Total Income</div><div class="card-value" style="color:var(--success)"><?= fmt_money($sum_income) ?></div></div>
-<div class="card"><div class="card-title">Total Expense</div><div class="card-value" style="color:var(--danger)"><?= fmt_money($sum_expense) ?></div></div>
-<div class="card"><div class="card-title">Net</div><div class="card-value" style="color:<?= ($sum_income - $sum_expense) >= 0 ? 'var(--success)' : 'var(--danger)' ?>"><?= fmt_money($sum_income - $sum_expense) ?></div></div>
-</div>
-<div id="ieForm" style="display:<?= $edit_entry ? 'block' : 'none' ?>;margin-bottom:14px">
-<fieldset class="fieldset"><legend><?= $edit_entry ? '✏ Edit' : ' + Add' ?> Income/Expense</legend>
-<form method="POST">
-<input type="hidden" name="id" value="<?= $edit_entry['id'] ?? 0 ?>">
-<input type="hidden" name="save_entry" value="1">
-<div class="form-row">
-<div class="form-group"><label>Date *</label><input type="date" name="entry_date" value="<?= $edit_entry['entry_date'] ?? date('Y-m-d') ?>" required></div>
-<div class="form-group"><label>Type *</label><select name="type" required><option value="income" <?= ($edit_entry['type'] ?? '') == 'income' ? 'selected' : '' ?>>Income</option><option value="expense" <?= ($edit_entry['type'] ?? 'expense') == 'expense' ? 'selected' : '' ?>>Expense</option></select></div>
-<div class="form-group"><label>Category *</label><input type="text" name="category" list="catlist" value="<?= sanitize($edit_entry['category'] ?? '') ?>" required placeholder="e.g. Fuel, Salary, Sales"><datalist id="catlist"><?php while ($c = $cats->fetch_assoc()): ?><option value="<?= sanitize($c['category']) ?>"><?php endwhile; ?></datalist></div>
-<div class="form-group"><label>Amount *</label><input type="number" step="0.01" name="amount" value="<?= $edit_entry['amount'] ?? '' ?>" required></div>
-</div>
-<div class="form-row">
-<div class="form-group"><label>Payment Method</label><select name="payment_method"><option>cash</option><option>bank_transfer</option><option>cheque</option><option>online</option><option>other</option></select></div>
-<div class="form-group"><label>Reference</label><input type="text" name="reference" value="<?= sanitize($edit_entry['reference'] ?? '') ?>"></div>
-</div>
-<div class="form-row"><div class="form-group"><label>Notes</label><textarea name="notes" rows="2"><?= sanitize($edit_entry['notes'] ?? '') ?></textarea></div></div>
-<button type="submit" class="btn btn-primary">💾 Save</button>
-<button type="button" class="btn btn-default" onclick="document.getElementById('ieForm').style.display='none'">Cancel</button>
-</form>
-</fieldset>
-</div>
-<div class="data-table-wrap">
-<table class="data-table">
-<thead><tr><th>Date</th><th>Type</th><th>Category</th><th>Amount</th><th>Method</th><th>Reference</th><th>By</th><th class="no-print">Actions</th></tr></thead>
-<tbody>
-<?php while ($e = $entries->fetch_assoc()): ?>
-<tr>
-<td><?= date('d/m/Y', strtotime($e['entry_date'])) ?></td>
-<td><?= $e['type'] == 'income' ? '<span style="color:var(--success)">Income</span>' : '<span style="color:var(--danger)">Expense</span>' ?></td>
-<td><?= sanitize($e['category']) ?></td>
-<td><?= fmt_money($e['amount']) ?></td>
-<td><?= $e['payment_method'] ?></td>
-<td><?= sanitize($e['reference']) ?></td>
-<td><?= sanitize($e['full_name'] ?? '-') ?></td>
-<td class="no-print">
-<?php if (has_permission($conn, 'income_expense', 'edit')): ?><a href="index.php?page=income_expense&edit_id=<?= $e['id'] ?>&from=<?= $filter_from ?>&to=<?= $filter_to ?>" class="btn btn-primary btn-sm">✏</a><?php endif; ?>
-<?php if (has_permission($conn, 'income_expense', 'delete')): ?><form method="POST" style="display:inline" onsubmit="return confirm('Delete?')"><input type="hidden" name="id" value="<?= $e['id'] ?>"><button name="delete_entry" class="btn btn-danger btn-sm">🗑</button></form><?php endif; ?>
-</td>
-</tr>
-<?php endwhile; ?>
-</tbody>
-</table>
-</div>
-
 <?php
     elseif ($page === 'settings'):
         $s_company = get_setting('company_name') ?? 'BNI Enterprises';
@@ -3318,7 +2830,7 @@ function toggleRetCheque(v) {
 </div>
 <?php endif; ?>
 
-<?php if ($db_exists && isset($_SESSION['user_id'])): ?>
+<?php if ($db_exists && isset($_SESSION['logged_in'])): ?>
 <script>
 function toggleSidebar() {
     if (window.innerWidth <= 600) {
@@ -3353,7 +2865,7 @@ setInterval(function() {
 
 <?php
 if (isset($conn) && $conn) {
-    if (isset($_SESSION['user_id']) && isset($_GET['ajax']) && $_GET['ajax'] === 'check_chassis') {
+    if (isset($_SESSION['logged_in']) && isset($_GET['ajax']) && $_GET['ajax'] === 'check_chassis') {
         $chassis = sanitize($_GET['chassis'] ?? '');
         $r = $conn->query("SELECT id FROM bikes WHERE chassis_number='" . mysqli_real_escape_string($conn, $chassis) . "'");
         echo ($r && $r->num_rows > 0) ? '1' : '0';
