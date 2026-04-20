@@ -993,7 +993,8 @@ table{border-collapse:collapse;width:100%}
 img{display:block;max-width:100%}
 .layout{display:flex;min-height:100vh;flex-direction:row}
 .sidebar{width:var(--sidebar-w);background:var(--bg2);border-right:2px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;z-index:100;overflow-y:auto;transition:width 0.2s, transform 0.2s}
-.sidebar-header{padding:12px 10px;border-bottom:2px solid var(--border);text-align:center}
+.sidebar-header{padding:12px 10px;border-bottom:2px solid var(--border);display:flex;align-items:center;justify-content:center;gap:10px;text-align:left}
+.sidebar-header .logo{width:35px;height:35px;object-fit:contain;flex-shrink:0}
 .sidebar-header .company{font-size:0.85rem;font-weight:700;color:var(--accent);line-height:1.3}
 .sidebar-header .branch{font-size:0.72rem;color:var(--text2);margin-top:2px}
 .sidebar nav ul{list-style:none;padding:0;margin:0}
@@ -1010,9 +1011,8 @@ img{display:block;max-width:100%}
 @media (min-width: 601px) {
 body.sidebar-collapsed { --sidebar-w: 60px; }
 body.sidebar-collapsed .sidebar { overflow-x: hidden; white-space: nowrap; }
-body.sidebar-collapsed .sidebar-header .company, body.sidebar-collapsed .sidebar-header .branch { display: none; }
+body.sidebar-collapsed .sidebar-header .header-text { display: none; }
 body.sidebar-collapsed .sidebar-header { padding: 15px 0; }
-body.sidebar-collapsed .sidebar-header::after { content: '⚡'; font-size: 1.4rem; display: block; text-align: center; color: var(--accent); }
 body.sidebar-collapsed nav ul li a { font-size: 0; justify-content: center; padding: 12px 0; }
 body.sidebar-collapsed nav ul li a .icon { font-size: 1.2rem; margin: 0; }
 body.sidebar-collapsed .sidebar-footer form button { font-size: 0; padding: 10px 0; }
@@ -1163,6 +1163,7 @@ body{background:#fff!important;color:#111!important}
 .split-grid-3{grid-template-columns:1fr 1fr}
 }
 @media(max-width:600px){
+.page-title .title-text{display:none}
 .card-grid, .split-grid, .split-grid-3{grid-template-columns:1fr}
 .sidebar{transform:translateX(-100%)}
 .sidebar.open{transform:translateX(0)}
@@ -1252,8 +1253,11 @@ else:
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
 <div class="sidebar" id="sidebar">
 <div class="sidebar-header">
+<img src="logo.png" alt="Logo" class="logo">
+<div class="header-text">
 <div class="company">⚡ <?= sanitize($company_name) ?></div>
 <div class="branch"><?= sanitize($branch_name) ?></div>
+</div>
 </div>
 <nav>
 <ul>
@@ -1270,13 +1274,13 @@ else:
 <div class="topbar">
 <button class="hamburger" onclick="toggleSidebar()">☰</button>
 <div class="page-title">
-<?php foreach ($pages_nav as $pn) { if ($pn[0] === $page) echo $pn[1] . ' ' . $pn[2]; } ?>
+<?php foreach ($pages_nav as $pn) { if ($pn[0] === $page) echo $pn[1] . ' <span class="title-text">' . $pn[2] . '</span>'; } ?>
 </div>
 <div class="topbar-actions">
 <?php $cu = current_user($conn);
     if ($cu): ?><span style="font-size:0.8rem;color:var(--text2);margin-right:10px">👤 <?= sanitize($cu['full_name'] ?: $cu['username']) ?> (<?= sanitize($cu['role_name']) ?>)</span><?php endif; ?>
 <form method="POST" action="index.php?<?= http_build_query(array_merge($_GET, [])) ?>">
-<button type="submit" name="toggle_theme" title="Toggle Theme"><?= ($theme ?? 'dark') === 'dark' ? '☀' : '🌙' ?> Theme</button>
+<button type="submit" name="toggle_theme" title="Toggle Theme"><?= ($theme ?? 'dark') === 'dark' ? '☀' : '🌙' ?></button>
 </form>
 <span style="font-size:0.75rem;color:var(--text3)"><?= date('d/m/Y H:i') ?></span>
 </div>
