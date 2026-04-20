@@ -525,7 +525,7 @@ function renderLayout(string $pageTitle, string $content, string $activePage = '
             #header .page-title { font-size: 16px; font-weight: bold; }
             #sidebar { background-color: var(--sidebar-bg); border-right: 1px solid var(--border-color); width: var(--sidebar-width); position: fixed; top: var(--header-height); left: 0; bottom: 0; overflow-y: auto; z-index: 900; transition: transform 0.3s ease-in-out, width 0.3s ease-in-out; }
             #sidebar.collapsed { transform: translateX(calc(-1 * var(--sidebar-width))); }
-            #main-content { margin-left: var(--sidebar-width); padding: 15px; min-height: calc(100vh - var(--header-height) - var(--footer-height)); transition: margin-left 0.3s ease-in-out; }
+            #main-content { margin-left: var(--sidebar-width); padding: 15px 15px calc(var(--footer-height) + 15px) 15px; min-height: calc(100vh - var(--header-height) - var(--footer-height)); transition: margin-left 0.3s ease-in-out; }
             body.sidebar-collapsed #main-content { margin-left: 0; }
             #sidebar-header { padding: 15px; text-align: center; border-bottom: 1px solid var(--border-color); }
             #sidebar-header .company-name { font-size: 16px; font-weight: bold; color: var(--text-color); }
@@ -852,6 +852,61 @@ function renderLayout(string $pageTitle, string $content, string $activePage = '
                 background-color: var(--input-bg) !important;
                 color: var(--input-text) !important;
                 padding: 5px !important;
+            }
+            
+            /* Classic GUI Modals */
+            .modal-overlay {
+                display: none;
+                position: fixed;
+                top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0, 0, 0, 0.4);
+                z-index: 9999;
+                justify-content: center;
+                align-items: center;
+            }
+            .modal-overlay.open {
+                display: flex;
+            }
+            .modal-content {
+                background-color: var(--surface);
+                border: 2px solid;
+                border-color: #ffffff #808080 #808080 #ffffff;
+                width: 100%;
+                max-width: 400px;
+                box-shadow: 2px 2px 10px rgba(0,0,0,0.5);
+                display: flex;
+                flex-direction: column;
+            }
+            .modal-header {
+                background-color: var(--accent-color);
+                color: #ffffff;
+                padding: 4px 8px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            .modal-header h3 {
+                margin: 0;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            .modal-close-btn {
+                background-color: #E0E0E0;
+                color: #000;
+                border: 1px solid;
+                border-color: #ffffff #808080 #808080 #ffffff;
+                cursor: pointer;
+                font-family: var(--font-family);
+                font-size: 10px;
+                font-weight: bold;
+                padding: 1px 5px;
+            }
+            .modal-close-btn:active {
+                border-color: #808080 #ffffff #ffffff #808080;
+                padding: 2px 4px 0px 6px;
+            }
+            .modal-body {
+                padding: 15px;
             }
         </style>
     </head>
