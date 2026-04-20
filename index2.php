@@ -433,6 +433,19 @@ function upgradeDatabase(): void
         `type` ENUM('income','expense') NOT NULL,
         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS `supplier_ledgers` (
+        `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        `supplier_id` INT UNSIGNED NOT NULL,
+        `transaction_date` DATE NOT NULL,
+        `reference_type` ENUM('opening','po','payment','return','credit_note') NOT NULL,
+        `reference_id` INT UNSIGNED NULL,
+        `debit` DECIMAL(15,2) NOT NULL DEFAULT 0,
+        `credit` DECIMAL(15,2) NOT NULL DEFAULT 0,
+        `balance` DECIMAL(15,2) NOT NULL DEFAULT 0,
+        `notes` VARCHAR(255),
+        FOREIGN KEY (`supplier_id`) REFERENCES `suppliers`(`id`) ON DELETE CASCADE,
+        INDEX (`supplier_id`,`transaction_date`)
+    ) ENGINE=InnoDB");
     $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
 }
 
@@ -861,6 +874,30 @@ function generateInvoiceNumber(): string
 function generateRefNumber(string $prefix): string
 {
     return $prefix . '-' . date('Ymd') . '-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6));
+}
+
+function updateCustomerLedger(int $customerId, string $type, ?int $refId, float $debit, float $credit, string $notes = ''): void
+{
+    $pdo = getPDO();
+    $stmt = $pdo->prepare('SELECT balance FROM customer_ledgers WHERE customer_id=? ORDER BY transaction_date DESC, id DESC LIMIT 1');
+    $stmt->execute([$customerId]);
+    $lastBalance = (float) ($stmt->fetchColumn() ?: 0);
+    $newBalance = $lastBalance + $debit - $credit;
+    $stmt = $pdo->prepare('INSERT INTO customer_ledgers (customer_id, transaction_date, reference_type, reference_id, debit, credit, balance, notes) VALUES (?, CURDATE(), ?, ?, ?, ?, ?, ?)');
+    $stmt->execute([$customerId, $type, $refId, $debit, $credit, $newBalance, $notes]);
+    $pdo->prepare('UPDATE customers SET current_balance=? WHERE id=?')->execute([$newBalance, $customerId]);
+}
+
+function updateSupplierLedger(int $supplierId, string $type, ?int $refId, float $debit, float $credit, string $notes = ''): void
+{
+    $pdo = getPDO();
+    $stmt = $pdo->prepare('SELECT balance FROM supplier_ledgers WHERE supplier_id=? ORDER BY transaction_date DESC, id DESC LIMIT 1');
+    $stmt->execute([$supplierId]);
+    $lastBalance = (float) ($stmt->fetchColumn() ?: 0);
+    $newBalance = $lastBalance + $debit - $credit;
+    $stmt = $pdo->prepare('INSERT INTO supplier_ledgers (supplier_id, transaction_date, reference_type, reference_id, debit, credit, balance, notes) VALUES (?, CURDATE(), ?, ?, ?, ?, ?, ?)');
+    $stmt->execute([$supplierId, $type, $refId, $debit, $credit, $newBalance, $notes]);
+    $pdo->prepare('UPDATE suppliers SET current_balance=? WHERE id=?')->execute([$newBalance, $supplierId]);
 }
 
 function logActivity(int $userId, string $action, string $module, string $description): void
@@ -1818,7 +1855,7 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
     .loading-overlay.open{display:flex}
     .loading-spinner{background:#f0f0f0;border:2px ridge #a0a0a0;padding:20px 30px;font-weight:700;font-size:14px;color:#4a90d9}
     .barcode-svg-wrap{font-family:'Courier New',monospace;text-align:center;border:1px solid #a0a0a0;padding:8px;background:#fff;display:inline-block}
-    .barcode-bars{display:flex;align-items:flex-end;gap:0;height:50px}
+    .barcode-bars{display:flex;align-items:flex-end;justify-content:center;gap:0;height:50px}
     .barcode-bar{background:#000;height:100%}
     .barcode-bar.t{height:70%}
     .barcode-text{font-size:10px;letter-spacing:2px;margin-top:4px}
@@ -1991,6 +2028,7 @@ body.sidebar-collapsed #main-content{margin-left:var(--sidebar-collapsed-w)}
     <script>
     var CSRF_TOKEN = <?= json_encode(csrf()) ?>;
     var CURRENCY = <?= json_encode(getSetting('currency_symbol') ?: 'Rs.') ?>;
+    var TAX_PCT = <?= json_encode((float) getSetting('default_tax_percent') / 100) ?>;
     function toggleSidebar(){
         const isMobile = window.innerWidth <= 900;
         if(isMobile){
@@ -3414,6 +3452,11 @@ function renderPurchases(): void
                     if ($qty > 0 && $pid)
                         $pdo->prepare('INSERT INTO purchase_order_items (po_id,product_id,quantity,unit_price,total_price) VALUES (?,?,?,?,?)')->execute([$editId, (int) $pid, $qty, $up, $qty * $up]);
                 }
+                if ($payStatus === 'paid') {
+                    updateSupplierLedger($supplierId, 'po', $editId, $total, $total, "Paid PO #$poNum");
+                } else {
+                    updateSupplierLedger($supplierId, 'po', $editId, 0, $total, "PO #$poNum");
+                }
                 $pdo->commit();
                 logActivity($_SESSION['user_id'], $po ? 'UPDATE' : 'CREATE', 'purchases', ($po ? 'Updated' : 'Created') . ' PO id ' . $editId);
                 $_SESSION['flash_msg'] = 'Purchase order ' . ($po ? 'updated' : 'created') . '.';
@@ -3811,7 +3854,7 @@ function renderSales(): void
             $invQ = $pdo->prepare('SELECT * FROM invoices WHERE id=?');
             $invQ->execute([$editId]);
             $inv = $invQ->fetch();
-            $invItems = $pdo->prepare('SELECT ii.*,p.name as product_name,p.sku FROM invoice_items ii JOIN products p ON p.id=ii.product_id WHERE ii.invoice_id=?');
+            $invItems = $pdo->prepare('SELECT ii.*,p.name as product_name,p.sku,p.current_stock FROM invoice_items ii JOIN products p ON p.id=ii.product_id WHERE ii.invoice_id=?');
             $invItems->execute([$editId]);
             $invItems = $invItems->fetchAll();
         }
@@ -3884,7 +3927,9 @@ function renderSales(): void
                     $pdo->prepare('UPDATE products SET current_stock=current_stock-?,updated_at=NOW() WHERE id=?')->execute([$qty, $pid]);
                 }
                 if ($payStatus === 'paid') {
-                    $pdo->prepare('UPDATE customers SET current_balance=0 WHERE id=?')->execute([$customerId]);
+                    updateCustomerLedger($customerId, 'invoice', $editId, $total, $total, "Paid Invoice #$invNum");
+                } else {
+                    updateCustomerLedger($customerId, 'invoice', $editId, $total, 0, "Invoice #$invNum");
                 }
                 $pdo->commit();
                 logActivity($_SESSION['user_id'], $inv ? 'UPDATE' : 'CREATE', 'sales', ($inv ? 'Updated' : 'Created') . ' invoice id ' . $editId);
@@ -3932,7 +3977,7 @@ function renderSales(): void
                             <option value="">-- Select Product --</option>
                             <?php foreach ($products as $pr): ?><option value="<?= $pr['id'] ?>" data-price="<?= $pr['selling_price'] ?>" data-stock="<?= $pr['current_stock'] ?>" data-unit="<?= h($pr['unit']) ?>" <?= $item['product_id'] == $pr['id'] ? 'selected' : '' ?>><?= h($pr['name'] . ' (' . $pr['sku'] . ')') ?></option><?php endforeach; ?>
                         </select></td>
-                        <td class="inv-stock text-right"><?= number_format((int) $item['quantity']) ?></td>
+                        <td class="inv-stock text-right"><?= number_format((int) $item['current_stock']) ?></td>
                         <td><input type="number" name="quantity[]" class="inv-qty" min="1" value="<?= (int) $item['quantity'] ?>" oninput="recalcInv()" required style="width:70px;padding:4px;border:2px inset #a0a0a0;background:#fff"></td>
                         <td><input type="number" name="unit_price[]" class="inv-price" step="0.01" min="0" value="<?= number_format((float) $item['unit_price'], 2, '.', '') ?>" oninput="recalcInv()" required style="width:100px;padding:4px;border:2px inset #a0a0a0;background:#fff"></td>
                         <td><input type="number" name="discount_pct[]" class="inv-disc" step="0.01" min="0" max="100" value="<?= number_format((float) $item['discount_pct'], 2, '.', '') ?>" oninput="recalcInv()" style="width:60px;padding:4px;border:2px inset #a0a0a0;background:#fff"></td>
@@ -4618,28 +4663,19 @@ function renderBarcodes(): void
     <?php for ($i = 0; $i < $numLabels; $i++): ?>
     <div class="barcode-svg-wrap">
         <div style="font-size:11px;font-weight:700;margin-bottom:4px;color:#000"><?= h(substr($selectedProduct['name'], 0, 25)) ?></div>
-        <div class="barcode-bars">
-        <?php
-        $code = str_pad(preg_replace('/[^0-9A-Za-z]/', '', $barcodeVal), 12, '0', STR_PAD_LEFT);
-        $barPattern = '';
-        for ($ci = 0; $ci < strlen($code); $ci++) {
-            $ch = ord($code[$ci]);
-            $bits = str_pad(decbin($ch), 8, '0', STR_PAD_LEFT);
-            $barPattern .= $bits;
-        }
-        $barPattern = substr($barPattern, 0, 80);
-        for ($bi = 0; $bi < strlen($barPattern); $bi++) {
-            $w = ($barPattern[$bi] === '1') ? 2 : 1;
-            $h_pct = $bi % 3 === 0 ? '100%' : '80%';
-            echo '<div class="barcode-bar' . ($barPattern[$bi] === '0' ? ' t' : '') . '" style="width:' . $w . 'px;height:' . $h_pct . ';background:' . ($barPattern[$bi] === '1' ? '#000' : 'transparent') . '"></div>';
-        }
-        ?>
-        </div>
-        <div class="barcode-text"><?= h($barcodeVal) ?></div>
-        <div style="font-size:9px;color:#555"><?= h($selectedProduct['sku']) ?></div>
+        <svg class="js-barcode" jsbarcode-value="<?= h($barcodeVal) ?>" jsbarcode-height="40" jsbarcode-width="1.5" jsbarcode-fontsize="12" jsbarcode-textmargin="2" style="max-width:100%;height:auto;"></svg>
+        <div style="font-size:9px;color:#555;margin-top:2px"><?= h($selectedProduct['sku']) ?></div>
     </div>
     <?php endfor; ?>
     </div>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof JsBarcode !== 'undefined') {
+                JsBarcode(".js-barcode").init();
+            }
+        });
+    </script>
     <?php elseif ($productId): ?>
     <div class="alert alert-warning">Product not found.</div>
     <?php else: ?>
@@ -4803,15 +4839,15 @@ function renderAuditLog(): void
         $params[] = $dateTo;
     }
     $whereStr = implode(' AND ', $where);
-    $cntQ = $pdo->prepare("SELECT COUNT(*) FROM activity_logs al WHERE $whereStr");
+    $cntQ = $pdo->prepare("SELECT COUNT(*) FROM activity_log al WHERE $whereStr");
     $cntQ->execute($params);
     $total = (int) $cntQ->fetchColumn();
     $pag = paginate($total, $perPage, $page);
-    $stmt = $pdo->prepare("SELECT al.*,u.full_name,u.username FROM activity_logs al LEFT JOIN users u ON u.id=al.user_id WHERE $whereStr ORDER BY al.created_at DESC LIMIT ? OFFSET ?");
+    $stmt = $pdo->prepare("SELECT al.*,u.full_name,u.username FROM activity_log al LEFT JOIN users u ON u.id=al.user_id WHERE $whereStr ORDER BY al.created_at DESC LIMIT ? OFFSET ?");
     $stmt->execute(array_merge($params, [$pag['per_page'], $pag['offset']]));
     $logs = $stmt->fetchAll();
     $users = $pdo->query('SELECT id,full_name,username FROM users ORDER BY full_name')->fetchAll();
-    $modules = array_column($pdo->query('SELECT DISTINCT module FROM activity_logs ORDER BY module')->fetchAll(), 'module');
+    $modules = array_column($pdo->query('SELECT DISTINCT module FROM activity_log ORDER BY module')->fetchAll(), 'module');
     ob_start();
     ?>
     <div class="page-header"><h1>&#128196; Activity Log / Audit Trail</h1></div>
@@ -4853,8 +4889,8 @@ function renderNotifications(): void
 {
     $pdo = getPDO();
     $lowStockItems = $pdo->query("SELECT p.name,p.sku,p.current_stock,p.min_stock_level FROM products p WHERE p.current_stock<=p.min_stock_level AND p.status='active' ORDER BY p.current_stock ASC LIMIT 50")->fetchAll();
-    $overdueInvoices = $pdo->query("SELECT i.invoice_number,c.name as customer_name,i.due_date,i.total_amount FROM invoices i JOIN customers c ON c.id=i.customer_id WHERE i.payment_status IN ('unpaid','partial') AND i.due_date < CURDATE() ORDER BY i.due_date ASC LIMIT 50")->fetchAll();
-    $overduePOs = $pdo->query("SELECT po.po_number,s.company_name,po.expected_delivery_date,po.total_amount FROM purchase_orders po JOIN suppliers s ON s.id=po.supplier_id WHERE po.payment_status IN ('unpaid','partial') AND po.expected_delivery_date < CURDATE() ORDER BY po.expected_delivery_date ASC LIMIT 50")->fetchAll();
+    $overdueInvoices = $pdo->query("SELECT i.id,i.invoice_number,c.name as customer_name,i.due_date,i.total_amount FROM invoices i JOIN customers c ON c.id=i.customer_id WHERE i.payment_status IN ('unpaid','partial') AND i.due_date < CURDATE() ORDER BY i.due_date ASC LIMIT 50")->fetchAll();
+    $overduePOs = $pdo->query("SELECT po.id,po.po_number,s.company_name,po.expected_delivery,po.total_amount FROM purchase_orders po JOIN suppliers s ON s.id=po.supplier_id WHERE po.payment_status IN ('unpaid','partial') AND po.expected_delivery < CURDATE() ORDER BY po.expected_delivery ASC LIMIT 50")->fetchAll();
     ob_start();
     ?>
     <div class="page-header"><h1>&#128276; Notifications &amp; Alerts</h1></div>
@@ -4873,7 +4909,7 @@ function renderNotifications(): void
         <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Invoice#</th><th>Customer</th><th>Due Date</th><th class="text-right">Amount</th><th>Days Overdue</th></tr></thead><tbody>
         <?php foreach ($overdueInvoices as $inv):
             $days = max(0, (int) floor((time() - strtotime($inv['due_date'])) / 86400)); ?>
-        <tr><td><a href="?page=sales&action=view&id="><?= h($inv['invoice_number']) ?></a></td><td><?= h($inv['customer_name']) ?></td><td style="color:#d9534f;font-weight:700"><?= h($inv['due_date']) ?></td><td class="text-right"><?= formatCurrency((float) $inv['total_amount']) ?></td><td class="text-right stock-critical"><?= $days ?> days</td></tr>
+        <tr><td><a href="?page=sales&action=view&id=<?= $inv['id'] ?>"><?= h($inv['invoice_number']) ?></a></td><td><?= h($inv['customer_name']) ?></td><td style="color:#d9534f;font-weight:700"><?= h($inv['due_date']) ?></td><td class="text-right"><?= formatCurrency((float) $inv['total_amount']) ?></td><td class="text-right stock-critical"><?= $days ?> days</td></tr>
         <?php endforeach; ?>
         </tbody></table></div>
     </div>
@@ -4882,8 +4918,8 @@ function renderNotifications(): void
     <div class="lf"><span class="lf-title" style="color:#f0ad4e">&#128667; Overdue Supplier Payments (<?= count($overduePOs) ?>)</span>
         <div class="tbl-wrap"><table class="tbl"><thead><tr><th>PO#</th><th>Supplier</th><th>Expected By</th><th class="text-right">Amount</th><th>Days Overdue</th></tr></thead><tbody>
         <?php foreach ($overduePOs as $po):
-            $days = max(0, (int) floor((time() - strtotime($po['expected_delivery_date'])) / 86400)); ?>
-        <tr><td><a href="?page=purchases&action=view&id="><?= h($po['po_number']) ?></a></td><td><?= h($po['company_name']) ?></td><td style="color:#f0ad4e;font-weight:700"><?= h($po['expected_delivery_date']) ?></td><td class="text-right"><?= formatCurrency((float) $po['total_amount']) ?></td><td class="text-right stock-low"><?= $days ?> days</td></tr>
+            $days = max(0, (int) floor((time() - strtotime($po['expected_delivery'])) / 86400)); ?>
+        <tr><td><a href="?page=purchases&action=view&id=<?= $po['id'] ?>"><?= h($po['po_number']) ?></a></td><td><?= h($po['company_name']) ?></td><td style="color:#f0ad4e;font-weight:700"><?= h($po['expected_delivery']) ?></td><td class="text-right"><?= formatCurrency((float) $po['total_amount']) ?></td><td class="text-right stock-low"><?= $days ?> days</td></tr>
         <?php endforeach; ?>
         </tbody></table></div>
     </div>
@@ -5013,24 +5049,23 @@ function handleAjax(): void
             $invNum = generateInvoiceNumber();
             $pdo->prepare('INSERT INTO invoices (invoice_number,customer_id,invoice_date,subtotal,tax_percent,total_amount,payment_status,payment_method,created_by) VALUES (?,?,CURDATE(),?,?,?,"paid",?,?)')->execute([$invNum, $customerId, $subtotal, $taxPct, $total, $payMethod, (int) $_SESSION['user_id']]);
             $invId = (int) $pdo->lastInsertId();
-            
             $openShift = $pdo->prepare("SELECT id FROM shifts WHERE user_id=? AND status='open'");
             $openShift->execute([$_SESSION['user_id']]);
             $shiftId = $openShift->fetchColumn();
             if ($shiftId) {
                 if ($payMethod === 'cash') {
-                    $pdo->prepare("UPDATE shifts SET total_sales=total_sales+?, cash_sales=cash_sales+? WHERE id=?")->execute([$total, $total, $shiftId]);
+                    $pdo->prepare('UPDATE shifts SET total_sales=total_sales+?, cash_sales=cash_sales+? WHERE id=?')->execute([$total, $total, $shiftId]);
                 } else {
-                    $pdo->prepare("UPDATE shifts SET total_sales=total_sales+?, card_sales=card_sales+? WHERE id=?")->execute([$total, $total, $shiftId]);
+                    $pdo->prepare('UPDATE shifts SET total_sales=total_sales+?, card_sales=card_sales+? WHERE id=?')->execute([$total, $total, $shiftId]);
                 }
             }
-
             foreach ($items as $it) {
                 $qty = (int) $it['qty'];
                 $price = (float) $it['price'];
                 $pdo->prepare('INSERT INTO invoice_items (invoice_id,product_id,quantity,unit_price,total_price) VALUES (?,?,?,?,?)')->execute([$invId, (int) $it['id'], $qty, $price, $qty * $price]);
                 $pdo->prepare('UPDATE products SET current_stock=current_stock-?,updated_at=NOW() WHERE id=?')->execute([$qty, (int) $it['id']]);
             }
+            updateCustomerLedger($customerId, 'invoice', $invId, $total, $total, "POS Sale #$invNum");
             $pdo->commit();
             logActivity($_SESSION['user_id'], 'CREATE', 'pos', 'Created POS invoice ' . $invNum);
             echo json_encode(['success' => true, 'id' => $invId, 'invoice' => $invNum]);
@@ -5060,7 +5095,7 @@ function handleAjax(): void
     } elseif ($endpoint === 'finalize_audit') {
         requireRole(['admin', 'manager']);
         $id = (int) ($data['id'] ?? 0);
-        $counts = $data['counts'] ?? []; // {product_id: qty}
+        $counts = $data['counts'] ?? [];  // {product_id: qty}
         $pdo->beginTransaction();
         try {
             foreach ($counts as $pid => $qty) {
@@ -5069,11 +5104,13 @@ function handleAjax(): void
                 if ($diff != 0) {
                     $ref = 'AUDIT-' . $id . '-' . $pid;
                     $type = $diff > 0 ? 'addition' : 'subtraction';
-                    $pdo->prepare('INSERT INTO stock_adjustments (reference_no, product_id, adjustment_type, quantity, before_stock, after_stock, reason, status, requested_by, approved_by, approved_at) VALUES (?,?,?,?,?,?,?,?,?,?,NOW())')
+                    $pdo
+                        ->prepare('INSERT INTO stock_adjustments (reference_no, product_id, adjustment_type, quantity, before_stock, after_stock, reason, status, requested_by, approved_by, approved_at) VALUES (?,?,?,?,?,?,?,?,?,?,NOW())')
                         ->execute([$ref, $pid, $type, abs($diff), $prod['current_stock'], $qty, 'Stock Audit Variance', 'approved', $_SESSION['user_id'], $_SESSION['user_id']]);
                     $pdo->prepare('UPDATE products SET current_stock=?, updated_at=NOW() WHERE id=?')->execute([$qty, $pid]);
                 }
-                $pdo->prepare('UPDATE stock_audit_items SET counted_qty=?, difference=? WHERE audit_id=? AND product_id=?')
+                $pdo
+                    ->prepare('UPDATE stock_audit_items SET counted_qty=?, difference=? WHERE audit_id=? AND product_id=?')
                     ->execute([$qty, $diff, $id, $pid]);
             }
             $pdo->prepare("UPDATE stock_audits SET status='closed' WHERE id=?")->execute([$id]);
@@ -5248,7 +5285,7 @@ if (!empty($_GET['ajax'])) {
         echo '<div><select id="posCustomer" style="width:100%;padding:8px;margin-bottom:8px;border:2px inset #a0a0a0"><option value="1">Walk-in Customer</option></select>';
         echo '<div style="display:flex;gap:8px"><button class="btn btn-success" style="flex:1;padding:12px;font-size:16px;justify-content:center" onclick="posCheckout(\'cash\')">Cash</button>';
         echo '<button class="btn btn-primary" style="flex:1;padding:12px;font-size:16px;justify-content:center" onclick="posCheckout(\'card\')">Card</button></div></div></div></div>';
-        echo '<script>let posCart=[];function posAdd(id,name,price,stock){let f=posCart.find(i=>i.id===id);if(f){if(f.qty<stock)f.qty++}else posCart.push({id,name,price,qty:1});posRender()}function posRender(){let h="";let sub=0;posCart.forEach((i,idx)=>{let t=i.price*i.qty;sub+=t;h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px dashed #ccc"><div><div style="font-weight:600;font-size:12px">${i.name}</div><div style="font-size:11px;color:#666">${CURRENCY} ${i.price} x ${i.qty}</div></div><div style="font-weight:700;font-size:12px">${t.toFixed(2)} <button onclick="posCart.splice(${idx},1);posRender()" class="btn btn-danger btn-xs" style="margin-left:8px;padding:2px 5px">×</button></div></div>`});document.getElementById("posCart").innerHTML=h||"<div style=\'color:#888;text-align:center;padding:20px\'>Cart is empty</div>";document.getElementById("posSubtotal").textContent=sub.toFixed(2);let tax=sub*0.17;document.getElementById("posTax").textContent=tax.toFixed(2);document.getElementById("posTotal").textContent=(sub+tax).toFixed(2)}async function posCheckout(method){if(!posCart.length){showToast("Cart empty","error");return;}const res=await fetch("?ajax=pos_checkout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({items:posCart,customer_id:document.getElementById("posCustomer").value,payment_method:method,csrf_token:CSRF_TOKEN})});const d=await res.json();if(d.success){showToast("Sale #"+d.invoice,"success");window.open("?page=sales&action=view&id="+d.id,"_blank");posCart=[];posRender()}else showToast(d.msg||"Checkout error","error")}</script>';
+        echo '<script>let posCart=[];function posAdd(id,name,price,stock){let f=posCart.find(i=>i.id===id);if(f){if(f.qty<stock)f.qty++}else posCart.push({id,name,price,qty:1});posRender()}function posRender(){let h="";let sub=0;posCart.forEach((i,idx)=>{let t=i.price*i.qty;sub+=t;h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px dashed #ccc"><div><div style="font-weight:600;font-size:12px">${i.name}</div><div style="font-size:11px;color:#666">${CURRENCY} ${i.price} x ${i.qty}</div></div><div style="font-weight:700;font-size:12px">${t.toFixed(2)} <button onclick="posCart.splice(${idx},1);posRender()" class="btn btn-danger btn-xs" style="margin-left:8px;padding:2px 5px">×</button></div></div>`});document.getElementById("posCart").innerHTML=h||"<div style=\'color:#888;text-align:center;padding:20px\'>Cart is empty</div>";document.getElementById("posSubtotal").textContent=sub.toFixed(2);let tax=sub*TAX_PCT;document.getElementById("posTax").textContent=tax.toFixed(2);document.getElementById("posTotal").textContent=(sub+tax).toFixed(2)}async function posCheckout(method){if(!posCart.length){showToast("Cart empty","error");return;}const res=await fetch("?ajax=pos_checkout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({items:posCart,customer_id:document.getElementById("posCustomer").value,payment_method:method,csrf_token:CSRF_TOKEN})});const d=await res.json();if(d.success){showToast("Sale #"+d.invoice,"success");window.open("?page=sales&action=view&id="+d.id,"_blank");posCart=[];posRender()}else showToast(d.msg||"Checkout error","error")}</script>';
         $content = ob_get_clean();
         renderLayout('POS Checkout', $content, 'pos');
     }
@@ -5257,7 +5294,6 @@ if (!empty($_GET['ajax'])) {
     {
         requirePermission('expenses', 'view');
         $pdo = getPDO();
-
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
             if (isset($_POST['save_expense'])) {
                 $stmt = $pdo->prepare('INSERT INTO expenses (expense_date, category, amount, payment_method, reference, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)');
@@ -5278,7 +5314,6 @@ if (!empty($_GET['ajax'])) {
             header('Location: ?page=income_expenses');
             exit;
         }
-
         $summary = $pdo->query("
             SELECT 
                 DATE_FORMAT(d, '%Y-%m') as month,
@@ -5293,11 +5328,9 @@ if (!empty($_GET['ajax'])) {
             ORDER BY month DESC
             LIMIT 12
         ")->fetchAll();
-
         $expenses = $pdo->query('SELECT * FROM expenses ORDER BY expense_date DESC LIMIT 50')->fetchAll();
         $income = $pdo->query('SELECT * FROM income ORDER BY income_date DESC LIMIT 50')->fetchAll();
         $categories = $pdo->query('SELECT * FROM finance_categories ORDER BY type, name')->fetchAll();
-
         ob_start();
         ?>
         <div class="page-header">
@@ -5308,12 +5341,10 @@ if (!empty($_GET['ajax'])) {
                 <button class="btn btn-primary btn-sm" onclick="openModal('categoryModal')">Manage Categories</button>
             </div>
         </div>
-
         <?php if (isset($_SESSION['flash_msg'])): ?>
             <div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div>
             <?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']); ?>
         <?php endif; ?>
-
         <div class="lf">
             <span class="lf-title">Monthly Summary</span>
             <div class="tbl-wrap">
@@ -5327,15 +5358,16 @@ if (!empty($_GET['ajax'])) {
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($summary as $s): 
+                        <?php
+                        foreach ($summary as $s):
                             $net = $s['total_income'] - $s['total_expense'];
-                        ?>
+                            ?>
                             <tr>
                                 <td><?= h($s['month']) ?></td>
-                                <td class="text-right" style="color:green"><?= formatCurrency((float)$s['total_income']) ?></td>
-                                <td class="text-right" style="color:red"><?= formatCurrency((float)$s['total_expense']) ?></td>
+                                <td class="text-right" style="color:green"><?= formatCurrency((float) $s['total_income']) ?></td>
+                                <td class="text-right" style="color:red"><?= formatCurrency((float) $s['total_expense']) ?></td>
                                 <td class="text-right font-weight-bold" style="color:<?= $net >= 0 ? 'green' : 'red' ?>">
-                                    <?= formatCurrency((float)$net) ?>
+                                    <?= formatCurrency((float) $net) ?>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -5346,7 +5378,6 @@ if (!empty($_GET['ajax'])) {
                 </table>
             </div>
         </div>
-
         <div class="cols-2">
             <div class="lf">
                 <span class="lf-title">Recent Expenses</span>
@@ -5365,7 +5396,7 @@ if (!empty($_GET['ajax'])) {
                                 <tr>
                                     <td><?= h($e['expense_date']) ?></td>
                                     <td><?= h($e['category']) ?></td>
-                                    <td class="text-right"><?= formatCurrency((float)$e['amount']) ?></td>
+                                    <td class="text-right"><?= formatCurrency((float) $e['amount']) ?></td>
                                     <td><?= h($e['payment_method']) ?></td>
                                 </tr>
                             <?php endforeach; ?>
@@ -5392,7 +5423,7 @@ if (!empty($_GET['ajax'])) {
                                 <tr>
                                     <td><?= h($i['income_date']) ?></td>
                                     <td><?= h($i['source']) ?></td>
-                                    <td class="text-right"><?= formatCurrency((float)$i['amount']) ?></td>
+                                    <td class="text-right"><?= formatCurrency((float) $i['amount']) ?></td>
                                 </tr>
                             <?php endforeach; ?>
                             <?php if (empty($income)): ?>
@@ -5403,7 +5434,6 @@ if (!empty($_GET['ajax'])) {
                 </div>
             </div>
         </div>
-
         <!-- Expense Modal -->
         <div id="expenseModal" class="modal-overlay">
             <div class="modal">
@@ -5416,7 +5446,7 @@ if (!empty($_GET['ajax'])) {
                         <div class="form-group mb-8"><label>Category</label>
                             <select name="category" required>
                                 <option value="">-- Select Category --</option>
-                                <?php foreach ($categories as $cat) if ($cat['type'] === 'expense') echo "<option value='".h($cat['name'])."'>".h($cat['name'])."</option>"; ?>
+                                <?php foreach ($categories as $cat) if ($cat['type'] === 'expense') echo "<option value='" . h($cat['name']) . "'>" . h($cat['name']) . '</option>'; ?>
                             </select>
                         </div>
                         <div class="form-group mb-8"><label>Amount</label><input type="number" name="amount" step="0.01" required></div>
@@ -5435,7 +5465,6 @@ if (!empty($_GET['ajax'])) {
                 </form>
             </div>
         </div>
-
         <!-- Income Modal -->
         <div id="incomeModal" class="modal-overlay">
             <div class="modal">
@@ -5448,7 +5477,7 @@ if (!empty($_GET['ajax'])) {
                         <div class="form-group mb-8"><label>Source / Category</label>
                             <select name="source" required>
                                 <option value="">-- Select Category --</option>
-                                <?php foreach ($categories as $cat) if ($cat['type'] === 'income') echo "<option value='".h($cat['name'])."'>".h($cat['name'])."</option>"; ?>
+                                <?php foreach ($categories as $cat) if ($cat['type'] === 'income') echo "<option value='" . h($cat['name']) . "'>" . h($cat['name']) . '</option>'; ?>
                             </select>
                         </div>
                         <div class="form-group mb-8"><label>Amount</label><input type="number" name="amount" step="0.01" required></div>
@@ -5467,7 +5496,6 @@ if (!empty($_GET['ajax'])) {
                 </form>
             </div>
         </div>
-
         <!-- Category Modal -->
         <div id="categoryModal" class="modal-overlay">
             <div class="modal">
@@ -5503,34 +5531,29 @@ if (!empty($_GET['ajax'])) {
         requirePermission('quotations', 'view');
         $pdo = getPDO();
         $action = $_GET['action'] ?? 'list';
-
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
             if (isset($_POST['save_quotation'])) {
                 $customerId = (int) $_POST['customer_id'];
                 $validUntil = $_POST['valid_until'];
                 $status = $_POST['status'] ?? 'sent';
                 $items = json_decode($_POST['items_json'], true) ?? [];
-                
                 if (empty($items)) {
                     $_SESSION['flash_msg'] = 'Error: No items selected.';
                     $_SESSION['flash_type'] = 'danger';
                     header('Location: ?page=quotations&action=new');
                     exit;
                 }
-
                 $subtotal = 0;
                 foreach ($items as $it) {
                     $subtotal += $it['price'] * $it['qty'];
                 }
-                $total = $subtotal; // Simplify for now (tax could be added)
+                $total = $subtotal;  // Simplify for now (tax could be added)
                 $qn = 'QT-' . date('Ymd') . '-' . rand(1000, 9999);
-
                 $pdo->beginTransaction();
                 try {
                     $stmt = $pdo->prepare('INSERT INTO quotations (quote_number, customer_id, quote_date, valid_until, subtotal, tax_amount, total_amount, status, created_by) VALUES (?, ?, CURDATE(), ?, ?, ?, ?, ?, ?)');
                     $stmt->execute([$qn, $customerId, $validUntil, $subtotal, 0, $total, $status, $_SESSION['user_id']]);
                     $qid = $pdo->lastInsertId();
-
                     $stmtItem = $pdo->prepare('INSERT INTO quotation_items (quote_id, product_id, quantity, unit_price, total_price) VALUES (?, ?, ?, ?, ?)');
                     foreach ($items as $it) {
                         $stmtItem->execute([$qid, $it['id'], $it['qty'], $it['price'], $it['qty'] * $it['price']]);
@@ -5550,7 +5573,6 @@ if (!empty($_GET['ajax'])) {
                 $q = $pdo->prepare('SELECT * FROM quotations WHERE id=? AND status != "converted"');
                 $q->execute([$id]);
                 $quote = $q->fetch();
-                
                 if ($quote) {
                     $pdo->beginTransaction();
                     try {
@@ -5558,21 +5580,16 @@ if (!empty($_GET['ajax'])) {
                         $stmtInv = $pdo->prepare('INSERT INTO invoices (invoice_number, customer_id, invoice_date, due_date, subtotal, tax_percent, total_amount, payment_status, created_by) VALUES (?, ?, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 30 DAY), ?, 0, ?, "unpaid", ?)');
                         $stmtInv->execute([$invNum, $quote['customer_id'], $quote['subtotal'], $quote['total_amount'], $_SESSION['user_id']]);
                         $invId = $pdo->lastInsertId();
-
                         $items = $pdo->prepare('SELECT * FROM quotation_items WHERE quote_id=?');
                         $items->execute([$id]);
                         $qItems = $items->fetchAll();
-
                         $stmtInvItem = $pdo->prepare('INSERT INTO invoice_items (invoice_id, product_id, quantity, unit_price, total_price) VALUES (?, ?, ?, ?, ?)');
                         $stmtUpdateStock = $pdo->prepare('UPDATE products SET current_stock = current_stock - ? WHERE id = ?');
-
                         foreach ($qItems as $it) {
                             $stmtInvItem->execute([$invId, $it['product_id'], $it['quantity'], $it['unit_price'], $it['total_price']]);
                             $stmtUpdateStock->execute([$it['quantity'], $it['product_id']]);
                         }
-
                         $pdo->prepare('UPDATE quotations SET status="converted", converted_invoice_id=? WHERE id=?')->execute([$invId, $id]);
-                        
                         $pdo->commit();
                         $_SESSION['flash_msg'] = "Quotation converted to Invoice $invNum. Stock levels updated.";
                         $_SESSION['flash_type'] = 'success';
@@ -5586,11 +5603,11 @@ if (!empty($_GET['ajax'])) {
                 exit;
             }
         }
-
         if ($action === 'new') {
             $customers = $pdo->query('SELECT id,name FROM customers WHERE status="active" ORDER BY name')->fetchAll();
             $products = $pdo->query("SELECT id,name,sku,selling_price,current_stock FROM products WHERE status='active' ORDER BY name")->fetchAll();
-            ob_start(); ?>
+            ob_start();
+            ?>
             <div class="page-header">
                 <h1>&#128221; New Quotation</h1>
                 <div class="page-header-actions"><a href="?page=quotations" class="btn btn-secondary btn-sm">Back to List</a></div>
@@ -5687,7 +5704,8 @@ if (!empty($_GET['ajax'])) {
             <?php
         } else {
             $quotes = $pdo->query('SELECT q.*,c.name as customer FROM quotations q LEFT JOIN customers c ON c.id=q.customer_id ORDER BY q.id DESC')->fetchAll();
-            ob_start(); ?>
+            ob_start();
+            ?>
             <div class="page-header">
                 <h1>&#128221; Quotations</h1>
                 <div class="page-header-actions"><a href="?page=quotations&action=new" class="btn btn-primary btn-sm">+ New Quotation</a></div>
@@ -5717,8 +5735,8 @@ if (!empty($_GET['ajax'])) {
                                     <td><?= h($q['customer']) ?></td>
                                     <td><?= h($q['quote_date']) ?></td>
                                     <td><?= h($q['valid_until']) ?></td>
-                                    <td class="text-right"><?= formatCurrency((float)$q['total_amount']) ?></td>
-                                    <td><span class="badge badge-<?= ['draft'=>'secondary','sent'=>'info','accepted'=>'success','rejected'=>'danger','converted'=>'primary'][$q['status']] ?? 'secondary' ?>"><?= strtoupper($q['status']) ?></span></td>
+                                    <td class="text-right"><?= formatCurrency((float) $q['total_amount']) ?></td>
+                                    <td><span class="badge badge-<?= ['draft' => 'secondary', 'sent' => 'info', 'accepted' => 'success', 'rejected' => 'danger', 'converted' => 'primary'][$q['status']] ?? 'secondary' ?>"><?= strtoupper($q['status']) ?></span></td>
                                     <td>
                                         <div class="tbl-actions">
                                             <?php if ($q['status'] === 'sent' || $q['status'] === 'accepted'): ?>
@@ -5754,37 +5772,31 @@ if (!empty($_GET['ajax'])) {
         requirePermission('sales', 'return');
         $pdo = getPDO();
         $action = $_GET['action'] ?? 'list';
-
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_return']) && verifyCsrf()) {
             $pdo->beginTransaction();
             try {
-                $invoiceId = (int)$_POST['invoice_id'];
-                $customerId = (int)$_POST['customer_id'];
+                $invoiceId = (int) $_POST['invoice_id'];
+                $customerId = (int) $_POST['customer_id'];
                 $items = json_decode($_POST['items_json'], true) ?? [];
                 $refundMethod = $_POST['refund_method'] ?? 'cash';
                 $reason = $_POST['reason'] ?? '';
-                
-                if (empty($items)) throw new Exception("No items to return.");
-
+                if (empty($items))
+                    throw new Exception('No items to return.');
                 $total = 0;
                 foreach ($items as $it) {
                     $total += $it['price'] * $it['qty'];
                 }
-
                 $rn = 'SR-' . date('Ymd') . '-' . strtoupper(substr(bin2hex(random_bytes(2)), 0, 4));
-                
                 $stmt = $pdo->prepare('INSERT INTO sales_returns (return_number, invoice_id, customer_id, return_date, total_amount, refund_method, reason, created_by) VALUES (?, ?, ?, CURDATE(), ?, ?, ?, ?)');
                 $stmt->execute([$rn, $invoiceId, $customerId, $total, $refundMethod, $reason, $_SESSION['user_id']]);
                 $returnId = $pdo->lastInsertId();
-
                 $stmtItem = $pdo->prepare('INSERT INTO sales_return_items (return_id, product_id, quantity, unit_price) VALUES (?, ?, ?, ?)');
                 $stmtUpdateStock = $pdo->prepare('UPDATE products SET current_stock = current_stock + ? WHERE id = ?');
-                
                 foreach ($items as $it) {
-                    $stmtItem->execute([$returnId, (int)$it['id'], (int)$it['qty'], (float)$it['price']]);
-                    $stmtUpdateStock->execute([(int)$it['qty'], (int)$it['id']]);
+                    $stmtItem->execute([$returnId, (int) $it['id'], (int) $it['qty'], (float) $it['price']]);
+                    $stmtUpdateStock->execute([(int) $it['qty'], (int) $it['id']]);
                 }
-
+                updateCustomerLedger($customerId, 'return', $returnId, 0, $total, "Return for Invoice #$invoiceId");
                 logActivity($_SESSION['user_id'], 'CREATE', 'sales', "Processed sales return $rn for invoice ID $invoiceId");
                 $pdo->commit();
                 $_SESSION['flash_msg'] = "Sales return $rn processed successfully.";
@@ -5795,10 +5807,10 @@ if (!empty($_GET['ajax'])) {
                 $error = $e->getMessage();
             }
         }
-
         if ($action === 'new') {
             $invoices = $pdo->query("SELECT i.id, i.invoice_number, i.customer_id, c.name as customer_name FROM invoices i JOIN customers c ON i.customer_id = c.id WHERE i.payment_status IN ('paid', 'partial') ORDER BY i.id DESC")->fetchAll();
-            ob_start(); ?>
+            ob_start();
+            ?>
             <div class="page-header">
                 <h1>&#8630; Process Sales Return</h1>
                 <div class="page-header-actions"><a href="?page=sales_returns" class="btn btn-secondary btn-sm">Back to List</a></div>
@@ -5834,7 +5846,6 @@ if (!empty($_GET['ajax'])) {
                         <label>Reason for Return</label>
                         <textarea name="reason" rows="2" class="form-control" placeholder="Optional reason..."></textarea>
                     </div>
-
                     <div id="items-container" style="display:none; margin-top:20px;">
                         <h3>Invoice Items</h3>
                         <table class="tbl" id="items-table">
@@ -5870,7 +5881,6 @@ if (!empty($_GET['ajax'])) {
                     }
                     const sel = document.getElementById('invoice_id');
                     document.getElementById('customer_id').value = sel.options[sel.selectedIndex].dataset.customerId;
-
                     fetch('?ajax=get_invoice_details', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -5887,7 +5897,6 @@ if (!empty($_GET['ajax'])) {
                         }
                     });
                 }
-
                 function renderItems() {
                     const tbody = document.querySelector('#items-table tbody');
                     tbody.innerHTML = '';
@@ -5904,13 +5913,11 @@ if (!empty($_GET['ajax'])) {
                     });
                     calculateGrandTotal();
                 }
-
                 function updateTotal(idx, qty) {
                     invoiceItems[idx].return_qty = parseFloat(qty) || 0;
                     document.getElementById('total-' + idx).textContent = (invoiceItems[idx].return_qty * invoiceItems[idx].unit_price).toFixed(2);
                     calculateGrandTotal();
                 }
-
                 function calculateGrandTotal() {
                     let total = 0;
                     invoiceItems.forEach(it => {
@@ -5918,7 +5925,6 @@ if (!empty($_GET['ajax'])) {
                     });
                     document.getElementById('return-total').textContent = total.toFixed(2);
                 }
-
                 function prepareSubmit(e) {
                     const returns = invoiceItems.filter(it => (it.return_qty || 0) > 0).map(it => ({
                         id: it.product_id,
@@ -5937,8 +5943,9 @@ if (!empty($_GET['ajax'])) {
             $c = ob_get_clean();
             renderLayout('Process Sales Return', $c, 'sales_returns');
         } else {
-            $returns = $pdo->query("SELECT sr.*, c.name as customer FROM sales_returns sr JOIN customers c ON sr.customer_id = c.id ORDER BY sr.id DESC")->fetchAll();
-            ob_start(); ?>
+            $returns = $pdo->query('SELECT sr.*, c.name as customer FROM sales_returns sr JOIN customers c ON sr.customer_id = c.id ORDER BY sr.id DESC')->fetchAll();
+            ob_start();
+            ?>
             <div class="page-header">
                 <h1>&#8630; Sales Returns</h1>
                 <div class="page-header-actions"><a href="?page=sales_returns&action=new" class="btn btn-primary btn-sm">+ Process Return</a></div>
@@ -5965,7 +5972,7 @@ if (!empty($_GET['ajax'])) {
                                 <td><?= h($r['return_number']) ?></td>
                                 <td><?= h($r['customer']) ?></td>
                                 <td><?= h($r['return_date']) ?></td>
-                                <td><?= formatCurrency((float)$r['total_amount']) ?></td>
+                                <td><?= formatCurrency((float) $r['total_amount']) ?></td>
                                 <td><span class="badge badge-info"><?= h(ucfirst($r['refund_method'])) ?></span></td>
                             </tr>
                         <?php endforeach; ?>
@@ -5985,7 +5992,7 @@ if (!empty($_GET['ajax'])) {
         $customers = $pdo->query('SELECT id,name FROM customers ORDER BY name')->fetchAll();
         $cid = (int) ($_GET['customer_id'] ?? ($customers[0]['id'] ?? 0));
         ob_start();
-    ?>
+        ?>
     <div class="page-header"><h1>&#128200; Customer Ledgers</h1></div>
     <div class="lf"><span class="lf-title">Statement of Account</span>
     <form method="GET" class="mb-8" style="display:flex;gap:8px;align-items:flex-end">
@@ -6012,36 +6019,30 @@ if (!empty($_GET['ajax'])) {
         requirePermission('purchases', 'view');
         $pdo = getPDO();
         $action = $_GET['action'] ?? 'list';
-
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_return']) && verifyCsrf()) {
             $pdo->beginTransaction();
             try {
-                $poId = (int)$_POST['po_id'];
-                $supplierId = (int)$_POST['supplier_id'];
+                $poId = (int) $_POST['po_id'];
+                $supplierId = (int) $_POST['supplier_id'];
                 $items = json_decode($_POST['items_json'], true) ?? [];
-                
-                if (empty($items)) throw new Exception("No items to return.");
-
+                if (empty($items))
+                    throw new Exception('No items to return.');
                 $total = 0;
                 foreach ($items as $it) {
                     $total += $it['price'] * $it['qty'];
                 }
-
                 $rn = 'PR-' . date('Ymd') . '-' . strtoupper(substr(bin2hex(random_bytes(2)), 0, 4));
-                
                 // Add created_by if missing in table but used in code
                 $stmt = $pdo->prepare('INSERT INTO purchase_returns (return_number, po_id, supplier_id, return_date, total_amount, created_by) VALUES (?, ?, ?, CURDATE(), ?, ?)');
                 $stmt->execute([$rn, $poId, $supplierId, $total, $_SESSION['user_id']]);
                 $returnId = $pdo->lastInsertId();
-
                 $stmtItem = $pdo->prepare('INSERT INTO purchase_return_items (return_id, product_id, quantity, unit_price) VALUES (?, ?, ?, ?)');
                 $stmtUpdateStock = $pdo->prepare('UPDATE products SET current_stock = current_stock - ? WHERE id = ?');
-                
                 foreach ($items as $it) {
-                    $stmtItem->execute([$returnId, (int)$it['id'], (int)$it['qty'], (float)$it['price']]);
-                    $stmtUpdateStock->execute([(int)$it['qty'], (int)$it['id']]);
+                    $stmtItem->execute([$returnId, (int) $it['id'], (int) $it['qty'], (float) $it['price']]);
+                    $stmtUpdateStock->execute([(int) $it['qty'], (int) $it['id']]);
                 }
-
+                updateSupplierLedger($supplierId, 'return', $returnId, $total, 0, "Return for PO #$poId");
                 logActivity($_SESSION['user_id'], 'CREATE', 'purchases', "Processed purchase return $rn for PO ID $poId");
                 $pdo->commit();
                 $_SESSION['flash_msg'] = "Purchase return $rn processed successfully.";
@@ -6052,10 +6053,10 @@ if (!empty($_GET['ajax'])) {
                 $error = $e->getMessage();
             }
         }
-
         if ($action === 'new') {
             $pos = $pdo->query("SELECT po.id, po.po_number, po.supplier_id, s.name as supplier_name FROM purchase_orders po JOIN suppliers s ON po.supplier_id = s.id WHERE po.order_status = 'Received' ORDER BY po.id DESC")->fetchAll();
-            ob_start(); ?>
+            ob_start();
+            ?>
             <div class="page-header">
                 <h1>&#8630; New Purchase Return</h1>
                 <div class="page-header-actions"><a href="?page=purchase_returns" class="btn btn-secondary btn-sm">Back to List</a></div>
@@ -6076,7 +6077,6 @@ if (!empty($_GET['ajax'])) {
                         </select>
                         <input type="hidden" name="supplier_id" id="supplier_id">
                     </div>
-
                     <div id="items-container" style="display:none; margin-top:20px;">
                         <h3>PO Items</h3>
                         <table class="tbl" id="items-table">
@@ -6112,7 +6112,6 @@ if (!empty($_GET['ajax'])) {
                     }
                     const sel = document.getElementById('po_id');
                     document.getElementById('supplier_id').value = sel.options[sel.selectedIndex].dataset.supplierId;
-
                     fetch('?ajax=get_po_details', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -6129,7 +6128,6 @@ if (!empty($_GET['ajax'])) {
                         }
                     });
                 }
-
                 function renderItems() {
                     const tbody = document.querySelector('#items-table tbody');
                     tbody.innerHTML = '';
@@ -6146,13 +6144,11 @@ if (!empty($_GET['ajax'])) {
                     });
                     calculateGrandTotal();
                 }
-
                 function updateTotal(idx, qty) {
                     poItems[idx].return_qty = parseFloat(qty) || 0;
                     document.getElementById('total-' + idx).textContent = (poItems[idx].return_qty * poItems[idx].unit_price).toFixed(2);
                     calculateGrandTotal();
                 }
-
                 function calculateGrandTotal() {
                     let total = 0;
                     poItems.forEach(it => {
@@ -6160,7 +6156,6 @@ if (!empty($_GET['ajax'])) {
                     });
                     document.getElementById('return-total').textContent = total.toFixed(2);
                 }
-
                 function prepareSubmit(e) {
                     const returns = poItems.filter(it => (it.return_qty || 0) > 0).map(it => ({
                         id: it.product_id,
@@ -6178,8 +6173,9 @@ if (!empty($_GET['ajax'])) {
             <?php
             renderLayout('Purchase Returns', ob_get_clean(), 'purchase_returns');
         } else {
-            $returns = $pdo->query("SELECT pr.*, s.name as supplier FROM purchase_returns pr JOIN suppliers s ON pr.supplier_id = s.id ORDER BY pr.id DESC")->fetchAll();
-            ob_start(); ?>
+            $returns = $pdo->query('SELECT pr.*, s.company_name as supplier FROM purchase_returns pr JOIN suppliers s ON pr.supplier_id = s.id ORDER BY pr.id DESC')->fetchAll();
+            ob_start();
+            ?>
             <div class="page-header">
                 <h1>&#8630; Purchase Returns</h1>
                 <div class="page-header-actions"><a href="?page=purchase_returns&action=new" class="btn btn-primary btn-sm">+ New Return</a></div>
@@ -6205,7 +6201,7 @@ if (!empty($_GET['ajax'])) {
                                 <td><?= h($r['return_number']) ?></td>
                                 <td><?= h($r['supplier']) ?></td>
                                 <td><?= h($r['return_date']) ?></td>
-                                <td><?= formatCurrency((float)$r['total_amount']) ?></td>
+                                <td><?= formatCurrency((float) $r['total_amount']) ?></td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -6220,26 +6216,22 @@ if (!empty($_GET['ajax'])) {
         requirePermission('purchases', 'view');
         $pdo = getPDO();
         $action = $_GET['action'] ?? 'list';
-
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
             if (isset($_POST['save_requisition'])) {
                 $notes = trim($_POST['notes'] ?? '');
                 $items = json_decode($_POST['items_json'], true) ?? [];
-
                 if (empty($items)) {
                     $_SESSION['flash_msg'] = 'Error: No items selected.';
                     $_SESSION['flash_type'] = 'danger';
                     header('Location: ?page=requisitions&action=new');
                     exit;
                 }
-
                 $rn = 'RQ-' . date('Ymd') . '-' . rand(1000, 9999);
                 $pdo->beginTransaction();
                 try {
                     $stmt = $pdo->prepare('INSERT INTO requisitions (req_number, requested_by, status, notes) VALUES (?, ?, "pending", ?)');
                     $stmt->execute([$rn, $_SESSION['user_id'], $notes]);
                     $reqId = $pdo->lastInsertId();
-
                     $stmtItem = $pdo->prepare('INSERT INTO requisition_items (req_id, product_id, quantity) VALUES (?, ?, ?)');
                     foreach ($items as $it) {
                         $stmtItem->execute([$reqId, $it['id'], $it['qty']]);
@@ -6259,7 +6251,7 @@ if (!empty($_GET['ajax'])) {
                 $status = $_POST['status'];
                 if (in_array($status, ['approved', 'rejected'])) {
                     $pdo->prepare('UPDATE requisitions SET status=? WHERE id=?')->execute([$status, $id]);
-                    $_SESSION['flash_msg'] = "Requisition status updated to " . ucfirst($status) . ".";
+                    $_SESSION['flash_msg'] = 'Requisition status updated to ' . ucfirst($status) . '.';
                     $_SESSION['flash_type'] = 'success';
                 }
                 header('Location: ?page=requisitions');
@@ -6267,11 +6259,9 @@ if (!empty($_GET['ajax'])) {
             } elseif (isset($_POST['create_po'])) {
                 $id = (int) $_POST['req_id'];
                 $supplierId = (int) $_POST['supplier_id'];
-                
                 $req = $pdo->prepare('SELECT * FROM requisitions WHERE id=? AND status="approved"');
                 $req->execute([$id]);
                 $requisition = $req->fetch();
-
                 if ($requisition && $supplierId) {
                     $pdo->beginTransaction();
                     try {
@@ -6279,24 +6269,20 @@ if (!empty($_GET['ajax'])) {
                         $items = $pdo->prepare('SELECT ri.*, p.purchase_price FROM requisition_items ri JOIN products p ON p.id=ri.product_id WHERE ri.req_id=?');
                         $items->execute([$id]);
                         $reqItems = $items->fetchAll();
-
                         $subtotal = 0;
-                        foreach($reqItems as $it) {
+                        foreach ($reqItems as $it) {
                             $subtotal += $it['purchase_price'] * $it['quantity'];
                         }
-                        $taxPct = (float)getSetting('default_tax_percent');
+                        $taxPct = (float) getSetting('default_tax_percent');
                         $taxAmt = $subtotal * ($taxPct / 100);
                         $total = $subtotal + $taxAmt;
-
                         $stmtPO = $pdo->prepare('INSERT INTO purchase_orders (po_number, supplier_id, po_date, subtotal, tax_percent, total_amount, payment_status, order_status, notes, created_by) VALUES (?, ?, CURDATE(), ?, ?, ?, "unpaid", "pending", ?, ?)');
-                        $stmtPO->execute([$poNum, $supplierId, $subtotal, $taxPct, $total, "Created from Requisition " . $requisition['req_number'], $_SESSION['user_id']]);
+                        $stmtPO->execute([$poNum, $supplierId, $subtotal, $taxPct, $total, 'Created from Requisition ' . $requisition['req_number'], $_SESSION['user_id']]);
                         $poId = $pdo->lastInsertId();
-
                         $stmtPOItem = $pdo->prepare('INSERT INTO purchase_order_items (po_id, product_id, quantity, unit_price, total_price) VALUES (?, ?, ?, ?, ?)');
                         foreach ($reqItems as $it) {
                             $stmtPOItem->execute([$poId, $it['product_id'], $it['quantity'], $it['purchase_price'], $it['quantity'] * $it['purchase_price']]);
                         }
-
                         $pdo->prepare('UPDATE requisitions SET status="ordered" WHERE id=?')->execute([$id]);
                         $pdo->commit();
                         $_SESSION['flash_msg'] = "Draft Purchase Order $poNum created successfully.";
@@ -6313,7 +6299,6 @@ if (!empty($_GET['ajax'])) {
                 exit;
             }
         }
-
         if ($action === 'new') {
             $products = $pdo->query("SELECT id,name,sku,current_stock FROM products WHERE status='active' ORDER BY name")->fetchAll();
             ob_start(); ?>
@@ -6397,7 +6382,8 @@ if (!empty($_GET['ajax'])) {
         } else {
             $reqs = $pdo->query('SELECT r.*, u.full_name as requester FROM requisitions r JOIN users u ON u.id=r.requested_by ORDER BY r.id DESC')->fetchAll();
             $suppliers = $pdo->query('SELECT id, company_name FROM suppliers WHERE status="active"')->fetchAll();
-            ob_start(); ?>
+            ob_start();
+            ?>
             <div class="page-header">
                 <h1>&#128227; Requisitions</h1>
                 <div class="page-header-actions"><a href="?page=requisitions&action=new" class="btn btn-primary btn-sm">+ New Requisition</a></div>
@@ -6425,7 +6411,7 @@ if (!empty($_GET['ajax'])) {
                                     <td><?= h($r['req_number']) ?></td>
                                     <td><?= h($r['requester']) ?></td>
                                     <td><?= h($r['created_at']) ?></td>
-                                    <td><span class="badge badge-<?= ['pending'=>'warning','approved'=>'success','rejected'=>'danger','ordered'=>'primary'][$r['status']] ?? 'secondary' ?>"><?= strtoupper($r['status']) ?></span></td>
+                                    <td><span class="badge badge-<?= ['pending' => 'warning', 'approved' => 'success', 'rejected' => 'danger', 'ordered' => 'primary'][$r['status']] ?? 'secondary' ?>"><?= strtoupper($r['status']) ?></span></td>
                                     <td><?= h($r['notes']) ?></td>
                                     <td>
                                         <div class="tbl-actions">
@@ -6459,7 +6445,6 @@ if (!empty($_GET['ajax'])) {
                     </table>
                 </div>
             </div>
-
             <div id="poModal" class="modal-overlay">
                 <div class="modal">
                     <div class="modal-title-bar"><span>Create PO from Requisition</span><button class="modal-close-btn" onclick="closeModal('poModal')">&times;</button></div>
@@ -6473,7 +6458,7 @@ if (!empty($_GET['ajax'])) {
                                 <label>Supplier</label>
                                 <select name="supplier_id" required>
                                     <option value="">-- Select Supplier --</option>
-                                    <?php foreach ($suppliers as $s) echo "<option value='{$s['id']}'>" . h($s['company_name']) . "</option>"; ?>
+                                    <?php foreach ($suppliers as $s) echo "<option value='{$s['id']}'>" . h($s['company_name']) . '</option>'; ?>
                                 </select>
                             </div>
                         </div>
@@ -6502,10 +6487,8 @@ if (!empty($_GET['ajax'])) {
         requirePermission('stock_audit', 'view');
         $pdo = getPDO();
         $id = isset($_GET['id']) ? (int) $_GET['id'] : 0;
-
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
             $action = $_POST['action'] ?? '';
-
             if ($action === 'start_audit') {
                 requirePermission('stock_audit', 'manage');
                 $an = 'AUD-' . date('Ymd') . '-' . strtoupper(substr(bin2hex(random_bytes(2)), 0, 4));
@@ -6514,7 +6497,6 @@ if (!empty($_GET['ajax'])) {
                     $stmt = $pdo->prepare('INSERT INTO stock_audits (audit_number, warehouse_id, audit_date, status, created_by) VALUES (?, ?, ?, ?, ?)');
                     $stmt->execute([$an, 1, date('Y-m-d'), 'open', $_SESSION['user_id']]);
                     $auditId = $pdo->lastInsertId();
-
                     $products = $pdo->query("SELECT id, current_stock FROM products WHERE status='active'")->fetchAll();
                     $stmtItem = $pdo->prepare('INSERT INTO stock_audit_items (audit_id, product_id, system_qty, counted_qty, difference) VALUES (?, ?, ?, ?, ?)');
                     foreach ($products as $p) {
@@ -6538,7 +6520,6 @@ if (!empty($_GET['ajax'])) {
                 $stmtA = $pdo->prepare("SELECT * FROM stock_audits WHERE id=? AND status='open'");
                 $stmtA->execute([$auditId]);
                 $audit = $stmtA->fetch();
-
                 if ($audit) {
                     $pdo->beginTransaction();
                     try {
@@ -6547,35 +6528,28 @@ if (!empty($_GET['ajax'])) {
                         foreach ($counts as $productId => $countedQty) {
                             $productId = (int) $productId;
                             $countedQty = (int) $countedQty;
-
                             $stmtSys = $pdo->prepare('SELECT system_qty FROM stock_audit_items WHERE audit_id=? AND product_id=?');
                             $stmtSys->execute([$auditId, $productId]);
                             $systemQty = (int) $stmtSys->fetchColumn();
-
                             $diff = $countedQty - $systemQty;
                             $stmtUpdate->execute([$countedQty, $diff, $auditId, $productId]);
                         }
-
                         if ($action === 'finalize_audit') {
                             $stmtItems = $pdo->prepare('SELECT * FROM stock_audit_items WHERE audit_id=?');
                             $stmtItems->execute([$auditId]);
                             $items = $stmtItems->fetchAll();
-
                             foreach ($items as $item) {
                                 if ((int) $item['difference'] !== 0) {
                                     $diff = (int) $item['difference'];
                                     $absDiff = abs($diff);
                                     $type = ($diff > 0) ? 'addition' : 'subtraction';
                                     $ref = 'ADJ-' . $audit['audit_number'] . '-' . $item['product_id'];
-
                                     $stmtProd = $pdo->prepare('SELECT current_stock FROM products WHERE id=?');
                                     $stmtProd->execute([$item['product_id']]);
                                     $before = (int) $stmtProd->fetchColumn();
                                     $after = (int) $item['counted_qty'];
-
                                     $stmtAdj = $pdo->prepare('INSERT INTO stock_adjustments (reference_no, product_id, adjustment_type, quantity, before_stock, after_stock, reason, status, requested_by, approved_by, approved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())');
                                     $stmtAdj->execute([$ref, $item['product_id'], $type, $absDiff, $before, $after, 'Stock Audit Variance: ' . $audit['audit_number'], 'approved', $_SESSION['user_id'], $_SESSION['user_id']]);
-
                                     $pdo->prepare('UPDATE products SET current_stock=?, updated_at=NOW() WHERE id=?')->execute([$after, $item['product_id']]);
                                 }
                             }
@@ -6586,7 +6560,6 @@ if (!empty($_GET['ajax'])) {
                             $_SESSION['flash_msg'] = 'Audit counts saved.';
                             $_SESSION['flash_type'] = 'info';
                         }
-
                         $pdo->commit();
                         header("Location: ?page=stock_audit&id=$auditId");
                         exit;
@@ -6600,7 +6573,6 @@ if (!empty($_GET['ajax'])) {
                 }
             }
         }
-
         ob_start();
         if ($id):
             $stmt = $pdo->prepare('SELECT a.*, u.full_name as creator FROM stock_audits a JOIN users u ON u.id=a.created_by WHERE a.id=?');
@@ -6621,10 +6593,8 @@ if (!empty($_GET['ajax'])) {
                     <button class="btn btn-primary btn-sm no-print" onclick="window.print()">Print List</button>
                 </div>
             </div>
-
             <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
             endif; ?>
-
             <div class="lf">
                 <span class="lf-title">Audit Info</span>
                 <div style="display:flex; gap:30px; padding:5px;">
@@ -6633,7 +6603,6 @@ if (!empty($_GET['ajax'])) {
                     <div>Created By: <strong><?= h($audit['creator']) ?></strong></div>
                 </div>
             </div>
-
             <form method="POST">
                 <?= csrfField() ?>
                 <input type="hidden" name="audit_id" value="<?= $id ?>">
@@ -6648,7 +6617,8 @@ if (!empty($_GET['ajax'])) {
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($items as $x):
+                            <?php
+                            foreach ($items as $x):
                                 $diff = (int) $x['difference'];
                                 $diffClass = '';
                                 if ($diff > 0)
@@ -6674,7 +6644,6 @@ if (!empty($_GET['ajax'])) {
                         </tbody>
                     </table>
                 </div>
-
                 <?php if ($audit['status'] === 'open'): ?>
                     <div class="mt-8 no-print" style="display:flex; justify-content:flex-end; gap:10px; padding:10px 0;">
                         <button type="submit" name="action" value="save_counts" class="btn btn-primary">Save Counts</button>
@@ -6682,7 +6651,6 @@ if (!empty($_GET['ajax'])) {
                     </div>
                 <?php endif; ?>
             </form>
-
             <script>
             function updDiff(inp, sys) {
                 var c = parseInt(inp.value) || 0;
@@ -6692,8 +6660,8 @@ if (!empty($_GET['ajax'])) {
                 cell.className = 'text-right diff-val ' + (d > 0 ? 'stock-ok' : (d < 0 ? 'stock-critical' : ''));
             }
             </script>
-
-        <?php else:
+        <?php
+        else:
             $a = $pdo->query('SELECT a.*, u.full_name as creator FROM stock_audits a JOIN users u ON u.id=a.created_by ORDER BY a.id DESC')->fetchAll();
             ?>
             <div class="page-header">
@@ -6706,10 +6674,8 @@ if (!empty($_GET['ajax'])) {
                     </form>
                 </div>
             </div>
-
             <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
             endif; ?>
-
             <div class="lf">
                 <table class="tbl">
                     <thead>
@@ -6724,7 +6690,8 @@ if (!empty($_GET['ajax'])) {
                     </thead>
                     <tbody>
                         <?php if (empty($a)): ?><tr><td colspan="6" class="text-center" style="padding:20px; color:#888;">No stock audits found.</td></tr><?php endif; ?>
-                        <?php foreach ($a as $x):
+                        <?php
+                        foreach ($a as $x):
                             $count = $pdo->prepare('SELECT COUNT(*) FROM stock_audit_items WHERE audit_id=?');
                             $count->execute([$x['id']]);
                             $numItems = $count->fetchColumn();
@@ -6792,19 +6759,20 @@ if (!empty($_GET['ajax'])) {
     {
         requireRole(['admin', 'manager', 'staff']);
         $pdo = getPDO();
-
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
             if (isset($_POST['action'])) {
                 if ($_POST['action'] === 'open_shift') {
                     $float = (float) ($_POST['opening_float'] ?? 0);
-                    $pdo->prepare("INSERT INTO shifts (user_id, open_time, opening_float, status) VALUES (?, NOW(), ?, 'open')")
+                    $pdo
+                        ->prepare("INSERT INTO shifts (user_id, open_time, opening_float, status) VALUES (?, NOW(), ?, 'open')")
                         ->execute([$_SESSION['user_id'], $float]);
                     $_SESSION['flash_msg'] = 'Shift opened successfully.';
                     $_SESSION['flash_type'] = 'success';
                 } elseif ($_POST['action'] === 'close_shift') {
                     $shiftId = (int) $_POST['shift_id'];
                     $closingCash = (float) ($_POST['closing_cash'] ?? 0);
-                    $pdo->prepare("UPDATE shifts SET close_time=NOW(), closing_cash=?, status='closed' WHERE id=?")
+                    $pdo
+                        ->prepare("UPDATE shifts SET close_time=NOW(), closing_cash=?, status='closed' WHERE id=?")
                         ->execute([$closingCash, $shiftId]);
                     $_SESSION['flash_msg'] = 'Shift closed successfully.';
                     $_SESSION['flash_type'] = 'success';
@@ -6813,24 +6781,22 @@ if (!empty($_GET['ajax'])) {
                 exit;
             }
         }
-
         $s = $pdo->query('SELECT s.*,u.full_name FROM shifts s LEFT JOIN users u ON u.id=s.user_id ORDER BY s.id DESC LIMIT 50')->fetchAll();
         $openShift = $pdo->prepare("SELECT * FROM shifts WHERE user_id=? AND status='open' LIMIT 1");
         $openShift->execute([$_SESSION['user_id']]);
         $myOpenShift = $openShift->fetch();
-
         ob_start();
     ?>
     <div class="page-header"><h1>&#128336; POS Shifts / Registers</h1></div>
-    
-    <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']); endif; ?>
-
+    <?php if (isset($_SESSION['flash_msg'])): ?><div class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
+        endif; ?>
     <div class="cols-2">
         <div>
             <div class="lf"><span class="lf-title">My Current Shift</span>
-            <?php if ($myOpenShift): 
+            <?php
+            if ($myOpenShift):
                 $expectedCash = $myOpenShift['opening_float'] + $myOpenShift['cash_sales'];
-            ?>
+                ?>
                 <div style="padding:15px; background:#f9f9f9; border:1px solid #ddd; border-radius:4px;">
                     <div style="margin-bottom:10px;">Opened at: <strong><?= $myOpenShift['open_time'] ?></strong></div>
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:15px;">
@@ -6856,10 +6822,11 @@ if (!empty($_GET['ajax'])) {
             <div class="lf"><span class="lf-title">Recent Shifts</span>
             <div class="tbl-wrap"><table class="tbl"><thead><tr><th>User</th><th>Opened</th><th>Closed</th><th class="text-right">Expected</th><th class="text-right">Actual</th><th>Status</th></tr></thead><tbody>
             <?php if (empty($s)): ?><tr><td colspan="6" class="text-center text-muted">No shifts recorded</td></tr><?php endif; ?>
-            <?php foreach ($s as $x): 
+            <?php
+            foreach ($s as $x):
                 $exp = $x['opening_float'] + $x['total_sales'];
                 $diff = ($x['closing_cash'] !== null) ? ($x['closing_cash'] - $exp) : 0;
-            ?>
+                ?>
                 <tr>
                     <td><?= h($x['full_name']) ?></td>
                     <td><?= date('d M H:i', strtotime($x['open_time'])) ?></td>
@@ -6877,7 +6844,6 @@ if (!empty($_GET['ajax'])) {
             </tbody></table></div></div>
         </div>
     </div>
-
     <!-- Modals -->
     <div id="openShiftModal" class="modal-overlay">
         <div class="modal">
@@ -6890,7 +6856,6 @@ if (!empty($_GET['ajax'])) {
             </form>
         </div>
     </div>
-
     <div id="closeShiftModal" class="modal-overlay">
         <div class="modal">
             <div class="modal-title-bar"><span>Close Shift & Reconcile</span><button class="modal-close-btn" onclick="closeModal('closeShiftModal')">&times;</button></div>
@@ -6906,7 +6871,6 @@ if (!empty($_GET['ajax'])) {
             </form>
         </div>
     </div>
-
     <?php
         $content = ob_get_clean();
         renderLayout('Shifts', $content, 'shifts');
@@ -7131,6 +7095,35 @@ if (!empty($_GET['ajax'])) {
         renderLayout('SMS Alerts', $content, 'sms');
     }
 
+    function renderSupplierLedgers(): void
+    {
+        requirePermission('suppliers', 'view');
+        $pdo = getPDO();
+        $suppliers = $pdo->query('SELECT id,company_name FROM suppliers ORDER BY company_name')->fetchAll();
+        $sid = (int) ($_GET['supplier_id'] ?? ($suppliers[0]['id'] ?? 0));
+        ob_start();
+    ?>
+    <div class="page-header"><h1>&#128200; Supplier Ledgers</h1></div>
+    <div class="lf"><span class="lf-title">Statement of Account (Payables)</span>
+    <form method="GET" class="mb-8" style="display:flex;gap:8px;align-items:flex-end">
+        <input type="hidden" name="page" value="supplier_ledgers">
+        <div class="form-group" style="width:300px"><label>Select Supplier</label>
+        <select name="supplier_id" onchange="this.form.submit()"><?php foreach ($suppliers as $s) { $v = $s['id'] == $sid ? 'selected' : ''; echo "<option value='{$s['id']}' $v>" . h($s['company_name']) . '</option>'; } ?></select>
+        </div>
+    </form>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Type</th><th class="text-right">Debit (Paid)</th><th class="text-right">Credit (Due)</th><th class="text-right">Balance</th></tr></thead><tbody>
+    <?php $stmt = $pdo->prepare('SELECT * FROM supplier_ledgers WHERE supplier_id=? ORDER BY transaction_date, id');
+    $stmt->execute([$sid]);
+    $ledgers = $stmt->fetchAll();
+    if (empty($ledgers)): ?><tr><td colspan="5" class="text-center text-muted">No ledger entries found</td></tr><?php endif;
+    foreach ($ledgers as $l): ?>
+    <tr><td><?= h($l['transaction_date']) ?></td><td><?= h(ucfirst($l['reference_type'])) ?></td><td class="text-right" style="color:#5cb85c"><?= formatCurrency((float) $l['debit']) ?></td><td class="text-right" style="color:#d9534f"><?= formatCurrency((float) $l['credit']) ?></td><td class="text-right font-weight-bold"><?= formatCurrency((float) $l['balance']) ?></td></tr>
+    <?php endforeach; ?></tbody></table></div></div>
+    <?php
+        $content = ob_get_clean();
+        renderLayout('Supplier Ledgers', $content, 'supplier_ledgers');
+    }
+
     match ($currentPage) {
         'dashboard' => renderDashboard(),
         'pos' => renderPOS(),
@@ -7139,6 +7132,7 @@ if (!empty($_GET['ajax'])) {
         'quotations' => renderQuotations(),
         'sales_returns' => renderSalesReturns(),
         'customer_ledgers' => renderCustomerLedgers(),
+        'supplier_ledgers' => renderSupplierLedgers(),
         'purchase_returns' => renderPurchaseReturns(),
         'requisitions' => renderRequisitions(),
         'stock_audit' => renderStockAudit(),
