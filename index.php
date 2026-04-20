@@ -723,7 +723,9 @@ if ($db_exists && isset($_SESSION['logged_in'])) {
         if ($file['error'] === UPLOAD_ERR_OK && pathinfo($file['name'], PATHINFO_EXTENSION) === 'sql') {
             $sql_content = file_get_contents($file['tmp_name']);
             if ($conn->multi_query($sql_content)) {
-                while ($conn->more_results() && $conn->next_result()) {;}
+                while ($conn->more_results() && $conn->next_result()) {
+                    ;
+                }
                 $msg = 'Database restored successfully.';
             } else {
                 $err = 'Restore failed: ' . $conn->error;
@@ -825,7 +827,7 @@ img{display:block;max-width:100%}
 .sidebar-footer form{display:inline}
 .sidebar-footer button{background:var(--danger);color:#fff;border:1px solid var(--danger-h);padding:6px 14px;font-size:0.8rem;border-radius:2px;width:100%}
 
-.main-wrap{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-height:100vh;transition:margin-left 0.2s}
+.main-wrap{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-height:100vh;transition:margin-left 0.2s;min-width:0}
 .topbar{height:var(--topbar-h);background:var(--bg2);border-bottom:2px solid var(--border);display:flex;align-items:center;padding:0 16px;position:sticky;top:0;z-index:50;gap:10px}
 .topbar .hamburger{display:flex;background:none;border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:2px;font-size:1.1rem;cursor:pointer}
 @media (min-width: 601px) {
@@ -844,7 +846,7 @@ body.sidebar-collapsed .sidebar-footer form button::after { content: '🚪'; fon
 .topbar .topbar-actions form button{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:4px 10px;font-size:0.78rem;border-radius:2px}
 .topbar .topbar-actions form button:hover{background:var(--bg3)}
 
-.content{flex:1;padding:16px;overflow-x:hidden}
+.content{flex:1;padding:16px;overflow-x:hidden;max-width:100%}
 
 .toast-wrap{position:fixed;top:60px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:8px}
 .toast{padding:10px 18px;border-radius:2px;font-size:0.85rem;border:1px solid;min-width:220px;max-width:340px;animation:fadeIn 0.3s;font-weight:600}
@@ -854,7 +856,7 @@ body.sidebar-collapsed .sidebar-footer form button::after { content: '🚪'; fon
 [data-theme="light"] .toast.error{background:#f4d4d4;border-color:var(--danger);color:#4d1a1a}
 @keyframes fadeIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
 
-.fieldset{border:2px solid var(--border);padding:12px 14px;margin-bottom:14px;border-radius:2px}
+.fieldset{border:2px solid var(--border);padding:12px 14px;margin-bottom:14px;border-radius:2px;min-width:0;max-width:100%}
 .fieldset legend{font-size:0.8rem;font-weight:700;padding:0 6px;color:var(--accent);text-transform:uppercase;letter-spacing:0.5px}
 .form-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px}
 .form-group{display:flex;flex-direction:column;gap:3px;flex:1;min-width:140px}
@@ -888,8 +890,9 @@ body.sidebar-collapsed .sidebar-footer form button::after { content: '🚪'; fon
 .card.success{border-color:var(--success)}
 .card.danger{border-color:var(--danger)}
 .card.warning{border-color:var(--warning)}
-
-.data-table-wrap{overflow-x:auto;margin-bottom:14px}
+.split-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.split-grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.data-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-bottom:14px;width:100%;max-width:100%}
 .data-table{width:100%;border:1px solid var(--border);font-size:0.82rem}
 .data-table th,.data-table td{border:1px solid var(--border);padding:6px 9px;white-space:nowrap}
 .data-table th{background:var(--bg2);color:var(--text);font-weight:700;text-align:left;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.3px;cursor:pointer;user-select:none}
@@ -998,9 +1001,10 @@ body{background:#fff!important;color:#111!important}
 }
 @media(max-width:900px){
 .card-grid{grid-template-columns:repeat(2,1fr)}
+.split-grid-3{grid-template-columns:1fr 1fr}
 }
 @media(max-width:600px){
-.card-grid{grid-template-columns:1fr}
+.card-grid, .split-grid, .split-grid-3{grid-template-columns:1fr}
 .sidebar{transform:translateX(-100%)}
 .sidebar.open{transform:translateX(0)}
 .sidebar-overlay.open{display:block}
@@ -1179,7 +1183,7 @@ else:
 </div>
 </fieldset>
 
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;flex-wrap:wrap">
+<div class="split-grid">
 <fieldset class="fieldset"><legend>🛒 Recent 10 Sales</legend>
 <div class="data-table-wrap">
 <table class="data-table">
@@ -1298,6 +1302,7 @@ else:
 </div>
 
 <script>
+var prefillModelId = <?= (int) ($_GET['model_id'] ?? 0) ?>;
 var bikeCount = 0;
 var modelsOptions = `<?php $models_list->data_seek(0);
         $mo = '';
@@ -1327,6 +1332,9 @@ function addBikeRow() {
     <div class="form-group"><label>Notes</label><input type="text" name="bikes[${bikeCount}][notes]" placeholder="Any notes..."></div>
     </div>`;
     document.getElementById('bikesList').appendChild(d);
+    if (prefillModelId && bikeCount === 1) {
+        document.querySelector(`select[name="bikes[${bikeCount}][model_id]"]`).value = prefillModelId;
+    }
 }
 function removeBikeRow(n) {
     var el = document.getElementById('bikeRow_'+n);
@@ -1400,7 +1408,7 @@ addBikeRow();
 <?php if ($view_bike): ?>
 <div class="print-btn-wrap no-print"><button onclick="window.print()" class="btn btn-default btn-sm">🖨 Print</button> <a href="index.php?page=inventory" class="btn btn-default btn-sm">← Back</a></div>
 <fieldset class="fieldset"><legend>🚲 Bike Details — <?= sanitize($view_bike['chassis_number']) ?></legend>
-<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
+<div class="split-grid-3" style="margin-bottom:12px">
 <?php
             $detail_fields = [
                 ['Chassis Number', $view_bike['chassis_number']],
@@ -1648,7 +1656,11 @@ function sortTable(col) {
             $pr = $conn->query("SELECT b.*, m.model_name, m.model_code FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.id=$prefill_bike_id AND b.status='in_stock'");
             $prefill_bike = $pr ? $pr->fetch_assoc() : null;
         }
-        $bikes_instock = $conn->query("SELECT b.id, b.chassis_number, b.color, b.purchase_price, m.model_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.status='in_stock' ORDER BY b.created_at DESC");
+        $sale_model_id = (int) ($_GET['model_id'] ?? 0);
+        $sale_where = "b.status='in_stock'";
+        if ($sale_model_id)
+            $sale_where .= " AND b.model_id=$sale_model_id";
+        $bikes_instock = $conn->query("SELECT b.id, b.chassis_number, b.color, b.purchase_price, m.model_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE $sale_where ORDER BY b.created_at DESC");
         $customers_list = $conn->query('SELECT id, name, phone FROM customers ORDER BY name');
         $last_sale_bike_id = $_SESSION['last_sale_bike_id'] ?? 0;
         unset($_SESSION['last_sale_bike_id']);
@@ -1660,8 +1672,18 @@ function sortTable(col) {
 <label>Select Bike <span class="req">*</span></label>
 <select name="bike_id" id="bikeSelect" required onchange="fillBikeDetails(this)">
 <option value="">-- Select Bike (Chassis / Model / Color) --</option>
-<?php while ($bs = $bikes_instock->fetch_assoc()): ?>
-<option value="<?= $bs['id'] ?>" data-pp="<?= $bs['purchase_price'] ?>" <?= $prefill_bike_id == $bs['id'] ? 'selected' : '' ?>>
+<?php
+        $auto_sel = false;
+        while ($bs = $bikes_instock->fetch_assoc()):
+            $sel_attr = '';
+            if ($prefill_bike_id == $bs['id']) {
+                $sel_attr = 'selected';
+            } elseif (isset($sale_model_id) && $sale_model_id > 0 && !$auto_sel) {
+                $sel_attr = 'selected';
+                $auto_sel = true;
+            }
+?>
+<option value="<?= $bs['id'] ?>" data-pp="<?= $bs['purchase_price'] ?>" <?= $sel_attr ?>>
 <?= sanitize($bs['chassis_number']) ?> | <?= sanitize($bs['model_name']) ?> | <?= sanitize($bs['color']) ?> | Pp: <?= fmt_money($bs['purchase_price']) ?>
 </option>
 <?php endwhile; ?>
@@ -1671,7 +1693,7 @@ function sortTable(col) {
 </div>
 <div class="form-row">
 <div class="form-group"><label>Selling Price (<?= $currency ?>) <span class="req">*</span></label><input type="number" name="selling_price" id="sellingPrice" step="0.01" min="0" required placeholder="0.00" oninput="calcMargin()"></div>
-<div class="form-group"><label>Purchase Price</label><input type="number" id="purchasePriceDisplay" readonly style="background:var(--bg3);color:var(--text2)" placeholder="Auto-filled"></div>
+<div class="form-group"><label>Purchase Price</label><input type="text" id="purchasePriceDisplay" readonly style="background:var(--bg3);color:var(--text2)" placeholder="Auto-filled"></div>
 <div class="form-group"><label>Tax Amount (<?= get_setting('tax_rate') ?? 0.1 ?>% of <?= get_setting('tax_on') === 'selling_price' ? 'Selling' : 'Purchase' ?> Price)</label><input type="text" id="taxDisplay" readonly style="background:var(--bg3);color:var(--text2)" placeholder="Auto-calculated"></div>
 <div class="form-group"><label>Margin / Profit</label><input type="text" id="marginDisplay" readonly style="background:var(--bg3);font-weight:700" placeholder="Auto-calculated"></div>
 </div>
@@ -2611,6 +2633,8 @@ function toggleRetCheque(v) {
 <td><span class="badge badge-success"><?= $mdl['sold_cnt'] ?></span></td>
 <td class="no-print">
 <div class="actions-col">
+<a href="index.php?page=purchase&model_id=<?= $mdl['id'] ?>" class="btn btn-success btn-sm" title="Purchase">📦</a>
+<a href="index.php?page=sale&model_id=<?= $mdl['id'] ?>" class="btn btn-warning btn-sm" title="Sell">🛒</a>
 <a href="index.php?page=models&edit_id=<?= $mdl['id'] ?>" class="btn btn-primary btn-sm">✏ Edit</a>
 <form method="POST" action="index.php?page=models&action=delete" style="display:inline" onsubmit="return confirm('Delete this model? Only possible if no bikes are linked.')">
 <input type="hidden" name="id" value="<?= $mdl['id'] ?>">
@@ -2804,7 +2828,7 @@ function toggleRetCheque(v) {
 </div>
 </fieldset>
 <fieldset class="fieldset"><legend>ℹ System Info</legend>
-<div style="font-size:0.82rem;color:var(--text2);display:grid;grid-template-columns:1fr 1fr;gap:8px">
+<div class="split-grid" style="font-size:0.82rem;color:var(--text2);gap:8px">
 <div><strong>App Version:</strong> <?= $app_version ?></div>
 <div><strong>Author:</strong> <?= $author ?></div>
 <div><strong>PHP Version:</strong> <?= phpversion() ?></div>
