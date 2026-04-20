@@ -281,20 +281,6 @@ if (isset($_POST['do_install'])) {
 
 if ($db_exists) {
     $theme = get_setting('theme') ?? 'dark';
-    if (isset($_POST['toggle_theme'])) {
-        $new_theme = ($theme === 'dark') ? 'light' : 'dark';
-        $conn = db_connect();
-        if ($conn) {
-            $stmt = $conn->prepare("UPDATE settings SET setting_value=? WHERE setting_key='theme'");
-            $stmt->bind_param('s', $new_theme);
-            $stmt->execute();
-            $stmt->close();
-            $conn->close();
-        }
-        $theme = $new_theme;
-        header('Location: index.php?' . http_build_query(array_merge($_GET, [])));
-        exit;
-    }
 
     if (!isset($_SESSION['logged_in'])) {
         if (isset($_POST['do_login'])) {
@@ -338,6 +324,16 @@ $err = '';
 
 if ($db_exists && isset($_SESSION['logged_in'])) {
     $conn = db_connect();
+
+    if (isset($_POST['toggle_theme'])) {
+        $new_theme = ($theme === 'dark') ? 'light' : 'dark';
+        $stmt = $conn->prepare("UPDATE settings SET setting_value=? WHERE setting_key='theme'");
+        $stmt->bind_param('s', $new_theme);
+        $stmt->execute();
+        $stmt->close();
+        header('Location: index.php?' . http_build_query($_GET));
+        exit;
+    }
 
     if ($page === 'purchase' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_purchase'])) {
         $order_date = $_POST['order_date'] ?? date('Y-m-d');
@@ -2869,7 +2865,7 @@ setInterval(function() {
 
 <?php
 if (isset($conn) && $conn) {
-    if (isset($_GET['ajax']) && $_GET['ajax'] === 'check_chassis') {
+    if (isset($_SESSION['logged_in']) && isset($_GET['ajax']) && $_GET['ajax'] === 'check_chassis') {
         $chassis = sanitize($_GET['chassis'] ?? '');
         $r = $conn->query("SELECT id FROM bikes WHERE chassis_number='" . mysqli_real_escape_string($conn, $chassis) . "'");
         echo ($r && $r->num_rows > 0) ? '1' : '0';
