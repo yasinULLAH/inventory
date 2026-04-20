@@ -856,7 +856,9 @@ function generatePoNumber(): string
     $pdo = getPDO();
     $prefix = getSetting('po_prefix') ?: 'PO';
     $date = date('Ymd');
-    $row = $pdo->query("SELECT COUNT(*) as cnt FROM `purchase_orders` WHERE `po_number` LIKE '" . $prefix . '-' . $date . "-%'")->fetch();
+    $stmt = $pdo->prepare('SELECT COUNT(*) as cnt FROM `purchase_orders` WHERE `po_number` LIKE ?');
+    $stmt->execute([$prefix . '-' . $date . '-%']);
+    $row = $stmt->fetch();
     $seq = str_pad((int) $row['cnt'] + 1, 3, '0', STR_PAD_LEFT);
     return $prefix . '-' . $date . '-' . $seq;
 }
@@ -866,7 +868,9 @@ function generateInvoiceNumber(): string
     $pdo = getPDO();
     $prefix = getSetting('invoice_prefix') ?: 'INV';
     $date = date('Ymd');
-    $row = $pdo->query("SELECT COUNT(*) as cnt FROM `invoices` WHERE `invoice_number` LIKE '" . $prefix . '-' . $date . "-%'")->fetch();
+    $stmt = $pdo->prepare('SELECT COUNT(*) as cnt FROM `invoices` WHERE `invoice_number` LIKE ?');
+    $stmt->execute([$prefix . '-' . $date . '-%']);
+    $row = $stmt->fetch();
     $seq = str_pad((int) $row['cnt'] + 1, 3, '0', STR_PAD_LEFT);
     return $prefix . '-' . $date . '-' . $seq;
 }
@@ -1543,7 +1547,9 @@ function getNotifications(): array
         $chk = $pdo->prepare("SELECT `id` FROM `notifications` WHERE `type`='low_stock' AND `related_id`=(SELECT `id` FROM `products` WHERE `sku`=?) AND `is_read`=0");
         $chk->execute([$p['sku']]);
         if (!$chk->fetch()) {
-            $prodId = (int) $pdo->query("SELECT `id` FROM `products` WHERE `sku`='" . $p['sku'] . "'")->fetchColumn();
+            $stmt = $pdo->prepare('SELECT `id` FROM `products` WHERE `sku`=?');
+            $stmt->execute([$p['sku']]);
+            $prodId = (int) $stmt->fetchColumn();
             $pdo->prepare("INSERT IGNORE INTO `notifications` (`type`,`title`,`message`,`related_id`,`related_module`) VALUES ('low_stock',?,?,?,'products')")->execute(["Low Stock: {$p['name']}", "Product '{$p['name']}' has only {$p['current_stock']} units left (min: {$p['min_stock_level']})", $prodId]);
         }
     }
@@ -3085,7 +3091,7 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
                     </div>
                     <a href="?page=profile">&#128100; My Profile</a>
                     <a href="?page=profile&action=change_password">&#128274; Change Password</a>
-                    <button onclick="window.location='?action=logout'">&#128275; Sign Out</button>
+                    <button onclick="window.location='?page=logout'">&#128275; Sign Out</button>
                 </div>
             </div>
         </div>
@@ -3250,11 +3256,10 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
         });
         function apiPost(url, data, onSuccess, onError) {
             showLoading();
-            data['csrf_token'] = CSRF_TOKEN;
             fetch(url, {
                 method: 'POST',
-                headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
-                body: new URLSearchParams(data)
+                headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': CSRF_TOKEN},
+                body: JSON.stringify(data)
             })
                 .then(function (r) {
                     return r.json();
@@ -4342,7 +4347,10 @@ function renderCategories(): void
         }
     }
     if ($action === 'delete' && !empty($_GET['id']) && canAccess(['admin', 'manager'])) {
-        if ($_GET['confirm'] ?? '' === 'yes') {
+        if (($_GET['confirm'] ?? '') === 'yes') {
+            if (($_GET['csrf_token'] ?? '') !== csrf()) {
+                die('CSRF token mismatch');
+            }
             $id = (int) $_GET['id'];
             $chkProd = $pdo->prepare('SELECT COUNT(*) FROM products WHERE category_id=?');
             $chkProd->execute([$id]);
@@ -4472,7 +4480,7 @@ function renderCategories(): void
     <script>
         function confirmDeleteCat(id, name) {
             confirmAction('Delete category "' + name + '"?', function () {
-                window.location = '?page=categories&action=delete&id=' + id + '&confirm=yes';
+                window.location = '?page=categories&action=delete&id=' + id + '&confirm=yes&csrf_token=' + CSRF_TOKEN;
             });
         }
     </script>
@@ -4498,6 +4506,8 @@ function renderSuppliers(): void
         }
     }
     if ($action === 'delete' && !empty($_GET['id']) && canAccess(['admin', 'manager'])) {
+        if (($_GET['csrf_token'] ?? '') !== csrf())
+            die('CSRF token mismatch');
         $res = deleteSupplier((int) $_GET['id']);
         $_SESSION['flash_msg'] = $res['success'] ? 'Supplier deleted.' : ($res['error'] ?? 'Error');
         $_SESSION['flash_type'] = $res['success'] ? 'success' : 'danger';
@@ -4589,7 +4599,7 @@ function renderSuppliers(): void
     <?= paginationHtml($result['pagination'], '?page=suppliers&search=' . urlencode($filters['search']) . '&status=' . urlencode($filters['status'])) ?>
         <script>function confirmDelSupplier(id, n) {
                 confirmAction('Delete supplier "' + n + '"?', function () {
-                    window.location = '?page=suppliers&action=delete&id=' + id;
+                    window.location = '?page=suppliers&action=delete&id=' + id + '&csrf_token=' + CSRF_TOKEN;
                 });
             }</script>
     <?php
@@ -4784,6 +4794,8 @@ function renderCustomers(): void
         }
     }
     if ($action === 'delete' && !empty($_GET['id']) && canAccess(['admin', 'manager'])) {
+        if (($_GET['csrf_token'] ?? '') !== csrf())
+            die('CSRF token mismatch');
         $res = deleteCustomer((int) $_GET['id']);
         $_SESSION['flash_msg'] = $res['success'] ? 'Customer deleted.' : ($res['error'] ?? 'Error');
         $_SESSION['flash_type'] = $res['success'] ? 'success' : 'danger';
@@ -4885,7 +4897,7 @@ function renderCustomers(): void
     <?= paginationHtml($result['pagination'], '?page=customers&search=' . urlencode($filters['search']) . '&status=' . urlencode($filters['status']) . '&type=' . urlencode($filters['type'])) ?>
         <script>function confirmDelCust(id, n) {
                 confirmAction('Delete customer "' + n + '"?', function () {
-                    window.location = '?page=customers&action=delete&id=' + id;
+                    window.location = '?page=customers&action=delete&id=' + id + '&csrf_token=' + CSRF_TOKEN;
                 });
             }</script>
     <?php
@@ -7382,8 +7394,8 @@ function renderReports(): void
     requireRole(['admin', 'manager']);
     $pdo = getPDO();
     $reportType = $_GET['report'] ?? 'stock';
-    $dateFrom = $_GET['date_from'] ?? date('Y-m-01');
-    $dateTo = $_GET['date_to'] ?? date('Y-m-d');
+    $dateFrom = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['date_from'] ?? '') ? $_GET['date_from'] : date('Y-m-01');
+    $dateTo = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['date_to'] ?? '') ? $_GET['date_to'] : date('Y-m-d');
     $exportCsv = !empty($_GET['export']) && $_GET['export'] === 'csv';
     ob_start();
     ?>
@@ -8030,6 +8042,10 @@ function handleAjax(): void
 {
     $pdo = getPDO();
     header('Content-Type: application/json');
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && !verifyCsrf()) {
+        echo json_encode(['success' => false, 'msg' => 'CSRF verification failed']);
+        exit;
+    }
     $endpoint = $_GET['ajax'] ?? '';
     $data = json_decode(file_get_contents('php://input'), true) ?? [];
     if (!isset($_SESSION['user_id'])) {
@@ -8105,10 +8121,22 @@ function handleAjax(): void
         $id = (int) ($data['id'] ?? 0);
         $pdo->prepare("UPDATE products SET status=IF(status='active','inactive','active'),updated_at=NOW() WHERE id=?")->execute([$id]);
         echo json_encode(['success' => true]);
-    } elseif ($endpoint === 'bulk_product_action') {
+    } elseif ($endpoint === 'delete_product') {
         requireRole(['admin', 'manager']);
-        $action = $data['bulk_action'] ?? '';
-        $ids = array_map('intval', $data['ids'] ?? []);
+        $id = (int) ($data['id'] ?? 0);
+        echo json_encode(deleteProduct($id));
+    } elseif ($endpoint === 'cancel_po') {
+        requireRole(['admin', 'manager']);
+        $id = (int) ($data['id'] ?? 0);
+        $pdo->prepare("UPDATE purchase_orders SET order_status='cancelled',updated_at=NOW() WHERE id=?")->execute([$id]);
+        logActivity($_SESSION['user_id'], 'UPDATE', 'purchases', 'Cancelled PO id: ' . $id);
+        echo json_encode(['success' => true]);
+    } elseif ($endpoint === 'bulk_product_action' || $endpoint === 'bulk_products') {
+        requireRole(['admin', 'manager']);
+        $action = $data['action'] ?? ($data['bulk_action'] ?? '');
+        $rawIds = $data['ids'] ?? '';
+        $idArray = is_string($rawIds) ? explode(',', $rawIds) : (is_array($rawIds) ? $rawIds : []);
+        $ids = array_map('intval', $idArray);
         if (!empty($ids)) {
             $placeholders = implode(',', array_fill(0, count($ids), '?'));
             if ($action === 'activate')
@@ -8241,6 +8269,13 @@ function handleAjax(): void
         $stmt = $pdo->prepare('SELECT * FROM finance_categories WHERE type=?');
         $stmt->execute([$type]);
         echo json_encode(['success' => true, 'categories' => $stmt->fetchAll()]);
+    } elseif ($endpoint === 'mark_notif_read') {
+        $id = (int) ($_GET['id'] ?? 0);
+        $pdo->prepare('UPDATE notifications SET is_read=1 WHERE id=?')->execute([$id]);
+        echo json_encode(['success' => true]);
+    } elseif ($endpoint === 'mark_all_notif_read') {
+        $pdo->prepare('UPDATE notifications SET is_read=1 WHERE is_read=0')->execute();
+        echo json_encode(['success' => true]);
     } else {
         echo json_encode(['success' => false, 'msg' => 'Unknown endpoint']);
     }
@@ -8260,12 +8295,7 @@ if (!empty($_GET['ajax'])) {
     $loginError = handleLogin();
     renderLogin($loginError);
 } elseif ($currentPage === 'logout') {
-    $pdo = getPDO();
-    if (isset($_SESSION['user_id']))
-        logActivity($_SESSION['user_id'], 'LOGOUT', 'auth', 'User logged out');
-    session_destroy();
-    header('Location: ?page=login');
-    exit;
+    handleLogout();
 } elseif (!isset($_SESSION['user_id'])) {
     header('Location: ?page=login');
     exit;
@@ -8442,7 +8472,7 @@ if (!empty($_GET['ajax'])) {
         echo '<div style="margin-bottom:8px;"><label style="font-size:11px;font-weight:600;display:block;margin-bottom:2px">Amount Paid (Leave empty for full payment)</label><input type="number" id="posAmountPaid" class="form-control" style="width:100%;padding:8px;border:2px inset #a0a0a0" step="0.01" min="0" placeholder="0.00"></div>';
         echo '<div style="display:flex;gap:8px"><button class="btn btn-success" style="flex:1;padding:12px;font-size:16px;justify-content:center" onclick="posCheckout(\'cash\')">Cash</button>';
         echo '<button class="btn btn-primary" style="flex:1;padding:12px;font-size:16px;justify-content:center" onclick="posCheckout(\'card\')">Card</button></div></div></div></div>';
-        echo '<script>let posCart=[];function posAdd(id,name,price,stock){let f=posCart.find(i=>i.id===id);if(f){if(f.qty<stock)f.qty++}else posCart.push({id,name,price,qty:1});posRender()}function posRender(){let h="";let sub=0;posCart.forEach((i,idx)=>{let t=i.price*i.qty;sub+=t;h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px dashed #ccc"><div><div style="font-weight:600;font-size:12px">${i.name}</div><div style="font-size:11px;color:#666">${CURRENCY} ${i.price} x ${i.qty}</div></div><div style="font-weight:700;font-size:12px">${t.toFixed(2)} <button onclick="posCart.splice(${idx},1);posRender()" class="btn btn-danger btn-xs" style="margin-left:8px;padding:2px 5px">×</button></div></div>`});document.getElementById("posCart").innerHTML=h||"<div style=\'color:#888;text-align:center;padding:20px\'>Cart is empty</div>";document.getElementById("posSubtotal").textContent=sub.toFixed(2);let tax=sub*TAX_PCT;document.getElementById("posTax").textContent=tax.toFixed(2);document.getElementById("posTotal").textContent=(sub+tax).toFixed(2)}async function posCheckout(method){if(!posCart.length){showToast("Cart empty","error");return;}let amtPaid=document.getElementById("posAmountPaid").value;const res=await fetch("?ajax=pos_checkout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({items:posCart,customer_id:document.getElementById("posCustomer").value,payment_method:method,amount_paid:amtPaid?parseFloat(amtPaid):null,csrf_token:CSRF_TOKEN})});const d=await res.json();if(d.success){showToast("Sale #"+d.invoice,"success");window.open("?page=sales&action=view&id="+d.id,"_blank");posCart=[];posRender();document.getElementById("posAmountPaid").value="";}else showToast(d.msg||"Checkout error","error")}</script>';
+        echo '<script>let posCart=[];function posAdd(id,name,price,stock){let f=posCart.find(i=>i.id===id);if(f){if(f.qty<stock)f.qty++}else posCart.push({id,name,price,qty:1});posRender()}function posRender(){let h="";let sub=0;posCart.forEach((i,idx)=>{let t=i.price*i.qty;sub+=t;h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px dashed #ccc"><div><div style="font-weight:600;font-size:12px">${i.name}</div><div style="font-size:11px;color:#666">${CURRENCY} ${i.price} x ${i.qty}</div></div><div style="font-weight:700;font-size:12px">${t.toFixed(2)} <button onclick="posCart.splice(${idx},1);posRender()" class="btn btn-danger btn-xs" style="margin-left:8px;padding:2px 5px">×</button></div></div>`});document.getElementById("posCart").innerHTML=h||"<div style=\'color:#888;text-align:center;padding:20px\'>Cart is empty</div>";document.getElementById("posSubtotal").textContent=sub.toFixed(2);let tax=sub*TAX_PCT;document.getElementById("posTax").textContent=tax.toFixed(2);document.getElementById("posTotal").textContent=(sub+tax).toFixed(2)}async function posCheckout(method){if(!posCart.length){showToast("Cart empty","error");return;}let amtPaid=document.getElementById("posAmountPaid").value;const res=await fetch("?ajax=pos_checkout",{method:"POST",headers:{"Content-Type":"application/json","X-CSRF-Token":CSRF_TOKEN},body:JSON.stringify({items:posCart,customer_id:document.getElementById("posCustomer").value,payment_method:method,amount_paid:amtPaid?parseFloat(amtPaid):null})});const d=await res.json();if(d.success){showToast("Sale #"+d.invoice,"success");window.open("?page=sales&action=view&id="+d.id,"_blank");posCart=[];posRender();document.getElementById("posAmountPaid").value="";}else showToast(d.msg||"Checkout error","error")}</script>';
         $content = ob_get_clean();
         renderLayout('POS Checkout', $content, 'pos');
     }
@@ -9106,7 +9136,7 @@ if (!empty($_GET['ajax'])) {
             document.getElementById('customer_id').value = sel.options[sel.selectedIndex].dataset.customerId;
             fetch('?ajax=get_invoice_details', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN},
                 body: JSON.stringify({id: invId})
             })
                 .then(r => r.json())
@@ -9369,7 +9399,7 @@ if (!empty($_GET['ajax'])) {
             document.getElementById('supplier_id').value = sel.options[sel.selectedIndex].dataset.supplierId;
             fetch('?ajax=get_po_details', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN},
                 body: JSON.stringify({id: poId})
             })
                 .then(r => r.json())
