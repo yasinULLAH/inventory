@@ -1083,29 +1083,52 @@ function getDashboardStats(): array
 {
     $pdo = getPDO();
     $today = date('Y-m-d');
+    $thisMonthStart = date('Y-m-01');
     $stats = [];
+
     $stats['total_products'] = (int) $pdo->query("SELECT COUNT(*) FROM `products` WHERE `status`='active'")->fetchColumn();
-    $threshold = (int) (getSetting('low_stock_threshold') ?: 10);
-    $stats['low_stock'] = (int) $pdo->query("SELECT COUNT(*) FROM `products` WHERE `current_stock` <= `min_stock_level` AND `status`='active'")->fetchColumn();
+    $stats['low_stock'] = (int) $pdo->query("SELECT COUNT(*) FROM `products` WHERE `current_stock` > 0 AND `current_stock` <= `min_stock_level` AND `status`='active'")->fetchColumn();
+    $stats['out_of_stock'] = (int) $pdo->query("SELECT COUNT(*) FROM `products` WHERE `current_stock` <= 0 AND `status`='active'")->fetchColumn();
+    $stats['categories_count'] = (int) $pdo->query("SELECT COUNT(*) FROM `categories` WHERE `status`='active'")->fetchColumn();
+    $stats['inventory_value'] = (float) $pdo->query("SELECT COALESCE(SUM(`current_stock` * `purchase_price`),0) FROM `products` WHERE `status`='active'")->fetchColumn();
+
     $stats['today_sales'] = (float) $pdo->query("SELECT COALESCE(SUM(`total_amount`),0) FROM `invoices` WHERE DATE(`invoice_date`)='$today'")->fetchColumn();
-    $stats['today_purchases'] = (float) $pdo->query("SELECT COALESCE(SUM(`total_amount`),0) FROM `purchase_orders` WHERE DATE(`po_date`)='$today'")->fetchColumn();
+    $stats['this_month_sales'] = (float) $pdo->query("SELECT COALESCE(SUM(`total_amount`),0) FROM `invoices` WHERE `invoice_date` >= '$thisMonthStart'")->fetchColumn();
     $stats['total_revenue'] = (float) $pdo->query('SELECT COALESCE(SUM(`total_amount`),0) FROM `invoices`')->fetchColumn();
+    $stats['unpaid_invoices_amt'] = (float) $pdo->query("SELECT COALESCE(SUM(`total_amount`),0) FROM `invoices` WHERE `payment_status` != 'paid'")->fetchColumn();
+    $stats['unpaid_invoices'] = (int) $pdo->query("SELECT COUNT(*) FROM `invoices` WHERE `payment_status`='unpaid'")->fetchColumn();
+
+    $stats['today_purchases'] = (float) $pdo->query("SELECT COALESCE(SUM(`total_amount`),0) FROM `purchase_orders` WHERE DATE(`po_date`)='$today'")->fetchColumn();
+    $stats['this_month_purchases'] = (float) $pdo->query("SELECT COALESCE(SUM(`total_amount`),0) FROM `purchase_orders` WHERE `po_date` >= '$thisMonthStart'")->fetchColumn();
+    $stats['unpaid_pos_amt'] = (float) $pdo->query("SELECT COALESCE(SUM(`total_amount`),0) FROM `purchase_orders` WHERE `payment_status` != 'paid'")->fetchColumn();
+    $stats['pending_orders'] = (int) $pdo->query("SELECT COUNT(*) FROM `purchase_orders` WHERE `order_status`='pending'")->fetchColumn();
+
     $stats['total_customers'] = (int) $pdo->query("SELECT COUNT(*) FROM `customers` WHERE `status`='active'")->fetchColumn();
     $stats['total_suppliers'] = (int) $pdo->query("SELECT COUNT(*) FROM `suppliers` WHERE `status`='active'")->fetchColumn();
-    $stats['pending_orders'] = (int) $pdo->query("SELECT COUNT(*) FROM `purchase_orders` WHERE `order_status`='pending'")->fetchColumn();
-    $stats['inventory_value'] = (float) $pdo->query("SELECT COALESCE(SUM(`current_stock` * `purchase_price`),0) FROM `products` WHERE `status`='active'")->fetchColumn();
-    $stats['unpaid_invoices'] = (int) $pdo->query("SELECT COUNT(*) FROM `invoices` WHERE `payment_status`='unpaid'")->fetchColumn();
+    $stats['total_users'] = (int) $pdo->query("SELECT COUNT(*) FROM `users` WHERE `status`='active'")->fetchColumn();
+    $stats['total_warehouses'] = (int) $pdo->query("SELECT COUNT(*) FROM `warehouses` WHERE `status`='active'")->fetchColumn();
+
+    $stats['total_sales_returns'] = (float) $pdo->query('SELECT COALESCE(SUM(`total_amount`),0) FROM `sales_returns`')->fetchColumn();
+    $stats['total_purchase_returns'] = (float) $pdo->query('SELECT COALESCE(SUM(`total_amount`),0) FROM `purchase_returns`')->fetchColumn();
+
     $salesLast7 = [];
     for ($i = 6; $i >= 0; $i--) {
         $d = date('Y-m-d', strtotime("-$i days"));
         $amt = (float) $pdo->query("SELECT COALESCE(SUM(`total_amount`),0) FROM `invoices` WHERE DATE(`invoice_date`)='$d'")->fetchColumn();
-        $salesLast7[] = ['date' => date('D', strtotime($d)), 'amount' => $amt];
+        $cost = (float) $pdo->query("SELECT COALESCE(SUM(ii.quantity * p.purchase_price),0) FROM invoice_items ii JOIN invoices i ON i.id=ii.invoice_id JOIN products p ON p.id=ii.product_id WHERE DATE(i.invoice_date)='$d'")->fetchColumn();
+        $salesLast7[] = ['date' => date('D', strtotime($d)), 'amount' => $amt, 'cost' => $cost];
     }
     $stats['sales_last7'] = $salesLast7;
-    $stats['recent_invoices'] = $pdo->query('SELECT i.`invoice_number`, c.`name` as customer_name, i.`total_amount`, i.`payment_status`, i.`invoice_date` FROM `invoices` i JOIN `customers` c ON c.`id`=i.`customer_id` ORDER BY i.`created_at` DESC LIMIT 5')->fetchAll();
-    $stats['recent_purchases'] = $pdo->query('SELECT po.`po_number`, s.`company_name` as supplier_name, po.`total_amount`, po.`order_status`, po.`po_date` FROM `purchase_orders` po JOIN `suppliers` s ON s.`id`=po.`supplier_id` ORDER BY po.`created_at` DESC LIMIT 5')->fetchAll();
+
+    $stats['customers_by_type'] = $pdo->query('SELECT customer_type, COUNT(*) as cnt FROM customers GROUP BY customer_type')->fetchAll();
+    $stats['po_status_dist'] = $pdo->query('SELECT order_status, COUNT(*) as cnt FROM purchase_orders GROUP BY order_status')->fetchAll();
+    $stats['stock_by_category'] = $pdo->query('SELECT c.name, COALESCE(SUM(p.current_stock * p.purchase_price),0) as val FROM products p JOIN categories c ON c.id=p.category_id GROUP BY c.id, c.name ORDER BY val DESC LIMIT 6')->fetchAll();
+
+    $stats['recent_invoices'] = $pdo->query('SELECT i.`id`, i.`invoice_number`, c.`name` as customer_name, i.`total_amount`, i.`payment_status`, i.`invoice_date` FROM `invoices` i JOIN `customers` c ON c.`id`=i.`customer_id` ORDER BY i.`created_at` DESC LIMIT 5')->fetchAll();
+    $stats['recent_purchases'] = $pdo->query('SELECT po.`id`, po.`po_number`, s.`company_name` as supplier_name, po.`total_amount`, po.`order_status`, po.`po_date` FROM `purchase_orders` po JOIN `suppliers` s ON s.`id`=po.`supplier_id` ORDER BY po.`created_at` DESC LIMIT 5')->fetchAll();
     $stats['low_stock_products'] = $pdo->query("SELECT `sku`,`name`,`current_stock`,`min_stock_level` FROM `products` WHERE `current_stock` <= `min_stock_level` AND `status`='active' ORDER BY `current_stock` ASC LIMIT 8")->fetchAll();
     $stats['top_products'] = $pdo->query('SELECT p.`name`, COALESCE(SUM(ii.`quantity`),0) as qty_sold FROM `products` p LEFT JOIN `invoice_items` ii ON ii.`product_id`=p.`id` GROUP BY p.`id`,p.`name` ORDER BY qty_sold DESC LIMIT 5')->fetchAll();
+
     return $stats;
 }
 
@@ -2127,17 +2150,48 @@ function renderDashboard(): void
 {
     ob_start();
     $stats = getDashboardStats();
-    $maxSale = max(array_column($stats['sales_last7'], 'amount')) ?: 1;
+
+    $dates7 = array_reverse(array_column($stats['sales_last7'], 'date'));
+    $sales7 = array_reverse(array_column($stats['sales_last7'], 'amount'));
+    $cost7 = array_reverse(array_column($stats['sales_last7'], 'cost'));
+
+    $topProdLabels = array_column($stats['top_products'], 'name');
+    $topProdData = array_column($stats['top_products'], 'qty_sold');
+
+    $custTypeLabels = array_column($stats['customers_by_type'], 'customer_type');
+    $custTypeData = array_column($stats['customers_by_type'], 'cnt');
+
+    $poStatusLabels = array_column($stats['po_status_dist'], 'order_status');
+    $poStatusData = array_column($stats['po_status_dist'], 'cnt');
+
+    $catStockLabels = array_column($stats['stock_by_category'], 'name');
+    $catStockData = array_column($stats['stock_by_category'], 'val');
+
     ?>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <div class="page-header">
-        <h1>&#9632; Dashboard</h1>
-        <div class="page-header-actions">
-            <a href="?page=sales&action=new" class="btn btn-success btn-sm">+ New Invoice</a>
-            <a href="?page=purchases&action=new" class="btn btn-primary btn-sm">+ New PO</a>
-            <a href="?page=products&action=new" class="btn btn-secondary btn-sm">+ New Product</a>
-        </div>
+        <h1>&#9632; Dashboard Overview</h1>
     </div>
-    <div class="stats-grid">
+    
+    <div class="quick-actions">
+        <a href="?page=sales&action=new" class="btn btn-success btn-sm">+ New Invoice</a>
+        <a href="?page=purchases&action=new" class="btn btn-primary btn-sm">+ New PO</a>
+        <a href="?page=products&action=new" class="btn btn-secondary btn-sm">+ New Product</a>
+        <a href="?page=customers&action=new" class="btn btn-sm" style="background:#17a2b8;color:#fff;border-color:#117a8b">+ New Customer</a>
+        <a href="?page=suppliers&action=new" class="btn btn-sm" style="background:#343a40;color:#fff;border-color:#23272b">+ New Supplier</a>
+        <a href="?page=adjustments&action=new" class="btn btn-warning btn-sm">+ Stock Adjustment</a>
+        <a href="?page=transfers&action=new" class="btn btn-warning btn-sm">+ Stock Transfer</a>
+        <a href="?page=quotations&action=new" class="btn btn-primary btn-sm">+ New Quotation</a>
+        <a href="?page=sales_returns&action=new" class="btn btn-danger btn-sm">+ Sales Return</a>
+        <a href="?page=purchase_returns&action=new" class="btn btn-danger btn-sm">+ Purchase Return</a>
+        <a href="?page=income_expenses" class="btn btn-success btn-sm">+ Add Income</a>
+        <a href="?page=income_expenses" class="btn btn-danger btn-sm">+ Add Expense</a>
+        <a href="?page=pos" class="btn btn-primary btn-sm" style="background:#6f42c1;border-color:#6f42c1">&#128722; POS Checkout</a>
+        <a href="?page=stock_audit" class="btn btn-secondary btn-sm">&#128269; Stock Audit</a>
+        <a href="?page=reports" class="btn btn-sm" style="background:#e83e8c;color:#fff;border-color:#e83e8c">&#128202; Reports</a>
+    </div>
+
+    <div class="stats-grid" style="grid-template-columns: repeat(auto-fill,minmax(200px,1fr)); margin-bottom:16px;">
         <div class="stat-card primary" onclick="window.location='?page=products'">
             <div class="stat-card-title">Total Products</div>
             <div class="stat-card-value"><?= number_format($stats['total_products']) ?></div>
@@ -2148,150 +2202,251 @@ function renderDashboard(): void
             <div class="stat-card-value"><?= number_format($stats['low_stock']) ?></div>
             <div class="stat-card-sub">Below minimum level</div>
         </div>
+        <div class="stat-card danger" onclick="window.location='?page=products&stock_level=out'">
+            <div class="stat-card-title">Out of Stock</div>
+            <div class="stat-card-value"><?= number_format($stats['out_of_stock']) ?></div>
+            <div class="stat-card-sub">Zero inventory</div>
+        </div>
+        <div class="stat-card primary" onclick="window.location='?page=categories'">
+            <div class="stat-card-title">Categories</div>
+            <div class="stat-card-value"><?= number_format($stats['categories_count']) ?></div>
+            <div class="stat-card-sub">Active categories</div>
+        </div>
+        
         <div class="stat-card success" onclick="window.location='?page=sales'">
             <div class="stat-card-title">Today's Sales</div>
-            <div class="stat-card-value" style="font-size:16px"><?= formatCurrency($stats['today_sales']) ?></div>
+            <div class="stat-card-value" style="font-size:18px"><?= formatCurrency($stats['today_sales']) ?></div>
             <div class="stat-card-sub">Revenue today</div>
         </div>
-        <div class="stat-card warning" onclick="window.location='?page=purchases'">
-            <div class="stat-card-title">Today's Purchases</div>
-            <div class="stat-card-value" style="font-size:16px"><?= formatCurrency($stats['today_purchases']) ?></div>
-            <div class="stat-card-sub">Procurement today</div>
+        <div class="stat-card success" onclick="window.location='?page=sales'">
+            <div class="stat-card-title">This Month Sales</div>
+            <div class="stat-card-value" style="font-size:18px"><?= formatCurrency($stats['this_month_sales']) ?></div>
+            <div class="stat-card-sub">Revenue this month</div>
         </div>
         <div class="stat-card success">
             <div class="stat-card-title">Total Revenue</div>
-            <div class="stat-card-value" style="font-size:15px"><?= formatCurrency($stats['total_revenue']) ?></div>
+            <div class="stat-card-value" style="font-size:18px"><?= formatCurrency($stats['total_revenue']) ?></div>
             <div class="stat-card-sub">All time</div>
         </div>
-        <div class="stat-card primary" onclick="window.location='?page=customers'">
+        <div class="stat-card warning" onclick="window.location='?page=sales&payment_status=unpaid'">
+            <div class="stat-card-title">Unpaid Invoices</div>
+            <div class="stat-card-value" style="font-size:18px"><?= formatCurrency($stats['unpaid_invoices_amt']) ?></div>
+            <div class="stat-card-sub"><?= $stats['unpaid_invoices'] ?> invoices</div>
+        </div>
+
+        <div class="stat-card primary" onclick="window.location='?page=purchases'">
+            <div class="stat-card-title">Today's Purchases</div>
+            <div class="stat-card-value" style="font-size:18px"><?= formatCurrency($stats['today_purchases']) ?></div>
+            <div class="stat-card-sub">Procurement today</div>
+        </div>
+        <div class="stat-card primary" onclick="window.location='?page=purchases'">
+            <div class="stat-card-title">This Month Purchases</div>
+            <div class="stat-card-value" style="font-size:18px"><?= formatCurrency($stats['this_month_purchases']) ?></div>
+            <div class="stat-card-sub">Procurement this month</div>
+        </div>
+        <div class="stat-card warning" onclick="window.location='?page=purchases&order_status=pending'">
+            <div class="stat-card-title">Pending POs</div>
+            <div class="stat-card-value"><?= number_format($stats['pending_orders']) ?></div>
+            <div class="stat-card-sub">Awaiting delivery</div>
+        </div>
+        <div class="stat-card danger" onclick="window.location='?page=purchases&payment_status=unpaid'">
+            <div class="stat-card-title">Unpaid POs Amount</div>
+            <div class="stat-card-value" style="font-size:18px"><?= formatCurrency($stats['unpaid_pos_amt']) ?></div>
+            <div class="stat-card-sub">Payables outstanding</div>
+        </div>
+
+        <div class="stat-card info" onclick="window.location='?page=customers'">
             <div class="stat-card-title">Total Customers</div>
             <div class="stat-card-value"><?= number_format($stats['total_customers']) ?></div>
             <div class="stat-card-sub">Active customers</div>
         </div>
-        <div class="stat-card primary" onclick="window.location='?page=suppliers'">
+        <div class="stat-card info" onclick="window.location='?page=suppliers'">
             <div class="stat-card-title">Total Suppliers</div>
             <div class="stat-card-value"><?= number_format($stats['total_suppliers']) ?></div>
             <div class="stat-card-sub">Active suppliers</div>
         </div>
-        <div class="stat-card warning" onclick="window.location='?page=purchases&order_status=pending'">
-            <div class="stat-card-title">Pending Orders</div>
-            <div class="stat-card-value"><?= number_format($stats['pending_orders']) ?></div>
-            <div class="stat-card-sub">Awaiting delivery</div>
+        <div class="stat-card secondary" onclick="window.location='?page=sales_returns'">
+            <div class="stat-card-title">Total Sales Returns</div>
+            <div class="stat-card-value" style="font-size:18px"><?= formatCurrency($stats['total_sales_returns']) ?></div>
+            <div class="stat-card-sub">Amount refunded</div>
+        </div>
+        <div class="stat-card secondary" onclick="window.location='?page=purchase_returns'">
+            <div class="stat-card-title">Purchase Returns</div>
+            <div class="stat-card-value" style="font-size:18px"><?= formatCurrency($stats['total_purchase_returns']) ?></div>
+            <div class="stat-card-sub">Returned to suppliers</div>
         </div>
     </div>
-    <div class="dashboard-row">
-        <div>
-            <div class="lf"><span class="lf-title">Sales - Last 7 Days</span>
-                <div style="margin-bottom:6px;font-size:11px;color:#666">Bar height proportional to sales amount</div>
-                <div class="chart-bars">
-                    <?php foreach ($stats['sales_last7'] as $day):
-                        $pct = $maxSale > 0 ? max(4, round(($day['amount'] / $maxSale) * 96)) : 4; ?>
-                    <div class="chart-bar-wrap">
-                        <div class="chart-bar-val"><?= $day['amount'] > 0 ? number_format($day['amount'] / 1000, 1) . 'K' : '0' ?></div>
-                        <div class="chart-bar" style="height:<?= $pct ?>%"></div>
-                        <div class="chart-bar-label"><?= h($day['date']) ?></div>
-                    </div>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-            <div class="lf"><span class="lf-title">Recent Invoices</span>
-                <div class="tbl-wrap"><table class="tbl">
-                    <thead><tr><th>Invoice#</th><th>Customer</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead>
-                    <tbody>
-                    <?php if (empty($stats['recent_invoices'])): ?>
-                    <tr><td colspan="5" class="text-center" style="color:#888;padding:16px">No invoices yet</td></tr>
-                    <?php else:
-        foreach ($stats['recent_invoices'] as $inv): ?>
-                    <tr>
-                        <td><a href="?page=sales&action=view&id=<?= $inv['id'] ?? '' ?>"><?= h($inv['invoice_number']) ?></a></td>
-                        <td><?= h($inv['customer_name']) ?></td>
-                        <td class="text-right"><?= formatCurrency((float) $inv['total_amount']) ?></td>
-                        <td><?php $ps = $inv['payment_status'];
-            echo '<span class="badge badge-' . ($ps === 'paid' ? 'success' : ($ps === 'partial' ? 'warning' : 'danger')) . '">' . h(strtoupper($ps)) . '</span>'; ?></td>
-                        <td><?= h($inv['invoice_date']) ?></td>
-                    </tr>
-                    <?php endforeach;
-    endif; ?>
-                    </tbody>
-                </table></div>
-                <div class="mt-8"><a href="?page=sales" class="btn btn-secondary btn-sm">View All Invoices</a></div>
-            </div>
-            <div class="lf"><span class="lf-title">Recent Purchase Orders</span>
-                <div class="tbl-wrap"><table class="tbl">
-                    <thead><tr><th>PO#</th><th>Supplier</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead>
-                    <tbody>
-                    <?php if (empty($stats['recent_purchases'])): ?>
-                    <tr><td colspan="5" class="text-center" style="color:#888;padding:16px">No purchase orders yet</td></tr>
-                    <?php else:
-        foreach ($stats['recent_purchases'] as $po): ?>
-                    <tr>
-                        <td><a href="?page=purchases&action=view&id=<?= $po['id'] ?? '' ?>"><?= h($po['po_number']) ?></a></td>
-                        <td><?= h($po['supplier_name']) ?></td>
-                        <td class="text-right"><?= formatCurrency((float) $po['total_amount']) ?></td>
-                        <td><?php $os = $po['order_status'];
-            echo '<span class="badge badge-' . ($os === 'received' ? 'success' : ($os === 'cancelled' ? 'danger' : ($os === 'partial' ? 'warning' : 'info'))) . '">' . h(strtoupper($os)) . '</span>'; ?></td>
-                        <td><?= h($po['po_date']) ?></td>
-                    </tr>
-                    <?php endforeach;
-    endif; ?>
-                    </tbody>
-                </table></div>
-                <div class="mt-8"><a href="?page=purchases" class="btn btn-secondary btn-sm">View All POs</a></div>
-            </div>
+
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 16px; margin-bottom: 16px;">
+        <div class="lf"><span class="lf-title">Sales & Cost (Last 7 Days)</span>
+            <div style="height:250px;"><canvas id="chartSalesCost"></canvas></div>
         </div>
-        <div>
-            <div class="lf"><span class="lf-title">Low Stock Alerts</span>
+        <div class="lf"><span class="lf-title">Inventory Value by Category</span>
+            <div style="height:250px;"><canvas id="chartStockCat"></canvas></div>
+        </div>
+        <div class="lf"><span class="lf-title">Top 5 Selling Products</span>
+            <div style="height:250px; display:flex; justify-content:center;"><canvas id="chartTopProducts"></canvas></div>
+        </div>
+        <div class="lf"><span class="lf-title">Customers by Type</span>
+            <div style="height:250px; display:flex; justify-content:center;"><canvas id="chartCustType"></canvas></div>
+        </div>
+        <div class="lf"><span class="lf-title">PO Status Distribution</span>
+            <div style="height:250px; display:flex; justify-content:center;"><canvas id="chartPoStatus"></canvas></div>
+        </div>
+        <div class="lf"><span class="lf-title">Sales Revenue (Last 7 Days)</span>
+            <div style="height:250px;"><canvas id="chartSalesBar"></canvas></div>
+        </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 16px;">
+        <div class="lf"><span class="lf-title">Recent Invoices</span>
+            <div class="tbl-wrap"><table class="tbl">
+                <thead><tr><th>Invoice#</th><th>Customer</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead>
+                <tbody>
+                <?php if (empty($stats['recent_invoices'])): ?>
+                <tr><td colspan="5" class="text-center" style="color:#888;padding:16px">No invoices yet</td></tr>
+                <?php else:
+        foreach ($stats['recent_invoices'] as $inv): ?>
+                <tr>
+                    <td><a href="?page=sales&action=view&id=<?= $inv['id'] ?>"><?= h($inv['invoice_number']) ?></a></td>
+                    <td><?= h($inv['customer_name']) ?></td>
+                    <td class="text-right"><?= formatCurrency((float) $inv['total_amount']) ?></td>
+                    <td><?php $ps = $inv['payment_status'];
+            echo '<span class="badge badge-' . ($ps === 'paid' ? 'success' : ($ps === 'partial' ? 'warning' : 'danger')) . '">' . h(strtoupper($ps)) . '</span>'; ?></td>
+                    <td><?= h($inv['invoice_date']) ?></td>
+                </tr>
+                <?php endforeach;
+    endif; ?>
+                </tbody>
+            </table></div>
+            <div class="mt-8 text-right"><a href="?page=sales" class="btn btn-secondary btn-xs">View All Invoices</a></div>
+        </div>
+
+        <div class="lf"><span class="lf-title">Recent Purchase Orders</span>
+            <div class="tbl-wrap"><table class="tbl">
+                <thead><tr><th>PO#</th><th>Supplier</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead>
+                <tbody>
+                <?php if (empty($stats['recent_purchases'])): ?>
+                <tr><td colspan="5" class="text-center" style="color:#888;padding:16px">No purchase orders yet</td></tr>
+                <?php else:
+        foreach ($stats['recent_purchases'] as $po): ?>
+                <tr>
+                    <td><a href="?page=purchases&action=view&id=<?= $po['id'] ?>"><?= h($po['po_number']) ?></a></td>
+                    <td><?= h($po['supplier_name']) ?></td>
+                    <td class="text-right"><?= formatCurrency((float) $po['total_amount']) ?></td>
+                    <td><?php $os = $po['order_status'];
+            echo '<span class="badge badge-' . ($os === 'received' ? 'success' : ($os === 'cancelled' ? 'danger' : ($os === 'partial' ? 'warning' : 'info'))) . '">' . h(strtoupper($os)) . '</span>'; ?></td>
+                    <td><?= h($po['po_date']) ?></td>
+                </tr>
+                <?php endforeach;
+    endif; ?>
+                </tbody>
+            </table></div>
+            <div class="mt-8 text-right"><a href="?page=purchases" class="btn btn-secondary btn-xs">View All POs</a></div>
+        </div>
+
+        <div class="lf"><span class="lf-title">Low Stock Products</span>
+            <div class="tbl-wrap"><table class="tbl">
+                <thead><tr><th>SKU</th><th>Product</th><th class="text-right">Stock</th><th class="text-right">Min</th></tr></thead>
+                <tbody>
                 <?php if (empty($stats['low_stock_products'])): ?>
-                <div style="padding:12px;text-align:center;color:#5cb85c;font-size:12px;">&#10003; All stock levels OK</div>
+                <tr><td colspan="4" class="text-center" style="color:#5cb85c;padding:16px">&#10003; All stock levels OK</td></tr>
                 <?php else:
         foreach ($stats['low_stock_products'] as $p):
             $cls = $p['current_stock'] == 0 ? 'critical' : 'low'; ?>
-                <div style="padding:6px 0;border-bottom:1px solid #e0e0e0;font-size:12px">
-                    <div style="font-weight:700;color:#1a1a1a"><?= h($p['name']) ?></div>
-                    <div style="display:flex;justify-content:space-between;margin-top:2px">
-                        <span class="stock-<?= $cls ?>"><?= $p['current_stock'] == 0 ? 'OUT OF STOCK' : 'LOW: ' . $p['current_stock'] . ' left' ?></span>
-                        <span style="color:#888;font-size:11px">Min: <?= (int) $p['min_stock_level'] ?></span>
-                    </div>
-                    <div style="background:#e0e0e0;height:6px;margin-top:4px">
-                        <?php $pctBar = $p['min_stock_level'] > 0 ? min(100, round($p['current_stock'] / $p['min_stock_level'] * 100)) : 0;
-                        $barColor = $p['current_stock'] == 0 ? '#d9534f' : ($pctBar < 50 ? '#f0ad4e' : '#5cb85c'); ?>
-                        <div style="background:<?= $barColor ?>;height:100%;width:<?= $pctBar ?>%"></div>
-                    </div>
-                </div>
+                <tr>
+                    <td><code style="font-size:10px"><?= h($p['sku']) ?></code></td>
+                    <td><?= h($p['name']) ?></td>
+                    <td class="text-right stock-<?= $cls ?>"><?= number_format((int) $p['current_stock']) ?></td>
+                    <td class="text-right"><?= number_format((int) $p['min_stock_level']) ?></td>
+                </tr>
                 <?php endforeach;
     endif; ?>
-                <div class="mt-8"><a href="?page=products&stock_level=low" class="btn btn-warning btn-sm">View All Low Stock</a></div>
-            </div>
-            <div class="lf"><span class="lf-title">Top Selling Products</span>
-                <?php if (empty($stats['top_products'])): ?>
-                <div style="padding:12px;text-align:center;color:#888;font-size:12px">No sales data yet</div>
-                <?php else:
-        $maxQty = max(array_column($stats['top_products'], 'qty_sold')) ?: 1;
-        foreach ($stats['top_products'] as $tp):
-            $pct2 = max(4, round($tp['qty_sold'] / $maxQty * 100)); ?>
-                <div style="padding:5px 0;border-bottom:1px solid #e0e0e0;font-size:12px">
-                    <div style="display:flex;justify-content:space-between;margin-bottom:2px">
-                        <span style="font-weight:600;color:#1a1a1a"><?= h(substr($tp['name'], 0, 28)) ?><?= strlen($tp['name']) > 28 ? '…' : '' ?></span>
-                        <span style="color:#4a90d9;font-weight:700"><?= number_format((int) $tp['qty_sold']) ?> sold</span>
-                    </div>
-                    <div style="background:#e0e0e0;height:5px"><div style="background:#4a90d9;height:100%;width:<?= $pct2 ?>%"></div></div>
-                </div>
-                <?php endforeach;
-    endif; ?>
-            </div>
-            <div class="lf"><span class="lf-title">Inventory Snapshot</span>
-                <div style="font-size:12px;display:flex;flex-direction:column;gap:6px">
-                    <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #e8e8e8"><span>Inventory Value:</span><span style="font-weight:700;color:#5cb85c"><?= formatCurrency($stats['inventory_value']) ?></span></div>
-                    <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #e8e8e8"><span>Unpaid Invoices:</span><span style="font-weight:700;color:#d9534f"><?= number_format($stats['unpaid_invoices']) ?></span></div>
-                    <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #e8e8e8"><span>Pending POs:</span><span style="font-weight:700;color:#f0ad4e"><?= number_format($stats['pending_orders']) ?></span></div>
-                    <div style="display:flex;justify-content:space-between;padding:5px 0"><span>Total Revenue:</span><span style="font-weight:700;color:#5cb85c"><?= formatCurrency($stats['total_revenue']) ?></span></div>
-                </div>
+                </tbody>
+            </table></div>
+            <div class="mt-8 text-right"><a href="?page=products&stock_level=low" class="btn btn-warning btn-xs">View All Low Stock</a></div>
+        </div>
+        
+        <div class="lf"><span class="lf-title">Inventory Snapshot</span>
+            <div style="font-size:13px;display:flex;flex-direction:column;gap:8px">
+                <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #e8e8e8"><span>Total Inventory Value:</span><span style="font-weight:700;color:#5cb85c"><?= formatCurrency($stats['inventory_value']) ?></span></div>
+                <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #e8e8e8"><span>Unpaid Invoices (Receivable):</span><span style="font-weight:700;color:#4a90d9"><?= formatCurrency($stats['unpaid_invoices_amt']) ?></span></div>
+                <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #e8e8e8"><span>Unpaid POs (Payable):</span><span style="font-weight:700;color:#d9534f"><?= formatCurrency($stats['unpaid_pos_amt']) ?></span></div>
+                <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #e8e8e8"><span>System Users:</span><span style="font-weight:700;color:#555"><?= number_format($stats['total_users']) ?></span></div>
+                <div style="display:flex;justify-content:space-between;padding:8px 0"><span>Registered Warehouses:</span><span style="font-weight:700;color:#555"><?= number_format($stats['total_warehouses']) ?></span></div>
             </div>
         </div>
     </div>
+
+    <script>
+    document.addEventListener("DOMContentLoaded", function() {
+        Chart.defaults.font.family = "'Segoe UI', Arial, sans-serif";
+        const dates7 = <?= json_encode($dates7) ?>;
+        const sales7 = <?= json_encode($sales7) ?>;
+        const cost7 = <?= json_encode($cost7) ?>;
+        const colors =['#4a90d9', '#5cb85c', '#f0ad4e', '#d9534f', '#6f42c1', '#17a2b8', '#fd7e14', '#e83e8c'];
+
+        new Chart(document.getElementById('chartSalesCost'), {
+            type: 'line',
+            data: {
+                labels: dates7,
+                datasets:[
+                    { label: 'Revenue', data: sales7, borderColor: '#5cb85c', backgroundColor: 'rgba(92,184,92,0.1)', fill: true, tension: 0.3 },
+                    { label: 'Cost', data: cost7, borderColor: '#d9534f', backgroundColor: 'transparent', borderDash: [5,5], tension: 0.3 }
+                ]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+        });
+
+        new Chart(document.getElementById('chartSalesBar'), {
+            type: 'bar',
+            data: {
+                labels: dates7,
+                datasets:[{ label: 'Sales Revenue', data: sales7, backgroundColor: '#4a90d9' }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+        });
+
+        new Chart(document.getElementById('chartTopProducts'), {
+            type: 'doughnut',
+            data: {
+                labels: <?= json_encode($topProdLabels) ?>,
+                datasets:[{ data: <?= json_encode($topProdData) ?>, backgroundColor: colors }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+        });
+
+        new Chart(document.getElementById('chartCustType'), {
+            type: 'pie',
+            data: {
+                labels: <?= json_encode($custTypeLabels) ?>,
+                datasets:[{ data: <?= json_encode($custTypeData) ?>, backgroundColor:['#17a2b8', '#ffc107', '#28a745', '#e83e8c'] }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+        });
+
+        new Chart(document.getElementById('chartPoStatus'), {
+            type: 'polarArea',
+            data: {
+                labels: <?= json_encode($poStatusLabels) ?>,
+                datasets:[{ data: <?= json_encode($poStatusData) ?>, backgroundColor:['#f0ad4e', '#5bc0de', '#5cb85c', '#d9534f'] }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+        });
+
+        new Chart(document.getElementById('chartStockCat'), {
+            type: 'bar',
+            data: {
+                labels: <?= json_encode($catStockLabels) ?>,
+                datasets:[{ label: 'Stock Value', data: <?= json_encode($catStockData) ?>, backgroundColor: '#6f42c1' }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } }
+        });
+    });
+    </script>
     <?php
     $content = ob_get_clean();
-    renderLayout('Dashboard', $content, 'dashboard');
+    renderLayout('Dashboard Overview', $content, 'dashboard');
 }
 
 function renderProducts(): void
