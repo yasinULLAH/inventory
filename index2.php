@@ -4585,7 +4585,7 @@ function handleAjax(): void
     exit;
 }
 
-//initializeDatabase();
+// initializeDatabase();
 $currentPage = $_GET['page'] ?? 'dashboard';
 if (!empty($_GET['ajax'])) {
     handleAjax();
