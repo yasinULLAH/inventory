@@ -1068,7 +1068,7 @@ function handleLogin(): ?string
     $logStmt = $pdo->prepare("INSERT INTO `login_log` (`username`,`ip_address`,`status`,`user_agent`) VALUES (?,?,'success',?)");
     $logStmt->execute([$username, $ip, $ua]);
     logActivity($user['id'], 'LOGIN', 'auth', 'User logged in from ' . $ip);
-    header('Location: ?page=dashboard');
+    header('Location: ?page=' . getDefaultPage());
     exit;
 }
 
@@ -1561,9 +1561,42 @@ function getUnreadNotificationCount(): int
     return (int) getPDO()->query('SELECT COUNT(*) FROM `notifications` WHERE `is_read`=0')->fetchColumn();
 }
 
+function getDefaultPage(): string
+{
+    if (!isset($_SESSION['user_id']))
+        return 'login';
+    $pdo = getPDO();
+    $stmt = $pdo->prepare('SELECT r.name FROM users u JOIN roles r ON u.role_id=r.id WHERE u.id=?');
+    $stmt->execute([$_SESSION['user_id']]);
+    if ($stmt->fetchColumn() === 'admin')
+        return 'dashboard';
+
+    $stmt = $pdo->prepare('SELECT p.module FROM role_permissions rp JOIN permissions p ON rp.permission_id=p.id WHERE rp.role_id=(SELECT role_id FROM users WHERE id=?) LIMIT 1');
+    $stmt->execute([$_SESSION['user_id']]);
+    $module = $stmt->fetchColumn();
+
+    $map = [
+        'dashboard' => 'dashboard', 'pos' => 'pos', 'products' => 'products',
+        'categories' => 'categories', 'purchases' => 'purchases', 'sales' => 'sales',
+        'quotations' => 'quotations', 'customers' => 'customers', 'suppliers' => 'suppliers',
+        'reports' => 'reports', 'expenses' => 'income_expenses', 'income' => 'income_expenses',
+        'users' => 'users', 'roles' => 'roles', 'settings' => 'settings', 'stock_audit' => 'stock_audit'
+    ];
+    return isset($map[$module]) ? $map[$module] : 'profile';
+}
+
 function renderError403(): void
 {
-    echo '<div class="alert alert-danger" style="margin:40px auto;max-width:500px;text-align:center;"><h3>403 - Access Denied</h3><p>You do not have permission to access this page.</p><a href="?page=dashboard" class="btn btn-primary">Go to Dashboard</a></div>';
+    $def = getDefaultPage();
+    $reqPage = $_GET['page'] ?? 'dashboard';
+
+    if ($reqPage === 'dashboard' && $def !== 'dashboard') {
+        header('Location: ?page=' . $def);
+        exit;
+    }
+
+    echo '<div class="alert alert-danger" style="margin:40px auto;max-width:500px;text-align:center;"><h3>403 - Access Denied</h3><p>You are being redirected to your allowed area...</p><a href="?page=' . h($def) . '" class="btn btn-primary">Continue Now</a></div>';
+    echo '<script>setTimeout(function(){ window.location.href="?page=' . h($def) . '"; }, 1500);</script>';
 }
 
 function renderLogin(?string $error = null): void
@@ -3101,48 +3134,48 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
         <?php
         $navItems = [
             ['section' => 'MAIN'],
-            ['page' => 'dashboard', 'label' => 'Dashboard', 'icon' => '&#9632;', 'roles' => ['admin', 'manager', 'staff']],
-            ['page' => 'pos', 'label' => 'POS Checkout', 'icon' => '&#128722;', 'roles' => ['admin', 'manager', 'staff']],
+            ['page' => 'dashboard', 'label' => 'Dashboard', 'icon' => '&#9632;', 'perm' => ['dashboard', 'view']],
+            ['page' => 'pos', 'label' => 'POS Checkout', 'icon' => '&#128722;', 'perm' => ['pos', 'view']],
             ['section' => 'INVENTORY'],
-            ['page' => 'products', 'label' => 'Products', 'icon' => '&#128230;', 'roles' => ['admin', 'manager', 'staff']],
-            ['page' => 'categories', 'label' => 'Categories', 'icon' => '&#128193;', 'roles' => ['admin', 'manager', 'staff']],
-            ['page' => 'adjustments', 'label' => 'Stock Adjustments', 'icon' => '&#9881;', 'roles' => ['admin', 'manager', 'staff']],
-            ['page' => 'transfers', 'label' => 'Stock Transfers', 'icon' => '&#8644;', 'roles' => ['admin', 'manager']],
-            ['page' => 'stock_audit', 'label' => 'Stock Audit', 'icon' => '&#128269;', 'roles' => ['admin', 'manager']],
+            ['page' => 'products', 'label' => 'Products', 'icon' => '&#128230;', 'perm' => ['products', 'view']],
+            ['page' => 'categories', 'label' => 'Categories', 'icon' => '&#128193;', 'perm' => ['categories', 'view']],
+            ['page' => 'adjustments', 'label' => 'Stock Adjustments', 'icon' => '&#9881;', 'perm' => ['products', 'edit']],
+            ['page' => 'transfers', 'label' => 'Stock Transfers', 'icon' => '&#8644;', 'perm' => ['products', 'edit']],
+            ['page' => 'stock_audit', 'label' => 'Stock Audit', 'icon' => '&#128269;', 'perm' => ['stock_audit', 'view']],
             ['section' => 'SALES'],
-            ['page' => 'sales', 'label' => 'Sales / Invoices', 'icon' => '&#128203;', 'roles' => ['admin', 'manager', 'staff']],
-            ['page' => 'quotations', 'label' => 'Quotations', 'icon' => '&#128221;', 'roles' => ['admin', 'manager', 'staff']],
-            ['page' => 'sales_returns', 'label' => 'Sales Returns', 'icon' => '&#8630;', 'roles' => ['admin', 'manager']],
-            ['page' => 'customers', 'label' => 'Customers', 'icon' => '&#128101;', 'roles' => ['admin', 'manager', 'staff']],
-            ['page' => 'customer_ledgers', 'label' => 'Customer Ledgers', 'icon' => '&#128200;', 'roles' => ['admin', 'manager']],
+            ['page' => 'sales', 'label' => 'Sales / Invoices', 'icon' => '&#128203;', 'perm' => ['sales', 'view']],
+            ['page' => 'quotations', 'label' => 'Quotations', 'icon' => '&#128221;', 'perm' => ['quotations', 'view']],
+            ['page' => 'sales_returns', 'label' => 'Sales Returns', 'icon' => '&#8630;', 'perm' => ['sales', 'return']],
+            ['page' => 'customers', 'label' => 'Customers', 'icon' => '&#128101;', 'perm' => ['customers', 'view']],
+            ['page' => 'customer_ledgers', 'label' => 'Customer Ledgers', 'icon' => '&#128200;', 'perm' => ['customers', 'view']],
             ['section' => 'PURCHASING'],
-            ['page' => 'purchases', 'label' => 'Purchase Orders', 'icon' => '&#128722;', 'roles' => ['admin', 'manager', 'staff']],
-            ['page' => 'purchase_returns', 'label' => 'Purchase Returns', 'icon' => '&#8630;', 'roles' => ['admin', 'manager']],
-            ['page' => 'requisitions', 'label' => 'Requisitions', 'icon' => '&#128227;', 'roles' => ['admin', 'manager', 'staff']],
-            ['page' => 'suppliers', 'label' => 'Suppliers', 'icon' => '&#128667;', 'roles' => ['admin', 'manager', 'staff']],
+            ['page' => 'purchases', 'label' => 'Purchase Orders', 'icon' => '&#128722;', 'perm' => ['purchases', 'view']],
+            ['page' => 'purchase_returns', 'label' => 'Purchase Returns', 'icon' => '&#8630;', 'perm' => ['purchases', 'view']],
+            ['page' => 'requisitions', 'label' => 'Requisitions', 'icon' => '&#128227;', 'perm' => ['purchases', 'view']],
+            ['page' => 'suppliers', 'label' => 'Suppliers', 'icon' => '&#128667;', 'perm' => ['suppliers', 'view']],
             ['section' => 'FINANCE'],
-            ['page' => 'income_expenses', 'label' => 'Income & Expenses', 'icon' => '&#128181;', 'roles' => ['admin', 'manager']],
-            ['page' => 'taxes', 'label' => 'Taxes', 'icon' => '&#37;', 'roles' => ['admin']],
-            ['page' => 'currencies', 'label' => 'Currencies', 'icon' => '&#164;', 'roles' => ['admin']],
+            ['page' => 'income_expenses', 'label' => 'Income & Expenses', 'icon' => '&#128181;', 'perm' => ['expenses', 'view']],
+            ['page' => 'taxes', 'label' => 'Taxes', 'icon' => '&#37;', 'perm' => ['settings', 'manage']],
+            ['page' => 'currencies', 'label' => 'Currencies', 'icon' => '&#164;', 'perm' => ['settings', 'manage']],
             ['section' => 'HR'],
-            ['page' => 'shifts', 'label' => 'Shifts', 'icon' => '&#128336;', 'roles' => ['admin', 'manager']],
-            ['page' => 'roles', 'label' => 'Roles & Permissions', 'icon' => '&#128272;', 'roles' => ['admin']],
-            ['page' => 'users', 'label' => 'User Management', 'icon' => '&#128101;', 'roles' => ['admin']],
+            ['page' => 'shifts', 'label' => 'Shifts', 'icon' => '&#128336;', 'perm' => ['pos', 'view']],
+            ['page' => 'roles', 'label' => 'Roles & Permissions', 'icon' => '&#128272;', 'perm' => ['roles', 'view']],
+            ['page' => 'users', 'label' => 'User Management', 'icon' => '&#128101;', 'perm' => ['users', 'view']],
             ['section' => 'INTEGRATIONS'],
-            ['page' => 'api_sync', 'label' => 'E-Commerce Sync', 'icon' => '&#128279;', 'roles' => ['admin']],
-            ['page' => 'sms', 'label' => 'SMS Alerts', 'icon' => '&#128241;', 'roles' => ['admin']],
+            ['page' => 'api_sync', 'label' => 'E-Commerce Sync', 'icon' => '&#128279;', 'perm' => ['settings', 'manage']],
+            ['page' => 'sms', 'label' => 'SMS Alerts', 'icon' => '&#128241;', 'perm' => ['settings', 'manage']],
             ['section' => 'REPORTS'],
-            ['page' => 'reports', 'label' => 'Reports', 'icon' => '&#128202;', 'roles' => ['admin', 'manager']],
-            ['page' => 'barcodes', 'label' => 'Barcodes', 'icon' => '&#9644;', 'roles' => ['admin', 'manager', 'staff']],
-            ['page' => 'activity_log', 'label' => 'Activity Log', 'icon' => '&#128196;', 'roles' => ['admin', 'manager']],
+            ['page' => 'reports', 'label' => 'Reports', 'icon' => '&#128202;', 'perm' => ['reports', 'view']],
+            ['page' => 'barcodes', 'label' => 'Barcodes', 'icon' => '&#9644;', 'perm' => ['products', 'view']],
+            ['page' => 'activity_log', 'label' => 'Activity Log', 'icon' => '&#128196;', 'perm' => ['reports', 'view']],
             ['section' => 'SYSTEM'],
-            ['page' => 'settings', 'label' => 'Settings', 'icon' => '&#9881;', 'roles' => ['admin']],
+            ['page' => 'settings', 'label' => 'Settings', 'icon' => '&#9881;', 'perm' => ['settings', 'view']],
         ];
         foreach ($navItems as $item):
             if (isset($item['section'])):
                 ?>
                 <div class="nav-section-title"><?= h($item['section']) ?></div>
-            <?php elseif (canAccess($item['roles'])):
+            <?php elseif (isset($item['perm']) && hasPermission($item['perm'][0], $item['perm'][1])):
                 $isActive = ($activePage === $item['page']); ?>
                 <a href="?page=<?= h($item['page']) ?>" class="nav-item <?= $isActive ? 'active' : '' ?>"
                    data-label="<?= h($item['label']) ?>">
@@ -3314,6 +3347,7 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
 
 function renderDashboard(): void
 {
+    requirePermission('dashboard', 'view');
     ob_start();
     $stats = getDashboardStats();
     $dates7 = array_reverse(array_column($stats['sales_last7'], 'date'));
@@ -3825,7 +3859,7 @@ function renderProducts(): void
                                        class="btn btn-warning btn-xs" title="Edit">&#9998;</a>
                                     <a href="?page=adjustments&action=new&product_id=<?= $p['id'] ?>"
                                        class="btn btn-secondary btn-xs" title="Adjust Stock">&#9881;</a>
-                                    <?php if (canAccess(['admin', 'manager'])): ?>
+                                    <?php if (hasPermission('products', 'delete')): ?>
                                         <button onclick="deleteProduct(<?= $p['id'] ?>, '<?= h(addslashes($p['name'])) ?>')"
                                                 class="btn btn-danger btn-xs" title="Delete">&#128465;
                                         </button>
@@ -3843,7 +3877,7 @@ function renderProducts(): void
             <div style="font-size:12px;color:#666">Bulk action on selected:</div>
             <button onclick="bulkAction('activate')" class="btn btn-success btn-sm">Activate</button>
             <button onclick="bulkAction('deactivate')" class="btn btn-warning btn-sm">Deactivate</button>
-            <?php if (canAccess(['admin'])): ?>
+            <?php if (hasPermission('products', 'delete')): ?>
                 <button onclick="bulkAction('delete')" class="btn btn-danger btn-sm">Delete</button><?php endif; ?>
         </div>
     <?php endif; ?>
@@ -4346,7 +4380,7 @@ function renderCategories(): void
             $_SESSION['flash_type'] = 'danger';
         }
     }
-    if ($action === 'delete' && !empty($_GET['id']) && canAccess(['admin', 'manager'])) {
+    if ($action === 'delete' && !empty($_GET['id']) && hasPermission($_GET['page'] ?? 'products', 'manage')) {
         if (($_GET['confirm'] ?? '') === 'yes') {
             if (($_GET['csrf_token'] ?? '') !== csrf()) {
                 die('CSRF token mismatch');
@@ -4462,7 +4496,7 @@ function renderCategories(): void
                                     <div class="tbl-actions">
                                         <a href="?page=categories&action=edit&id=<?= $c['id'] ?>"
                                            class="btn btn-warning btn-xs">&#9998;</a>
-                                        <?php if (canAccess(['admin', 'manager'])): ?>
+                                        <?php if (hasPermission('categories', 'manage')): ?>
                                             <button onclick="confirmDeleteCat(<?= $c['id'] ?>,'<?= h(addslashes($c['name'])) ?>')"
                                                     class="btn btn-danger btn-xs">&#128465;
                                             </button>
@@ -4505,7 +4539,7 @@ function renderSuppliers(): void
             }
         }
     }
-    if ($action === 'delete' && !empty($_GET['id']) && canAccess(['admin', 'manager'])) {
+    if ($action === 'delete' && !empty($_GET['id']) && hasPermission($_GET['page'] ?? 'products', 'manage')) {
         if (($_GET['csrf_token'] ?? '') !== csrf())
             die('CSRF token mismatch');
         $res = deleteSupplier((int) $_GET['id']);
@@ -4584,7 +4618,7 @@ function renderSuppliers(): void
                                        class="btn btn-warning btn-xs">&#9998;</a>
                                     <a href="?page=purchases&action=new&supplier_id=<?= $s['id'] ?>"
                                        class="btn btn-success btn-xs" title="New PO">+PO</a>
-                                    <?php if (canAccess(['admin'])): ?>
+                                    <?php if (hasPermission('suppliers', 'manage')): ?>
                                         <button
                                         onclick="confirmDelSupplier(<?= $s['id'] ?>,'<?= h(addslashes($s['company_name'])) ?>')"
                                         class="btn btn-danger btn-xs">&#128465;</button><?php endif; ?>
@@ -4793,7 +4827,7 @@ function renderCustomers(): void
             }
         }
     }
-    if ($action === 'delete' && !empty($_GET['id']) && canAccess(['admin', 'manager'])) {
+    if ($action === 'delete' && !empty($_GET['id']) && hasPermission($_GET['page'] ?? 'products', 'manage')) {
         if (($_GET['csrf_token'] ?? '') !== csrf())
             die('CSRF token mismatch');
         $res = deleteCustomer((int) $_GET['id']);
@@ -4882,7 +4916,7 @@ function renderCustomers(): void
                                        class="btn btn-warning btn-xs">&#9998;</a>
                                     <a href="?page=sales&action=new&customer_id=<?= $c['id'] ?>"
                                        class="btn btn-success btn-xs" title="New Invoice">+INV</a>
-                                    <?php if (canAccess(['admin'])): ?>
+                                    <?php if (hasPermission('customers', 'manage')): ?>
                                         <button
                                         onclick="confirmDelCust(<?= $c['id'] ?>,'<?= h(addslashes($c['name'])) ?>')"
                                         class="btn btn-danger btn-xs">&#128465;</button><?php endif; ?>
@@ -5073,7 +5107,7 @@ function renderCustomers(): void
 
 function renderUsers(): void
 {
-    requireRole(['admin']);
+    requirePermission('users', 'manage');
     $action = $_GET['action'] ?? 'list';
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
         if ($action === 'new' || $action === 'edit') {
@@ -5414,7 +5448,7 @@ function renderPurchases(): void
         ob_start();
         ?>
         <div class="page-header"><h1>&#128722; Purchase Orders</h1>
-            <div class="page-header-actions"><?php if (canAccess(['admin', 'manager', 'staff'])): ?><a
+            <div class="page-header-actions"><?php if (hasPermission('purchases', 'create')): ?><a
                         href="?page=purchases&action=new" class="btn btn-success btn-sm">+ New PO</a><?php endif; ?>
             </div>
         </div>
@@ -5516,7 +5550,7 @@ function renderPurchases(): void
                                         <a href="?page=purchases&action=receive&id=<?= $po['id'] ?>"
                                            class="btn btn-success btn-xs" title="Receive Stock">&#8595;Rcv</a>
                                     <?php endif; ?>
-                                    <?php if ($po['order_status'] === 'pending' && canAccess(['admin', 'manager'])): ?>
+                                    <?php if ($po['order_status'] === 'pending' && hasPermission('purchases', 'edit')): ?>
                                         <button onclick="cancelPO(<?= $po['id'] ?>)" class="btn btn-danger btn-xs">
                                             &#215;Cancel
                                         </button>
@@ -6336,7 +6370,7 @@ function renderSales(): void
                                     <?php if ($inv['payment_status'] !== 'paid'): ?><a
                                         href="?page=sales&action=edit&id=<?= $inv['id'] ?>"
                                         class="btn btn-warning btn-xs">&#9998;</a><?php endif; ?>
-                                    <?php if (canAccess(['admin', 'manager'])): ?>
+                                    <?php if (hasPermission('sales', 'edit')): ?>
                                         <button
                                         onclick="voidInvoice(<?= $inv['id'] ?>,'<?= h(addslashes($inv['invoice_number'])) ?>')"
                                         class="btn btn-danger btn-xs">&#215;Void</button><?php endif; ?>
@@ -7003,7 +7037,7 @@ function renderAdjustments(): void
                             <td><?= h(substr($a['reason'] ?? '-', 0, 40)) ?></td>
                             <td><?= h($a['req_name']) ?></td>
                             <td><span class="badge badge-<?= $sBadge ?>"><?= h(strtoupper($a['status'])) ?></span></td>
-                            <td><?php if ($a['status'] === 'pending' && canAccess(['admin', 'manager'])): ?>
+                            <td><?php if ($a['status'] === 'pending' && hasPermission('products', 'edit')): ?>
                                     <div class="tbl-actions">
                                         <button onclick="approveAdj(<?= $a['id'] ?>)" class="btn btn-success btn-xs">
                                             &#10003;
@@ -7068,7 +7102,7 @@ function renderAdjustments(): void
                     $addTypes = ['addition', 'opening_stock'];
                     $afterStock = in_array($adjType, $addTypes) ? $beforeStock + $qty : max(0, $beforeStock - $qty);
                     $ref = generateRefNumber('ADJ');
-                    $autoApprove = canAccess(['admin', 'manager']);
+                    $autoApprove = hasPermission('products', 'edit');
                     $status = $autoApprove ? 'approved' : 'pending';
                     $approvedBy = $autoApprove ? (int) $_SESSION['user_id'] : null;
                     $approvedAt = $autoApprove ? date('Y-m-d H:i:s') : null;
@@ -7093,7 +7127,7 @@ function renderAdjustments(): void
         <div
         class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
-        <?php if (!canAccess(['admin', 'manager'])): ?>
+        <?php if (!hasPermission('products', 'edit')): ?>
         <div class="alert alert-info">&#128274; As Staff, adjustments require Manager or Admin approval before stock is
             updated.
         </div><?php endif; ?>
@@ -7169,7 +7203,7 @@ function renderAdjustments(): void
 
 function renderTransfers(): void
 {
-    requireRole(['admin', 'manager']);
+    requirePermission('products', 'edit');
     $action = $_GET['action'] ?? 'list';
     $pdo = getPDO();
     $warehouses = $pdo->query("SELECT * FROM warehouses WHERE status='active' ORDER BY name")->fetchAll();
@@ -7391,7 +7425,7 @@ function renderTransfers(): void
 
 function renderReports(): void
 {
-    requireRole(['admin', 'manager']);
+    requirePermission('reports', 'view');
     $pdo = getPDO();
     $reportType = $_GET['report'] ?? 'stock';
     $dateFrom = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['date_from'] ?? '') ? $_GET['date_from'] : date('Y-m-01');
@@ -7685,7 +7719,7 @@ function renderBarcodes(): void
 
 function renderSettings(): void
 {
-    requireRole(['admin']);
+    requirePermission('settings', 'manage');
     $pdo = getPDO();
     $section = $_GET['section'] ?? 'company';
     $msg = '';
@@ -7826,7 +7860,7 @@ function renderSettings(): void
 
 function renderAuditLog(): void
 {
-    requireRole(['admin', 'manager']);
+    requirePermission('reports', 'view');
     $pdo = getPDO();
     $page = max(1, (int) ($_GET['pg'] ?? 1));
     $perPage = (int) (getSetting('items_per_page') ?? 20);
@@ -8059,13 +8093,13 @@ function handleAjax(): void
         $p = $p->fetch();
         echo json_encode(['success' => (bool) $p, 'product' => $p]);
     } elseif ($endpoint === 'void_invoice') {
-        requireRole(['admin', 'manager']);
+        requirePermission('sales', 'edit');
         $id = (int) ($data['id'] ?? 0);
         $pdo->prepare("UPDATE invoices SET payment_status='unpaid',updated_at=NOW() WHERE id=?")->execute([$id]);
         logActivity($_SESSION['user_id'], 'UPDATE', 'sales', 'Voided invoice id: ' . $id);
         echo json_encode(['success' => true]);
     } elseif ($endpoint === 'approve_adj') {
-        requireRole(['admin', 'manager']);
+        requirePermission('products', 'edit');
         $id = (int) ($data['id'] ?? 0);
         $adj = $pdo->prepare("SELECT * FROM stock_adjustments WHERE id=? AND status='pending'");
         $adj->execute([$id]);
@@ -8078,13 +8112,13 @@ function handleAjax(): void
         } else
             echo json_encode(['success' => false, 'msg' => 'Not found or already processed']);
     } elseif ($endpoint === 'reject_adj') {
-        requireRole(['admin', 'manager']);
+        requirePermission('products', 'edit');
         $id = (int) ($data['id'] ?? 0);
         $pdo->prepare("UPDATE stock_adjustments SET status='rejected',approved_by=?,approved_at=NOW() WHERE id=?")->execute([(int) $_SESSION['user_id'], $id]);
         logActivity($_SESSION['user_id'], 'UPDATE', 'adjustments', 'Rejected adjustment id: ' . $id);
         echo json_encode(['success' => true]);
     } elseif ($endpoint === 'complete_transfer') {
-        requireRole(['admin', 'manager']);
+        requirePermission('products', 'edit');
         $id = (int) ($data['id'] ?? 0);
         $pdo->beginTransaction();
         try {
@@ -8103,13 +8137,13 @@ function handleAjax(): void
             echo json_encode(['success' => false, 'msg' => $e->getMessage()]);
         }
     } elseif ($endpoint === 'cancel_transfer') {
-        requireRole(['admin', 'manager']);
+        requirePermission('products', 'edit');
         $id = (int) ($data['id'] ?? 0);
         $pdo->prepare("UPDATE stock_transfers SET status='cancelled',updated_at=NOW() WHERE id=?")->execute([$id]);
         logActivity($_SESSION['user_id'], 'UPDATE', 'transfers', 'Cancelled transfer id: ' . $id);
         echo json_encode(['success' => true]);
     } elseif ($endpoint === 'delete_user') {
-        requireRole(['admin']);
+        requirePermission('users', 'manage');
         $id = (int) ($data['id'] ?? 0);
         if ($id === (int) $_SESSION['user_id']) {
             echo json_encode(['success' => false, 'msg' => 'Cannot delete yourself']);
@@ -8122,17 +8156,17 @@ function handleAjax(): void
         $pdo->prepare("UPDATE products SET status=IF(status='active','inactive','active'),updated_at=NOW() WHERE id=?")->execute([$id]);
         echo json_encode(['success' => true]);
     } elseif ($endpoint === 'delete_product') {
-        requireRole(['admin', 'manager']);
+        requirePermission('products', 'delete');
         $id = (int) ($data['id'] ?? 0);
         echo json_encode(deleteProduct($id));
     } elseif ($endpoint === 'cancel_po') {
-        requireRole(['admin', 'manager']);
+        requirePermission('purchases', 'edit');
         $id = (int) ($data['id'] ?? 0);
         $pdo->prepare("UPDATE purchase_orders SET order_status='cancelled',updated_at=NOW() WHERE id=?")->execute([$id]);
         logActivity($_SESSION['user_id'], 'UPDATE', 'purchases', 'Cancelled PO id: ' . $id);
         echo json_encode(['success' => true]);
     } elseif ($endpoint === 'bulk_product_action' || $endpoint === 'bulk_products') {
-        requireRole(['admin', 'manager']);
+        requirePermission('products', 'edit');
         $action = $data['action'] ?? ($data['bulk_action'] ?? '');
         $rawIds = $data['ids'] ?? '';
         $idArray = is_string($rawIds) ? explode(',', $rawIds) : (is_array($rawIds) ? $rawIds : []);
@@ -8143,7 +8177,7 @@ function handleAjax(): void
                 $pdo->prepare("UPDATE products SET status='active' WHERE id IN ($placeholders)")->execute($ids);
             elseif ($action === 'deactivate')
                 $pdo->prepare("UPDATE products SET status='inactive' WHERE id IN ($placeholders)")->execute($ids);
-            elseif ($action === 'delete' && canAccess(['admin']))
+            elseif ($action === 'delete' && hasPermission('products', 'delete'))
                 $pdo->prepare("DELETE FROM products WHERE id IN ($placeholders)")->execute($ids);
         }
         echo json_encode(['success' => true, 'count' => count($ids)]);
@@ -8154,7 +8188,7 @@ function handleAjax(): void
         $row = $row->fetch();
         echo json_encode(['success' => (bool) $row, 'stock' => $row ? $row['current_stock'] : 0, 'name' => $row ? $row['name'] : '']);
     } elseif ($endpoint === 'pos_checkout') {
-        requireRole(['admin', 'manager', 'staff']);
+        requirePermission('pos', 'sell');
         $items = $data['items'] ?? [];
         $customerId = (int) ($data['customer_id'] ?? 1);
         $payMethod = $data['payment_method'] ?? 'cash';
@@ -8236,7 +8270,7 @@ function handleAjax(): void
         }
         echo json_encode(['success' => true]);
     } elseif ($endpoint === 'finalize_audit') {
-        requireRole(['admin', 'manager']);
+        requirePermission('stock_audit', 'manage');
         $id = (int) ($data['id'] ?? 0);
         $counts = $data['counts'] ?? [];
         $pdo->beginTransaction();
@@ -8289,7 +8323,7 @@ if (!empty($_GET['ajax'])) {
     handleAjax();
 } elseif ($currentPage === 'login') {
     if (isset($_SESSION['user_id'])) {
-        header('Location: ?page=dashboard');
+        header('Location: ?page=' . getDefaultPage());
         exit;
     }
     $loginError = handleLogin();
@@ -9716,7 +9750,7 @@ if (!empty($_GET['ajax'])) {
                         <td><?= h($r['notes']) ?></td>
                         <td>
                             <div class="tbl-actions">
-                                <?php if ($r['status'] === 'pending' && canAccess(['admin', 'manager'])): ?>
+                                <?php if ($r['status'] === 'pending' && hasPermission('purchases', 'edit')): ?>
                                     <form method="POST" style="display:inline">
                                         <?= csrfField() ?>
                                         <input type="hidden" name="update_status" value="1">
@@ -10057,7 +10091,7 @@ if (!empty($_GET['ajax'])) {
 
     function renderTaxes(): void
     {
-        requireRole(['admin']);
+        requirePermission('settings', 'manage');
         $pdo = getPDO();
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
             $id = (int) ($_POST['id'] ?? 0);
@@ -10121,7 +10155,7 @@ if (!empty($_GET['ajax'])) {
 
     function renderCurrencies(): void
     {
-        requireRole(['admin']);
+        requirePermission('settings', 'manage');
         $pdo = getPDO();
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
             $pdo->prepare('REPLACE INTO currencies (code,name,symbol,rate_to_base,is_base) VALUES (?,?,?,?,?)')->execute([$_POST['code'], $_POST['name'], $_POST['symbol'], $_POST['rate'], isset($_POST['base']) ? 1 : 0]);
@@ -10171,7 +10205,7 @@ if (!empty($_GET['ajax'])) {
 
     function renderShifts(): void
     {
-        requireRole(['admin', 'manager', 'staff']);
+        requirePermission('pos', 'view');
         $pdo = getPDO();
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
             if (isset($_POST['action'])) {
@@ -10333,7 +10367,7 @@ if (!empty($_GET['ajax'])) {
 
     function renderApiSync(): void
     {
-        requireRole(['admin']);
+        requirePermission('settings', 'manage');
         $pdo = getPDO();
         $pdo->exec("CREATE TABLE IF NOT EXISTS `sync_logs` (
             `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -10547,7 +10581,7 @@ if (!empty($_GET['ajax'])) {
 
     function renderSms(): void
     {
-        requireRole(['admin']);
+        requirePermission('settings', 'manage');
         $pdo = getPDO();
         $pdo->exec("CREATE TABLE IF NOT EXISTS `sms_logs` (
             `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
