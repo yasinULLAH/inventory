@@ -1300,6 +1300,10 @@ else:
         $chq_issued = $conn->query("SELECT COUNT(*) as c, SUM(amount) as s FROM cheque_register WHERE type='payment'")->fetch_assoc();
         $chq_received = $conn->query("SELECT COUNT(*) as c, SUM(amount) as s FROM cheque_register WHERE type='receipt'")->fetch_assoc();
         $pending_cheques = $conn->query("SELECT COUNT(*) as c, SUM(amount) as s FROM cheque_register WHERE status='pending'")->fetch_assoc();
+        $todays_sales = $conn->query("SELECT COUNT(*) as c, SUM(selling_price) as s FROM bikes WHERE status='sold' AND selling_date = CURDATE()")->fetch_assoc();
+        $total_customers = $conn->query('SELECT COUNT(*) as c FROM customers')->fetch_assoc()['c'];
+        $total_suppliers = $conn->query('SELECT COUNT(*) as c FROM suppliers')->fetch_assoc()['c'];
+        $total_expenses = $conn->query("SELECT SUM(amount) as s FROM income_expenses WHERE type='expense'")->fetch_assoc()['s'] ?? 0;
 
         $sales_trend = $conn->query("SELECT DATE_FORMAT(selling_date,'%Y-%m') as ym, SUM(selling_price) as total FROM bikes WHERE status='sold' AND selling_date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH) GROUP BY ym ORDER BY ym");
         $chart_labels = [];
@@ -1332,6 +1336,10 @@ else:
 <div class="card"><div class="card-icon">🧾</div><div class="card-body"><div class="card-label">Total Tax Paid</div><div class="card-value" style="font-size:1rem"><?= $currency ?> <?= number_format($total_tax, 2) ?></div></div></div>
 <div class="card success"><div class="card-icon">📈</div><div class="card-body"><div class="card-label">Total Profit</div><div class="card-value" style="font-size:1rem;color:var(--success)"><?= $currency ?> <?= number_format($total_margin) ?></div></div></div>
 <div class="card"><div class="card-icon">💳</div><div class="card-body"><div class="card-label">Pending Cheques</div><div class="card-value" style="font-size:1rem;color:var(--warning)"><?= number_format($pending_cheques['c']) ?></div><div class="card-sub"><?= $currency ?> <?= number_format($pending_cheques['s'] ?? 0) ?></div></div></div>
+<div class="card success"><div class="card-icon">🔥</div><div class="card-body"><div class="card-label">Today's Sales</div><div class="card-value"><?= number_format($todays_sales['c']) ?></div><div class="card-sub"><?= $currency ?> <?= number_format($todays_sales['s'] ?? 0) ?></div></div></div>
+<div class="card danger"><div class="card-icon">💸</div><div class="card-body"><div class="card-label">Total Expenses</div><div class="card-value" style="font-size:1rem;color:var(--danger)"><?= $currency ?> <?= number_format($total_expenses) ?></div></div></div>
+<div class="card accent"><div class="card-icon">👥</div><div class="card-body"><div class="card-label">Customers</div><div class="card-value"><?= number_format($total_customers) ?></div></div></div>
+<div class="card warning"><div class="card-icon">🏭</div><div class="card-body"><div class="card-label">Suppliers</div><div class="card-value"><?= number_format($total_suppliers) ?></div></div></div>
 </div>
 <fieldset class="fieldset"><legend>⚡ Quick Actions (Top 10)</legend>
 <div style="display:flex;gap:8px;flex-wrap:wrap">
