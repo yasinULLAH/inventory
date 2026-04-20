@@ -718,7 +718,20 @@ if ($db_exists && isset($_SESSION['logged_in'])) {
         echo $sql_dump;
         exit;
     }
-
+    if ($page === 'settings' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['restore_db']) && isset($_FILES['backup_file'])) {
+        $file = $_FILES['backup_file'];
+        if ($file['error'] === UPLOAD_ERR_OK && pathinfo($file['name'], PATHINFO_EXTENSION) === 'sql') {
+            $sql_content = file_get_contents($file['tmp_name']);
+            if ($conn->multi_query($sql_content)) {
+                while ($conn->more_results() && $conn->next_result()) {;}
+                $msg = 'Database restored successfully.';
+            } else {
+                $err = 'Restore failed: ' . $conn->error;
+            }
+        } else {
+            $err = 'Invalid file uploaded. Please upload a valid .sql file.';
+        }
+    }
     if ($page === 'inventory' && isset($_GET['export_csv']) && $_GET['export_csv'] == 1) {
         $status_f = sanitize($_GET['status_f'] ?? '');
         $where = '1=1';
@@ -799,7 +812,7 @@ table{border-collapse:collapse;width:100%}
 img{display:block;max-width:100%}
 
 .layout{display:flex;min-height:100vh;flex-direction:row}
-.sidebar{width:var(--sidebar-w);background:var(--bg2);border-right:2px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;z-index:100;overflow-y:auto;transition:transform 0.2s}
+.sidebar{width:var(--sidebar-w);background:var(--bg2);border-right:2px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;z-index:100;overflow-y:auto;transition:width 0.2s, transform 0.2s}
 .sidebar-header{padding:12px 10px;border-bottom:2px solid var(--border);text-align:center}
 .sidebar-header .company{font-size:0.85rem;font-weight:700;color:var(--accent);line-height:1.3}
 .sidebar-header .branch{font-size:0.72rem;color:var(--text2);margin-top:2px}
@@ -812,9 +825,20 @@ img{display:block;max-width:100%}
 .sidebar-footer form{display:inline}
 .sidebar-footer button{background:var(--danger);color:#fff;border:1px solid var(--danger-h);padding:6px 14px;font-size:0.8rem;border-radius:2px;width:100%}
 
-.main-wrap{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-height:100vh}
+.main-wrap{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-height:100vh;transition:margin-left 0.2s}
 .topbar{height:var(--topbar-h);background:var(--bg2);border-bottom:2px solid var(--border);display:flex;align-items:center;padding:0 16px;position:sticky;top:0;z-index:50;gap:10px}
-.topbar .hamburger{display:none;background:none;border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:2px;font-size:1.1rem;cursor:pointer}
+.topbar .hamburger{display:flex;background:none;border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:2px;font-size:1.1rem;cursor:pointer}
+@media (min-width: 601px) {
+body.sidebar-collapsed { --sidebar-w: 60px; }
+body.sidebar-collapsed .sidebar { overflow-x: hidden; white-space: nowrap; }
+body.sidebar-collapsed .sidebar-header .company, body.sidebar-collapsed .sidebar-header .branch { display: none; }
+body.sidebar-collapsed .sidebar-header { padding: 15px 0; }
+body.sidebar-collapsed .sidebar-header::after { content: '⚡'; font-size: 1.4rem; display: block; text-align: center; color: var(--accent); }
+body.sidebar-collapsed nav ul li a { font-size: 0; justify-content: center; padding: 12px 0; }
+body.sidebar-collapsed nav ul li a .icon { font-size: 1.2rem; margin: 0; }
+body.sidebar-collapsed .sidebar-footer form button { font-size: 0; padding: 10px 0; }
+body.sidebar-collapsed .sidebar-footer form button::after { content: '🚪'; font-size: 1.1rem; }
+}
 .topbar .page-title{font-size:0.95rem;font-weight:700;color:var(--text);flex:1}
 .topbar .topbar-actions{display:flex;gap:8px;align-items:center}
 .topbar .topbar-actions form button{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:4px 10px;font-size:0.78rem;border-radius:2px}
@@ -977,7 +1001,6 @@ body{background:#fff!important;color:#111!important}
 }
 @media(max-width:600px){
 .card-grid{grid-template-columns:1fr}
-.topbar .hamburger{display:flex}
 .sidebar{transform:translateX(-100%)}
 .sidebar.open{transform:translateX(0)}
 .sidebar-overlay.open{display:block}
@@ -993,6 +1016,11 @@ body{background:#fff!important;color:#111!important}
 </style>
 </head>
 <body>
+<script>
+if (localStorage.getItem('sidebarCollapsed') === '1' && window.innerWidth > 600) {
+    document.body.classList.add('sidebar-collapsed');
+}
+</script>
 <?php if (!$db_exists): ?>
 <div class="install-wrap">
 <div class="install-box">
@@ -2733,7 +2761,7 @@ function toggleRetCheque(v) {
         $s_taxon = get_setting('tax_on') ?? 'purchase_price';
         $s_show_pp = get_setting('show_purchase_on_invoice') ?? '0';
 ?>
-<form method="POST">
+<form method="POST" enctype="multipart/form-data">
 <fieldset class="fieldset"><legend>⚙ Company Settings</legend>
 <div class="form-row">
 <div class="form-group"><label>Company Name</label><input type="text" name="company_name" value="<?= sanitize($s_company) ?>"></div>
@@ -2764,10 +2792,15 @@ function toggleRetCheque(v) {
 </div>
 <div style="font-size:0.78rem;color:var(--text2);margin-top:4px">⚠ Password must be at least 8 characters. Leave empty to keep the current password unchanged.</div>
 </fieldset>
-<fieldset class="fieldset"><legend>💾 Database Backup</legend>
-<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+<fieldset class="fieldset"><legend>💾 Database Backup & Restore</legend>
+<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
 <a href="index.php?page=settings&action=backup" class="btn btn-primary">⬇ Download SQL Backup</a>
 <span style="font-size:0.8rem;color:var(--text2)">Downloads a full SQL dump of the database.</span>
+</div>
+<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:14px">
+<input type="file" name="backup_file" accept=".sql" style="font-size:0.8rem;background:var(--input-bg);color:var(--input-text);border:1px solid var(--input-border);padding:5px;border-radius:2px">
+<button type="submit" name="restore_db" class="btn btn-danger" onclick="return confirm('WARNING: Restoring will overwrite all current data! Are you absolutely sure?')">⬆ Restore Database</button>
+<span style="font-size:0.8rem;color:var(--text2)">Upload a previously downloaded .sql backup file.</span>
 </div>
 </fieldset>
 <fieldset class="fieldset"><legend>ℹ System Info</legend>
@@ -2792,10 +2825,15 @@ function toggleRetCheque(v) {
 <?php if ($db_exists && isset($_SESSION['logged_in'])): ?>
 <script>
 function toggleSidebar() {
-    var s = document.getElementById('sidebar');
-    var o = document.getElementById('sidebarOverlay');
-    s.classList.toggle('open');
-    o.classList.toggle('open');
+    if (window.innerWidth <= 600) {
+        var s = document.getElementById('sidebar');
+        var o = document.getElementById('sidebarOverlay');
+        s.classList.toggle('open');
+        o.classList.toggle('open');
+    } else {
+        document.body.classList.toggle('sidebar-collapsed');
+        localStorage.setItem('sidebarCollapsed', document.body.classList.contains('sidebar-collapsed') ? '1' : '0');
+    }
 }
 function closeSidebar() {
     document.getElementById('sidebar').classList.remove('open');
