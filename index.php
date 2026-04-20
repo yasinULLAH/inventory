@@ -534,7 +534,7 @@ if ($db_exists && isset($_SESSION['logged_in'])) {
                 $tax_on = get_setting('tax_on') ?? 'purchase_price';
                 $base = ($tax_on === 'selling_price') ? $selling_price : $bike['purchase_price'];
                 $tax_amount = ($base * $tax_rate) / 100;
-                $margin = $selling_price - $bike['purchase_price'];
+                $margin = $selling_price - $bike['purchase_price'] - $tax_amount;
 
                 $st = $conn->prepare("UPDATE bikes SET selling_price=?,selling_date=?,customer_id=?,tax_amount=?,margin=?,status='sold',accessories=?,notes=? WHERE id=?");
                 $st->bind_param('dsiddsssi', $selling_price, $selling_date, $customer_id, $tax_amount, $margin, $accessories, $sale_notes, $bike_id);
@@ -1778,7 +1778,7 @@ function calcMargin() {
     var pp = parseFloat(document.getElementById('purchasePriceDisplay').value.replace(/,/g,'')) || 0;
     var base = taxOn === 'selling_price' ? sp : pp;
     var tax = (base * taxRate) / 100;
-    var margin = sp - pp;
+    var margin = sp - pp - tax;
     document.getElementById('taxDisplay').value = 'Rs. ' + tax.toFixed(2);
     var md = document.getElementById('marginDisplay');
     md.value = 'Rs. ' + margin.toFixed(2);

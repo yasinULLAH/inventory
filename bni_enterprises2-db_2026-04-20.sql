@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3306
--- Generation Time: Apr 20, 2026 at 09:59 AM
+-- Generation Time: Apr 20, 2026 at 10:04 AM
 -- Server version: 8.2.0
 -- PHP Version: 8.3.0
 
@@ -53,6 +53,39 @@ CREATE TABLE `bikes` (
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+--
+-- Dumping data for table `bikes`
+--
+
+INSERT INTO `bikes` (`id`, `purchase_order_id`, `order_date`, `inventory_date`, `chassis_number`, `motor_number`, `model_id`, `color`, `purchase_price`, `selling_price`, `selling_date`, `customer_id`, `tax_amount`, `margin`, `status`, `return_date`, `return_amount`, `return_notes`, `accessories`, `safeguard_notes`, `notes`, `created_at`, `updated_at`) VALUES
+(1, 1, '2026-02-03', '2026-02-05', 'LY05G48270002304', '*XRLY48052125D0002228*', 1, 'Black', 125225.00, NULL, NULL, NULL, 125.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(2, 1, '2026-02-03', '2026-02-05', 'LY05G48270002202', '*XRLY48052125D0002322*', 1, 'Grey', 125225.00, NULL, NULL, NULL, 125.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(3, 1, '2026-02-03', '2026-02-05', 'DD35G48130001177', '*48V350WA8T454708922*', 13, 'Black', 94595.00, NULL, NULL, NULL, 95.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(4, 1, '2026-02-03', '2026-02-05', 'M615G72380002665', 'A9A756800994', 9, 'Silver', 220721.00, 242000.00, NULL, NULL, 221.00, 0.00, 'returned', NULL, NULL, NULL, NULL, NULL, 'Returned on 200,000 Cheque to be issued.', '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(5, 1, '2026-02-03', '2026-02-05', 'T910G72260006966', '*XR9S72102825N0007369*', 2, 'Red', 161261.00, 179000.00, '2026-03-05', NULL, 161.00, 17578.00, 'sold', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(6, 1, '2026-02-03', '2026-02-05', 'T910G72260007041', '*XR9S72102825N0007701*', 2, 'Black', 161261.00, 179000.00, NULL, NULL, 161.00, 17578.00, 'sold', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(7, 1, '2026-02-03', '2026-02-05', 'T910G72260006884', '*XR9S72102825N0007393*', 2, 'Grey', 161261.00, 179000.00, '2026-03-02', NULL, 161.00, 17578.00, 'sold', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(8, 1, '2026-02-03', '2026-02-05', 'E820G72380002293', '*PJE872203525N0002160*', 7, 'Grey', 251351.00, 279000.00, '2026-02-23', NULL, 251.00, 27398.00, 'sold', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(9, 1, '2026-02-03', '2026-02-05', 'TH12G72260005515', 'AIMTP721240259005364', 5, 'Grey', 179279.00, 199000.00, '2026-02-22', NULL, 179.00, 19542.00, 'sold', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(10, 1, '2026-02-03', '2026-02-05', 'TH12G72260006004', 'AIMTP721240259006297', 5, 'Black', 179279.00, NULL, NULL, NULL, 179.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(11, 1, '2026-02-03', '2026-02-05', 'T910L72300000632', '*XR9S7210282500000640*', 3, 'Silver', 193694.00, NULL, NULL, NULL, 194.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(12, 1, '2026-02-03', '2026-02-05', 'T910L72300000916', '*XR9S7210282500000927*', 3, 'Black', 193694.00, 234000.00, '2026-03-07', NULL, 194.00, 40112.00, 'sold', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(13, 1, '2026-02-03', '2026-02-05', 'TH12L72300000445', 'AIMTP72124025N001005', 6, 'Black', 211712.00, NULL, NULL, NULL, 212.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(14, 1, '2026-02-03', '2026-02-05', 'TH12L72300000416', 'AIMTP72124025N001176', 6, 'Grey', 211712.00, 246000.00, '2026-03-18', NULL, 212.00, 34076.00, 'sold', NULL, NULL, NULL, NULL, NULL, '(2,470,276) Received', '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(15, 2, '2026-02-27', '2026-03-12', 'M615L72300006176', 'XRM672153025D0007536', 11, 'Unknown', 254955.00, 285000.00, '2026-03-12', NULL, 285.00, 29760.00, 'sold', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(16, 2, '2026-02-27', '2026-03-12', 'M615L72300006278', 'XRM672153025D0007499', 11, 'Unknown', 254955.00, 283000.00, '2026-03-12', NULL, 285.00, 27760.00, 'sold', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(17, 3, '2026-03-12', '2026-03-16', 'T910G72260008882', '*XR9S72102825D0007890*', 4, 'Red', 238739.00, 179000.00, NULL, NULL, 239.00, -59978.00, 'sold', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(18, 3, '2026-03-12', '2026-03-16', 'T910G72260008478', '*XR9S72102825D0007855*', 4, 'Black', 238739.00, NULL, NULL, NULL, 239.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(19, 3, '2026-03-12', '2026-03-16', 'T910G72260008679', '*XR9S72102825D0007954*', 2, 'Grey', 161261.00, 179000.00, '2026-03-18', NULL, 179.00, 17560.00, 'sold', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(20, 3, '2026-03-12', '2026-03-16', 'TH12G72260006279', 'AIMTP721240259006047', 5, 'Unknown', 179279.00, NULL, NULL, NULL, 179.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(21, 3, '2026-03-12', '2026-03-16', 'TH12G72260006236', 'AIMTP721240259006039', 5, 'Unknown', 179279.00, NULL, NULL, NULL, 179.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, '(997,297) Receiving', '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(22, 4, '2026-03-18', '2026-03-27', 'E820G72380000466', '12ZW7271327YE*CERR116670C*', 8, 'Blue', 247748.00, NULL, NULL, NULL, 247.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(23, 4, '2026-03-18', '2026-03-27', 'P308L72300000159', 'PHPM7208352610000422', 12, 'Unknown', 234234.00, NULL, NULL, NULL, 234.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(24, 4, '2026-03-18', '2026-03-27', 'E810G72380000595', '*10ZW7273316YECKTS0000107*', 7, 'Grey', 251351.00, NULL, NULL, NULL, 251.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(25, 4, '2026-03-18', '2026-03-27', 'T910G72260008720', '*XR9S72102825D0007987*', 3, 'Unknown', 193694.00, NULL, NULL, NULL, 194.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(26, 4, '2026-03-18', '2026-03-27', 'T910G72260008894', '*XR9S72102825D0008251*', 3, 'Unknown', 193694.00, NULL, NULL, NULL, 194.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, 'Diff ledger= (70,137)+ new delivery', '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(27, 4, '2026-03-18', '2026-03-27', 'T910G72260008737', '*XR9S72102825D0008003*', 3, 'Unknown', 193694.00, NULL, NULL, NULL, 194.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57');
+
 -- --------------------------------------------------------
 
 --
@@ -73,6 +106,16 @@ CREATE TABLE `cheque_register` (
   `notes` text,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Dumping data for table `cheque_register`
+--
+
+INSERT INTO `cheque_register` (`id`, `cheque_number`, `bank_name`, `cheque_date`, `amount`, `type`, `status`, `reference_type`, `reference_id`, `party_name`, `notes`, `created_at`) VALUES
+(1, '03420810', 'UBL', '2026-02-03', 2535000.00, 'payment', 'cleared', 'purchase_order', 1, 'Default Supplier', 'First Order', '2026-04-20 09:01:57'),
+(2, '03420811', 'UBL', '2026-02-27', 509910.00, 'payment', 'cleared', 'purchase_order', 2, 'Default Supplier', 'Second Order', '2026-04-20 09:01:57'),
+(3, '03420809', 'UBL', '2026-03-12', 1002710.00, 'payment', 'cleared', 'purchase_order', 3, 'Default Supplier', 'Third Order', '2026-04-20 09:01:57'),
+(4, 'D72981756', 'Meezan', '2026-03-18', 1241441.00, 'payment', 'cleared', 'purchase_order', 4, 'Default Supplier', 'Fourth Order', '2026-04-20 09:01:57');
 
 -- --------------------------------------------------------
 
@@ -190,6 +233,16 @@ CREATE TABLE `purchase_orders` (
   `notes` text,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Dumping data for table `purchase_orders`
+--
+
+INSERT INTO `purchase_orders` (`id`, `order_date`, `supplier_id`, `cheque_number`, `bank_name`, `cheque_date`, `cheque_amount`, `total_units`, `notes`, `created_at`) VALUES
+(1, '2026-02-03', 1, '03420810', 'UBL', '2026-02-03', 2535000.00, 14, 'First Order', '2026-04-20 09:01:57'),
+(2, '2026-02-27', 1, '03420811', 'UBL', '2026-02-27', 509910.00, 2, 'Second Order', '2026-04-20 09:01:57'),
+(3, '2026-03-12', 1, '03420809', 'UBL', '2026-03-12', 1002710.00, 5, 'Third Order', '2026-04-20 09:01:57'),
+(4, '2026-03-18', 1, 'D72981756', 'Meezan', '2026-03-18', 1241441.00, 6, 'Fourth Order', '2026-04-20 09:01:57');
 
 -- --------------------------------------------------------
 
@@ -311,13 +364,13 @@ ALTER TABLE `suppliers`
 -- AUTO_INCREMENT for table `bikes`
 --
 ALTER TABLE `bikes`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=28;
 
 --
 -- AUTO_INCREMENT for table `cheque_register`
 --
 ALTER TABLE `cheque_register`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT for table `customers`
@@ -347,7 +400,7 @@ ALTER TABLE `payments`
 -- AUTO_INCREMENT for table `purchase_orders`
 --
 ALTER TABLE `purchase_orders`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT for table `settings`
