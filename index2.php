@@ -11199,7 +11199,10 @@ if (!empty($_GET['ajax'])) {
                 $prods->execute([$id]);
                 $prods = $prods->fetchAll();
 
-                $totalStockVal = array_reduce($prods, fn($c, $i) => $c + ($i['current_stock'] * $i['purchase_price']), 0);
+                $totalStockCost = array_reduce($prods, fn($c, $i) => $c + ($i['current_stock'] * $i['purchase_price']), 0);
+                $totalStockSell = array_reduce($prods, fn($c, $i) => $c + ($i['current_stock'] * $i['selling_price']), 0);
+                $potentialProfit = $totalStockSell - $totalStockCost;
+                $lowStockCount = count(array_filter($prods, fn($i) => $i['current_stock'] <= $i['min_stock_level']));
 
                 ob_start();
                 ?>
@@ -11213,9 +11216,24 @@ if (!empty($_GET['ajax'])) {
 
                 <div class="stats-grid" style="margin-bottom:16px;">
                     <div class="stat-card primary">
-                        <div class="stat-card-title">Products</div>
+                        <div class="stat-card-title">Products Count</div>
                         <div class="stat-card-value"><?= count($prods) ?></div>
-                        <div class="stat-card-sub">Total Value: <?= formatCurrency($totalStockVal) ?></div>
+                        <div class="stat-card-sub" style="<?= $lowStockCount > 0 ? 'color:#d9534f;font-weight:bold;' : '' ?>"><?= $lowStockCount ?> low/out of stock</div>
+                    </div>
+                    <div class="stat-card info">
+                        <div class="stat-card-title">Inventory Value (Cost)</div>
+                        <div class="stat-card-value"><?= formatCurrency($totalStockCost) ?></div>
+                        <div class="stat-card-sub">Total purchase value</div>
+                    </div>
+                    <div class="stat-card success">
+                        <div class="stat-card-title">Retail Value (Sell)</div>
+                        <div class="stat-card-value"><?= formatCurrency($totalStockSell) ?></div>
+                        <div class="stat-card-sub">Total selling value</div>
+                    </div>
+                    <div class="stat-card warning">
+                        <div class="stat-card-title">Potential Profit</div>
+                        <div class="stat-card-value"><?= formatCurrency($potentialProfit) ?></div>
+                        <div class="stat-card-sub">Gross margin if all sold</div>
                     </div>
                 </div>
 
@@ -11281,8 +11299,13 @@ if (!empty($_GET['ajax'])) {
                 $availSups->execute([$id]);
                 $availSups = $availSups->fetchAll();
 
-                $totalStockVal = array_reduce($prods, fn($c, $i) => $c + ($i['current_stock'] * $i['purchase_price']), 0);
+                $totalStockCost = array_reduce($prods, fn($c, $i) => $c + ($i['current_stock'] * $i['purchase_price']), 0);
+                $totalStockSell = array_reduce($prods, fn($c, $i) => $c + ($i['current_stock'] * $i['selling_price']), 0);
+                $potentialProfit = $totalStockSell - $totalStockCost;
+                
                 $totalCustBal = array_reduce($custs, fn($c, $i) => $c + $i['current_balance'], 0);
+                $totalCustCredit = array_reduce($custs, fn($c, $i) => $c + $i['credit_limit'], 0);
+                
                 $totalSupBal = array_reduce($sups, fn($c, $i) => $c + $i['current_balance'], 0);
 
                 ob_start();
@@ -11300,19 +11323,24 @@ if (!empty($_GET['ajax'])) {
 
                 <div class="stats-grid" style="margin-bottom:16px;">
                     <div class="stat-card primary">
-                        <div class="stat-card-title">Products</div>
-                        <div class="stat-card-value"><?= count($prods) ?></div>
-                        <div class="stat-card-sub">Val: <?= formatCurrency($totalStockVal) ?></div>
+                        <div class="stat-card-title">Inventory Value (Cost)</div>
+                        <div class="stat-card-value"><?= formatCurrency($totalStockCost) ?></div>
+                        <div class="stat-card-sub"><?= count($prods) ?> products linked</div>
                     </div>
-                    <div class="stat-card info">
-                        <div class="stat-card-title">Customers</div>
-                        <div class="stat-card-value"><?= count($custs) ?></div>
-                        <div class="stat-card-sub">Bal: <?= formatCurrency($totalCustBal) ?></div>
+                    <div class="stat-card success">
+                        <div class="stat-card-title">Expected Retail / Profit</div>
+                        <div class="stat-card-value"><?= formatCurrency($totalStockSell) ?></div>
+                        <div class="stat-card-sub" style="color:#5cb85c;font-weight:bold;">Profit: <?= formatCurrency($potentialProfit) ?></div>
                     </div>
                     <div class="stat-card warning">
-                        <div class="stat-card-title">Suppliers</div>
-                        <div class="stat-card-value"><?= count($sups) ?></div>
-                        <div class="stat-card-sub">Bal: <?= formatCurrency($totalSupBal) ?></div>
+                        <div class="stat-card-title">Receivables (Customers)</div>
+                        <div class="stat-card-value" style="<?= $totalCustBal > 0 ? 'color:#d9534f;' : '' ?>"><?= formatCurrency($totalCustBal) ?></div>
+                        <div class="stat-card-sub"><?= count($custs) ?> customers (Limit: <?= formatCurrency($totalCustCredit) ?>)</div>
+                    </div>
+                    <div class="stat-card danger">
+                        <div class="stat-card-title">Payables (Suppliers)</div>
+                        <div class="stat-card-value" style="<?= $totalSupBal > 0 ? 'color:#d9534f;' : '' ?>"><?= formatCurrency($totalSupBal) ?></div>
+                        <div class="stat-card-sub">Owed to <?= count($sups) ?> suppliers</div>
                     </div>
                 </div>
 
