@@ -3225,7 +3225,8 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
             ['section' => 'INVENTORY'],
             ['page' => 'products', 'label' => 'Products', 'icon' => '&#128230;', 'perm' => ['products', 'view']],
             ['page' => 'categories', 'label' => 'Categories', 'icon' => '&#128193;', 'perm' => ['categories', 'view']],
-            ['page' => 'collections', 'label' => 'Collections / Folders', 'icon' => '&#128194;', 'perm' => ['collections', 'view']],
+            ['page' => 'collections', 'label' => 'Collections / Folders', 'icon' => '&#128194;', 'perm' =>['collections', 'view']],
+            ['page' => 'warehouses', 'label' => 'Warehouses', 'icon' => '&#127970;', 'perm' => ['settings', 'manage']],
             ['page' => 'adjustments', 'label' => 'Stock Adjustments', 'icon' => '&#9881;', 'perm' => ['products', 'edit']],
             ['page' => 'transfers', 'label' => 'Stock Transfers', 'icon' => '&#8644;', 'perm' => ['products', 'edit']],
             ['page' => 'stock_audit', 'label' => 'Stock Audit', 'icon' => '&#128269;', 'perm' => ['stock_audit', 'view']],
@@ -4527,7 +4528,147 @@ function renderProducts(): void
         renderLayout('Import Products', $content, 'products');
     }
 }
-
+function renderWarehouses(): void
+{
+    requirePermission('settings', 'manage');
+    $pdo = getPDO();
+    $action = $_GET['action'] ?? 'list';
+    
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf() && in_array($action, ['new', 'edit'])) {
+        $editId = !empty($_GET['id']) ? (int) $_GET['id'] : null;
+        $name = trim($_POST['name'] ?? '');
+        $location = trim($_POST['location'] ?? '');
+        $status = $_POST['status'] ?? 'active';
+        
+        if (empty($name)) {
+            $_SESSION['flash_msg'] = 'Name is required.';
+            $_SESSION['flash_type'] = 'danger';
+        } else {
+            if ($editId) {
+                $pdo->prepare('UPDATE warehouses SET name=?, location=?, status=? WHERE id=?')->execute([$name, $location, $status, $editId]);
+                $_SESSION['flash_msg'] = 'Warehouse updated.';
+            } else {
+                $pdo->prepare('INSERT INTO warehouses (name, location, status) VALUES (?, ?, ?)')->execute([$name, $location, $status]);
+                $_SESSION['flash_msg'] = 'Warehouse created.';
+            }
+            $_SESSION['flash_type'] = 'success';
+            header('Location: ?page=warehouses');
+            exit;
+        }
+    }
+    
+    if ($action === 'delete' && !empty($_GET['id'])) {
+        if (($_GET['csrf_token'] ?? '') !== csrf()) die('CSRF token mismatch');
+        $id = (int) $_GET['id'];
+        $chk = $pdo->prepare('SELECT COUNT(*) FROM products WHERE warehouse_id=?');
+        $chk->execute([$id]);
+        
+        if ((int) $chk->fetchColumn() > 0) {
+            $_SESSION['flash_msg'] = 'Cannot delete: Warehouse is linked to products.';
+            $_SESSION['flash_type'] = 'danger';
+        } else {
+            $pdo->prepare('DELETE FROM warehouses WHERE id=?')->execute([$id]);
+            $_SESSION['flash_msg'] = 'Warehouse deleted.';
+            $_SESSION['flash_type'] = 'success';
+        }
+        header('Location: ?page=warehouses');
+        exit;
+    }
+    
+    $warehouses = $pdo->query('SELECT w.*, (SELECT COUNT(*) FROM products p WHERE p.warehouse_id=w.id) as p_cnt FROM warehouses w ORDER BY w.name ASC')->fetchAll();
+    $editWh = ($action === 'edit' && !empty($_GET['id'])) ? $pdo->prepare('SELECT * FROM warehouses WHERE id=?') : null;
+    if ($editWh) {
+        $editWh->execute([(int) $_GET['id']]);
+        $editWh = $editWh->fetch() ?: null;
+    }
+    
+    ob_start();
+    ?>
+    <div class="page-header">
+        <h1>&#127970; Warehouses</h1>
+        <div class="page-header-actions">
+            <a href="?page=warehouses&action=new" class="btn btn-success btn-sm">+ Add Warehouse</a>
+        </div>
+    </div>
+    
+    <?php if (isset($_SESSION['flash_msg'])): ?>
+        <div class="alert alert-<?= h($_SESSION['flash_type']) ?>"><?= h($_SESSION['flash_msg']) ?></div>
+        <?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']); ?>
+    <?php endif; ?>
+    
+    <div class="cols-2">
+        <div class="lf"><span class="lf-title"><?= ($action === 'edit' && $editWh) ? 'Edit Warehouse' : 'Add New Warehouse' ?></span>
+            <form method="POST" action="?page=warehouses&action=<?= ($action === 'edit' && $editWh) ? 'edit&id=' . (int) $_GET['id'] : 'new' ?>">
+                <?= csrfField() ?>
+                <div class="form-grid" style="grid-template-columns:1fr">
+                    <div class="form-group">
+                        <label>Warehouse Name <span class="required-mark">*</span></label>
+                        <input type="text" name="name" value="<?= h($editWh['name'] ?? $_POST['name'] ?? '') ?>" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Location</label>
+                        <input type="text" name="location" value="<?= h($editWh['location'] ?? $_POST['location'] ?? '') ?>">
+                    </div>
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select name="status">
+                            <option value="active" <?= ($editWh['status'] ?? 'active') === 'active' ? 'selected' : '' ?>>Active</option>
+                            <option value="inactive" <?= ($editWh['status'] ?? '') === 'inactive' ? 'selected' : '' ?>>Inactive</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display:flex;gap:8px;margin-top:10px">
+                    <button type="submit" class="btn btn-success btn-sm"><?= ($action === 'edit' && $editWh) ? '&#10003; Update' : '+ Create' ?></button>
+                    <?php if ($action === 'edit'): ?><a href="?page=warehouses" class="btn btn-secondary btn-sm">Cancel</a><?php endif; ?>
+                </div>
+            </form>
+        </div>
+        
+        <div class="lf"><span class="lf-title">All Warehouses (<?= count($warehouses) ?>)</span>
+            <div class="tbl-wrap">
+                <table class="tbl">
+                    <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Location</th>
+                        <th class="text-right">Products</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php if (empty($warehouses)): ?>
+                        <tr><td colspan="5" class="text-center text-muted" style="padding:12px;">No warehouses yet</td></tr>
+                    <?php else: foreach ($warehouses as $w): ?>
+                        <tr>
+                            <td><strong><?= h($w['name']) ?></strong></td>
+                            <td><?= h($w['location'] ?: '-') ?></td>
+                            <td class="text-right"><?= number_format((int) $w['p_cnt']) ?></td>
+                            <td><span class="badge badge-<?= $w['status'] === 'active' ? 'success' : 'secondary' ?>"><?= h(strtoupper($w['status'])) ?></span></td>
+                            <td>
+                                <div class="tbl-actions">
+                                    <a href="?page=warehouses&action=edit&id=<?= $w['id'] ?>" class="btn btn-warning btn-xs">&#9998;</a>
+                                    <button type="button" onclick="confirmDeleteWh(<?= $w['id'] ?>,'<?= h(addslashes($w['name'])) ?>')" class="btn btn-danger btn-xs">&#128465;</button>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <script>
+        function confirmDeleteWh(id, name) {
+            confirmAction('Delete warehouse "' + name + '"?', function() {
+                window.location = '?page=warehouses&action=delete&id=' + id + '&csrf_token=' + CSRF_TOKEN;
+            });
+        }
+    </script>
+    <?php
+    $content = ob_get_clean();
+    renderLayout('Warehouses', $content, 'warehouses');
+}
 function renderCategories(): void
 {
     $action = $_GET['action'] ?? 'list';
@@ -11508,6 +11649,7 @@ if (!empty($_GET['ajax'])) {
         'products' => renderProducts(),
         'categories' => renderCategories(),
         'collections' => renderCollections(),
+        'warehouses' => renderWarehouses(),
         'suppliers' => renderSuppliers(),
         'customers' => renderCustomers(),
         'purchases' => renderPurchases(),
