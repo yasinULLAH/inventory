@@ -446,7 +446,6 @@ function upgradeDatabase(): void
         FOREIGN KEY (`supplier_id`) REFERENCES `suppliers`(`id`) ON DELETE CASCADE,
         INDEX (`supplier_id`,`transaction_date`)
     ) ENGINE=InnoDB");
-
     $pdo->exec("CREATE TABLE IF NOT EXISTS `collections` (
         `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         `name` VARCHAR(150) NOT NULL,
@@ -455,7 +454,6 @@ function upgradeDatabase(): void
         `created_by` INT UNSIGNED NOT NULL,
         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB");
-
     $pdo->exec("CREATE TABLE IF NOT EXISTS `collection_items` (
         `collection_id` INT UNSIGNED NOT NULL,
         `item_type` ENUM('product','customer','supplier') NOT NULL,
@@ -464,13 +462,11 @@ function upgradeDatabase(): void
         PRIMARY KEY (`collection_id`, `item_type`, `item_id`),
         FOREIGN KEY (`collection_id`) REFERENCES `collections`(`id`) ON DELETE CASCADE
     ) ENGINE=InnoDB");
-
     $chkColPerm = $pdo->query("SELECT COUNT(*) FROM permissions WHERE module='collections'")->fetchColumn();
     if ($chkColPerm == 0) {
         $pdo->exec("INSERT INTO permissions (module,action,display_name) VALUES ('collections','view','Collections View'), ('collections','manage','Collections Manage')");
         $pdo->exec("INSERT INTO role_permissions (role_id,permission_id) SELECT 1, id FROM permissions WHERE module='collections'");
     }
-
     $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
 }
 
@@ -1251,7 +1247,6 @@ function saveProduct(array $data, ?int $id = null): array
         $errors[] = 'SKU already exists.';
     if (!empty($errors))
         return ['success' => false, 'errors' => $errors];
-
     $existing = $id ? getProduct($id) : null;
     $imagePath = $existing['image_path'] ?? null;
     if (isset($_FILES['image_file']) && $_FILES['image_file']['error'] === UPLOAD_ERR_OK) {
@@ -1259,7 +1254,6 @@ function saveProduct(array $data, ?int $id = null): array
         if ($uploaded)
             $imagePath = $uploaded;
     }
-
     $params = [
         'name' => $name,
         'sku' => $sku,
@@ -1291,14 +1285,12 @@ function saveProduct(array $data, ?int $id = null): array
         $prodId = (int) $pdo->lastInsertId();
         logActivity($_SESSION['user_id'], 'CREATE', 'products', "Created product: $name (SKU: $sku)");
     }
-
     $attrNames = $data['attr_name'] ?? [];
     $attrValues = $data['attr_value'] ?? [];
     $pdo->prepare('DELETE FROM product_attribute_values WHERE product_id=?')->execute([$prodId]);
     $stmtAttr = $pdo->prepare('INSERT IGNORE INTO product_attributes (name) VALUES (?)');
     $stmtGetAttr = $pdo->prepare('SELECT id FROM product_attributes WHERE name=?');
     $stmtVal = $pdo->prepare('INSERT INTO product_attribute_values (product_id, attribute_id, value) VALUES (?,?,?)');
-
     foreach ($attrNames as $i => $aName) {
         $aName = trim($aName);
         $aVal = trim($attrValues[$i] ?? '');
@@ -1309,7 +1301,6 @@ function saveProduct(array $data, ?int $id = null): array
             $stmtVal->execute([$prodId, $attrId, $aVal]);
         }
     }
-
     return ['success' => true, 'id' => $prodId];
 }
 
@@ -1641,11 +1632,9 @@ function getDefaultPage(): string
     $stmt->execute([$_SESSION['user_id']]);
     if ($stmt->fetchColumn() === 'admin')
         return 'dashboard';
-
     $stmt = $pdo->prepare('SELECT p.module FROM role_permissions rp JOIN permissions p ON rp.permission_id=p.id WHERE rp.role_id=(SELECT role_id FROM users WHERE id=?) LIMIT 1');
     $stmt->execute([$_SESSION['user_id']]);
     $module = $stmt->fetchColumn();
-
     $map = [
         'dashboard' => 'dashboard', 'pos' => 'pos', 'products' => 'products',
         'categories' => 'categories', 'purchases' => 'purchases', 'sales' => 'sales',
@@ -1660,12 +1649,10 @@ function renderError403(): void
 {
     $def = getDefaultPage();
     $reqPage = $_GET['page'] ?? 'dashboard';
-
     if ($reqPage === 'dashboard' && $def !== 'dashboard') {
         header('Location: ?page=' . $def);
         exit;
     }
-
     echo '<div class="alert alert-danger" style="margin:40px auto;max-width:500px;text-align:center;"><h3>403 - Access Denied</h3><p>You are being redirected to your allowed area...</p><a href="?page=' . h($def) . '" class="btn btn-primary">Continue Now</a></div>';
     echo '<script>setTimeout(function(){ window.location.href="?page=' . h($def) . '"; }, 1500);</script>';
 }
@@ -1841,7 +1828,24 @@ function renderLogin(?string $error = null): void
                     max-width: 100%
                 }
             }
-        </style>
+        #sidebar {
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+        }
+        #sidebar::-webkit-scrollbar {
+            width: 4px;
+        }
+        #sidebar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        #sidebar::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+        }
+        #sidebar::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 0, 0, 0.4);
+        }
+</style>
     </head>
     <body>
     <div class="login-wrap">
@@ -1980,7 +1984,6 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
                 display: inline-block;
                 vertical-align: middle
             }
-            /* HEADER */
             #header {
                 position: fixed;
                 top: 0;
@@ -1996,7 +1999,7 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
                 gap: 8px
             }
             #hamburger {
-                display: none;
+                display: block;
                 background: #357abd;
                 border: 1px outset #6aaae9;
                 color: #fff;
@@ -2113,7 +2116,6 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
                 background: #4a90d9;
                 color: #fff
             }
-            /* SIDEBAR */
             #sidebar {
                 position: fixed;
                 top: var(--header-h);
@@ -2216,16 +2218,18 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
                 height: 16px;
                 flex-shrink: 0
             }
-            /* MAIN CONTENT */
             #main {
                 margin-left: var(--sidebar-w);
                 margin-top: var(--header-h);
                 margin-bottom: var(--status-h);
                 padding: 12px;
                 min-height: calc(100vh - var(--header-h) - var(--status-h));
-                background: var(--bg)
+                background: var(--bg);
+                transition: margin-left 0.2s ease;
             }
-            /* STATUS BAR */
+            body.sidebar-collapsed #main {
+                margin-left: var(--sidebar-collapsed-w);
+            }
             #statusbar {
                 position: fixed;
                 bottom: 0;
@@ -2255,7 +2259,6 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
                 font-weight: 600;
                 color: #333
             }
-            /* PAGE HEADER */
             .page-header {
                 background: #f0f0f0;
                 border: 2px solid #a0a0a0;
@@ -2281,7 +2284,6 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
                 gap: 6px;
                 flex-wrap: wrap
             }
-            /* LABELFRAME */
             .lf {
                 border: 2px solid #a0a0a0;
                 border-style: groove;
@@ -2301,7 +2303,6 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
                 text-transform: uppercase;
                 letter-spacing: 0.5px
             }
-            /* BUTTONS */
             .btn {
                 display: inline-flex;
                 align-items: center;
@@ -2379,7 +2380,6 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
                 font-size: 10px;
                 min-height: 20px
             }
-            /* FORMS */
             .form-grid {
                 display: grid;
                 grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));
@@ -2434,7 +2434,6 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
             .required-mark {
                 color: var(--danger)
             }
-            /* ALERTS */
             .alert {
                 padding: 8px 12px;
                 margin-bottom: 10px;
@@ -2470,7 +2469,6 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
             .alert li {
                 margin-bottom: 2px
             }
-            /* TABLES */
             .tbl-wrap {
                 overflow-x: auto;
                 border: 2px solid #a0a0a0
@@ -2526,7 +2524,6 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
             .sort-link:hover {
                 color: #4a90d9
             }
-            /* BADGES */
             .badge {
                 display: inline-block;
                 padding: 2px 7px;
@@ -2566,7 +2563,6 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
                 border-color: #b8daff;
                 color: #004085
             }
-            /* STATS CARDS */
             .stats-grid {
                 display: grid;
                 grid-template-columns:repeat(auto-fill, minmax(160px, 1fr));
@@ -2614,7 +2610,6 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
             .stat-card.warning .stat-card-value {
                 color: #f0ad4e
             }
-            /* DASHBOARD CHARTS */
             .chart-bars {
                 display: flex;
                 align-items: flex-end;
@@ -2649,7 +2644,6 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
                 color: #333;
                 font-weight: 600
             }
-            /* FILTERS */
             .filter-bar {
                 background: #f0f0f0;
                 border: 2px solid #a0a0a0;
@@ -2668,7 +2662,6 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
                 text-transform: none;
                 letter-spacing: 0
             }
-            /* MODAL */
             .modal-overlay {
                 display: none;
                 position: fixed;
@@ -2735,7 +2728,6 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
             .modal.xl {
                 max-width: 1000px
             }
-            /* PAGINATION */
             .pagination {
                 display: flex;
                 flex-wrap: wrap;
@@ -2767,7 +2759,6 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
                 font-size: 11px;
                 color: #666
             }
-            /* TOAST */
             #toast-container {
                 position: fixed;
                 bottom: 36px;
@@ -2810,7 +2801,6 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
                     transform: translateX(0)
                 }
             }
-            /* MISC */
             .stock-ok {
                 color: var(--success);
                 font-weight: 700
@@ -3062,10 +3052,8 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
                     --sidebar-w: 220px
                 }
                 #sidebar {
-                    transform: translateX(-100%)
-                }
-                body.sidebar-collapsed #main-content {
-                    margin-left: 0
+                    transform: translateX(-220px);
+                    width: 220px;
                 }
                 #sidebar.collapsed {
                     width: var(--sidebar-w)
@@ -3083,24 +3071,17 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
                 #sidebar.collapsed .nav-item:hover::after {
                     display: none
                 }
-                #sidebar {
-                    transform: translateX(-220px);
-                    width: 220px
-                }
                 #sidebar.open {
                     transform: translateX(0)
-                }
-                body.sidebar-collapsed #main-content {
-                    margin-left: var(--sidebar-collapsed-w)
                 }
                 #sidebar-overlay.open {
                     display: block
                 }
-                #hamburger {
-                    display: block
+                body.sidebar-collapsed #main {
+                    margin-left: 0 !important;
                 }
                 #main {
-                    margin-left: 0
+                    margin-left: 0 !important;
                 }
                 .stats-grid {
                     grid-template-columns:repeat(2, 1fr)
@@ -3145,7 +3126,24 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
                     display: none
                 }
             }
-        </style>
+        #sidebar {
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+        }
+        #sidebar::-webkit-scrollbar {
+            width: 4px;
+        }
+        #sidebar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        #sidebar::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+        }
+        #sidebar::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 0, 0, 0.4);
+        }
+</style>
     </head>
     <body>
     <div id="loading-overlay" class="loading-overlay">
@@ -3225,7 +3223,7 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
             ['section' => 'INVENTORY'],
             ['page' => 'products', 'label' => 'Products', 'icon' => '&#128230;', 'perm' => ['products', 'view']],
             ['page' => 'categories', 'label' => 'Categories', 'icon' => '&#128193;', 'perm' => ['categories', 'view']],
-            ['page' => 'collections', 'label' => 'Collections / Folders', 'icon' => '&#128194;', 'perm' =>['collections', 'view']],
+            ['page' => 'collections', 'label' => 'Collections / Folders', 'icon' => '&#128194;', 'perm' => ['collections', 'view']],
             ['page' => 'warehouses', 'label' => 'Warehouses', 'icon' => '&#127970;', 'perm' => ['settings', 'manage']],
             ['page' => 'adjustments', 'label' => 'Stock Adjustments', 'icon' => '&#9881;', 'perm' => ['products', 'edit']],
             ['page' => 'transfers', 'label' => 'Stock Transfers', 'icon' => '&#8644;', 'perm' => ['products', 'edit']],
@@ -3314,6 +3312,12 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
             }
         }
         initSidebar();
+        document.addEventListener('DOMContentLoaded', function() {
+            var activeNav = document.querySelector('#sidebar .nav-item.active');
+            if (activeNav) {
+                activeNav.scrollIntoView({ behavior: 'auto', block: 'center' });
+            }
+        });
         function toggleUserMenu() {
             document.getElementById('user-dropdown').classList.toggle('open');
         }
@@ -4184,7 +4188,6 @@ function renderProducts(): void
                 </div>
                 <button type="button" class="btn btn-secondary btn-sm mt-8" onclick="addAttrRow()">+ Add Attribute</button>
             </div>
-
             <div style="display:flex;gap:8px;flex-wrap:wrap">
                 <button type="submit"
                         class="btn btn-success"><?= $editId ? '&#10003; Update Product' : '&#43; Create Product' ?></button>
@@ -4238,11 +4241,9 @@ function renderProducts(): void
         $adjustHistory = $pdo2->prepare('SELECT sa.*, u.full_name as requested_by_name FROM stock_adjustments sa JOIN users u ON u.id=sa.requested_by WHERE sa.product_id=? ORDER BY sa.created_at DESC LIMIT 10');
         $adjustHistory->execute([$id]);
         $adjustHistory = $adjustHistory->fetchAll();
-
         $stmtPA = $pdo2->prepare('SELECT pa.name, pav.value FROM product_attribute_values pav JOIN product_attributes pa ON pa.id=pav.attribute_id WHERE pav.product_id=?');
         $stmtPA->execute([$id]);
         $productAttributes = $stmtPA->fetchAll();
-
         ob_start();
         ?>
         <div class="page-header">
@@ -4370,7 +4371,6 @@ function renderProducts(): void
             </div>
         </div>
         <?php endif; ?>
-        
         <div class="lf"><span class="lf-title">Recent Sales History</span>
             <div class="tbl-wrap">
                 <table class="tbl">
@@ -4528,18 +4528,17 @@ function renderProducts(): void
         renderLayout('Import Products', $content, 'products');
     }
 }
+
 function renderWarehouses(): void
 {
     requirePermission('settings', 'manage');
     $pdo = getPDO();
     $action = $_GET['action'] ?? 'list';
-    
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf() && in_array($action, ['new', 'edit'])) {
         $editId = !empty($_GET['id']) ? (int) $_GET['id'] : null;
         $name = trim($_POST['name'] ?? '');
         $location = trim($_POST['location'] ?? '');
         $status = $_POST['status'] ?? 'active';
-        
         if (empty($name)) {
             $_SESSION['flash_msg'] = 'Name is required.';
             $_SESSION['flash_type'] = 'danger';
@@ -4556,13 +4555,12 @@ function renderWarehouses(): void
             exit;
         }
     }
-    
     if ($action === 'delete' && !empty($_GET['id'])) {
-        if (($_GET['csrf_token'] ?? '') !== csrf()) die('CSRF token mismatch');
+        if (($_GET['csrf_token'] ?? '') !== csrf())
+            die('CSRF token mismatch');
         $id = (int) $_GET['id'];
         $chk = $pdo->prepare('SELECT COUNT(*) FROM products WHERE warehouse_id=?');
         $chk->execute([$id]);
-        
         if ((int) $chk->fetchColumn() > 0) {
             $_SESSION['flash_msg'] = 'Cannot delete: Warehouse is linked to products.';
             $_SESSION['flash_type'] = 'danger';
@@ -4574,14 +4572,12 @@ function renderWarehouses(): void
         header('Location: ?page=warehouses');
         exit;
     }
-    
     $warehouses = $pdo->query('SELECT w.*, (SELECT COUNT(*) FROM products p WHERE p.warehouse_id=w.id) as p_cnt FROM warehouses w ORDER BY w.name ASC')->fetchAll();
     $editWh = ($action === 'edit' && !empty($_GET['id'])) ? $pdo->prepare('SELECT * FROM warehouses WHERE id=?') : null;
     if ($editWh) {
         $editWh->execute([(int) $_GET['id']]);
         $editWh = $editWh->fetch() ?: null;
     }
-    
     ob_start();
     ?>
     <div class="page-header">
@@ -4590,12 +4586,10 @@ function renderWarehouses(): void
             <a href="?page=warehouses&action=new" class="btn btn-success btn-sm">+ Add Warehouse</a>
         </div>
     </div>
-    
     <?php if (isset($_SESSION['flash_msg'])): ?>
         <div class="alert alert-<?= h($_SESSION['flash_type']) ?>"><?= h($_SESSION['flash_msg']) ?></div>
         <?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']); ?>
     <?php endif; ?>
-    
     <div class="cols-2">
         <div class="lf"><span class="lf-title"><?= ($action === 'edit' && $editWh) ? 'Edit Warehouse' : 'Add New Warehouse' ?></span>
             <form method="POST" action="?page=warehouses&action=<?= ($action === 'edit' && $editWh) ? 'edit&id=' . (int) $_GET['id'] : 'new' ?>">
@@ -4623,7 +4617,6 @@ function renderWarehouses(): void
                 </div>
             </form>
         </div>
-        
         <div class="lf"><span class="lf-title">All Warehouses (<?= count($warehouses) ?>)</span>
             <div class="tbl-wrap">
                 <table class="tbl">
@@ -4639,7 +4632,8 @@ function renderWarehouses(): void
                     <tbody>
                     <?php if (empty($warehouses)): ?>
                         <tr><td colspan="5" class="text-center text-muted" style="padding:12px;">No warehouses yet</td></tr>
-                    <?php else: foreach ($warehouses as $w): ?>
+                    <?php else:
+        foreach ($warehouses as $w): ?>
                         <tr>
                             <td><strong><?= h($w['name']) ?></strong></td>
                             <td><?= h($w['location'] ?: '-') ?></td>
@@ -4652,7 +4646,8 @@ function renderWarehouses(): void
                                 </div>
                             </td>
                         </tr>
-                    <?php endforeach; endif; ?>
+                    <?php endforeach;
+    endif; ?>
                     </tbody>
                 </table>
             </div>
@@ -4669,6 +4664,7 @@ function renderWarehouses(): void
     $content = ob_get_clean();
     renderLayout('Warehouses', $content, 'warehouses');
 }
+
 function renderCategories(): void
 {
     $action = $_GET['action'] ?? 'list';
@@ -11163,7 +11159,6 @@ if (!empty($_GET['ajax'])) {
         requirePermission('collections', 'view');
         $pdo = getPDO();
         $action = $_GET['action'] ?? 'list';
-
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
             if (isset($_POST['save_collection'])) {
                 requirePermission('collections', 'manage');
@@ -11209,15 +11204,11 @@ if (!empty($_GET['ajax'])) {
                 exit;
             }
         }
-
         if ($action === 'list') {
-            // Fetch System Categories
             $categories = $pdo->query('SELECT id, name, description, 
                 (SELECT COUNT(*) FROM products WHERE category_id=categories.id) as p_cnt,
                 (SELECT SUM(current_stock * purchase_price) FROM products WHERE category_id=categories.id) as p_val
                 FROM categories ORDER BY name ASC')->fetchAll();
-
-            // Fetch Custom Collections
             $collections = $pdo->query("SELECT c.*, 
                 (SELECT COUNT(*) FROM collection_items WHERE collection_id=c.id AND item_type='product') as p_cnt,
                 (SELECT SUM(p.current_stock * p.purchase_price) FROM collection_items ci JOIN products p ON p.id=ci.item_id WHERE ci.collection_id=c.id AND ci.item_type='product') as p_val,
@@ -11241,8 +11232,6 @@ if (!empty($_GET['ajax'])) {
                 <?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']); ?>
             <?php endif; ?>
             <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap:16px;">
-                
-                <!-- System Categories (Read-Only) -->
                 <?php foreach ($categories as $cat): ?>
                     <div class="lf" style="cursor:pointer; transition:transform 0.2s; border-left:4px solid #f0ad4e;" onclick="window.location='?page=collections&action=view&type=category&id=<?= $cat['id'] ?>'" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
                         <div style="display:flex; justify-content:space-between; align-items:flex-start;">
@@ -11259,8 +11248,6 @@ if (!empty($_GET['ajax'])) {
                         </div>
                     </div>
                 <?php endforeach; ?>
-
-                <!-- Custom Collections -->
                 <?php foreach ($collections as $c): ?>
                     <div class="lf" style="cursor:pointer; transition:transform 0.2s; border-left:4px solid #4a90d9;" onclick="window.location='?page=collections&action=view&id=<?= $c['id'] ?>'" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
                         <div style="display:flex; justify-content:space-between; align-items:flex-start;">
@@ -11287,14 +11274,12 @@ if (!empty($_GET['ajax'])) {
                         </div>
                     </div>
                 <?php endforeach; ?>
-
                 <?php if (empty($categories) && empty($collections)): ?>
                     <div style="grid-column:1/-1; padding:30px; text-align:center; color:#888; border:2px dashed #ccc;">
                         No collections or categories found. Create a folder to group related records together!
                     </div>
                 <?php endif; ?>
             </div>
-
             <div id="colModal" class="modal-overlay">
                 <div class="modal" style="max-width:400px;">
                     <div class="modal-title-bar"><span>New Collection</span><button class="modal-close-btn" onclick="closeModal('colModal')">&times;</button></div>
@@ -11326,7 +11311,6 @@ if (!empty($_GET['ajax'])) {
         } elseif ($action === 'view') {
             $id = (int) $_GET['id'];
             $type = $_GET['type'] ?? 'collection';
-
             if ($type === 'category') {
                 $col = $pdo->prepare('SELECT * FROM categories WHERE id=?');
                 $col->execute([$id]);
@@ -11335,16 +11319,13 @@ if (!empty($_GET['ajax'])) {
                     header('Location: ?page=collections');
                     exit;
                 }
-
                 $prods = $pdo->prepare('SELECT p.* FROM products p WHERE p.category_id=? ORDER BY p.name');
                 $prods->execute([$id]);
                 $prods = $prods->fetchAll();
-
                 $totalStockCost = array_reduce($prods, fn($c, $i) => $c + ($i['current_stock'] * $i['purchase_price']), 0);
                 $totalStockSell = array_reduce($prods, fn($c, $i) => $c + ($i['current_stock'] * $i['selling_price']), 0);
                 $potentialProfit = $totalStockSell - $totalStockCost;
                 $lowStockCount = count(array_filter($prods, fn($i) => $i['current_stock'] <= $i['min_stock_level']));
-
                 ob_start();
                 ?>
                 <div class="page-header">
@@ -11354,7 +11335,6 @@ if (!empty($_GET['ajax'])) {
                         <a href="?page=collections" class="btn btn-secondary btn-sm">&#8592; Back</a>
                     </div>
                 </div>
-
                 <div class="stats-grid" style="margin-bottom:16px;">
                     <div class="stat-card primary">
                         <div class="stat-card-title">Products Count</div>
@@ -11377,13 +11357,11 @@ if (!empty($_GET['ajax'])) {
                         <div class="stat-card-sub">Gross margin if all sold</div>
                     </div>
                 </div>
-
                 <?php if ($col['description']): ?>
                     <div style="background:#fff; padding:10px 14px; border:1px solid #ccc; margin-bottom:16px; border-left:4px solid #f0ad4e; font-size:13px; color:#555;">
                         <?= nl2br(h($col['description'])) ?>
                     </div>
                 <?php endif; ?>
-
                 <div class="lf">
                     <span class="lf-title">Products in Category (<?= count($prods) ?>)</span>
                     <div class="tbl-wrap">
@@ -11407,7 +11385,6 @@ if (!empty($_GET['ajax'])) {
                 <?php
                 renderLayout('Category: ' . $col['name'], ob_get_clean(), 'collections');
             } else {
-                // Custom Collection
                 $col = $pdo->prepare('SELECT * FROM collections WHERE id=?');
                 $col->execute([$id]);
                 $col = $col->fetch();
@@ -11415,40 +11392,30 @@ if (!empty($_GET['ajax'])) {
                     header('Location: ?page=collections');
                     exit;
                 }
-
                 $prods = $pdo->prepare("SELECT p.*, ci.added_at FROM products p JOIN collection_items ci ON ci.item_id=p.id WHERE ci.collection_id=? AND ci.item_type='product' ORDER BY p.name");
                 $prods->execute([$id]);
                 $prods = $prods->fetchAll();
-
                 $custs = $pdo->prepare("SELECT c.*, ci.added_at FROM customers c JOIN collection_items ci ON ci.item_id=c.id WHERE ci.collection_id=? AND ci.item_type='customer' ORDER BY c.name");
                 $custs->execute([$id]);
                 $custs = $custs->fetchAll();
-
                 $sups = $pdo->prepare("SELECT s.*, ci.added_at FROM suppliers s JOIN collection_items ci ON ci.item_id=s.id WHERE ci.collection_id=? AND ci.item_type='supplier' ORDER BY s.company_name");
                 $sups->execute([$id]);
                 $sups = $sups->fetchAll();
-
                 $availProds = $pdo->prepare("SELECT id, name, sku FROM products WHERE status='active' AND id NOT IN (SELECT item_id FROM collection_items WHERE collection_id=? AND item_type='product') ORDER BY name");
                 $availProds->execute([$id]);
                 $availProds = $availProds->fetchAll();
-
                 $availCusts = $pdo->prepare("SELECT id, name FROM customers WHERE status='active' AND id NOT IN (SELECT item_id FROM collection_items WHERE collection_id=? AND item_type='customer') ORDER BY name");
                 $availCusts->execute([$id]);
                 $availCusts = $availCusts->fetchAll();
-
                 $availSups = $pdo->prepare("SELECT id, company_name FROM suppliers WHERE status='active' AND id NOT IN (SELECT item_id FROM collection_items WHERE collection_id=? AND item_type='supplier') ORDER BY company_name");
                 $availSups->execute([$id]);
                 $availSups = $availSups->fetchAll();
-
                 $totalStockCost = array_reduce($prods, fn($c, $i) => $c + ($i['current_stock'] * $i['purchase_price']), 0);
                 $totalStockSell = array_reduce($prods, fn($c, $i) => $c + ($i['current_stock'] * $i['selling_price']), 0);
                 $potentialProfit = $totalStockSell - $totalStockCost;
-                
                 $totalCustBal = array_reduce($custs, fn($c, $i) => $c + $i['current_balance'], 0);
                 $totalCustCredit = array_reduce($custs, fn($c, $i) => $c + $i['credit_limit'], 0);
-                
                 $totalSupBal = array_reduce($sups, fn($c, $i) => $c + $i['current_balance'], 0);
-
                 ob_start();
                 ?>
                 <div class="page-header">
@@ -11461,7 +11428,6 @@ if (!empty($_GET['ajax'])) {
                     <div class="alert alert-<?= h($_SESSION['flash_type']) ?>"><?= h($_SESSION['flash_msg']) ?></div>
                     <?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']); ?>
                 <?php endif; ?>
-
                 <div class="stats-grid" style="margin-bottom:16px;">
                     <div class="stat-card primary">
                         <div class="stat-card-title">Inventory Value (Cost)</div>
@@ -11484,16 +11450,12 @@ if (!empty($_GET['ajax'])) {
                         <div class="stat-card-sub">Owed to <?= count($sups) ?> suppliers</div>
                     </div>
                 </div>
-
                 <?php if ($col['description']): ?>
                     <div style="background:#fff; padding:10px 14px; border:1px solid #ccc; margin-bottom:16px; border-left:4px solid #4a90d9; font-size:13px; color:#555;">
                         <?= nl2br(h($col['description'])) ?>
                     </div>
                 <?php endif; ?>
-
                 <div class="cols-3" style="grid-template-columns: 1fr; gap:16px;">
-                    
-                    <!-- PRODUCTS -->
                     <div class="lf">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                             <span class="lf-title" style="position:static;">Products (<?= count($prods) ?>)</span>
@@ -11536,8 +11498,6 @@ if (!empty($_GET['ajax'])) {
                             </table>
                         </div>
                     </div>
-
-                    <!-- CUSTOMERS -->
                     <div class="lf">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                             <span class="lf-title" style="position:static;">Customers (<?= count($custs) ?>)</span>
@@ -11579,8 +11539,6 @@ if (!empty($_GET['ajax'])) {
                             </table>
                         </div>
                     </div>
-
-                    <!-- SUPPLIERS -->
                     <div class="lf">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                             <span class="lf-title" style="position:static;">Suppliers (<?= count($sups) ?>)</span>
