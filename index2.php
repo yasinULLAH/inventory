@@ -1912,7 +1912,7 @@ function renderLogin(?string $error = null): void
             </form>
         </div>
     </div>
-    </body>
+</body>
     </html>
     <?php
 }
@@ -3041,6 +3041,43 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
             .print-only {
                 display: none
             }
+            .print-mode-bar {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 8px 14px;
+                background: #fff3cd;
+                border: 1px solid #ffc107;
+                border-radius: 6px;
+                margin-bottom: 12px;
+                font-size: 13px;
+                font-weight: 600;
+                color: #856404;
+            }
+            .print-mode-bar label { font-weight: 600; margin-right: 4px; }
+            .print-mode-bar select {
+                padding: 4px 10px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                font-size: 13px;
+                background: #fff;
+            }
+            .print-mode-bar .btn-print-now {
+                padding: 5px 14px;
+                background: #0d6efd;
+                color: #fff;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 13px;
+                font-weight: 600;
+            }
+            .thermal-receipt {
+                display: none;
+            }
+            .a4-letterhead-header {
+                display: none;
+            }
             @media print {
                 * {
                     -webkit-print-color-adjust: exact !important;
@@ -3062,6 +3099,55 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
                 .tbl {
                     font-size: 10px
                 }
+                .print-mode-bar {
+                    display: none !important;
+                }
+                body.print-thermal {
+                    font-size: 11px;
+                    max-width: 80mm;
+                    margin: 0 auto;
+                }
+                body.print-thermal .lf,
+                body.print-thermal .print-po {
+                    max-width: 80mm;
+                    margin: 0 auto;
+                    padding: 4px;
+                }
+                body.print-thermal .cols-2 {
+                    display: block !important;
+                }
+                body.print-thermal .a4-letterhead-header { display: none !important; }
+                body.print-thermal .thermal-receipt { display: block !important; }
+                body.print-thermal .print-only.a4-header-block { display: none !important; }
+                body.print-thermal table.tbl th,
+                body.print-thermal table.tbl td {
+                    padding: 2px 4px !important;
+                    font-size: 10px !important;
+                }
+                body.print-thermal .tbl thead { border-top: 1px dashed #000; border-bottom: 1px dashed #000; }
+                body.print-thermal tfoot tr:last-child td { border-top: 1px dashed #000; }
+                body.print-thermal .tbl-wrap { overflow: visible !important; border: none !important; }
+                body.print-a4 {
+                    font-size: 12px;
+                }
+                body.print-a4 .lf,
+                body.print-a4 .print-po {
+                    max-width: 190mm;
+                    margin: 0 auto;
+                    padding: 0 10mm;
+                }
+                body.print-a4 .thermal-receipt { display: none !important; }
+                body.print-a4 .a4-letterhead-header { display: block !important; }
+                body.print-a4 .print-only.thermal-header-block { display: none !important; }
+                body.print-a4 .tbl { font-size: 11px; }
+                body.print-a4 .tbl th { background: #1a3a5c !important; color: #fff !important; }
+                body.print-a4 .tbl tfoot tr:last-child td {
+                    background: #1a3a5c !important;
+                    color: #fff !important;
+                    font-size: 13px !important;
+                }
+                body.print-a4 .cols-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+                @page { size: A4 portrait; margin: 15mm 10mm 15mm 10mm; }
             }
             @media (max-width: 900px) {
                 :root {
@@ -3540,7 +3626,6 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
         showToast(<?= json_encode($_SESSION['toast_msg']) ?>, <?= json_encode($_SESSION['toast_type'] ?? 'info') ?>);
         <?php unset($_SESSION['toast_msg'], $_SESSION['toast_type']);
     endif; ?>
-        // Kiosk mode
         (function () {
             if (!KIOSK_ENABLED) return;
             var pinBuffer = '';
@@ -3627,6 +3712,23 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
             });
             resetTimer();
         })();
+    </script>
+        <script>
+    function doPrint(selectId) {
+        var mode = document.getElementById(selectId) ? document.getElementById(selectId).value : 'thermal';
+        ['inv-print-mode','inv-print-mode-bar','po-print-mode','po-print-mode-bar'].forEach(function(id){
+            var el = document.getElementById(id);
+            if (el) el.value = mode;
+        });
+        document.body.classList.remove('print-thermal', 'print-a4');
+        document.body.classList.add(mode === 'a4' ? 'print-a4' : 'print-thermal');
+        window.print();
+        setTimeout(function(){ document.body.classList.remove('print-thermal','print-a4'); }, 2000);
+    }
+    document.addEventListener('DOMContentLoaded', function(){
+        var bars = document.querySelectorAll('.print-mode-bar select, .print-mode-inline select');
+        bars.forEach(function(s){ s.value = 'thermal'; });
+    });
     </script>
     <?php
 }
@@ -6410,7 +6512,13 @@ function renderPurchases(): void
                     <a href="?page=purchases&action=receive&id=<?= $id ?>" class="btn btn-success btn-sm">&#8595;
                         Receive Stock</a>
                 <?php endif; ?>
-                <button onclick="window.print()" class="btn btn-primary btn-sm">&#128438; Print</button>
+                <div style="display:inline-flex;gap:6px;align-items:center" class="print-mode-inline">
+                    <select id="po-print-mode" style="padding:4px 8px;border:1px solid #ccc;border-radius:4px;font-size:12px;font-weight:600;">
+                        <option value="thermal">🧾 Thermal Receipt</option>
+                        <option value="a4">📄 A4 Letterhead</option>
+                    </select>
+                    <button onclick="doPrint('po-print-mode')" class="btn btn-primary btn-sm">&#128438; Print</button>
+                </div>
                 <a href="?page=purchases" class="btn btn-secondary btn-sm">&#8592; Back</a>
             </div>
         </div>
@@ -6418,7 +6526,41 @@ function renderPurchases(): void
         <div
         class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?> no-print"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
+        <div class="print-mode-bar no-print">
+            <label>&#128438; Print as:</label>
+            <select id="po-print-mode-bar" onchange="document.getElementById('po-print-mode').value=this.value">
+                <option value="thermal">🧾 Thermal Receipt (80mm)</option>
+                <option value="a4">📄 A4 Letterhead</option>
+            </select>
+            <button class="btn-print-now" onclick="doPrint('po-print-mode-bar')">Print Now</button>
+        </div>
         <div class="lf print-po">
+            <div class="print-only thermal-header-block" style="margin-bottom:8px;text-align:center;">
+                <div style="font-size:14px;font-weight:700"><?= h($companyName) ?></div>
+                <div style="font-size:10px;color:#555"><?= h($companyAddress) ?> | <?= h($companyPhone) ?></div>
+                <div style="border-top:1px dashed #000;margin:6px 0;"></div>
+                <div style="font-size:13px;font-weight:700;letter-spacing:1px">PURCHASE ORDER</div>
+                <div style="font-size:11px;font-weight:700"><?= h($po['po_number']) ?></div>
+                <div style="font-size:10px">Date: <?= h($po['po_date']) ?> | Supplier: <?= h($po['company_name']) ?></div>
+                <div style="border-top:1px dashed #000;margin:6px 0;"></div>
+            </div>
+            <div class="a4-letterhead-header" style="margin-bottom:20px;">
+                <table style="width:100%;border-bottom:3px solid #1a3a5c;padding-bottom:12px;margin-bottom:16px;">
+                    <tr>
+                        <td style="vertical-align:top;width:60%">
+                            <div style="font-size:22px;font-weight:700;color:#1a3a5c"><?= h($companyName) ?></div>
+                            <div style="font-size:11px;color:#555;margin-top:4px"><?= h($companyAddress) ?></div>
+                            <div style="font-size:11px;color:#555"><?= h($companyPhone) ?></div>
+                        </td>
+                        <td style="text-align:right;vertical-align:top">
+                            <div style="font-size:26px;font-weight:800;color:#1a3a5c;letter-spacing:2px">PURCHASE ORDER</div>
+                            <div style="font-size:14px;font-weight:700;color:#333;margin-top:4px"><?= h($po['po_number']) ?></div>
+                            <div style="font-size:11px;color:#666;margin-top:2px">Date: <?= h($po['po_date']) ?></div>
+                            <div style="font-size:11px;color:#666">Expected: <?= h($po['expected_delivery'] ?? '-') ?></div>
+                        </td>
+                    </tr>
+                </table>
+            </div>
             <div class="print-only" style="margin-bottom:16px">
                 <h2 style="font-size:18px"><?= h($companyName) ?></h2>
                 <div style="font-size:12px"><?= h($companyAddress) ?> | <?= h($companyPhone) ?></div>
@@ -6549,6 +6691,25 @@ function renderPurchases(): void
             <?php if ($po['notes']): ?>
                 <div style="margin-top:12px;font-size:12px"><strong>Notes:</strong> <?= h($po['notes']) ?>
                 </div><?php endif; ?>
+            <div class="a4-letterhead-header" style="margin-top:40px;">
+                <table style="width:100%;font-size:11px;color:#444;">
+                    <tr>
+                        <td style="width:45%;border-top:1px solid #333;padding-top:6px;text-align:center">
+                            Authorized Signature
+                        </td>
+                        <td style="width:10%"></td>
+                        <td style="width:45%;border-top:1px solid #333;padding-top:6px;text-align:center">
+                            Supplier Signature
+                        </td>
+                    </tr>
+                </table>
+                <div style="margin-top:16px;font-size:10px;color:#888;border-top:1px solid #ddd;padding-top:8px">
+                    This is an official Purchase Order. Please deliver as per the terms above.
+                </div>
+            </div>
+            <div class="print-only" style="margin-top:20px;font-size:10px;text-align:center;color:#888;border-top:1px dashed #000;padding-top:6px">
+                Purchase Order &bull; <?= h($companyName) ?>
+            </div>
             <?php if (!empty($receipts)): ?>
                 <div class="no-print mt-8">
                     <h4 style="font-size:14px; margin-bottom:8px; border-bottom:1px solid #ccc; padding-bottom:4px;">
@@ -7288,7 +7449,13 @@ function renderSales(): void
                     </button>
                     <a href="?page=sales&action=edit&id=<?= $id ?>" class="btn btn-warning btn-sm">&#9998; Edit</a>
                 <?php endif; ?>
-                <button onclick="window.print()" class="btn btn-primary btn-sm">&#128438; Print</button>
+                <div style="display:inline-flex;gap:6px;align-items:center" class="print-mode-inline">
+                    <select id="inv-print-mode" style="padding:4px 8px;border:1px solid #ccc;border-radius:4px;font-size:12px;font-weight:600;">
+                        <option value="thermal">🧾 Thermal Receipt</option>
+                        <option value="a4">📄 A4 Letterhead</option>
+                    </select>
+                    <button onclick="doPrint('inv-print-mode')" class="btn btn-primary btn-sm">&#128438; Print</button>
+                </div>
                 <a href="?page=sales" class="btn btn-secondary btn-sm">&#8592; Back</a>
             </div>
         </div>
@@ -7296,17 +7463,39 @@ function renderSales(): void
         <div
         class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?> no-print"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
+        <div class="print-mode-bar no-print">
+            <label>&#128438; Print as:</label>
+            <select id="inv-print-mode-bar" onchange="document.getElementById('inv-print-mode').value=this.value">
+                <option value="thermal">🧾 Thermal Receipt (80mm)</option>
+                <option value="a4">📄 A4 Letterhead</option>
+            </select>
+            <button class="btn-print-now" onclick="doPrint('inv-print-mode-bar')">Print Now</button>
+        </div>
         <div class="lf">
-            <div class="print-only" style="margin-bottom:16px;border-bottom:2px solid #333;padding-bottom:12px">
-                <table style="width:100%">
+            <div class="print-only thermal-header-block" style="margin-bottom:8px;text-align:center;">
+                <div style="font-size:14px;font-weight:700"><?= h($companyName) ?></div>
+                <div style="font-size:10px;color:#555"><?= h($companyAddress) ?></div>
+                <div style="font-size:10px;color:#555"><?= h($companyPhone) ?> | <?= h($companyEmail) ?></div>
+                <div style="border-top:1px dashed #000;margin:6px 0;"></div>
+                <div style="font-size:13px;font-weight:700;letter-spacing:1px">INVOICE</div>
+                <div style="font-size:11px;font-weight:700"><?= h($inv['invoice_number']) ?></div>
+                <div style="font-size:10px">Date: <?= h($inv['invoice_date']) ?> | Due: <?= h($inv['due_date'] ?? '-') ?></div>
+                <div style="font-size:10px">Customer: <?= h($inv['customer_name']) ?></div>
+                <div style="border-top:1px dashed #000;margin:6px 0;"></div>
+            </div>
+            <div class="a4-letterhead-header" style="margin-bottom:20px;">
+                <table style="width:100%;border-bottom:3px solid #1a3a5c;padding-bottom:12px;margin-bottom:16px;">
                     <tr>
-                        <td><h2 style="font-size:20px;font-weight:700"><?= h($companyName) ?></h2>
-                            <div style="font-size:11px;color:#555"><?= h($companyAddress) ?><br><?= h($companyPhone) ?>
-                                | <?= h($companyEmail) ?></div>
+                        <td style="vertical-align:top;width:60%">
+                            <div style="font-size:22px;font-weight:700;color:#1a3a5c"><?= h($companyName) ?></div>
+                            <div style="font-size:11px;color:#555;margin-top:4px"><?= h($companyAddress) ?></div>
+                            <div style="font-size:11px;color:#555"><?= h($companyPhone) ?> &nbsp;|&nbsp; <?= h($companyEmail) ?></div>
                         </td>
-                        <td style="text-align:right">
-                            <div style="font-size:24px;font-weight:700;color:#4a90d9">INVOICE</div>
-                            <div style="font-size:14px;font-weight:700"><?= h($inv['invoice_number']) ?></div>
+                        <td style="text-align:right;vertical-align:top">
+                            <div style="font-size:28px;font-weight:800;color:#1a3a5c;letter-spacing:2px">INVOICE</div>
+                            <div style="font-size:14px;font-weight:700;color:#333;margin-top:4px"><?= h($inv['invoice_number']) ?></div>
+                            <div style="font-size:11px;color:#666;margin-top:2px">Date: <?= h($inv['invoice_date']) ?></div>
+                            <div style="font-size:11px;color:#666">Due: <?= h($inv['due_date'] ?? '-') ?></div>
                         </td>
                     </tr>
                 </table>
@@ -7462,6 +7651,22 @@ function renderSales(): void
                     </table>
                 </div>
             <?php endif; ?>
+            <div class="a4-letterhead-header" style="margin-top:40px;">
+                <table style="width:100%;font-size:11px;color:#444;">
+                    <tr>
+                        <td style="width:45%;border-top:1px solid #333;padding-top:6px;text-align:center">
+                            Authorized Signature
+                        </td>
+                        <td style="width:10%"></td>
+                        <td style="width:45%;border-top:1px solid #333;padding-top:6px;text-align:center">
+                            Customer Signature
+                        </td>
+                    </tr>
+                </table>
+                <div style="margin-top:16px;font-size:10px;color:#888;border-top:1px solid #ddd;padding-top:8px">
+                    Terms & Conditions: Payment is due by the date specified above. Thank you for your business.
+                </div>
+            </div>
             <div class="print-only"
                  style="margin-top:30px;font-size:11px;text-align:center;color:#888;border-top:1px solid #ccc;padding-top:8px">
                 Thank you for your business! &bull; <?= h($companyName) ?></div>
@@ -8979,8 +9184,6 @@ function requirePermission(string $module, string $action): void
     }
 }
 
-// initializeDatabase();
-// upgradeDatabase();
 $currentPage = $_GET['page'] ?? 'dashboard';
 if (!empty($_GET['ajax'])) {
     handleAjax();
