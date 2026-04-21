@@ -763,6 +763,9 @@ function seedDatabase(PDO $pdo): void
         ['timezone', 'Asia/Karachi'],
         ['low_stock_threshold', '10'],
         ['items_per_page', '20'],
+        ['kiosk_enabled', '0'],
+        ['kiosk_pin_hash', ''],
+        ['kiosk_timeout', '300'],
     ];
     $stmtS = $pdo->prepare('INSERT IGNORE INTO `settings` (`setting_key`,`setting_value`) VALUES (?,?)');
     foreach ($settingsData as $s) {
@@ -1625,7 +1628,7 @@ function getUnreadNotificationCount(): int
 
 function getDefaultPage(): string
 {
-    if (!isset($_SESSION['user_id']))
+    if (!isLoggedIn())
         return 'login';
     $pdo = getPDO();
     $stmt = $pdo->prepare('SELECT r.name FROM users u JOIN roles r ON u.role_id=r.id WHERE u.id=?');
@@ -3212,6 +3215,9 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
     endif; ?>
                 </div>
             </div>
+            <?php if (getSetting('kiosk_enabled') === '1'): ?>
+            <button class="notif-btn" onclick="kioskLock()" id="kiosk-lock-btn" title="Lock Screen" style="font-size:15px">&#128274;</button>
+            <?php endif; ?>
             <div class="user-menu-wrap">
                 <button class="user-btn" onclick="toggleUserMenu()">
                     &#128100; <?= h($user['name']) ?> <small>[<?= h($user['role']) ?>]</small> &#9660;
@@ -3297,10 +3303,44 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
         <span class="sb-item">Page: <?= h(ucfirst($activePage)) ?></span>
         <span id="clock" class="sb-item"></span>
     </footer>
+    <?php if (getSetting('kiosk_enabled') === '1'): ?>
+    <div id="kiosk-overlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(10,20,40,0.97);align-items:center;justify-content:center;flex-direction:column">
+        <div style="text-align:center;color:#fff;max-width:340px;width:90%;padding:40px 30px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.5)">
+            <div style="font-size:48px;margin-bottom:8px">&#128274;</div>
+            <div style="font-size:22px;font-weight:700;margin-bottom:4px"><?= h(APP_NAME) ?></div>
+            <div style="font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:28px">Screen Locked &mdash; Enter PIN to continue</div>
+            <div id="kiosk-pin-dots" style="display:flex;justify-content:center;gap:12px;margin-bottom:8px">
+                <span class="kiosk-dot"></span><span class="kiosk-dot"></span><span class="kiosk-dot"></span><span class="kiosk-dot"></span>
+            </div>
+            <div id="kiosk-error" style="color:#f87171;font-size:12px;min-height:20px;margin-bottom:14px;"></div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:0">
+                <?php foreach (['1','2','3','4','5','6','7','8','9'] as $d): ?>
+                <button onclick="kioskPinInput('<?= $d ?>')" class="kiosk-pad-btn"><?= $d ?></button>
+                <?php endforeach; ?>
+                <button onclick="kioskPinBackspace()" class="kiosk-pad-btn kiosk-pad-alt" title="Backspace">&#9003;</button>
+                <button onclick="kioskPinInput('0')" class="kiosk-pad-btn">0</button>
+                <button onclick="kioskSubmitPin()" class="kiosk-pad-btn kiosk-pad-ok" title="Unlock">&#10003;</button>
+            </div>
+        </div>
+    </div>
+    <style>
+        .kiosk-dot{display:inline-block;width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,0.35);background:transparent;transition:background .15s,border-color .15s}
+        .kiosk-dot.filled{background:#4a90d9;border-color:#4a90d9}
+        .kiosk-pad-btn{background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.15);color:#fff;padding:15px 10px;font-size:18px;font-weight:600;border-radius:8px;cursor:pointer;transition:background .15s,transform .1s;font-family:var(--font)}
+        .kiosk-pad-btn:hover{background:rgba(255,255,255,0.2)}
+        .kiosk-pad-btn:active{transform:scale(0.94)}
+        .kiosk-pad-alt{background:rgba(255,255,255,0.06);color:#bbb;font-size:16px}
+        .kiosk-pad-alt:hover{background:rgba(255,255,255,0.13)}
+        .kiosk-pad-ok{background:#4a90d9;border-color:#357abd;font-size:16px}
+        .kiosk-pad-ok:hover{background:#357abd}
+    </style>
+    <?php endif; ?>
     <script>
         var CSRF_TOKEN = <?= json_encode(csrf()) ?>;
         var CURRENCY = <?= json_encode(getSetting('currency_symbol') ?: 'Rs.') ?>;
         var TAX_PCT = <?= json_encode((float) getSetting('default_tax_percent') / 100) ?>;
+        var KIOSK_ENABLED = <?= json_encode(getSetting('kiosk_enabled') === '1') ?>;
+        var KIOSK_TIMEOUT = <?= json_encode((int)(getSetting('kiosk_timeout') ?: 300)) ?>;
         function toggleSidebar() {
             const isMobile = window.innerWidth <= 900;
             if (isMobile) {
@@ -3448,6 +3488,84 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
         showToast(<?= json_encode($_SESSION['toast_msg']) ?>, <?= json_encode($_SESSION['toast_type'] ?? 'info') ?>);
         <?php unset($_SESSION['toast_msg'], $_SESSION['toast_type']);
     endif; ?>
+        // Kiosk mode
+        (function() {
+            if (!KIOSK_ENABLED) return;
+            var pinBuffer = '';
+            var timer = null;
+            var locked = false;
+            var overlay = document.getElementById('kiosk-overlay');
+            function lock() {
+                if (locked) return;
+                locked = true;
+                pinBuffer = '';
+                overlay.style.display = 'flex';
+                updateDots();
+                document.getElementById('kiosk-error').textContent = '';
+                clearTimeout(timer);
+            }
+            function unlock() {
+                locked = false;
+                overlay.style.display = 'none';
+                resetTimer();
+            }
+            function resetTimer() {
+                clearTimeout(timer);
+                timer = setTimeout(lock, KIOSK_TIMEOUT * 1000);
+            }
+            function updateDots() {
+                var html = '';
+                var total = Math.max(4, pinBuffer.length);
+                for (var i = 0; i < total; i++) {
+                    html += '<span class="kiosk-dot' + (i < pinBuffer.length ? ' filled' : '') + '"></span>';
+                }
+                document.getElementById('kiosk-pin-dots').innerHTML = html;
+            }
+            window.kioskLock = lock;
+            window.kioskPinInput = function(d) {
+                if (!locked || pinBuffer.length >= 8) return;
+                pinBuffer += d;
+                updateDots();
+                document.getElementById('kiosk-error').textContent = '';
+            };
+            window.kioskPinBackspace = function() {
+                if (!locked) return;
+                pinBuffer = pinBuffer.slice(0, -1);
+                updateDots();
+            };
+            window.kioskSubmitPin = function() {
+                if (!locked) return;
+                if (pinBuffer.length < 4) {
+                    document.getElementById('kiosk-error').textContent = 'Enter at least 4 digits';
+                    return;
+                }
+                fetch('?ajax=kiosk_verify_pin', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN},
+                    body: JSON.stringify({pin: pinBuffer})
+                }).then(function(r) { return r.json(); }).then(function(d) {
+                    if (d.success) {
+                        unlock();
+                    } else {
+                        document.getElementById('kiosk-error').textContent = d.msg || 'Incorrect PIN';
+                        pinBuffer = '';
+                        updateDots();
+                    }
+                }).catch(function() {
+                    document.getElementById('kiosk-error').textContent = 'Network error. Try again.';
+                });
+            };
+            document.addEventListener('keydown', function(e) {
+                if (!locked) { resetTimer(); return; }
+                if (e.key >= '0' && e.key <= '9') window.kioskPinInput(e.key);
+                else if (e.key === 'Backspace') { e.preventDefault(); window.kioskPinBackspace(); }
+                else if (e.key === 'Enter') window.kioskSubmitPin();
+            });
+            ['mousemove','mousedown','touchstart','scroll'].forEach(function(ev) {
+                document.addEventListener(ev, function() { if (!locked) resetTimer(); }, {passive: true});
+            });
+            resetTimer();
+        })();
     </script>
     <?php
 }
@@ -8079,8 +8197,23 @@ function renderSettings(): void
             echo "SET FOREIGN_KEY_CHECKS=1;\n";
             exit;
         }
-        $msg = 'Settings saved.';
-        $msgType = 'success';
+        if ($section === 'kiosk' && isset($_POST['kiosk_new_pin']) && $_POST['kiosk_new_pin'] !== '') {
+            $np = trim($_POST['kiosk_new_pin']);
+            $cp = trim($_POST['kiosk_confirm_pin'] ?? '');
+            if ($np !== $cp) {
+                $msg = 'PINs do not match.';
+                $msgType = 'error';
+            } elseif (!preg_match('/^\d{4,8}$/', $np)) {
+                $msg = 'PIN must be 4–8 digits only.';
+                $msgType = 'error';
+            } else {
+                setSetting('kiosk_pin_hash', password_hash($np, PASSWORD_BCRYPT, ['cost' => 10]));
+            }
+        }
+        if (empty($msg)) {
+            $msg = 'Settings saved.';
+            $msgType = 'success';
+        }
         logActivity($_SESSION['user_id'], 'UPDATE', 'settings', 'Updated system settings');
     }
     $settingKeys = ['company' => ['company_name' => 'Company Name', 'company_address' => 'Address', 'company_phone' => 'Phone', 'company_email' => 'Email', 'company_website' => 'Website', 'company_tax_number' => 'Tax Number', 'company_logo_url' => 'Logo URL (External)', 'company_logo_file' => 'Logo Upload (File)'], 'invoice' => ['invoice_prefix' => 'Invoice Prefix', 'invoice_start_number' => 'Starting Number', 'po_prefix' => 'PO Prefix', 'po_start_number' => 'PO Starting Number', 'default_tax_percent' => 'Default Tax %', 'default_payment_terms' => 'Default Payment Terms'], 'system' => ['currency_symbol' => 'Currency Symbol', 'currency_code' => 'Currency Code', 'date_format' => 'Date Format', 'timezone' => 'Timezone', 'low_stock_threshold' => 'Low Stock Threshold', 'items_per_page' => 'Items Per Page']];
@@ -8090,13 +8223,13 @@ function renderSettings(): void
     <?php if ($msg): ?>
     <div class="alert alert-<?= h($msgType) ?>"><?= h($msg) ?></div><?php endif; ?>
     <div style="display:flex;gap:0;margin-bottom:12px;border-bottom:2px solid #a0a0a0">
-        <?php $sections = ['company' => '&#127970; Company', 'invoice' => '&#128203; Invoice', 'system' => '&#9881; System', 'backup' => '&#128190; Backup'];
+        <?php $sections = ['company' => '&#127970; Company', 'invoice' => '&#128203; Invoice', 'system' => '&#9881; System', 'kiosk' => '&#128274; Kiosk', 'backup' => '&#128190; Backup'];
         foreach ($sections as $k => $v): ?>
             <a href="?page=settings&section=<?= $k ?>"
                style="padding:8px 16px;text-decoration:none;font-size:12px;font-weight:600;border:1px solid #a0a0a0;border-bottom:none;background:<?= $section === $k ? '#f0f0f0' : '#d0d0d0' ?>;color:<?= $section === $k ? '#000' : '#555' ?>;margin-right:2px"><?= $v ?></a>
         <?php endforeach; ?>
     </div>
-<?php if ($section !== 'backup' && isset($settingKeys[$section])): ?>
+<?php if ($section !== 'backup' && $section !== 'kiosk' && isset($settingKeys[$section])): ?>
     <form method="POST" action="?page=settings&section=<?= h($section) ?>" enctype="multipart/form-data">
         <?= csrfField() ?>
         <div class="lf"><span
@@ -8118,6 +8251,46 @@ function renderSettings(): void
             </div>
         </div>
         <button type="submit" class="btn btn-success">&#10003; Save Settings</button>
+    </form>
+<?php elseif ($section === 'kiosk'): ?>
+    <form method="POST" action="?page=settings&section=kiosk">
+        <?= csrfField() ?>
+        <div class="lf"><span class="lf-title">&#128274; Kiosk / Lock Screen Settings</span>
+            <div class="form-grid form-grid-2">
+                <div class="form-group">
+                    <label>Kiosk Mode</label>
+                    <select name="setting_kiosk_enabled">
+                        <option value="1" <?= getSetting('kiosk_enabled') === '1' ? 'selected' : '' ?>>Enabled</option>
+                        <option value="0" <?= getSetting('kiosk_enabled') !== '1' ? 'selected' : '' ?>>Disabled</option>
+                    </select>
+                    <small style="color:#666;display:block;margin-top:4px">When enabled, the screen auto-locks after inactivity and shows a lock button in the header.</small>
+                </div>
+                <div class="form-group">
+                    <label>Auto-lock Timeout (seconds)</label>
+                    <input type="number" name="setting_kiosk_timeout" value="<?= h(getSetting('kiosk_timeout') ?: '300') ?>" min="30" max="86400">
+                    <small style="color:#666;display:block;margin-top:4px">e.g. 300 = 5 min &bull; 600 = 10 min &bull; 1800 = 30 min</small>
+                </div>
+            </div>
+        </div>
+        <div class="lf" style="margin-top:12px"><span class="lf-title">&#128273; Change PIN</span>
+            <p style="font-size:12px;color:#555;margin-bottom:12px">PIN must be 4–8 digits. Leave blank to keep the existing PIN.</p>
+            <?php if (!getSetting('kiosk_pin_hash')): ?>
+            <div style="display:inline-flex;align-items:center;gap:6px;background:#fff3cd;border:1px solid #ffc107;padding:8px 12px;border-radius:4px;font-size:12px;margin-bottom:12px">
+                &#9888; No PIN configured yet. Set a PIN before enabling kiosk mode.
+            </div>
+            <?php endif; ?>
+            <div class="form-grid form-grid-2">
+                <div class="form-group">
+                    <label>New PIN (4–8 digits)</label>
+                    <input type="password" name="kiosk_new_pin" placeholder="Enter new PIN" maxlength="8" inputmode="numeric" pattern="\d{4,8}" autocomplete="new-password">
+                </div>
+                <div class="form-group">
+                    <label>Confirm New PIN</label>
+                    <input type="password" name="kiosk_confirm_pin" placeholder="Re-enter new PIN" maxlength="8" inputmode="numeric" pattern="\d{4,8}" autocomplete="new-password">
+                </div>
+            </div>
+        </div>
+        <button type="submit" class="btn btn-success">&#10003; Save Kiosk Settings</button>
     </form>
 <?php elseif ($section === 'backup'): ?>
     <div class="lf"><span class="lf-title">&#128190; Database Backup &amp; Restore</span>
@@ -8639,6 +8812,19 @@ function handleAjax(): void
     } elseif ($endpoint === 'mark_all_notif_read') {
         $pdo->prepare('UPDATE notifications SET is_read=1 WHERE is_read=0')->execute();
         echo json_encode(['success' => true]);
+    } elseif ($endpoint === 'kiosk_verify_pin') {
+        $pin = trim($data['pin'] ?? '');
+        $hash = getSetting('kiosk_pin_hash');
+        if (empty($hash)) {
+            echo json_encode(['success' => false, 'msg' => 'No PIN set. Configure a PIN in Settings > Kiosk.']);
+        } elseif (!preg_match('/^\d{4,8}$/', $pin)) {
+            echo json_encode(['success' => false, 'msg' => 'Invalid PIN format']);
+        } elseif (password_verify($pin, $hash)) {
+            logActivity($_SESSION['user_id'], 'UNLOCK', 'kiosk', 'Kiosk screen unlocked');
+            echo json_encode(['success' => true]);
+        } else {
+            echo json_encode(['success' => false, 'msg' => 'Incorrect PIN. Try again.']);
+        }
     } else {
         echo json_encode(['success' => false, 'msg' => 'Unknown endpoint']);
     }
@@ -8651,7 +8837,7 @@ $currentPage = $_GET['page'] ?? 'dashboard';
 if (!empty($_GET['ajax'])) {
     handleAjax();
 } elseif ($currentPage === 'login') {
-    if (isset($_SESSION['user_id'])) {
+    if (isLoggedIn()) {
         header('Location: ?page=' . getDefaultPage());
         exit;
     }
@@ -8659,7 +8845,7 @@ if (!empty($_GET['ajax'])) {
     renderLogin($loginError);
 } elseif ($currentPage === 'logout') {
     handleLogout();
-} elseif (!isset($_SESSION['user_id'])) {
+} elseif (!isLoggedIn()) {
     header('Location: ?page=login');
     exit;
 } else {
