@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3306
--- Generation Time: Apr 21, 2026 at 06:17 AM
+-- Generation Time: Apr 21, 2026 at 12:58 PM
 -- Server version: 8.2.0
 -- PHP Version: 8.3.0
 
@@ -56,7 +56,16 @@ INSERT INTO `activity_log` (`id`, `user_id`, `action`, `module`, `description`, 
 (12, 2, 'LOGIN', 'auth', 'User logged in from ::1', '::1', '2026-04-20 18:44:39'),
 (13, 2, 'LOGOUT', 'auth', 'User logged out', '::1', '2026-04-20 18:50:29'),
 (14, 1, 'LOGIN', 'auth', 'User logged in from ::1', '::1', '2026-04-20 18:50:55'),
-(15, 1, 'LOGIN', 'auth', 'User logged in from ::1', '::1', '2026-04-21 04:59:53');
+(15, 1, 'LOGIN', 'auth', 'User logged in from ::1', '::1', '2026-04-21 04:59:53'),
+(16, 1, 'LOGIN', 'auth', 'User logged in from ::1', '::1', '2026-04-21 06:06:40'),
+(17, 1, 'LOGIN', 'auth', 'User logged in from ::1', '::1', '2026-04-21 10:15:52'),
+(18, 1, 'CREATE', 'pos', 'Created POS invoice INV-20260421-001', '::1', '2026-04-21 10:41:53'),
+(19, 1, 'CREATE', 'pos', 'Created POS invoice INV-20260421-002', '::1', '2026-04-21 10:43:20'),
+(20, 1, 'CREATE', 'pos', 'Created POS invoice INV-20260421-003', '::1', '2026-04-21 11:18:41'),
+(21, 1, 'CREATE', 'pos', 'Created POS invoice INV-20260421-004', '::1', '2026-04-21 11:47:43'),
+(22, 1, 'CREATE', 'pos', 'Created POS invoice INV-20260421-005', '::1', '2026-04-21 11:47:58'),
+(23, 1, 'UPDATE', 'settings', 'Updated system settings', '::1', '2026-04-21 11:50:22'),
+(24, 1, 'CREATE', 'pos', 'Created POS invoice INV-20260421-006', '::1', '2026-04-21 11:58:04');
 
 -- --------------------------------------------------------
 
@@ -135,6 +144,13 @@ CREATE TABLE `collections` (
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+--
+-- Dumping data for table `collections`
+--
+
+INSERT INTO `collections` (`id`, `name`, `description`, `status`, `created_by`, `created_at`) VALUES
+(1, 'best customer', '', 'active', 1, '2026-04-21 05:19:35');
+
 -- --------------------------------------------------------
 
 --
@@ -147,6 +163,14 @@ CREATE TABLE `collection_items` (
   `item_id` int UNSIGNED NOT NULL,
   `added_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Dumping data for table `collection_items`
+--
+
+INSERT INTO `collection_items` (`collection_id`, `item_type`, `item_id`, `added_at`) VALUES
+(1, 'customer', 1, '2026-04-21 05:19:49'),
+(1, 'customer', 2, '2026-04-21 05:19:55');
 
 -- --------------------------------------------------------
 
@@ -231,7 +255,13 @@ CREATE TABLE `customer_ledgers` (
 
 INSERT INTO `customer_ledgers` (`id`, `customer_id`, `transaction_date`, `reference_type`, `reference_id`, `debit`, `credit`, `balance`, `notes`) VALUES
 (1, 1, '2026-04-20', 'invoice', 2, 643.50, 500.00, 143.50, 'POS Sale #INV-20260420-002'),
-(2, 1, '2026-04-20', 'payment', 1, 0.00, 143.50, 0.00, 'Payment for Invoice #INV-20260420-002');
+(2, 1, '2026-04-20', 'payment', 1, 0.00, 143.50, 0.00, 'Payment for Invoice #INV-20260420-002'),
+(3, 4, '2026-04-21', 'invoice', 3, 643.50, 643.50, 0.00, 'POS Sale #INV-20260421-001'),
+(4, 4, '2026-04-21', 'invoice', 4, 643.50, 643.50, 0.00, 'POS Sale #INV-20260421-002'),
+(5, 4, '2026-04-21', 'invoice', 5, 29248.83, 29248.83, 0.00, 'POS Sale #INV-20260421-003'),
+(6, 4, '2026-04-21', 'invoice', 6, 643.50, 643.50, 0.00, 'POS Sale #INV-20260421-004'),
+(7, 4, '2026-04-21', 'invoice', 7, 588.50, 588.50, 0.00, 'POS Sale #INV-20260421-005'),
+(8, 4, '2026-04-21', 'invoice', 8, 566.50, 566.50, 0.00, 'POS Sale #INV-20260421-006');
 
 -- --------------------------------------------------------
 
@@ -292,6 +322,7 @@ CREATE TABLE `invoices` (
   `id` int UNSIGNED NOT NULL,
   `invoice_number` varchar(30) NOT NULL,
   `customer_id` int UNSIGNED NOT NULL,
+  `walkin_name` varchar(150) DEFAULT NULL,
   `invoice_date` date NOT NULL,
   `due_date` date DEFAULT NULL,
   `subtotal` decimal(15,2) NOT NULL DEFAULT '0.00',
@@ -310,9 +341,15 @@ CREATE TABLE `invoices` (
 -- Dumping data for table `invoices`
 --
 
-INSERT INTO `invoices` (`id`, `invoice_number`, `customer_id`, `invoice_date`, `due_date`, `subtotal`, `tax_percent`, `discount`, `total_amount`, `payment_status`, `payment_method`, `notes`, `created_by`, `created_at`, `updated_at`) VALUES
-(1, 'INV-20260420-001', 1, '2026-04-20', NULL, 24999.00, 17.00, 0.00, 29248.83, 'paid', 'cash', NULL, 1, '2026-04-20 15:56:45', '2026-04-20 15:56:45'),
-(2, 'INV-20260420-002', 1, '2026-04-20', NULL, 550.00, 17.00, 0.00, 643.50, 'paid', 'cash', NULL, 1, '2026-04-20 18:09:01', '2026-04-20 18:19:35');
+INSERT INTO `invoices` (`id`, `invoice_number`, `customer_id`, `walkin_name`, `invoice_date`, `due_date`, `subtotal`, `tax_percent`, `discount`, `total_amount`, `payment_status`, `payment_method`, `notes`, `created_by`, `created_at`, `updated_at`) VALUES
+(1, 'INV-20260420-001', 1, NULL, '2026-04-20', NULL, 24999.00, 17.00, 0.00, 29248.83, 'paid', 'cash', NULL, 1, '2026-04-20 15:56:45', '2026-04-20 15:56:45'),
+(2, 'INV-20260420-002', 1, NULL, '2026-04-20', NULL, 550.00, 17.00, 0.00, 643.50, 'paid', 'cash', NULL, 1, '2026-04-20 18:09:01', '2026-04-20 18:19:35'),
+(3, 'INV-20260421-001', 4, NULL, '2026-04-21', NULL, 550.00, 17.00, 0.00, 643.50, 'paid', 'cash', NULL, 1, '2026-04-21 10:41:53', '2026-04-21 10:41:53'),
+(4, 'INV-20260421-002', 4, NULL, '2026-04-21', NULL, 550.00, 17.00, 0.00, 643.50, 'paid', 'cash', NULL, 1, '2026-04-21 10:43:20', '2026-04-21 10:43:20'),
+(5, 'INV-20260421-003', 4, NULL, '2026-04-21', NULL, 24999.00, 17.00, 0.00, 29248.83, 'paid', 'cash', NULL, 1, '2026-04-21 11:18:41', '2026-04-21 11:18:41'),
+(6, 'INV-20260421-004', 4, NULL, '2026-04-21', NULL, 550.00, 17.00, 0.00, 643.50, 'paid', 'cash', NULL, 1, '2026-04-21 11:47:43', '2026-04-21 11:47:43'),
+(7, 'INV-20260421-005', 4, NULL, '2026-04-21', NULL, 550.00, 17.00, 55.00, 588.50, 'paid', 'cash', NULL, 1, '2026-04-21 11:47:58', '2026-04-21 11:47:58'),
+(8, 'INV-20260421-006', 4, 'Khan Gull', '2026-04-21', NULL, 550.00, 3.00, 0.00, 566.50, 'paid', 'cash', NULL, 1, '2026-04-21 11:58:04', '2026-04-21 11:58:04');
 
 -- --------------------------------------------------------
 
@@ -336,7 +373,13 @@ CREATE TABLE `invoice_items` (
 
 INSERT INTO `invoice_items` (`id`, `invoice_id`, `product_id`, `quantity`, `unit_price`, `discount_pct`, `total_price`) VALUES
 (1, 1, 3, 1, 24999.00, 0.00, 24999.00),
-(2, 2, 4, 1, 550.00, 0.00, 550.00);
+(2, 2, 4, 1, 550.00, 0.00, 550.00),
+(3, 3, 4, 1, 550.00, 0.00, 550.00),
+(4, 4, 4, 1, 550.00, 0.00, 550.00),
+(5, 5, 3, 1, 24999.00, 0.00, 24999.00),
+(6, 6, 4, 1, 550.00, 0.00, 550.00),
+(7, 7, 4, 1, 550.00, 0.00, 550.00),
+(8, 8, 4, 1, 550.00, 0.00, 550.00);
 
 -- --------------------------------------------------------
 
@@ -365,7 +408,9 @@ INSERT INTO `login_log` (`id`, `username`, `ip_address`, `status`, `user_agent`,
 (5, 'manager1', '::1', 'success', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36', '2026-04-20 18:31:11'),
 (6, 'manager1', '::1', 'success', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36', '2026-04-20 18:44:39'),
 (7, 'admin', '::1', 'success', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36', '2026-04-20 18:50:55'),
-(8, 'admin', '::1', 'success', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36', '2026-04-21 04:59:53');
+(8, 'admin', '::1', 'success', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36', '2026-04-21 04:59:53'),
+(9, 'admin', '::1', 'success', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Mobile Safari/537.36', '2026-04-21 06:06:39'),
+(10, 'admin', '::1', 'success', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36', '2026-04-21 10:15:52');
 
 -- --------------------------------------------------------
 
@@ -511,8 +556,8 @@ CREATE TABLE `products` (
 INSERT INTO `products` (`id`, `parent_id`, `is_variant`, `is_composite`, `sku`, `name`, `description`, `category_id`, `brand`, `unit`, `purchase_price`, `selling_price`, `tax_id`, `current_stock`, `min_stock_level`, `max_stock_level`, `warehouse_id`, `barcode`, `image_url`, `image_path`, `track_serial`, `track_batch`, `status`, `created_at`, `updated_at`) VALUES
 (1, NULL, 0, 0, 'SKU-00001', 'Dell Inspiron 15 Laptop', '15.6 inch FHD, Intel Core i5, 8GB RAM, 512GB SSD', 5, 'Dell', 'pcs', 85000.00, 99999.00, NULL, 15, 3, 50, 1, '8001234567890', NULL, NULL, 0, 0, 'active', '2026-04-20 07:09:17', '2026-04-20 07:09:17'),
 (2, NULL, 0, 0, 'SKU-00002', 'Samsung Galaxy A54', '6.4 inch Super AMOLED, 128GB, 8GB RAM', 6, 'Samsung', 'pcs', 45000.00, 54999.00, NULL, 8, 5, 100, 1, '8009876543210', NULL, NULL, 0, 0, 'active', '2026-04-20 07:09:17', '2026-04-20 07:09:17'),
-(3, NULL, 0, 0, 'SKU-00003', 'Ergonomic Office Chair', 'Mesh back, adjustable height, lumbar support', 7, 'Herman Miller', 'pcs', 18000.00, 24999.00, NULL, 24, 5, 80, 2, '8005555555555', NULL, NULL, 0, 0, 'active', '2026-04-20 07:09:17', '2026-04-20 15:56:45'),
-(4, NULL, 0, 0, 'SKU-00004', 'Ballpoint Pens Box (50 pcs)', 'Blue ink, medium point, smooth writing', 8, 'Pilot', 'box', 350.00, 550.00, NULL, 119, 20, 500, 2, '8007777777777', NULL, NULL, 0, 0, 'active', '2026-04-20 07:09:17', '2026-04-20 18:09:01');
+(3, NULL, 0, 0, 'SKU-00003', 'Ergonomic Office Chair', 'Mesh back, adjustable height, lumbar support', 7, 'Herman Miller', 'pcs', 18000.00, 24999.00, NULL, 23, 5, 80, 2, '8005555555555', NULL, NULL, 0, 0, 'active', '2026-04-20 07:09:17', '2026-04-21 11:18:41'),
+(4, NULL, 0, 0, 'SKU-00004', 'Ballpoint Pens Box (50 pcs)', 'Blue ink, medium point, smooth writing', 8, 'Pilot', 'box', 350.00, 550.00, NULL, 114, 20, 500, 2, '8007777777777', NULL, NULL, 0, 0, 'active', '2026-04-20 07:09:17', '2026-04-21 11:58:04');
 
 -- --------------------------------------------------------
 
@@ -857,7 +902,7 @@ INSERT INTO `settings` (`id`, `setting_key`, `setting_value`, `created_at`, `upd
 (9, 'invoice_start_number', '1001', '2026-04-20 07:09:17', '2026-04-20 07:09:17'),
 (10, 'po_prefix', 'PO', '2026-04-20 07:09:17', '2026-04-20 07:09:17'),
 (11, 'po_start_number', '1001', '2026-04-20 07:09:17', '2026-04-20 07:09:17'),
-(12, 'default_tax_percent', '17', '2026-04-20 07:09:17', '2026-04-20 07:09:17'),
+(12, 'default_tax_percent', '3', '2026-04-20 07:09:17', '2026-04-21 11:50:22'),
 (13, 'default_payment_terms', 'Net 30', '2026-04-20 07:09:17', '2026-04-20 07:09:17'),
 (14, 'currency_symbol', 'Rs.', '2026-04-20 07:09:17', '2026-04-20 07:09:17'),
 (15, 'currency_code', 'PKR', '2026-04-20 07:09:17', '2026-04-20 07:09:17'),
@@ -888,6 +933,21 @@ CREATE TABLE `shifts` (
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `sms_logs`
+--
+
+CREATE TABLE `sms_logs` (
+  `id` int UNSIGNED NOT NULL,
+  `recipient` varchar(20) NOT NULL,
+  `message` text NOT NULL,
+  `status` enum('sent','failed','pending') NOT NULL DEFAULT 'pending',
+  `provider_response` text,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `sms_settings`
 --
 
@@ -898,6 +958,29 @@ CREATE TABLE `sms_settings` (
   `sender_id` varchar(20) DEFAULT NULL,
   `is_active` tinyint(1) NOT NULL DEFAULT '0'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `sms_triggers`
+--
+
+CREATE TABLE `sms_triggers` (
+  `id` int UNSIGNED NOT NULL,
+  `trigger_name` varchar(50) NOT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT '0',
+  `template` text NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Dumping data for table `sms_triggers`
+--
+
+INSERT INTO `sms_triggers` (`id`, `trigger_name`, `is_active`, `template`) VALUES
+(1, 'low_stock', 0, 'Alert: {product} is low on stock ({qty} left)'),
+(2, 'overdue_payment', 0, 'Reminder: Invoice {invoice} of {amount} is overdue'),
+(3, 'new_sale', 0, 'Thank you! Your order {invoice} for {amount} is confirmed'),
+(4, 'shipping', 0, 'Your order {invoice} has shipped');
 
 -- --------------------------------------------------------
 
@@ -1132,7 +1215,7 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `username`, `password_hash`, `full_name`, `email`, `phone`, `avatar`, `commission_rate`, `role`, `role_id`, `status`, `last_login`, `login_attempts`, `locked_until`, `created_at`, `updated_at`) VALUES
-(1, 'admin', '$2y$12$s.JygRgZjg2f8geMc1FfG.4wpUK/g/TTTSXOWliq3AaDEm2USiyci', 'System Administrator', 'admin@inventorypro.com', NULL, NULL, 0.00, 'admin', 1, 'active', '2026-04-21 09:59:53', 0, NULL, '2026-04-20 07:09:17', '2026-04-21 04:59:53'),
+(1, 'admin', '$2y$12$s.JygRgZjg2f8geMc1FfG.4wpUK/g/TTTSXOWliq3AaDEm2USiyci', 'System Administrator', 'admin@inventorypro.com', NULL, NULL, 0.00, 'admin', 1, 'active', '2026-04-21 15:15:52', 0, NULL, '2026-04-20 07:09:17', '2026-04-21 10:15:52'),
 (2, 'manager1', '$2y$12$IXpzQHFBJ9B0Fx4oWAeD2u/Q6/abt/coBdlxb5xR9xPQnSCRx9zxS', 'Sarah Johnson', 'sarah.johnson@inventorypro.com', NULL, NULL, 0.00, 'manager', 2, 'active', '2026-04-20 23:44:39', 0, NULL, '2026-04-20 07:09:17', '2026-04-20 18:44:39'),
 (3, 'staff1', '$2y$12$nDPgFj.aEHCX5hpjAFMSdOy3CtH0gi.df2e/8J5yS03fAjElUpZGe', 'Michael Chen', 'michael.chen@inventorypro.com', NULL, NULL, 0.00, 'staff', NULL, 'active', NULL, 0, NULL, '2026-04-20 07:09:17', '2026-04-20 07:09:17'),
 (4, 'staff2', '$2y$12$nDPgFj.aEHCX5hpjAFMSdOy3CtH0gi.df2e/8J5yS03fAjElUpZGe', 'Aisha Malik', 'aisha.malik@inventorypro.com', NULL, NULL, 0.00, 'staff', NULL, 'active', NULL, 0, NULL, '2026-04-20 07:09:17', '2026-04-20 07:09:17');
@@ -1459,10 +1542,23 @@ ALTER TABLE `shifts`
   ADD PRIMARY KEY (`id`);
 
 --
+-- Indexes for table `sms_logs`
+--
+ALTER TABLE `sms_logs`
+  ADD PRIMARY KEY (`id`);
+
+--
 -- Indexes for table `sms_settings`
 --
 ALTER TABLE `sms_settings`
   ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `sms_triggers`
+--
+ALTER TABLE `sms_triggers`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `trigger_name` (`trigger_name`);
 
 --
 -- Indexes for table `smtp_settings`
@@ -1570,7 +1666,7 @@ ALTER TABLE `warehouses`
 -- AUTO_INCREMENT for table `activity_log`
 --
 ALTER TABLE `activity_log`
-  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=25;
 
 --
 -- AUTO_INCREMENT for table `api_keys`
@@ -1594,7 +1690,7 @@ ALTER TABLE `categories`
 -- AUTO_INCREMENT for table `collections`
 --
 ALTER TABLE `collections`
-  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT for table `customers`
@@ -1606,7 +1702,7 @@ ALTER TABLE `customers`
 -- AUTO_INCREMENT for table `customer_ledgers`
 --
 ALTER TABLE `customer_ledgers`
-  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
 
 --
 -- AUTO_INCREMENT for table `expenses`
@@ -1630,19 +1726,19 @@ ALTER TABLE `income`
 -- AUTO_INCREMENT for table `invoices`
 --
 ALTER TABLE `invoices`
-  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
 
 --
 -- AUTO_INCREMENT for table `invoice_items`
 --
 ALTER TABLE `invoice_items`
-  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
 
 --
 -- AUTO_INCREMENT for table `login_log`
 --
 ALTER TABLE `login_log`
-  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT for table `notifications`
@@ -1756,13 +1852,25 @@ ALTER TABLE `serial_numbers`
 -- AUTO_INCREMENT for table `settings`
 --
 ALTER TABLE `settings`
-  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=20;
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=26;
 
 --
 -- AUTO_INCREMENT for table `shifts`
 --
 ALTER TABLE `shifts`
   MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `sms_logs`
+--
+ALTER TABLE `sms_logs`
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `sms_triggers`
+--
+ALTER TABLE `sms_triggers`
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT for table `stock_adjustments`

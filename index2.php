@@ -467,6 +467,10 @@ function upgradeDatabase(): void
         $pdo->exec("INSERT INTO permissions (module,action,display_name) VALUES ('collections','view','Collections View'), ('collections','manage','Collections Manage')");
         $pdo->exec("INSERT INTO role_permissions (role_id,permission_id) SELECT 1, id FROM permissions WHERE module='collections'");
     }
+    try {
+        $pdo->exec('ALTER TABLE `invoices` ADD COLUMN `walkin_name` VARCHAR(150) NULL AFTER `customer_id`');
+    } catch (PDOException $e) {
+    }
     $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
 }
 
@@ -3111,7 +3115,8 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
                 body.print-thermal .print-po {
                     max-width: 80mm;
                     margin: 0 auto;
-                    padding: 4px;
+                    padding: 2px;
+                    box-sizing: border-box;
                 }
                 body.print-thermal .cols-2 {
                     display: block !important;
@@ -3119,13 +3124,47 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
                 body.print-thermal .a4-letterhead-header { display: none !important; }
                 body.print-thermal .thermal-receipt { display: block !important; }
                 body.print-thermal .print-only.a4-header-block { display: none !important; }
+                body.print-thermal table.tbl {
+                    width: 100% !important;
+                }
                 body.print-thermal table.tbl th,
                 body.print-thermal table.tbl td {
-                    padding: 2px 4px !important;
+                    padding: 3px 2px !important;
                     font-size: 10px !important;
                 }
+                body.print-thermal .th-hide { display: none !important; }
+                /* Handle footer colspans breaking table layout */
+                body.print-thermal table.tbl tfoot {
+                    display: block !important;
+                    width: 100%;
+                    border-top: 1px dashed #000;
+                    padding-top: 4px;
+                }
+                body.print-thermal table.tbl tfoot tr {
+                    display: flex !important;
+                    justify-content: space-between !important;
+                    background: transparent !important;
+                }
+                body.print-thermal table.tbl tfoot td {
+                    display: block !important;
+                    border: none !important;
+                    padding: 2px 0 !important;
+                    background: transparent !important;
+                }
+                body.print-thermal table.tbl tfoot td[colspan] {
+                    text-align: right !important;
+                    flex: 1;
+                    padding-right: 10px !important;
+                }
+                body.print-thermal table.tbl tfoot td:last-child {
+                    text-align: right !important;
+                    min-width: 70px;
+                }
+                body.print-thermal tfoot tr:last-child { 
+                    border-top: 1px dashed #000;
+                    margin-top: 2px;
+                }
                 body.print-thermal .tbl thead { border-top: 1px dashed #000; border-bottom: 1px dashed #000; }
-                body.print-thermal tfoot tr:last-child td { border-top: 1px dashed #000; }
                 body.print-thermal .tbl-wrap { overflow: visible !important; border: none !important; }
                 body.print-a4 {
                     font-size: 12px;
@@ -6616,10 +6655,10 @@ function renderPurchases(): void
                 <table class="tbl">
                     <thead>
                     <tr>
-                        <th>#</th>
-                        <th>SKU</th>
+                        <th class="th-hide">#</th>
+                        <th class="th-hide">SKU</th>
                         <th>Product</th>
-                        <th>Unit</th>
+                        <th class="th-hide">Unit</th>
                         <th class="text-right">Ordered</th>
                         <th class="text-right">Received</th>
                         <th class="text-right">Unit Price</th>
@@ -6631,10 +6670,10 @@ function renderPurchases(): void
                     foreach ($items as $item):
                         $rowNum++; ?>
                         <tr>
-                            <td><?= $rowNum ?></td>
-                            <td><code style="font-size:10px"><?= h($item['sku']) ?></code></td>
+                            <td class="th-hide"><?= $rowNum ?></td>
+                            <td class="th-hide"><code style="font-size:10px"><?= h($item['sku']) ?></code></td>
                             <td><?= h($item['product_name']) ?></td>
-                            <td><?= h($item['unit']) ?></td>
+                            <td class="th-hide"><?= h($item['unit']) ?></td>
                             <td class="text-right"><?= number_format((int) $item['quantity']) ?></td>
                             <td class="text-right <?= $item['received_qty'] >= $item['quantity'] ? 'stock-ok' : ($item['received_qty'] > 0 ? 'stock-low' : 'stock-critical') ?>"><?= number_format((int) $item['received_qty']) ?></td>
                             <td class="text-right"><?= formatCurrency((float) $item['unit_price']) ?></td>
@@ -7048,7 +7087,7 @@ function renderSales(): void
                             <td>
                                 <a href="?page=sales&action=view&id=<?= $inv['id'] ?>"><?= h($inv['invoice_number']) ?></a>
                             </td>
-                            <td><?= h($inv['customer_name']) ?></td>
+                            <td><?= h($inv['customer_name']) ?><?= !empty($inv['walkin_name']) ? ' (' . h($inv['walkin_name']) . ')' : '' ?></td>
                             <td><?= h($inv['invoice_date']) ?></td>
                             <td><?= h($inv['due_date'] ?? '-') ?></td>
                             <td class="text-right"><?= formatCurrency((float) $inv['total_amount']) ?></td>
@@ -7106,6 +7145,9 @@ function renderSales(): void
             $pdo->beginTransaction();
             try {
                 $customerId = (int) ($_POST['customer_id'] ?? 0);
+                $walkinName = trim($_POST['walkin_name'] ?? '');
+                if ($walkinName === '')
+                    $walkinName = null;
                 $invoiceDate = trim($_POST['invoice_date'] ?? date('Y-m-d'));
                 $dueDate = trim($_POST['due_date'] ?? '') ?: null;
                 $taxPct = (float) ($_POST['tax_percent'] ?? 0);
@@ -7156,10 +7198,10 @@ function renderSales(): void
                     throw new Exception('Walk-in customers must pay in full.');
                 }
                 if ($editId) {
-                    $pdo->prepare('UPDATE invoices SET customer_id=?,invoice_date=?,due_date=?,subtotal=?,tax_percent=?,discount=?,total_amount=?,payment_status=?,payment_method=?,notes=?,updated_at=NOW() WHERE id=?')->execute([$customerId, $invoiceDate, $dueDate, $subtotal, $taxPct, $discount, $total, $payStatus, $payMethod, $notes, $editId]);
+                    $pdo->prepare('UPDATE invoices SET customer_id=?,walkin_name=?,invoice_date=?,due_date=?,subtotal=?,tax_percent=?,discount=?,total_amount=?,payment_status=?,payment_method=?,notes=?,updated_at=NOW() WHERE id=?')->execute([$customerId, $walkinName, $invoiceDate, $dueDate, $subtotal, $taxPct, $discount, $total, $payStatus, $payMethod, $notes, $editId]);
                 } else {
                     $invNum = generateInvoiceNumber();
-                    $pdo->prepare('INSERT INTO invoices (invoice_number,customer_id,invoice_date,due_date,subtotal,tax_percent,discount,total_amount,payment_status,payment_method,notes,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')->execute([$invNum, $customerId, $invoiceDate, $dueDate, $subtotal, $taxPct, $discount, $total, $payStatus, $payMethod, $notes, (int) $_SESSION['user_id']]);
+                    $pdo->prepare('INSERT INTO invoices (invoice_number,customer_id,walkin_name,invoice_date,due_date,subtotal,tax_percent,discount,total_amount,payment_status,payment_method,notes,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')->execute([$invNum, $customerId, $walkinName, $invoiceDate, $dueDate, $subtotal, $taxPct, $discount, $total, $payStatus, $payMethod, $notes, (int) $_SESSION['user_id']]);
                     $editId = (int) $pdo->lastInsertId();
                 }
                 foreach ($productIds as $i => $pid) {
@@ -7210,12 +7252,13 @@ function renderSales(): void
             <?= csrfField() ?>
             <div class="lf"><span class="lf-title">Invoice Details</span>
                 <div class="form-grid form-grid-3">
-                    <div class="form-group" style="grid-column:span 2"><label>Customer <span
+                    <div class="form-group" style="grid-column:span 1"><label>Customer <span
                                     class="required-mark">*</span></label><select name="customer_id" required>
                             <option value="">-- Select Customer --</option><?php foreach ($customers as $c): ?>
                                 <option value="<?= $c['id'] ?>"
                                         data-credit="<?= $c['credit_limit'] ?>" <?= ($inv['customer_id'] ?? $preCustomer) == $c['id'] ? 'selected' : '' ?>><?= h($c['name'] . ' [' . strtoupper($c['customer_type']) . ']') ?></option><?php endforeach; ?>
                         </select></div>
+                    <div class="form-group" style="grid-column:span 1"><label>Walk-in Name (Optional)</label><input type="text" name="walkin_name" value="<?= h($inv['walkin_name'] ?? '') ?>" placeholder="Leave blank if not walk-in"></div>
                     <div class="form-group"><label>Invoice Date <span class="required-mark">*</span></label><input
                                 type="date" name="invoice_date" value="<?= h($inv['invoice_date'] ?? date('Y-m-d')) ?>"
                                 required></div>
@@ -7480,7 +7523,7 @@ function renderSales(): void
                 <div style="font-size:13px;font-weight:700;letter-spacing:1px">INVOICE</div>
                 <div style="font-size:11px;font-weight:700"><?= h($inv['invoice_number']) ?></div>
                 <div style="font-size:10px">Date: <?= h($inv['invoice_date']) ?> | Due: <?= h($inv['due_date'] ?? '-') ?></div>
-                <div style="font-size:10px">Customer: <?= h($inv['customer_name']) ?></div>
+                <div style="font-size:10px">Customer: <?= h($inv['customer_name']) ?><?= !empty($inv['walkin_name']) ? ' (' . h($inv['walkin_name']) . ')' : '' ?></div>
                 <div style="border-top:1px dashed #000;margin:6px 0;"></div>
             </div>
             <div class="a4-letterhead-header" style="margin-bottom:20px;">
@@ -7505,7 +7548,7 @@ function renderSales(): void
                     <div style="font-size:11px;color:#666;text-transform:uppercase;font-weight:700;margin-bottom:4px">
                         Bill To
                     </div>
-                    <div style="font-size:14px;font-weight:700"><?= h($inv['customer_name']) ?></div>
+                    <div style="font-size:14px;font-weight:700"><?= h($inv['customer_name']) ?><?= !empty($inv['walkin_name']) ? ' (' . h($inv['walkin_name']) . ')' : '' ?></div>
                     <div style="font-size:12px;color:#555;margin-top:4px"><?= h($inv['customer_email'] ?? '') ?></div>
                     <div style="font-size:12px;color:#555"><?= h($inv['customer_phone'] ?? '') ?></div>
                     <div style="font-size:12px;color:#555"><?= h($inv['customer_address'] ?? '') ?><?= $inv['customer_city'] ? ', ' . h($inv['customer_city']) : '' ?></div>
@@ -7545,15 +7588,16 @@ function renderSales(): void
             </div>
             <div class="tbl-wrap">
                 <table class="tbl">
+                    <?php $hasItemDiscount = array_sum(array_column($items, 'discount_pct')) > 0; ?>
                     <thead>
                     <tr>
-                        <th>#</th>
-                        <th>SKU</th>
+                        <th class="th-hide">#</th>
+                        <th class="th-hide">SKU</th>
                         <th>Product</th>
-                        <th>Unit</th>
+                        <th class="th-hide">Unit</th>
                         <th class="text-right">Qty</th>
                         <th class="text-right">Unit Price</th>
-                        <th class="text-right">Disc %</th>
+                        <?php if ($hasItemDiscount): ?><th class="text-right th-hide">Disc %</th><?php endif; ?>
                         <th class="text-right">Total</th>
                     </tr>
                     </thead>
@@ -7562,38 +7606,38 @@ function renderSales(): void
                     foreach ($items as $item):
                         $rn++; ?>
                         <tr>
-                            <td><?= $rn ?></td>
-                            <td><code style="font-size:10px"><?= h($item['sku']) ?></code></td>
+                            <td class="th-hide"><?= $rn ?></td>
+                            <td class="th-hide"><code style="font-size:10px"><?= h($item['sku']) ?></code></td>
                             <td><?= h($item['product_name']) ?></td>
-                            <td><?= h($item['unit']) ?></td>
+                            <td class="th-hide"><?= h($item['unit']) ?></td>
                             <td class="text-right"><?= number_format((int) $item['quantity']) ?></td>
                             <td class="text-right"><?= formatCurrency((float) $item['unit_price']) ?></td>
-                            <td class="text-right"><?= number_format((float) $item['discount_pct'], 1) ?>%</td>
+                            <?php if ($hasItemDiscount): ?><td class="text-right th-hide"><?= number_format((float) $item['discount_pct'], 1) ?>%</td><?php endif; ?>
                             <td class="text-right"><?= formatCurrency((float) $item['total_price']) ?></td>
                         </tr>
                     <?php endforeach; ?>
                     </tbody>
                     <tfoot>
                     <tr style="background:#e8e8e8">
-                        <td colspan="7" class="text-right" style="padding:6px 10px;font-weight:600">Subtotal:</td>
+                        <td colspan="<?= $hasItemDiscount ? '7' : '6' ?>" class="text-right" style="padding:6px 10px;font-weight:600">Subtotal:</td>
                         <td class="text-right"
                             style="padding:6px 10px"><?= formatCurrency((float) $inv['subtotal']) ?></td>
                     </tr>
                     <tr style="background:#e8e8e8">
-                        <td colspan="7" class="text-right" style="padding:4px 10px;font-size:11px">Tax
+                        <td colspan="<?= $hasItemDiscount ? '7' : '6' ?>" class="text-right" style="padding:4px 10px;font-size:11px">Tax
                             (<?= h($inv['tax_percent']) ?>%):
                         </td>
                         <td class="text-right"
                             style="padding:4px 10px;font-size:11px"><?= formatCurrency((float) $inv['subtotal'] * (float) $inv['tax_percent'] / 100) ?></td>
                     </tr>
                     <tr style="background:#e8e8e8">
-                        <td colspan="7" class="text-right" style="padding:4px 10px;font-size:11px">Discount:</td>
+                        <td colspan="<?= $hasItemDiscount ? '7' : '6' ?>" class="text-right" style="padding:4px 10px;font-size:11px">Discount:</td>
                         <td class="text-right" style="padding:4px 10px;font-size:11px">
                             (<?= formatCurrency((float) $inv['discount']) ?>)
                         </td>
                     </tr>
                     <tr style="background:#d0d0d0;font-weight:700;font-size:16px">
-                        <td colspan="7" class="text-right" style="padding:8px 10px">TOTAL:</td>
+                        <td colspan="<?= $hasItemDiscount ? '7' : '6' ?>" class="text-right" style="padding:8px 10px">TOTAL:</td>
                         <td class="text-right"
                             style="padding:8px 10px"><?= formatCurrency((float) $inv['total_amount']) ?></td>
                     </tr>
@@ -9018,6 +9062,7 @@ function handleAjax(): void
         $customerId = (int) ($data['customer_id'] ?? 1);
         $payMethod = $data['payment_method'] ?? 'cash';
         $amountPaidInput = isset($data['amount_paid']) ? (float) $data['amount_paid'] : null;
+        $discountAmount = isset($data['discount_amount']) ? (float) $data['discount_amount'] : 0;
         if (empty($items)) {
             echo json_encode(['success' => false, 'msg' => 'Cart is empty']);
             exit;
@@ -9030,12 +9075,15 @@ function handleAjax(): void
             }
             $taxPct = (float) getSetting('default_tax_percent');
             $taxAmt = $subtotal * ($taxPct / 100);
-            $total = $subtotal + $taxAmt;
+            $total = $subtotal + $taxAmt - $discountAmount;
+            if ($total < 0)
+                $total = 0;
             $custCheck = $pdo->prepare('SELECT customer_type FROM customers WHERE id=?');
             $custCheck->execute([$customerId]);
             $isWalkIn = ($custCheck->fetchColumn() === 'walk-in');
             $amountPaid = $amountPaidInput;
-            if ($amountPaid === null || $amountPaid >= $total) {
+            // Allow minor 1 cent drift compensation safely
+            if ($amountPaid === null || $amountPaid >= ($total - 0.01)) {
                 $amountPaid = $total;
                 $paymentStatus = 'paid';
             } elseif ($amountPaid > 0) {
@@ -9048,8 +9096,11 @@ function handleAjax(): void
                 echo json_encode(['success' => false, 'msg' => 'Walk-in customers must pay in full.']);
                 exit;
             }
+            $walkinName = trim($data['walkin_name'] ?? '');
+            if ($walkinName === '')
+                $walkinName = null;
             $invNum = generateInvoiceNumber();
-            $pdo->prepare('INSERT INTO invoices (invoice_number,customer_id,invoice_date,subtotal,tax_percent,total_amount,payment_status,payment_method,created_by) VALUES (?,?,CURDATE(),?,?,?,?,?,?)')->execute([$invNum, $customerId, $subtotal, $taxPct, $total, $paymentStatus, $payMethod, (int) $_SESSION['user_id']]);
+            $pdo->prepare('INSERT INTO invoices (invoice_number,customer_id,walkin_name,invoice_date,subtotal,tax_percent,discount,total_amount,payment_status,payment_method,created_by) VALUES (?,?,?,CURDATE(),?,?,?,?,?,?,?)')->execute([$invNum, $customerId, $walkinName, $subtotal, $taxPct, $discountAmount, $total, $paymentStatus, $payMethod, (int) $_SESSION['user_id']]);
             $invId = (int) $pdo->lastInsertId();
             $openShift = $pdo->prepare("SELECT id FROM shifts WHERE user_id=? AND status='open'");
             $openShift->execute([$_SESSION['user_id']]);
@@ -9339,15 +9390,17 @@ if (!empty($_GET['ajax'])) {
         echo '</div></div>';
         echo '<div class="lf" style="display:flex;flex-direction:column"><span class="lf-title">Cart</span><div id="posCart" style="flex:1;overflow-y:auto;margin-bottom:10px;border-bottom:1px solid #a0a0a0;padding-bottom:10px"></div>';
         echo '<div style="font-size:14px;font-weight:600;display:flex;justify-content:space-between;margin-bottom:4px"><span>Subtotal</span><span id="posSubtotal">0.00</span></div>';
-        echo '<div style="font-size:12px;color:#666;display:flex;justify-content:space-between;margin-bottom:8px"><span>Tax</span><span id="posTax">0.00</span></div>';
+        echo '<div style="font-size:12px;color:#666;display:flex;justify-content:space-between;margin-bottom:4px"><span>Tax</span><span id="posTax">0.00</span></div>';
+        echo '<div style="font-size:12px;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span>Discount</span><div style="display:flex;gap:4px;width:120px"><input type="number" id="posDiscountVal" class="form-control" style="width:100%;padding:2px 4px;font-size:12px" step="0.01" min="0" value="0" oninput="posRender()"><select id="posDiscountType" class="form-control" style="padding:2px;font-size:12px" onchange="posRender()"><option value="flat">Rs.</option><option value="pct">%</option></select></div></div>';
         echo '<div style="font-size:20px;font-weight:700;display:flex;justify-content:space-between;margin-bottom:12px;color:#1a1a1a"><span>Total</span><span id="posTotal">0.00</span></div>';
-        echo '<div><select id="posCustomer" style="width:100%;padding:8px;margin-bottom:8px;border:2px inset #a0a0a0">';
+        echo '<div><select id="posCustomer" style="width:100%;padding:8px;margin-bottom:8px;border:2px inset #a0a0a0" onchange="posToggleWalkin()">';
         foreach ($customers as $c) {
             $sel = ($c['customer_type'] === 'walk-in') ? ' selected' : '';
-            echo '<option value="' . $c['id'] . '"' . $sel . '>' . h($c['name']) . '</option>';
+            echo '<option value="' . $c['id'] . '" data-type="' . $c['customer_type'] . '"' . $sel . '>' . h($c['name']) . '</option>';
         }
         echo '</select>';
-        echo '<div style="margin-bottom:8px;"><label style="font-size:11px;font-weight:600;display:block;margin-bottom:2px">Amount Paid (Leave empty for full payment)</label><input type="number" id="posAmountPaid" class="form-control" style="width:100%;padding:8px;border:2px inset #a0a0a0" step="0.01" min="0" placeholder="0.00"></div>';
+        echo '<div id="posWalkinWrap" style="margin-bottom:8px;"><input type="text" id="posWalkinName" class="form-control" style="width:100%;padding:8px;border:2px inset #a0a0a0" placeholder="Walk-in Name (Optional)"></div>';
+        echo '<div style="margin-bottom:8px;"><label style="font-size:11px;font-weight:600;display:block;margin-bottom:2px">Amount Paid</label><input type="number" id="posAmountPaid" class="form-control" style="width:100%;padding:8px;border:2px inset #a0a0a0" step="0.01" min="0" placeholder="0.00"></div>';
         echo '<div style="display:flex;gap:8px"><button class="btn btn-success" style="flex:1;padding:12px;font-size:16px;justify-content:center" onclick="posCheckout(\'cash\')">Cash</button>';
         echo '<button class="btn btn-primary" style="flex:1;padding:12px;font-size:16px;justify-content:center" onclick="posCheckout(\'card\')">Card</button></div></div></div></div>';
         echo '<div id="quickSellMenu" style="display:none; position:absolute; background:#f9f9f9; border:2px solid #a0a0a0; box-shadow:2px 2px 10px rgba(0,0,0,0.2); width:220px; z-index:9999; padding:10px;">';
@@ -9358,8 +9411,74 @@ if (!empty($_GET['ajax'])) {
         echo '<div style="margin-bottom:10px;"><label style="font-size:11px; font-weight:bold;">Qty:</label><input type="number" id="qsQty" value="1" min="1" style="width:100%; padding:4px; font-size:12px; border:2px inset #a0a0a0;"></div>';
         echo '<button class="btn btn-success btn-sm" style="width:100%; justify-content:center;" onclick="doQuickSell()">Quick Sell (Cash)</button>';
         echo '</div>';
-        echo '<script>let posCart=[];function posAdd(id,name,price,stock){let f=posCart.find(i=>i.id===id);if(f){if(f.qty<stock)f.qty++}else posCart.push({id,name,price,qty:1});posRender()}function posRender(){let h="";let sub=0;posCart.forEach((i,idx)=>{let t=i.price*i.qty;sub+=t;h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px dashed #ccc"><div><div style="font-weight:600;font-size:12px">${i.name}</div><div style="font-size:11px;color:#666">${CURRENCY} ${i.price} x ${i.qty}</div></div><div style="font-weight:700;font-size:12px">${t.toFixed(2)} <button onclick="posCart.splice(${idx},1);posRender()" class="btn btn-danger btn-xs" style="margin-left:8px;padding:2px 5px">×</button></div></div>`});document.getElementById("posCart").innerHTML=h||"<div style=\'color:#888;text-align:center;padding:20px\'>Cart is empty</div>";document.getElementById("posSubtotal").textContent=sub.toFixed(2);let tax=sub*TAX_PCT;document.getElementById("posTax").textContent=tax.toFixed(2);document.getElementById("posTotal").textContent=(sub+tax).toFixed(2)}async function posCheckout(method){if(!posCart.length){showToast("Cart empty","error");return;}let amtPaid=document.getElementById("posAmountPaid").value;const res=await fetch("?ajax=pos_checkout",{method:"POST",headers:{"Content-Type":"application/json","X-CSRF-Token":CSRF_TOKEN},body:JSON.stringify({items:posCart,customer_id:document.getElementById("posCustomer").value,payment_method:method,amount_paid:amtPaid?parseFloat(amtPaid):null})});const d=await res.json();if(d.success){showToast("Sale #"+d.invoice,"success");window.open("?page=sales&action=view&id="+d.id,"_blank");posCart=[];posRender();document.getElementById("posAmountPaid").value="";}else showToast(d.msg||"Checkout error","error")}';
-        echo 'let qsCurrentProduct=null;function showQuickSellMenu(e,id,name,sku,price,stock){e.preventDefault();qsCurrentProduct={id,name,price,stock};document.getElementById("qsName").textContent=name;document.getElementById("qsSku").textContent=sku;document.getElementById("qsPrice").textContent=CURRENCY+" "+parseFloat(price).toFixed(2);document.getElementById("qsStock").textContent=stock;document.getElementById("qsQty").value=1;document.getElementById("qsQty").max=stock;let menu=document.getElementById("quickSellMenu");menu.style.display="block";menu.style.left=e.pageX+"px";menu.style.top=e.pageY+"px";return false;}document.addEventListener("click",function(e){if(!e.target.closest("#quickSellMenu")){document.getElementById("quickSellMenu").style.display="none";}});async function doQuickSell(){if(!qsCurrentProduct)return;let qty=parseInt(document.getElementById("qsQty").value)||1;if(qty>qsCurrentProduct.stock){showToast("Not enough stock","error");return;}let items=[{id:qsCurrentProduct.id,name:qsCurrentProduct.name,price:qsCurrentProduct.price,qty:qty}];let customerId=document.getElementById("posCustomer").value;const res=await fetch("?ajax=pos_checkout",{method:"POST",headers:{"Content-Type":"application/json","X-CSRF-Token":CSRF_TOKEN},body:JSON.stringify({items:items,customer_id:customerId,payment_method:"cash",amount_paid:null})});const d=await res.json();if(d.success){document.getElementById("quickSellMenu").style.display="none";let printWin=window.open("?page=sales&action=view&id="+d.id+"&auto_print=1","printWin","width=400,height=600");let checkClose=setInterval(function(){if(printWin.closed){clearInterval(checkClose);location.reload();}},500);}else{showToast(d.msg||"Quick sell error","error");}}</script>';
+        echo '<script>
+        function posToggleWalkin(){
+            let sel = document.getElementById("posCustomer");
+            let type = sel.options[sel.selectedIndex].getAttribute("data-type");
+            let wrap = document.getElementById("posWalkinWrap");
+            if(wrap) { wrap.style.display = (type === "walk-in") ? "block" : "none"; }
+        }
+        document.addEventListener("DOMContentLoaded", posToggleWalkin);
+        let posCart=[];
+        function posAdd(id,name,price,stock){
+            let f=posCart.find(i=>i.id===id);
+            if(f){if(f.qty<stock)f.qty++}else posCart.push({id,name,price,qty:1});
+            posRender();
+        }
+        function posRender(){
+            let h=""; let sub=0;
+            posCart.forEach((i,idx)=>{
+                let t=i.price*i.qty; sub+=t;
+                h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px dashed #ccc"><div><div style="font-weight:600;font-size:12px">${i.name}</div><div style="font-size:11px;color:#666">${CURRENCY} ${i.price} x ${i.qty}</div></div><div style="font-weight:700;font-size:12px">${t.toFixed(2)} <button onclick="posCart.splice(${idx},1);posRender()" class="btn btn-danger btn-xs" style="margin-left:8px;padding:2px 5px">×</button></div></div>`;
+            });
+            document.getElementById("posCart").innerHTML=h||"<div style=\'color:#888;text-align:center;padding:20px\'>Cart is empty</div>";
+            document.getElementById("posSubtotal").textContent=sub.toFixed(2);
+            let tax=sub*TAX_PCT;
+            document.getElementById("posTax").textContent=tax.toFixed(2);
+            let discVal=parseFloat(document.getElementById("posDiscountVal").value)||0;
+            let discType=document.getElementById("posDiscountType").value;
+            let discount=(discType==="pct")?(sub*discVal/100):discVal;
+            let total=sub+tax-discount;
+            if(total<0) total=0;
+            document.getElementById("posTotal").textContent=total.toFixed(2);
+            if(posCart.length > 0) {
+                document.getElementById("posAmountPaid").value=total.toFixed(2);
+            } else {
+                document.getElementById("posAmountPaid").value="";
+            }
+        }
+        async function posCheckout(method){
+            if(!posCart.length){showToast("Cart empty","error");return;}
+            let amtPaid=document.getElementById("posAmountPaid").value;
+            let discVal=parseFloat(document.getElementById("posDiscountVal").value)||0;
+            let discType=document.getElementById("posDiscountType").value;
+            let sub=0; posCart.forEach(i=>sub+=i.price*i.qty);
+            let discount=(discType==="pct")?(sub*discVal/100):discVal;
+            const res=await fetch("?ajax=pos_checkout",{
+                method:"POST",
+                headers:{"Content-Type":"application/json","X-CSRF-Token":CSRF_TOKEN},
+                body:JSON.stringify({
+                    items:posCart,
+                    customer_id:document.getElementById("posCustomer").value,
+                    walkin_name:document.getElementById("posWalkinName") ? document.getElementById("posWalkinName").value : null,
+                    payment_method:method,
+                    amount_paid:amtPaid?parseFloat(amtPaid):null,
+                    discount_amount:discount
+                })
+            });
+            const d=await res.json();
+            if(d.success){
+                showToast("Sale #"+d.invoice,"success");
+                window.open("?page=sales&action=view&id="+d.id,"_blank");
+                posCart=[];
+                document.getElementById("posDiscountVal").value="0";
+                posRender();
+            }else{
+                showToast(d.msg||"Checkout error","error");
+            }
+        }
+        </script>';
+        echo '<script>let qsCurrentProduct=null;function showQuickSellMenu(e,id,name,sku,price,stock){e.preventDefault();qsCurrentProduct={id,name,price,stock};document.getElementById("qsName").textContent=name;document.getElementById("qsSku").textContent=sku;document.getElementById("qsPrice").textContent=CURRENCY+" "+parseFloat(price).toFixed(2);document.getElementById("qsStock").textContent=stock;document.getElementById("qsQty").value=1;document.getElementById("qsQty").max=stock;let menu=document.getElementById("quickSellMenu");menu.style.display="block";menu.style.left=e.pageX+"px";menu.style.top=e.pageY+"px";return false;}document.addEventListener("click",function(e){if(!e.target.closest("#quickSellMenu")){document.getElementById("quickSellMenu").style.display="none";}});async function doQuickSell(){if(!qsCurrentProduct)return;let qty=parseInt(document.getElementById("qsQty").value)||1;if(qty>qsCurrentProduct.stock){showToast("Not enough stock","error");return;}let items=[{id:qsCurrentProduct.id,name:qsCurrentProduct.name,price:qsCurrentProduct.price,qty:qty}];let customerId=document.getElementById("posCustomer").value;let walkName=document.getElementById("posWalkinName")?document.getElementById("posWalkinName").value:null;const res=await fetch("?ajax=pos_checkout",{method:"POST",headers:{"Content-Type":"application/json","X-CSRF-Token":CSRF_TOKEN},body:JSON.stringify({items:items,customer_id:customerId,walkin_name:walkName,payment_method:"cash",amount_paid:null})});const d=await res.json();if(d.success){document.getElementById("quickSellMenu").style.display="none";let printWin=window.open("?page=sales&action=view&id="+d.id+"&auto_print=1","printWin","width=400,height=600");let checkClose=setInterval(function(){if(printWin.closed){clearInterval(checkClose);location.reload();}},500);}else{showToast(d.msg||"Quick sell error","error");}}</script>';
         $content = ob_get_clean();
         renderLayout('POS Checkout', $content, 'pos');
     }
