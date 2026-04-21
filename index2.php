@@ -2563,6 +2563,17 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
                 border-color: #b8daff;
                 color: #004085
             }
+            .pos-grid {
+                display: grid;
+                grid-template-columns: 1fr 350px;
+                gap: 12px;
+                height: calc(100vh - 160px);
+            }
+            .sms-grid {
+                display: grid;
+                grid-template-columns: 350px 1fr;
+                gap: 16px;
+            }
             .stats-grid {
                 display: grid;
                 grid-template-columns:repeat(auto-fill, minmax(160px, 1fr));
@@ -3084,7 +3095,7 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
                     margin-left: 0 !important;
                 }
                 .stats-grid {
-                    grid-template-columns:repeat(2, 1fr)
+                    grid-template-columns:repeat(2, 1fr) !important;
                 }
                 .recent-grid, .dashboard-row {
                     grid-template-columns:1fr
@@ -3094,6 +3105,10 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
                 }
                 .cols-2, .cols-3 {
                     grid-template-columns:1fr
+                }
+                .pos-grid, .sms-grid {
+                    grid-template-columns: 1fr !important;
+                    height: auto !important;
                 }
                 .modal {
                     max-width: 100%;
@@ -3106,7 +3121,7 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
             }
             @media (max-width: 500px) {
                 .stats-grid {
-                    grid-template-columns:repeat(2, 1fr)
+                    grid-template-columns:repeat(2, 1fr) !important;
                 }
                 .page-header {
                     flex-direction: column;
@@ -3565,7 +3580,7 @@ function renderDashboard(): void
             <div class="stat-card-sub">Returned to suppliers</div>
         </div>
     </div>
-    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 16px; margin-bottom: 16px;">
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); gap: 16px; margin-bottom: 16px;">
         <div class="lf"><span class="lf-title">Sales & Cost (Last 7 Days)</span>
             <div style="height:250px;">
                 <canvas id="chartSalesCost"></canvas>
@@ -3597,7 +3612,7 @@ function renderDashboard(): void
             </div>
         </div>
     </div>
-    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 16px;">
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); gap: 16px;">
         <div class="lf"><span class="lf-title">Recent Invoices</span>
             <div class="tbl-wrap">
                 <table class="tbl">
@@ -8799,7 +8814,7 @@ if (!empty($_GET['ajax'])) {
         $customers = $pdo->query("SELECT id,name,customer_type FROM customers WHERE status='active' ORDER BY name")->fetchAll();
         ob_start();
         echo '<div class="page-header"><h1>&#128722; POS Checkout</h1></div>';
-        echo '<div style="display:grid;grid-template-columns:1fr 350px;gap:12px;height:calc(100vh - 160px)">';
+        echo '<div class="pos-grid">';
         echo '<div class="lf"><span class="lf-title">Products</span><div style="margin-bottom:10px"><input id="posBarcode" class="form-control" style="width:100%;padding:10px;font-size:16px;border:2px inset #a0a0a0" placeholder="Scan barcode or search product (F2)" autofocus></div>';
         echo '<div id="posProducts" style="display:flex;flex-wrap:wrap;gap:8px;overflow-y:auto;max-height:calc(100vh - 220px)">';
         foreach ($products as $p) {
@@ -10754,7 +10769,7 @@ if (!empty($_GET['ajax'])) {
     <div
     class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div class="cols-2">
         <div class="lf"><span class="lf-title">Active Integrations</span>
             <div class="tbl-wrap">
                 <table class="tbl">
@@ -10960,7 +10975,7 @@ if (!empty($_GET['ajax'])) {
     <div
     class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
-    <div style="display:grid;grid-template-columns:350px 1fr;gap:16px">
+    <div class="sms-grid">
         <div class="lf"><span class="lf-title">Gateway Configuration</span>
             <form method="POST" style="padding:12px"><?= csrfField() ?><input type="hidden" name="action"
                                                                               value="save_settings">
@@ -11231,7 +11246,7 @@ if (!empty($_GET['ajax'])) {
                 <div class="alert alert-<?= h($_SESSION['flash_type']) ?>"><?= h($_SESSION['flash_msg']) ?></div>
                 <?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']); ?>
             <?php endif; ?>
-            <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap:16px;">
+            <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap:16px;">
                 <?php foreach ($categories as $cat): ?>
                     <div class="lf" style="cursor:pointer; transition:transform 0.2s; border-left:4px solid #f0ad4e;" onclick="window.location='?page=collections&action=view&type=category&id=<?= $cat['id'] ?>'" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
                         <div style="display:flex; justify-content:space-between; align-items:flex-start;">
