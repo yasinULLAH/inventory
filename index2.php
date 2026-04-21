@@ -3314,7 +3314,7 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
             </div>
             <div id="kiosk-error" style="color:#f87171;font-size:12px;min-height:20px;margin-bottom:14px;"></div>
             <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:0">
-                <?php foreach (['1','2','3','4','5','6','7','8','9'] as $d): ?>
+                <?php foreach (['1', '2', '3', '4', '5', '6', '7', '8', '9'] as $d): ?>
                 <button onclick="kioskPinInput('<?= $d ?>')" class="kiosk-pad-btn"><?= $d ?></button>
                 <?php endforeach; ?>
                 <button onclick="kioskPinBackspace()" class="kiosk-pad-btn kiosk-pad-alt" title="Backspace">&#9003;</button>
@@ -3340,7 +3340,7 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
         var CURRENCY = <?= json_encode(getSetting('currency_symbol') ?: 'Rs.') ?>;
         var TAX_PCT = <?= json_encode((float) getSetting('default_tax_percent') / 100) ?>;
         var KIOSK_ENABLED = <?= json_encode(getSetting('kiosk_enabled') === '1') ?>;
-        var KIOSK_TIMEOUT = <?= json_encode((int)(getSetting('kiosk_timeout') ?: 300)) ?>;
+        var KIOSK_TIMEOUT = <?= json_encode((int) (getSetting('kiosk_timeout') ?: 300)) ?>;
         function toggleSidebar() {
             const isMobile = window.innerWidth <= 900;
             if (isMobile) {
@@ -7409,6 +7409,14 @@ function renderSales(): void
             </div>
         </div>
     <?php endif; ?>
+        <?php if (isset($_GET['auto_print']) && $_GET['auto_print'] == '1'): ?>
+        <script>
+            window.onload = function() {
+                window.print();
+                setTimeout(function() { window.close(); }, 500);
+            };
+        </script>
+        <?php endif; ?>
         <?php
         $content = ob_get_clean();
         renderLayout('Invoice: ' . $inv['invoice_number'], $content, 'sales');
@@ -8703,7 +8711,7 @@ function handleAjax(): void
         try {
             $subtotal = 0;
             foreach ($items as $it) {
-                $subtotal += ($it['price'] * $it['qty']);
+                $subtotal += (($it['price'] ?? 0) * ($it['qty'] ?? 1));
             }
             $taxPct = (float) getSetting('default_tax_percent');
             $taxAmt = $subtotal * ($taxPct / 100);
@@ -8831,8 +8839,38 @@ function handleAjax(): void
     exit;
 }
 
-initializeDatabase();
-upgradeDatabase();
+function hasPermission(string $module, string $action): bool
+{
+    if (!isset($_SESSION['user_id']))
+        return false;
+    $pdo = getPDO();
+    $stmt = $pdo->prepare('SELECT r.name FROM users u JOIN roles r ON u.role_id=r.id WHERE u.id=?');
+    $stmt->execute([$_SESSION['user_id']]);
+    if ($stmt->fetchColumn() === 'admin')
+        return true;
+    $sql = 'SELECT 1 FROM role_permissions rp
+    JOIN permissions p ON rp.permission_id=p.id
+    WHERE rp.role_id=(SELECT role_id FROM users WHERE id=?) AND p.module=? AND p.action=?';
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$_SESSION['user_id'], $module, $action]);
+    return (bool) $stmt->fetchColumn();
+}
+
+function requirePermission(string $module, string $action): void
+{
+    if (!hasPermission($module, $action)) {
+        if (!empty($_GET['ajax'])) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'msg' => 'Permission denied']);
+            exit;
+        }
+        renderError403();
+        exit;
+    }
+}
+
+//initializeDatabase();
+//upgradeDatabase();
 $currentPage = $_GET['page'] ?? 'dashboard';
 if (!empty($_GET['ajax'])) {
     handleAjax();
@@ -8850,31 +8888,6 @@ if (!empty($_GET['ajax'])) {
     exit;
 } else {
     requireLogin();
-
-    function hasPermission(string $module, string $action): bool
-    {
-        if (!isset($_SESSION['user_id']))
-            return false;
-        $pdo = getPDO();
-        $stmt = $pdo->prepare('SELECT r.name FROM users u JOIN roles r ON u.role_id=r.id WHERE u.id=?');
-        $stmt->execute([$_SESSION['user_id']]);
-        if ($stmt->fetchColumn() === 'admin')
-            return true;
-        $sql = 'SELECT 1 FROM role_permissions rp 
-            JOIN permissions p ON rp.permission_id=p.id
-            WHERE rp.role_id=(SELECT role_id FROM users WHERE id=?) AND p.module=? AND p.action=?';
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute([$_SESSION['user_id'], $module, $action]);
-        return (bool) $stmt->fetchColumn();
-    }
-
-    function requirePermission(string $module, string $action): void
-    {
-        if (!hasPermission($module, $action)) {
-            renderError403();
-            exit;
-        }
-    }
 
     function renderRoles(): void
     {
@@ -9006,7 +9019,7 @@ if (!empty($_GET['ajax'])) {
         foreach ($products as $p) {
             $img = $p['image_path'] ?: $p['image_url'];
             $imgHtml = $img ? '<img src="' . h($img) . '" style="width:100%;height:60px;object-fit:contain;margin-bottom:4px;border-bottom:1px solid #eee;padding-bottom:4px;">' : '<div style="height:60px;background:#f0f0f0;margin-bottom:4px;display:flex;align-items:center;justify-content:center;color:#ccc;font-size:10px">NO IMG</div>';
-            echo '<div style="background:#fff;border:2px solid #a0a0a0;padding:8px;width:130px;cursor:pointer;display:flex;flex-direction:column;justify-content:space-between" onclick="posAdd(' . $p['id'] . ",'" . addslashes($p['name']) . "'," . $p['selling_price'] . ',' . $p['current_stock'] . ')">
+            echo '<div style="background:#fff;border:2px solid #a0a0a0;padding:8px;width:130px;cursor:pointer;display:flex;flex-direction:column;justify-content:space-between" onclick="posAdd(' . $p['id'] . ",'" . addslashes($p['name']) . "'," . $p['selling_price'] . ',' . $p['current_stock'] . ')" oncontextmenu="return showQuickSellMenu(event, ' . $p['id'] . ", '" . addslashes($p['name']) . "', '" . addslashes($p['sku']) . "', " . $p['selling_price'] . ',' . $p['current_stock'] . ')">
                 ' . $imgHtml . '
                 <div style="font-size:10px;color:#888">' . h($p['sku']) . '</div><div style="font-weight:600;margin-bottom:4px;font-size:11px">' . h(substr($p['name'], 0, 30)) . '</div><div style="color:#4a90d9;font-weight:700">' . formatCurrency($p['selling_price']) . '</div></div>';
         }
@@ -9024,7 +9037,16 @@ if (!empty($_GET['ajax'])) {
         echo '<div style="margin-bottom:8px;"><label style="font-size:11px;font-weight:600;display:block;margin-bottom:2px">Amount Paid (Leave empty for full payment)</label><input type="number" id="posAmountPaid" class="form-control" style="width:100%;padding:8px;border:2px inset #a0a0a0" step="0.01" min="0" placeholder="0.00"></div>';
         echo '<div style="display:flex;gap:8px"><button class="btn btn-success" style="flex:1;padding:12px;font-size:16px;justify-content:center" onclick="posCheckout(\'cash\')">Cash</button>';
         echo '<button class="btn btn-primary" style="flex:1;padding:12px;font-size:16px;justify-content:center" onclick="posCheckout(\'card\')">Card</button></div></div></div></div>';
-        echo '<script>let posCart=[];function posAdd(id,name,price,stock){let f=posCart.find(i=>i.id===id);if(f){if(f.qty<stock)f.qty++}else posCart.push({id,name,price,qty:1});posRender()}function posRender(){let h="";let sub=0;posCart.forEach((i,idx)=>{let t=i.price*i.qty;sub+=t;h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px dashed #ccc"><div><div style="font-weight:600;font-size:12px">${i.name}</div><div style="font-size:11px;color:#666">${CURRENCY} ${i.price} x ${i.qty}</div></div><div style="font-weight:700;font-size:12px">${t.toFixed(2)} <button onclick="posCart.splice(${idx},1);posRender()" class="btn btn-danger btn-xs" style="margin-left:8px;padding:2px 5px">×</button></div></div>`});document.getElementById("posCart").innerHTML=h||"<div style=\'color:#888;text-align:center;padding:20px\'>Cart is empty</div>";document.getElementById("posSubtotal").textContent=sub.toFixed(2);let tax=sub*TAX_PCT;document.getElementById("posTax").textContent=tax.toFixed(2);document.getElementById("posTotal").textContent=(sub+tax).toFixed(2)}async function posCheckout(method){if(!posCart.length){showToast("Cart empty","error");return;}let amtPaid=document.getElementById("posAmountPaid").value;const res=await fetch("?ajax=pos_checkout",{method:"POST",headers:{"Content-Type":"application/json","X-CSRF-Token":CSRF_TOKEN},body:JSON.stringify({items:posCart,customer_id:document.getElementById("posCustomer").value,payment_method:method,amount_paid:amtPaid?parseFloat(amtPaid):null})});const d=await res.json();if(d.success){showToast("Sale #"+d.invoice,"success");window.open("?page=sales&action=view&id="+d.id,"_blank");posCart=[];posRender();document.getElementById("posAmountPaid").value="";}else showToast(d.msg||"Checkout error","error")}</script>';
+        echo '<div id="quickSellMenu" style="display:none; position:absolute; background:#f9f9f9; border:2px solid #a0a0a0; box-shadow:2px 2px 10px rgba(0,0,0,0.2); width:220px; z-index:9999; padding:10px;">';
+        echo '<div style="font-size:12px; font-weight:bold; color:#333; margin-bottom:5px; border-bottom:1px solid #ccc; padding-bottom:5px;" id="qsName">Product Name</div>';
+        echo '<div style="font-size:11px; color:#666; margin-bottom:2px;">SKU: <span id="qsSku"></span></div>';
+        echo '<div style="font-size:11px; color:#666; margin-bottom:2px;">Price: <span id="qsPrice" style="color:#4a90d9;font-weight:bold;"></span></div>';
+        echo '<div style="font-size:11px; color:#666; margin-bottom:10px;">Stock: <span id="qsStock"></span></div>';
+        echo '<div style="margin-bottom:10px;"><label style="font-size:11px; font-weight:bold;">Qty:</label><input type="number" id="qsQty" value="1" min="1" style="width:100%; padding:4px; font-size:12px; border:2px inset #a0a0a0;"></div>';
+        echo '<button class="btn btn-success btn-sm" style="width:100%; justify-content:center;" onclick="doQuickSell()">Quick Sell (Cash)</button>';
+        echo '</div>';
+        echo '<script>let posCart=[];function posAdd(id,name,price,stock){let f=posCart.find(i=>i.id===id);if(f){if(f.qty<stock)f.qty++}else posCart.push({id,name,price,qty:1});posRender()}function posRender(){let h="";let sub=0;posCart.forEach((i,idx)=>{let t=i.price*i.qty;sub+=t;h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px dashed #ccc"><div><div style="font-weight:600;font-size:12px">${i.name}</div><div style="font-size:11px;color:#666">${CURRENCY} ${i.price} x ${i.qty}</div></div><div style="font-weight:700;font-size:12px">${t.toFixed(2)} <button onclick="posCart.splice(${idx},1);posRender()" class="btn btn-danger btn-xs" style="margin-left:8px;padding:2px 5px">×</button></div></div>`});document.getElementById("posCart").innerHTML=h||"<div style=\'color:#888;text-align:center;padding:20px\'>Cart is empty</div>";document.getElementById("posSubtotal").textContent=sub.toFixed(2);let tax=sub*TAX_PCT;document.getElementById("posTax").textContent=tax.toFixed(2);document.getElementById("posTotal").textContent=(sub+tax).toFixed(2)}async function posCheckout(method){if(!posCart.length){showToast("Cart empty","error");return;}let amtPaid=document.getElementById("posAmountPaid").value;const res=await fetch("?ajax=pos_checkout",{method:"POST",headers:{"Content-Type":"application/json","X-CSRF-Token":CSRF_TOKEN},body:JSON.stringify({items:posCart,customer_id:document.getElementById("posCustomer").value,payment_method:method,amount_paid:amtPaid?parseFloat(amtPaid):null})});const d=await res.json();if(d.success){showToast("Sale #"+d.invoice,"success");window.open("?page=sales&action=view&id="+d.id,"_blank");posCart=[];posRender();document.getElementById("posAmountPaid").value="";}else showToast(d.msg||"Checkout error","error")}';
+        echo 'let qsCurrentProduct=null;function showQuickSellMenu(e,id,name,sku,price,stock){e.preventDefault();qsCurrentProduct={id,name,price,stock};document.getElementById("qsName").textContent=name;document.getElementById("qsSku").textContent=sku;document.getElementById("qsPrice").textContent=CURRENCY+" "+parseFloat(price).toFixed(2);document.getElementById("qsStock").textContent=stock;document.getElementById("qsQty").value=1;document.getElementById("qsQty").max=stock;let menu=document.getElementById("quickSellMenu");menu.style.display="block";menu.style.left=e.pageX+"px";menu.style.top=e.pageY+"px";return false;}document.addEventListener("click",function(e){if(!e.target.closest("#quickSellMenu")){document.getElementById("quickSellMenu").style.display="none";}});async function doQuickSell(){if(!qsCurrentProduct)return;let qty=parseInt(document.getElementById("qsQty").value)||1;if(qty>qsCurrentProduct.stock){showToast("Not enough stock","error");return;}let items=[{id:qsCurrentProduct.id,name:qsCurrentProduct.name,price:qsCurrentProduct.price,qty:qty}];let customerId=document.getElementById("posCustomer").value;const res=await fetch("?ajax=pos_checkout",{method:"POST",headers:{"Content-Type":"application/json","X-CSRF-Token":CSRF_TOKEN},body:JSON.stringify({items:items,customer_id:customerId,payment_method:"cash",amount_paid:null})});const d=await res.json();if(d.success){document.getElementById("quickSellMenu").style.display="none";let printWin=window.open("?page=sales&action=view&id="+d.id+"&auto_print=1","printWin","width=400,height=600");let checkClose=setInterval(function(){if(printWin.closed){clearInterval(checkClose);location.reload();}},500);}else{showToast(d.msg||"Quick sell error","error");}}</script>';
         $content = ob_get_clean();
         renderLayout('POS Checkout', $content, 'pos');
     }
