@@ -1831,24 +1831,24 @@ function renderLogin(?string $error = null): void
                     max-width: 100%
                 }
             }
-        #sidebar {
-            overflow-y: auto !important;
-            overflow-x: hidden !important;
-        }
-        #sidebar::-webkit-scrollbar {
-            width: 4px;
-        }
-        #sidebar::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        #sidebar::-webkit-scrollbar-thumb {
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 4px;
-        }
-        #sidebar::-webkit-scrollbar-thumb:hover {
-            background: rgba(0, 0, 0, 0.4);
-        }
-</style>
+            #sidebar {
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+            }
+            #sidebar::-webkit-scrollbar {
+                width: 4px;
+            }
+            #sidebar::-webkit-scrollbar-track {
+                background: transparent;
+            }
+            #sidebar::-webkit-scrollbar-thumb {
+                background: rgba(0, 0, 0, 0.2);
+                border-radius: 4px;
+            }
+            #sidebar::-webkit-scrollbar-thumb:hover {
+                background: rgba(0, 0, 0, 0.4);
+            }
+        </style>
     </head>
     <body>
     <div class="login-wrap">
@@ -1864,7 +1864,9 @@ function renderLogin(?string $error = null): void
                 $logoPath = getSetting('company_logo_path') ?: getSetting('company_logo_url');
                 if ($logoPath):
                     ?>
-                    <img src="<?= h($logoPath) ?>" alt="Logo" style="height:48px; vertical-align:middle; margin-bottom:8px; border-radius:4px; object-fit:contain;"><br>
+                    <img src="<?= h($logoPath) ?>" alt="Logo"
+                         style="height:48px; vertical-align:middle; margin-bottom:8px; border-radius:4px; object-fit:contain;">
+                    <br>
                 <?php endif; ?>
                 <?= h(APP_NAME) ?>
             </div>
@@ -3144,24 +3146,24 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
                     display: none
                 }
             }
-        #sidebar {
-            overflow-y: auto !important;
-            overflow-x: hidden !important;
-        }
-        #sidebar::-webkit-scrollbar {
-            width: 4px;
-        }
-        #sidebar::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        #sidebar::-webkit-scrollbar-thumb {
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 4px;
-        }
-        #sidebar::-webkit-scrollbar-thumb:hover {
-            background: rgba(0, 0, 0, 0.4);
-        }
-</style>
+            #sidebar {
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+            }
+            #sidebar::-webkit-scrollbar {
+                width: 4px;
+            }
+            #sidebar::-webkit-scrollbar-track {
+                background: transparent;
+            }
+            #sidebar::-webkit-scrollbar-thumb {
+                background: rgba(0, 0, 0, 0.2);
+                border-radius: 4px;
+            }
+            #sidebar::-webkit-scrollbar-thumb:hover {
+                background: rgba(0, 0, 0, 0.4);
+            }
+        </style>
     </head>
     <body>
     <div id="loading-overlay" class="loading-overlay">
@@ -3185,7 +3187,8 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
             $logoPath = getSetting('company_logo_path') ?: getSetting('company_logo_url');
             if ($logoPath):
                 ?>
-                <img src="<?= h($logoPath) ?>" alt="Logo" style="height:24px; vertical-align:middle; margin-right:6px; border-radius:4px; background:#fff; padding:2px; object-fit:contain;">
+                <img src="<?= h($logoPath) ?>" alt="Logo"
+                     style="height:24px; vertical-align:middle; margin-right:6px; border-radius:4px; background:#fff; padding:2px; object-fit:contain;">
             <?php endif; ?>
             <?= h(APP_NAME) ?> <span><?= h($companyName) ?></span>
         </div>
@@ -3216,7 +3219,9 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
                 </div>
             </div>
             <?php if (getSetting('kiosk_enabled') === '1'): ?>
-            <button class="notif-btn" onclick="kioskLock()" id="kiosk-lock-btn" title="Lock Screen" style="font-size:15px">&#128274;</button>
+                <button class="notif-btn" onclick="kioskLock()" id="kiosk-lock-btn" title="Lock Screen"
+                        style="font-size:15px">&#128274;
+                </button>
             <?php endif; ?>
             <div class="user-menu-wrap">
                 <button class="user-btn" onclick="toggleUserMenu()">
@@ -3303,38 +3308,81 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
         <span class="sb-item">Page: <?= h(ucfirst($activePage)) ?></span>
         <span id="clock" class="sb-item"></span>
     </footer>
-    <?php if (getSetting('kiosk_enabled') === '1'): ?>
-    <div id="kiosk-overlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(10,20,40,0.97);align-items:center;justify-content:center;flex-direction:column">
+<?php if (getSetting('kiosk_enabled') === '1'): ?>
+    <div id="kiosk-overlay"
+         style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(10,20,40,0.97);align-items:center;justify-content:center;flex-direction:column">
         <div style="text-align:center;color:#fff;max-width:340px;width:90%;padding:40px 30px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.5)">
             <div style="font-size:48px;margin-bottom:8px">&#128274;</div>
             <div style="font-size:22px;font-weight:700;margin-bottom:4px"><?= h(APP_NAME) ?></div>
-            <div style="font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:28px">Screen Locked &mdash; Enter PIN to continue</div>
+            <div style="font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:28px">Screen Locked &mdash; Enter PIN
+                to continue
+            </div>
             <div id="kiosk-pin-dots" style="display:flex;justify-content:center;gap:12px;margin-bottom:8px">
-                <span class="kiosk-dot"></span><span class="kiosk-dot"></span><span class="kiosk-dot"></span><span class="kiosk-dot"></span>
+                <span class="kiosk-dot"></span><span class="kiosk-dot"></span><span class="kiosk-dot"></span><span
+                        class="kiosk-dot"></span>
             </div>
             <div id="kiosk-error" style="color:#f87171;font-size:12px;min-height:20px;margin-bottom:14px;"></div>
             <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:0">
                 <?php foreach (['1', '2', '3', '4', '5', '6', '7', '8', '9'] as $d): ?>
-                <button onclick="kioskPinInput('<?= $d ?>')" class="kiosk-pad-btn"><?= $d ?></button>
+                    <button onclick="kioskPinInput('<?= $d ?>')" class="kiosk-pad-btn"><?= $d ?></button>
                 <?php endforeach; ?>
-                <button onclick="kioskPinBackspace()" class="kiosk-pad-btn kiosk-pad-alt" title="Backspace">&#9003;</button>
+                <button onclick="kioskPinBackspace()" class="kiosk-pad-btn kiosk-pad-alt" title="Backspace">&#9003;
+                </button>
                 <button onclick="kioskPinInput('0')" class="kiosk-pad-btn">0</button>
                 <button onclick="kioskSubmitPin()" class="kiosk-pad-btn kiosk-pad-ok" title="Unlock">&#10003;</button>
             </div>
         </div>
     </div>
     <style>
-        .kiosk-dot{display:inline-block;width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,0.35);background:transparent;transition:background .15s,border-color .15s}
-        .kiosk-dot.filled{background:#4a90d9;border-color:#4a90d9}
-        .kiosk-pad-btn{background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.15);color:#fff;padding:15px 10px;font-size:18px;font-weight:600;border-radius:8px;cursor:pointer;transition:background .15s,transform .1s;font-family:var(--font)}
-        .kiosk-pad-btn:hover{background:rgba(255,255,255,0.2)}
-        .kiosk-pad-btn:active{transform:scale(0.94)}
-        .kiosk-pad-alt{background:rgba(255,255,255,0.06);color:#bbb;font-size:16px}
-        .kiosk-pad-alt:hover{background:rgba(255,255,255,0.13)}
-        .kiosk-pad-ok{background:#4a90d9;border-color:#357abd;font-size:16px}
-        .kiosk-pad-ok:hover{background:#357abd}
+        .kiosk-dot {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.35);
+            background: transparent;
+            transition: background .15s, border-color .15s
+        }
+        .kiosk-dot.filled {
+            background: #4a90d9;
+            border-color: #4a90d9
+        }
+        .kiosk-pad-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #fff;
+            padding: 15px 10px;
+            font-size: 18px;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background .15s, transform .1s;
+            font-family: var(--font)
+        }
+        .kiosk-pad-btn:hover {
+            background: rgba(255, 255, 255, 0.2)
+        }
+        .kiosk-pad-btn:active {
+            transform: scale(0.94)
+        }
+        .kiosk-pad-alt {
+            background: rgba(255, 255, 255, 0.06);
+            color: #bbb;
+            font-size: 16px
+        }
+        .kiosk-pad-alt:hover {
+            background: rgba(255, 255, 255, 0.13)
+        }
+        .kiosk-pad-ok {
+            background: #4a90d9;
+            border-color: #357abd;
+            font-size: 16px
+        }
+        .kiosk-pad-ok:hover {
+            background: #357abd
+        }
     </style>
-    <?php endif; ?>
+<?php endif; ?>
     <script>
         var CSRF_TOKEN = <?= json_encode(csrf()) ?>;
         var CURRENCY = <?= json_encode(getSetting('currency_symbol') ?: 'Rs.') ?>;
@@ -3367,10 +3415,10 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
             }
         }
         initSidebar();
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             var activeNav = document.querySelector('#sidebar .nav-item.active');
             if (activeNav) {
-                activeNav.scrollIntoView({ behavior: 'auto', block: 'center' });
+                activeNav.scrollIntoView({behavior: 'auto', block: 'center'});
             }
         });
         function toggleUserMenu() {
@@ -3438,7 +3486,11 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
             showLoading();
             fetch(url, {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': CSRF_TOKEN},
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-Token': CSRF_TOKEN
+                },
                 body: JSON.stringify(data)
             })
                 .then(function (r) {
@@ -3489,7 +3541,7 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
         <?php unset($_SESSION['toast_msg'], $_SESSION['toast_type']);
     endif; ?>
         // Kiosk mode
-        (function() {
+        (function () {
             if (!KIOSK_ENABLED) return;
             var pinBuffer = '';
             var timer = null;
@@ -3522,18 +3574,18 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
                 document.getElementById('kiosk-pin-dots').innerHTML = html;
             }
             window.kioskLock = lock;
-            window.kioskPinInput = function(d) {
+            window.kioskPinInput = function (d) {
                 if (!locked || pinBuffer.length >= 8) return;
                 pinBuffer += d;
                 updateDots();
                 document.getElementById('kiosk-error').textContent = '';
             };
-            window.kioskPinBackspace = function() {
+            window.kioskPinBackspace = function () {
                 if (!locked) return;
                 pinBuffer = pinBuffer.slice(0, -1);
                 updateDots();
             };
-            window.kioskSubmitPin = function() {
+            window.kioskSubmitPin = function () {
                 if (!locked) return;
                 if (pinBuffer.length < 4) {
                     document.getElementById('kiosk-error').textContent = 'Enter at least 4 digits';
@@ -3543,7 +3595,9 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
                     method: 'POST',
                     headers: {'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN},
                     body: JSON.stringify({pin: pinBuffer})
-                }).then(function(r) { return r.json(); }).then(function(d) {
+                }).then(function (r) {
+                    return r.json();
+                }).then(function (d) {
                     if (d.success) {
                         unlock();
                     } else {
@@ -3551,18 +3605,25 @@ function renderLayout(string $pageTitle, string $pageContent, string $activePage
                         pinBuffer = '';
                         updateDots();
                     }
-                }).catch(function() {
+                }).catch(function () {
                     document.getElementById('kiosk-error').textContent = 'Network error. Try again.';
                 });
             };
-            document.addEventListener('keydown', function(e) {
-                if (!locked) { resetTimer(); return; }
+            document.addEventListener('keydown', function (e) {
+                if (!locked) {
+                    resetTimer();
+                    return;
+                }
                 if (e.key >= '0' && e.key <= '9') window.kioskPinInput(e.key);
-                else if (e.key === 'Backspace') { e.preventDefault(); window.kioskPinBackspace(); }
-                else if (e.key === 'Enter') window.kioskSubmitPin();
+                else if (e.key === 'Backspace') {
+                    e.preventDefault();
+                    window.kioskPinBackspace();
+                } else if (e.key === 'Enter') window.kioskSubmitPin();
             });
-            ['mousemove','mousedown','touchstart','scroll'].forEach(function(ev) {
-                document.addEventListener(ev, function() { if (!locked) resetTimer(); }, {passive: true});
+            ['mousemove', 'mousedown', 'touchstart', 'scroll'].forEach(function (ev) {
+                document.addEventListener(ev, function () {
+                    if (!locked) resetTimer();
+                }, {passive: true});
             });
             resetTimer();
         })();
@@ -4068,13 +4129,16 @@ function renderProducts(): void
                                 <div style="display:flex;align-items:center;gap:8px;">
                                     <?php $imgSrc = $p['image_path'] ?: $p['image_url'];
                                     if ($imgSrc): ?>
-                                        <img src="<?= h($imgSrc) ?>" style="width:30px;height:30px;object-fit:contain;border:1px solid #ccc;border-radius:4px;background:#fff">
+                                        <img src="<?= h($imgSrc) ?>"
+                                             style="width:30px;height:30px;object-fit:contain;border:1px solid #ccc;border-radius:4px;background:#fff">
                                     <?php else: ?>
-                                        <div style="width:30px;height:30px;background:#e0e0e0;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:8px;color:#888">N/A</div>
+                                        <div style="width:30px;height:30px;background:#e0e0e0;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:8px;color:#888">
+                                            N/A
+                                        </div>
                                     <?php endif; ?>
                                     <div>
                                         <strong><?= h($p['name']) ?></strong><?php if ($p['brand']): ?><br><small
-                                            style="color:#888"><?= h($p['brand']) ?></small><?php endif; ?>
+                                                style="color:#888"><?= h($p['brand']) ?></small><?php endif; ?>
                                     </div>
                                 </div>
                             </td>
@@ -4194,11 +4258,12 @@ function renderProducts(): void
             <div class="page-header-actions"><a href="?page=products" class="btn btn-secondary btn-sm">&#8592; Back to
                     Products</a></div>
         </div>
-        <?php if (!empty($errors)): ?>
+    <?php if (!empty($errors)): ?>
     <div class="alert alert-danger">
         <ul><?php foreach ($errors as $e): ?>
                 <li><?= h($e) ?></li><?php endforeach; ?></ul></div><?php endif; ?>
-        <form method="POST" action="?page=products&action=<?= $editId ? 'edit&id=' . $editId : 'new' ?>" enctype="multipart/form-data">
+        <form method="POST" action="?page=products&action=<?= $editId ? 'edit&id=' . $editId : 'new' ?>"
+              enctype="multipart/form-data">
             <?= csrfField() ?>
             <div class="lf"><span class="lf-title">Basic Information</span>
                 <div class="form-grid form-grid-3">
@@ -4299,12 +4364,16 @@ function renderProducts(): void
                     <div class="form-group full">
                         <label>Product Image (Upload File OR specify URL)</label>
                         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-                            <input type="file" name="image_file" accept="image/*" style="flex:1;padding:4px;border:2px inset #a0a0a0;background:#fff">
+                            <input type="file" name="image_file" accept="image/*"
+                                   style="flex:1;padding:4px;border:2px inset #a0a0a0;background:#fff">
                             <span style="font-weight:700">OR URL:</span>
-                            <input type="url" name="image_url" value="<?= h($d['image_url'] ?? '') ?>" placeholder="https://..." style="flex:2">
+                            <input type="url" name="image_url" value="<?= h($d['image_url'] ?? '') ?>"
+                                   placeholder="https://..." style="flex:2">
                         </div>
                         <?php if (!empty($d['image_path'])): ?>
-                            <div style="margin-top:6px;"><small>Current File: <a href="<?= h($d['image_path']) ?>" target="_blank"><?= h($d['image_path']) ?></a></small></div>
+                            <div style="margin-top:6px;"><small>Current File: <a href="<?= h($d['image_path']) ?>"
+                                                                                 target="_blank"><?= h($d['image_path']) ?></a></small>
+                            </div>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -4312,14 +4381,22 @@ function renderProducts(): void
             <div class="lf"><span class="lf-title">Custom Attributes</span>
                 <div id="attr-container">
                     <?php foreach ($productAttributes as $pa): ?>
-                        <div class="form-group" style="flex-direction:row; gap:8px; margin-bottom:8px; align-items:center;">
-                            <input type="text" name="attr_name[]" value="<?= h($pa['name']) ?>" placeholder="Attribute Name (e.g. Color)" style="flex:1; padding:4px; border:2px inset #a0a0a0;">
-                            <input type="text" name="attr_value[]" value="<?= h($pa['value']) ?>" placeholder="Value (e.g. Red)" style="flex:2; padding:4px; border:2px inset #a0a0a0;">
-                            <button type="button" class="btn btn-danger btn-xs" onclick="this.parentNode.remove()" style="height:28px;">&#215;</button>
+                        <div class="form-group"
+                             style="flex-direction:row; gap:8px; margin-bottom:8px; align-items:center;">
+                            <input type="text" name="attr_name[]" value="<?= h($pa['name']) ?>"
+                                   placeholder="Attribute Name (e.g. Color)"
+                                   style="flex:1; padding:4px; border:2px inset #a0a0a0;">
+                            <input type="text" name="attr_value[]" value="<?= h($pa['value']) ?>"
+                                   placeholder="Value (e.g. Red)"
+                                   style="flex:2; padding:4px; border:2px inset #a0a0a0;">
+                            <button type="button" class="btn btn-danger btn-xs" onclick="this.parentNode.remove()"
+                                    style="height:28px;">&#215;
+                            </button>
                         </div>
                     <?php endforeach; ?>
                 </div>
-                <button type="button" class="btn btn-secondary btn-sm mt-8" onclick="addAttrRow()">+ Add Attribute</button>
+                <button type="button" class="btn btn-secondary btn-sm mt-8" onclick="addAttrRow()">+ Add Attribute
+                </button>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
                 <button type="submit"
@@ -4437,7 +4514,8 @@ function renderProducts(): void
                         <td>
                             <?php $imgSrc = $prod['image_path'] ?: $prod['image_url']; ?>
                             <?php if ($imgSrc): ?>
-                                <img src="<?= h($imgSrc) ?>" style="max-height:100px; max-width:150px; border:1px solid #ccc; border-radius:4px; background:#fff; padding:2px; object-fit:contain;">
+                                <img src="<?= h($imgSrc) ?>"
+                                     style="max-height:100px; max-width:150px; border:1px solid #ccc; border-radius:4px; background:#fff; padding:2px; object-fit:contain;">
                             <?php else: ?>
                                 -
                             <?php endif; ?>
@@ -4495,7 +4573,9 @@ function renderProducts(): void
                     <tbody>
                     <?php foreach ($productAttributes as $pa): ?>
                         <tr>
-                            <td style="padding:6px 10px;color:#666;width:40%;font-weight:bold;background:#f8f8f8;border-right:1px solid #d8d8d8;border-bottom:1px solid #e0e0e0;"><?= h($pa['name']) ?>:</td>
+                            <td style="padding:6px 10px;color:#666;width:40%;font-weight:bold;background:#f8f8f8;border-right:1px solid #d8d8d8;border-bottom:1px solid #e0e0e0;"><?= h($pa['name']) ?>
+                                :
+                            </td>
                             <td style="padding:6px 10px;border-bottom:1px solid #e0e0e0;"><?= h($pa['value']) ?></td>
                         </tr>
                     <?php endforeach; ?>
@@ -4503,7 +4583,7 @@ function renderProducts(): void
                 </table>
             </div>
         </div>
-        <?php endif; ?>
+    <?php endif; ?>
         <div class="lf"><span class="lf-title">Recent Sales History</span>
             <div class="tbl-wrap">
                 <table class="tbl">
@@ -4719,34 +4799,44 @@ function renderWarehouses(): void
             <a href="?page=warehouses&action=new" class="btn btn-success btn-sm">+ Add Warehouse</a>
         </div>
     </div>
-    <?php if (isset($_SESSION['flash_msg'])): ?>
-        <div class="alert alert-<?= h($_SESSION['flash_type']) ?>"><?= h($_SESSION['flash_msg']) ?></div>
-        <?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']); ?>
-    <?php endif; ?>
+<?php if (isset($_SESSION['flash_msg'])): ?>
+    <div class="alert alert-<?= h($_SESSION['flash_type']) ?>"><?= h($_SESSION['flash_msg']) ?></div>
+<?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']); ?>
+<?php endif; ?>
     <div class="cols-2">
-        <div class="lf"><span class="lf-title"><?= ($action === 'edit' && $editWh) ? 'Edit Warehouse' : 'Add New Warehouse' ?></span>
-            <form method="POST" action="?page=warehouses&action=<?= ($action === 'edit' && $editWh) ? 'edit&id=' . (int) $_GET['id'] : 'new' ?>">
+        <div class="lf"><span
+                    class="lf-title"><?= ($action === 'edit' && $editWh) ? 'Edit Warehouse' : 'Add New Warehouse' ?></span>
+            <form method="POST"
+                  action="?page=warehouses&action=<?= ($action === 'edit' && $editWh) ? 'edit&id=' . (int) $_GET['id'] : 'new' ?>">
                 <?= csrfField() ?>
                 <div class="form-grid" style="grid-template-columns:1fr">
                     <div class="form-group">
                         <label>Warehouse Name <span class="required-mark">*</span></label>
-                        <input type="text" name="name" value="<?= h($editWh['name'] ?? $_POST['name'] ?? '') ?>" required>
+                        <input type="text" name="name" value="<?= h($editWh['name'] ?? $_POST['name'] ?? '') ?>"
+                               required>
                     </div>
                     <div class="form-group">
                         <label>Location</label>
-                        <input type="text" name="location" value="<?= h($editWh['location'] ?? $_POST['location'] ?? '') ?>">
+                        <input type="text" name="location"
+                               value="<?= h($editWh['location'] ?? $_POST['location'] ?? '') ?>">
                     </div>
                     <div class="form-group">
                         <label>Status</label>
                         <select name="status">
-                            <option value="active" <?= ($editWh['status'] ?? 'active') === 'active' ? 'selected' : '' ?>>Active</option>
-                            <option value="inactive" <?= ($editWh['status'] ?? '') === 'inactive' ? 'selected' : '' ?>>Inactive</option>
+                            <option value="active" <?= ($editWh['status'] ?? 'active') === 'active' ? 'selected' : '' ?>>
+                                Active
+                            </option>
+                            <option value="inactive" <?= ($editWh['status'] ?? '') === 'inactive' ? 'selected' : '' ?>>
+                                Inactive
+                            </option>
                         </select>
                     </div>
                 </div>
                 <div style="display:flex;gap:8px;margin-top:10px">
-                    <button type="submit" class="btn btn-success btn-sm"><?= ($action === 'edit' && $editWh) ? '&#10003; Update' : '+ Create' ?></button>
-                    <?php if ($action === 'edit'): ?><a href="?page=warehouses" class="btn btn-secondary btn-sm">Cancel</a><?php endif; ?>
+                    <button type="submit"
+                            class="btn btn-success btn-sm"><?= ($action === 'edit' && $editWh) ? '&#10003; Update' : '+ Create' ?></button>
+                    <?php if ($action === 'edit'): ?><a href="?page=warehouses"
+                                                        class="btn btn-secondary btn-sm">Cancel</a><?php endif; ?>
                 </div>
             </form>
         </div>
@@ -4764,22 +4854,30 @@ function renderWarehouses(): void
                     </thead>
                     <tbody>
                     <?php if (empty($warehouses)): ?>
-                        <tr><td colspan="5" class="text-center text-muted" style="padding:12px;">No warehouses yet</td></tr>
+                        <tr>
+                            <td colspan="5" class="text-center text-muted" style="padding:12px;">No warehouses yet</td>
+                        </tr>
                     <?php else:
         foreach ($warehouses as $w): ?>
-                        <tr>
-                            <td><strong><?= h($w['name']) ?></strong></td>
-                            <td><?= h($w['location'] ?: '-') ?></td>
-                            <td class="text-right"><?= number_format((int) $w['p_cnt']) ?></td>
-                            <td><span class="badge badge-<?= $w['status'] === 'active' ? 'success' : 'secondary' ?>"><?= h(strtoupper($w['status'])) ?></span></td>
-                            <td>
-                                <div class="tbl-actions">
-                                    <a href="?page=warehouses&action=edit&id=<?= $w['id'] ?>" class="btn btn-warning btn-xs">&#9998;</a>
-                                    <button type="button" onclick="confirmDeleteWh(<?= $w['id'] ?>,'<?= h(addslashes($w['name'])) ?>')" class="btn btn-danger btn-xs">&#128465;</button>
-                                </div>
-                            </td>
-                        </tr>
-                    <?php endforeach;
+                            <tr>
+                                <td><strong><?= h($w['name']) ?></strong></td>
+                                <td><?= h($w['location'] ?: '-') ?></td>
+                                <td class="text-right"><?= number_format((int) $w['p_cnt']) ?></td>
+                                <td>
+                                    <span class="badge badge-<?= $w['status'] === 'active' ? 'success' : 'secondary' ?>"><?= h(strtoupper($w['status'])) ?></span>
+                                </td>
+                                <td>
+                                    <div class="tbl-actions">
+                                        <a href="?page=warehouses&action=edit&id=<?= $w['id'] ?>"
+                                           class="btn btn-warning btn-xs">&#9998;</a>
+                                        <button type="button"
+                                                onclick="confirmDeleteWh(<?= $w['id'] ?>,'<?= h(addslashes($w['name'])) ?>')"
+                                                class="btn btn-danger btn-xs">&#128465;
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach;
     endif; ?>
                     </tbody>
                 </table>
@@ -4788,7 +4886,7 @@ function renderWarehouses(): void
     </div>
     <script>
         function confirmDeleteWh(id, name) {
-            confirmAction('Delete warehouse "' + name + '"?', function() {
+            confirmAction('Delete warehouse "' + name + '"?', function () {
                 window.location = '?page=warehouses&action=delete&id=' + id + '&csrf_token=' + CSRF_TOKEN;
             });
         }
@@ -4854,7 +4952,7 @@ function renderCategories(): void
         <div class="page-header-actions"><a href="?page=categories&action=new" class="btn btn-success btn-sm">+ Add
                 Category</a></div>
     </div>
-    <?php if (isset($_SESSION['flash_msg'])): ?>
+<?php if (isset($_SESSION['flash_msg'])): ?>
     <div
     class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
     endif; ?>
@@ -4993,7 +5091,7 @@ function renderSuppliers(): void
             <div class="page-header-actions"><a href="?page=suppliers&action=new" class="btn btn-success btn-sm">+ Add
                     Supplier</a></div>
         </div>
-        <?php if (isset($_SESSION['flash_msg'])): ?>
+    <?php if (isset($_SESSION['flash_msg'])): ?>
         <div
         class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
@@ -5054,9 +5152,9 @@ function renderSuppliers(): void
                                     <a href="?page=purchases&action=new&supplier_id=<?= $s['id'] ?>"
                                        class="btn btn-success btn-xs" title="New PO">+PO</a>
                                     <?php if (hasPermission('suppliers', 'manage')): ?>
-                                        <button
-                                        onclick="confirmDelSupplier(<?= $s['id'] ?>,'<?= h(addslashes($s['company_name'])) ?>')"
-                                        class="btn btn-danger btn-xs">&#128465;</button><?php endif; ?>
+                                    <button
+                                            onclick="confirmDelSupplier(<?= $s['id'] ?>,'<?= h(addslashes($s['company_name'])) ?>')"
+                                            class="btn btn-danger btn-xs">&#128465;</button><?php endif; ?>
                                 </div>
                             </td>
                         </tr>
@@ -5281,7 +5379,7 @@ function renderCustomers(): void
             <div class="page-header-actions"><a href="?page=customers&action=new" class="btn btn-success btn-sm">+ Add
                     Customer</a></div>
         </div>
-        <?php if (isset($_SESSION['flash_msg'])): ?>
+    <?php if (isset($_SESSION['flash_msg'])): ?>
         <div
         class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
@@ -5352,9 +5450,9 @@ function renderCustomers(): void
                                     <a href="?page=sales&action=new&customer_id=<?= $c['id'] ?>"
                                        class="btn btn-success btn-xs" title="New Invoice">+INV</a>
                                     <?php if (hasPermission('customers', 'manage')): ?>
-                                        <button
-                                        onclick="confirmDelCust(<?= $c['id'] ?>,'<?= h(addslashes($c['name'])) ?>')"
-                                        class="btn btn-danger btn-xs">&#128465;</button><?php endif; ?>
+                                    <button
+                                            onclick="confirmDelCust(<?= $c['id'] ?>,'<?= h(addslashes($c['name'])) ?>')"
+                                            class="btn btn-danger btn-xs">&#128465;</button><?php endif; ?>
                                 </div>
                             </td>
                         </tr>
@@ -5582,7 +5680,7 @@ function renderUsers(): void
             <div class="page-header-actions"><a href="?page=users&action=new" class="btn btn-success btn-sm">+ Add
                     User</a></div>
         </div>
-        <?php if (isset($_SESSION['flash_msg'])): ?>
+    <?php if (isset($_SESSION['flash_msg'])): ?>
         <div
         class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
@@ -5887,7 +5985,7 @@ function renderPurchases(): void
                         href="?page=purchases&action=new" class="btn btn-success btn-sm">+ New PO</a><?php endif; ?>
             </div>
         </div>
-        <?php if (isset($_SESSION['flash_msg'])): ?>
+    <?php if (isset($_SESSION['flash_msg'])): ?>
         <div
         class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
@@ -6091,7 +6189,7 @@ function renderPurchases(): void
             <div class="page-header-actions"><a href="?page=purchases" class="btn btn-secondary btn-sm">&#8592; Back</a>
             </div>
         </div>
-        <?php if (isset($_SESSION['flash_msg'])): ?>
+    <?php if (isset($_SESSION['flash_msg'])): ?>
         <div
         class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
@@ -6728,7 +6826,7 @@ function renderSales(): void
             <div class="page-header-actions"><a href="?page=sales&action=new" class="btn btn-success btn-sm">+ New
                     Invoice</a></div>
         </div>
-        <?php if (isset($_SESSION['flash_msg'])): ?>
+    <?php if (isset($_SESSION['flash_msg'])): ?>
         <div
         class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
@@ -6806,9 +6904,9 @@ function renderSales(): void
                                         href="?page=sales&action=edit&id=<?= $inv['id'] ?>"
                                         class="btn btn-warning btn-xs">&#9998;</a><?php endif; ?>
                                     <?php if (hasPermission('sales', 'edit')): ?>
-                                        <button
-                                        onclick="voidInvoice(<?= $inv['id'] ?>,'<?= h(addslashes($inv['invoice_number'])) ?>')"
-                                        class="btn btn-danger btn-xs">&#215;Void</button><?php endif; ?>
+                                    <button
+                                            onclick="voidInvoice(<?= $inv['id'] ?>,'<?= h(addslashes($inv['invoice_number'])) ?>')"
+                                            class="btn btn-danger btn-xs">&#215;Void</button><?php endif; ?>
                                 </div>
                             </td>
                         </tr>
@@ -6943,7 +7041,7 @@ function renderSales(): void
             <div class="page-header-actions"><a href="?page=sales" class="btn btn-secondary btn-sm">&#8592; Back</a>
             </div>
         </div>
-        <?php if (isset($_SESSION['flash_msg'])): ?>
+    <?php if (isset($_SESSION['flash_msg'])): ?>
         <div
         class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
@@ -7194,7 +7292,7 @@ function renderSales(): void
                 <a href="?page=sales" class="btn btn-secondary btn-sm">&#8592; Back</a>
             </div>
         </div>
-        <?php if (isset($_SESSION['flash_msg'])): ?>
+    <?php if (isset($_SESSION['flash_msg'])): ?>
         <div
         class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?> no-print"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
@@ -7368,7 +7466,7 @@ function renderSales(): void
                  style="margin-top:30px;font-size:11px;text-align:center;color:#888;border-top:1px solid #ccc;padding-top:8px">
                 Thank you for your business! &bull; <?= h($companyName) ?></div>
         </div>
-        <?php if ($inv['payment_status'] !== 'paid'): ?>
+    <?php if ($inv['payment_status'] !== 'paid'): ?>
         <div id="paymentModal" class="modal-overlay no-print">
             <div class="modal" style="max-width:400px;">
                 <div class="modal-title-bar"><span>Record Payment</span>
@@ -7409,14 +7507,16 @@ function renderSales(): void
             </div>
         </div>
     <?php endif; ?>
-        <?php if (isset($_GET['auto_print']) && $_GET['auto_print'] == '1'): ?>
+    <?php if (isset($_GET['auto_print']) && $_GET['auto_print'] == '1'): ?>
         <script>
-            window.onload = function() {
+            window.onload = function () {
                 window.print();
-                setTimeout(function() { window.close(); }, 500);
+                setTimeout(function () {
+                    window.close();
+                }, 500);
             };
         </script>
-        <?php endif; ?>
+    <?php endif; ?>
         <?php
         $content = ob_get_clean();
         renderLayout('Invoice: ' . $inv['invoice_number'], $content, 'sales');
@@ -7441,7 +7541,7 @@ function renderAdjustments(): void
             <div class="page-header-actions"><a href="?page=adjustments&action=new" class="btn btn-success btn-sm">+ New
                     Adjustment</a></div>
         </div>
-        <?php if (isset($_SESSION['flash_msg'])): ?>
+    <?php if (isset($_SESSION['flash_msg'])): ?>
         <div
         class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
@@ -7566,11 +7666,11 @@ function renderAdjustments(): void
             <div class="page-header-actions"><a href="?page=adjustments" class="btn btn-secondary btn-sm">&#8592;
                     Back</a></div>
         </div>
-        <?php if (isset($_SESSION['flash_msg'])): ?>
+    <?php if (isset($_SESSION['flash_msg'])): ?>
         <div
         class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
-        <?php if (!hasPermission('products', 'edit')): ?>
+    <?php if (!hasPermission('products', 'edit')): ?>
         <div class="alert alert-info">&#128274; As Staff, adjustments require Manager or Admin approval before stock is
             updated.
         </div><?php endif; ?>
@@ -7664,7 +7764,7 @@ function renderTransfers(): void
             <div class="page-header-actions"><a href="?page=transfers&action=new" class="btn btn-success btn-sm">+ New
                     Transfer</a></div>
         </div>
-        <?php if (isset($_SESSION['flash_msg'])): ?>
+    <?php if (isset($_SESSION['flash_msg'])): ?>
         <div
         class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
@@ -7781,7 +7881,7 @@ function renderTransfers(): void
             <div class="page-header-actions"><a href="?page=transfers" class="btn btn-secondary btn-sm">&#8592; Back</a>
             </div>
         </div>
-        <?php if (isset($_SESSION['flash_msg'])): ?>
+    <?php if (isset($_SESSION['flash_msg'])): ?>
         <div
         class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
@@ -8228,7 +8328,7 @@ function renderSettings(): void
     ob_start();
     ?>
     <div class="page-header"><h1>&#9881; Settings</h1></div>
-    <?php if ($msg): ?>
+<?php if ($msg): ?>
     <div class="alert alert-<?= h($msgType) ?>"><?= h($msg) ?></div><?php endif; ?>
     <div style="display:flex;gap:0;margin-bottom:12px;border-bottom:2px solid #a0a0a0">
         <?php $sections = ['company' => '&#127970; Company', 'invoice' => '&#128203; Invoice', 'system' => '&#9881; System', 'kiosk' => '&#128274; Kiosk', 'backup' => '&#128190; Backup'];
@@ -8247,9 +8347,13 @@ function renderSettings(): void
                     <div class="form-group">
                         <label><?= h($label) ?></label>
                         <?php if ($key === 'company_logo_file'): ?>
-                            <input type="file" name="company_logo_file" accept="image/*" style="padding:4px;border:2px inset #a0a0a0;background:#fff;width:100%">
+                            <input type="file" name="company_logo_file" accept="image/*"
+                                   style="padding:4px;border:2px inset #a0a0a0;background:#fff;width:100%">
                             <?php if (getSetting('company_logo_path')): ?>
-                                <div style="margin-top:4px;"><small>Current: <a href="<?= h(getSetting('company_logo_path')) ?>" target="_blank"><?= h(getSetting('company_logo_path')) ?></a></small></div>
+                                <div style="margin-top:4px;"><small>Current: <a
+                                                href="<?= h(getSetting('company_logo_path')) ?>"
+                                                target="_blank"><?= h(getSetting('company_logo_path')) ?></a></small>
+                                </div>
                             <?php endif; ?>
                         <?php else: ?>
                             <input type="text" name="setting_<?= h($key) ?>" value="<?= h(getSetting($key)) ?>">
@@ -8271,30 +8375,36 @@ function renderSettings(): void
                         <option value="1" <?= getSetting('kiosk_enabled') === '1' ? 'selected' : '' ?>>Enabled</option>
                         <option value="0" <?= getSetting('kiosk_enabled') !== '1' ? 'selected' : '' ?>>Disabled</option>
                     </select>
-                    <small style="color:#666;display:block;margin-top:4px">When enabled, the screen auto-locks after inactivity and shows a lock button in the header.</small>
+                    <small style="color:#666;display:block;margin-top:4px">When enabled, the screen auto-locks after
+                        inactivity and shows a lock button in the header.</small>
                 </div>
                 <div class="form-group">
                     <label>Auto-lock Timeout (seconds)</label>
-                    <input type="number" name="setting_kiosk_timeout" value="<?= h(getSetting('kiosk_timeout') ?: '300') ?>" min="30" max="86400">
-                    <small style="color:#666;display:block;margin-top:4px">e.g. 300 = 5 min &bull; 600 = 10 min &bull; 1800 = 30 min</small>
+                    <input type="number" name="setting_kiosk_timeout"
+                           value="<?= h(getSetting('kiosk_timeout') ?: '300') ?>" min="30" max="86400">
+                    <small style="color:#666;display:block;margin-top:4px">e.g. 300 = 5 min &bull; 600 = 10 min &bull;
+                        1800 = 30 min</small>
                 </div>
             </div>
         </div>
         <div class="lf" style="margin-top:12px"><span class="lf-title">&#128273; Change PIN</span>
-            <p style="font-size:12px;color:#555;margin-bottom:12px">PIN must be 4–8 digits. Leave blank to keep the existing PIN.</p>
+            <p style="font-size:12px;color:#555;margin-bottom:12px">PIN must be 4–8 digits. Leave blank to keep the
+                existing PIN.</p>
             <?php if (!getSetting('kiosk_pin_hash')): ?>
-            <div style="display:inline-flex;align-items:center;gap:6px;background:#fff3cd;border:1px solid #ffc107;padding:8px 12px;border-radius:4px;font-size:12px;margin-bottom:12px">
-                &#9888; No PIN configured yet. Set a PIN before enabling kiosk mode.
-            </div>
+                <div style="display:inline-flex;align-items:center;gap:6px;background:#fff3cd;border:1px solid #ffc107;padding:8px 12px;border-radius:4px;font-size:12px;margin-bottom:12px">
+                    &#9888; No PIN configured yet. Set a PIN before enabling kiosk mode.
+                </div>
             <?php endif; ?>
             <div class="form-grid form-grid-2">
                 <div class="form-group">
                     <label>New PIN (4–8 digits)</label>
-                    <input type="password" name="kiosk_new_pin" placeholder="Enter new PIN" maxlength="8" inputmode="numeric" pattern="\d{4,8}" autocomplete="new-password">
+                    <input type="password" name="kiosk_new_pin" placeholder="Enter new PIN" maxlength="8"
+                           inputmode="numeric" pattern="\d{4,8}" autocomplete="new-password">
                 </div>
                 <div class="form-group">
                     <label>Confirm New PIN</label>
-                    <input type="password" name="kiosk_confirm_pin" placeholder="Re-enter new PIN" maxlength="8" inputmode="numeric" pattern="\d{4,8}" autocomplete="new-password">
+                    <input type="password" name="kiosk_confirm_pin" placeholder="Re-enter new PIN" maxlength="8"
+                           inputmode="numeric" pattern="\d{4,8}" autocomplete="new-password">
                 </div>
             </div>
         </div>
@@ -8869,8 +8979,8 @@ function requirePermission(string $module, string $action): void
     }
 }
 
-//initializeDatabase();
-//upgradeDatabase();
+// initializeDatabase();
+// upgradeDatabase();
 $currentPage = $_GET['page'] ?? 'dashboard';
 if (!empty($_GET['ajax'])) {
     handleAjax();
@@ -8927,7 +9037,7 @@ if (!empty($_GET['ajax'])) {
             <button class="btn btn-primary btn-sm" onclick="newRole()">+ New Role</button>
         </div>
     </div>
-    <?php if (isset($_SESSION['flash_msg'])): ?>
+<?php if (isset($_SESSION['flash_msg'])): ?>
     <div
     class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
@@ -10478,7 +10588,7 @@ if (!empty($_GET['ajax'])) {
             <button class="btn btn-primary btn-sm no-print" onclick="window.print()">Print List</button>
         </div>
     </div>
-    <?php if (isset($_SESSION['flash_msg'])): ?>
+<?php if (isset($_SESSION['flash_msg'])): ?>
     <div
     class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
             endif; ?>
@@ -10973,7 +11083,7 @@ if (!empty($_GET['ajax'])) {
             <button class="btn btn-primary btn-sm" onclick="openModal('apiM')">+ Add Integration</button>
         </div>
     </div>
-    <?php if (isset($_SESSION['flash_msg'])): ?>
+<?php if (isset($_SESSION['flash_msg'])): ?>
     <div
     class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
@@ -11179,7 +11289,7 @@ if (!empty($_GET['ajax'])) {
             <button class="btn btn-primary btn-sm" onclick="openModal('smsTestM')">Send Test</button>
         </div>
     </div>
-    <?php if (isset($_SESSION['flash_msg'])): ?>
+<?php if (isset($_SESSION['flash_msg'])): ?>
     <div
     class="alert alert-<?= h($_SESSION['flash_type'] ?? 'info') ?>"><?= h($_SESSION['flash_msg']) ?></div><?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']);
         endif; ?>
@@ -11372,7 +11482,7 @@ if (!empty($_GET['ajax'])) {
             </table>
         </div>
     </div>
-    <?php
+<?php
         $content = ob_get_clean();
         renderLayout('Supplier Ledgers', $content, 'supplier_ledgers');
     }
@@ -11442,94 +11552,112 @@ if (!empty($_GET['ajax'])) {
                 FROM collections c ORDER BY c.name ASC")->fetchAll();
             ob_start();
             ?>
-            <div class="page-header">
-                <h1>&#128194; Collections / Folders</h1>
-                <div class="page-header-actions">
+    <div class="page-header">
+        <h1>&#128194; Collections / Folders</h1>
+        <div class="page-header-actions">
+            <?php if (hasPermission('collections', 'manage')): ?>
+                <button class="btn btn-success btn-sm" onclick="openModal('colModal')">+ New Collection</button>
+            <?php endif; ?>
+        </div>
+    </div>
+<?php if (isset($_SESSION['flash_msg'])): ?>
+    <div class="alert alert-<?= h($_SESSION['flash_type']) ?>"><?= h($_SESSION['flash_msg']) ?></div>
+<?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']); ?>
+<?php endif; ?>
+    <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap:16px;">
+        <?php foreach ($categories as $cat): ?>
+            <div class="lf" style="cursor:pointer; transition:transform 0.2s; border-left:4px solid #f0ad4e;"
+                 onclick="window.location='?page=collections&action=view&type=category&id=<?= $cat['id'] ?>'"
+                 onmouseover="this.style.transform='translateY(-3px)'"
+                 onmouseout="this.style.transform='translateY(0)'">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                    <div style="font-size:40px; color:#f0ad4e; line-height:1;">&#128193;</div>
+                    <span class="badge badge-warning" style="font-size:9px;">SYSTEM CATEGORY</span>
+                </div>
+                <h3 style="margin:10px 0 4px 0; font-size:16px; color:#333; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><?= h($cat['name']) ?></h3>
+                <p style="font-size:12px; color:#777; height:34px; overflow:hidden;"><?= h($cat['description'] ?: 'System product category.') ?></p>
+                <div style="margin-top:12px; font-size:11px; font-weight:700; color:#555; background:#e8e8e8; padding:6px; border-radius:4px; display:flex; flex-direction:column; gap:4px;">
+                    <div style="display:flex; justify-content:space-between;">
+                        <span>Products: <?= $cat['p_cnt'] ?></span>
+                        <span style="color:#4a90d9">Val: <?= formatCurrency((float) $cat['p_val']) ?></span>
+                    </div>
+                </div>
+            </div>
+        <?php endforeach; ?>
+        <?php foreach ($collections as $c): ?>
+            <div class="lf" style="cursor:pointer; transition:transform 0.2s; border-left:4px solid #4a90d9;"
+                 onclick="window.location='?page=collections&action=view&id=<?= $c['id'] ?>'"
+                 onmouseover="this.style.transform='translateY(-3px)'"
+                 onmouseout="this.style.transform='translateY(0)'">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                    <div style="font-size:40px; color:#4a90d9; line-height:1;">&#128193;</div>
                     <?php if (hasPermission('collections', 'manage')): ?>
-                        <button class="btn btn-success btn-sm" onclick="openModal('colModal')">+ New Collection</button>
+                        <button class="btn btn-xs btn-danger"
+                                onclick="event.stopPropagation(); deleteCol(<?= $c['id'] ?>, '<?= h(addslashes($c['name'])) ?>')">
+                            &#128465;
+                        </button>
                     <?php endif; ?>
                 </div>
-            </div>
-            <?php if (isset($_SESSION['flash_msg'])): ?>
-                <div class="alert alert-<?= h($_SESSION['flash_type']) ?>"><?= h($_SESSION['flash_msg']) ?></div>
-                <?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']); ?>
-            <?php endif; ?>
-            <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap:16px;">
-                <?php foreach ($categories as $cat): ?>
-                    <div class="lf" style="cursor:pointer; transition:transform 0.2s; border-left:4px solid #f0ad4e;" onclick="window.location='?page=collections&action=view&type=category&id=<?= $cat['id'] ?>'" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
-                        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                            <div style="font-size:40px; color:#f0ad4e; line-height:1;">&#128193;</div>
-                            <span class="badge badge-warning" style="font-size:9px;">SYSTEM CATEGORY</span>
-                        </div>
-                        <h3 style="margin:10px 0 4px 0; font-size:16px; color:#333; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><?= h($cat['name']) ?></h3>
-                        <p style="font-size:12px; color:#777; height:34px; overflow:hidden;"><?= h($cat['description'] ?: 'System product category.') ?></p>
-                        <div style="margin-top:12px; font-size:11px; font-weight:700; color:#555; background:#e8e8e8; padding:6px; border-radius:4px; display:flex; flex-direction:column; gap:4px;">
-                            <div style="display:flex; justify-content:space-between;">
-                                <span>Products: <?= $cat['p_cnt'] ?></span>
-                                <span style="color:#4a90d9">Val: <?= formatCurrency((float) $cat['p_val']) ?></span>
-                            </div>
-                        </div>
+                <h3 style="margin:10px 0 4px 0; font-size:16px; color:#333; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><?= h($c['name']) ?></h3>
+                <p style="font-size:12px; color:#777; height:34px; overflow:hidden;"><?= h($c['description'] ?: 'No description provided.') ?></p>
+                <div style="margin-top:12px; font-size:11px; font-weight:700; color:#555; background:#e8e8e8; padding:6px; border-radius:4px; display:flex; flex-direction:column; gap:4px;">
+                    <div style="display:flex; justify-content:space-between;">
+                        <span>Products: <?= $c['p_cnt'] ?></span>
+                        <span style="color:#4a90d9">Val: <?= formatCurrency((float) $c['p_val']) ?></span>
                     </div>
-                <?php endforeach; ?>
-                <?php foreach ($collections as $c): ?>
-                    <div class="lf" style="cursor:pointer; transition:transform 0.2s; border-left:4px solid #4a90d9;" onclick="window.location='?page=collections&action=view&id=<?= $c['id'] ?>'" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
-                        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                            <div style="font-size:40px; color:#4a90d9; line-height:1;">&#128193;</div>
-                            <?php if (hasPermission('collections', 'manage')): ?>
-                                <button class="btn btn-xs btn-danger" onclick="event.stopPropagation(); deleteCol(<?= $c['id'] ?>, '<?= h(addslashes($c['name'])) ?>')">&#128465;</button>
-                            <?php endif; ?>
-                        </div>
-                        <h3 style="margin:10px 0 4px 0; font-size:16px; color:#333; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><?= h($c['name']) ?></h3>
-                        <p style="font-size:12px; color:#777; height:34px; overflow:hidden;"><?= h($c['description'] ?: 'No description provided.') ?></p>
-                        <div style="margin-top:12px; font-size:11px; font-weight:700; color:#555; background:#e8e8e8; padding:6px; border-radius:4px; display:flex; flex-direction:column; gap:4px;">
-                            <div style="display:flex; justify-content:space-between;">
-                                <span>Products: <?= $c['p_cnt'] ?></span>
-                                <span style="color:#4a90d9">Val: <?= formatCurrency((float) $c['p_val']) ?></span>
-                            </div>
-                            <div style="display:flex; justify-content:space-between;">
-                                <span>Customers: <?= $c['c_cnt'] ?></span>
-                                <span style="color:<?= $c['c_bal'] > 0 ? '#d9534f' : '#5cb85c' ?>">Bal: <?= formatCurrency((float) $c['c_bal']) ?></span>
-                            </div>
-                            <div style="display:flex; justify-content:space-between;">
-                                <span>Suppliers: <?= $c['s_cnt'] ?></span>
-                                <span style="color:<?= $c['s_bal'] > 0 ? '#d9534f' : '#5cb85c' ?>">Bal: <?= formatCurrency((float) $c['s_bal']) ?></span>
-                            </div>
-                        </div>
+                    <div style="display:flex; justify-content:space-between;">
+                        <span>Customers: <?= $c['c_cnt'] ?></span>
+                        <span style="color:<?= $c['c_bal'] > 0 ? '#d9534f' : '#5cb85c' ?>">Bal: <?= formatCurrency((float) $c['c_bal']) ?></span>
                     </div>
-                <?php endforeach; ?>
-                <?php if (empty($categories) && empty($collections)): ?>
-                    <div style="grid-column:1/-1; padding:30px; text-align:center; color:#888; border:2px dashed #ccc;">
-                        No collections or categories found. Create a folder to group related records together!
+                    <div style="display:flex; justify-content:space-between;">
+                        <span>Suppliers: <?= $c['s_cnt'] ?></span>
+                        <span style="color:<?= $c['s_bal'] > 0 ? '#d9534f' : '#5cb85c' ?>">Bal: <?= formatCurrency((float) $c['s_bal']) ?></span>
                     </div>
-                <?php endif; ?>
-            </div>
-            <div id="colModal" class="modal-overlay">
-                <div class="modal" style="max-width:400px;">
-                    <div class="modal-title-bar"><span>New Collection</span><button class="modal-close-btn" onclick="closeModal('colModal')">&times;</button></div>
-                    <form method="POST">
-                        <?= csrfField() ?>
-                        <input type="hidden" name="save_collection" value="1">
-                        <div class="modal-body">
-                            <div class="form-group mb-8"><label>Folder Name <span class="required-mark">*</span></label><input type="text" name="name" required></div>
-                            <div class="form-group"><label>Description</label><textarea name="description" rows="3"></textarea></div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('colModal')">Cancel</button>
-                            <button type="submit" class="btn btn-success btn-sm">Create Folder</button>
-                        </div>
-                    </form>
                 </div>
             </div>
-            <form id="delForm" method="POST" style="display:none;"><?= csrfField() ?><input type="hidden" name="delete_collection" value="1"><input type="hidden" name="id" id="delId"></form>
-            <script>
-                function deleteCol(id, name) {
-                    confirmAction('Delete the folder "' + name + '"? The contents (products/customers) will NOT be deleted, only removed from this folder.', function() {
-                        document.getElementById('delId').value = id;
-                        document.getElementById('delForm').submit();
-                    });
-                }
-            </script>
-            <?php
+        <?php endforeach; ?>
+        <?php if (empty($categories) && empty($collections)): ?>
+            <div style="grid-column:1/-1; padding:30px; text-align:center; color:#888; border:2px dashed #ccc;">
+                No collections or categories found. Create a folder to group related records together!
+            </div>
+        <?php endif; ?>
+    </div>
+    <div id="colModal" class="modal-overlay">
+        <div class="modal" style="max-width:400px;">
+            <div class="modal-title-bar"><span>New Collection</span>
+                <button class="modal-close-btn" onclick="closeModal('colModal')">&times;</button>
+            </div>
+            <form method="POST">
+                <?= csrfField() ?>
+                <input type="hidden" name="save_collection" value="1">
+                <div class="modal-body">
+                    <div class="form-group mb-8"><label>Folder Name <span class="required-mark">*</span></label><input
+                                type="text" name="name" required></div>
+                    <div class="form-group"><label>Description</label><textarea name="description" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('colModal')">Cancel
+                    </button>
+                    <button type="submit" class="btn btn-success btn-sm">Create Folder</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <form id="delForm" method="POST" style="display:none;"><?= csrfField() ?><input type="hidden"
+                                                                                    name="delete_collection"
+                                                                                    value="1"><input type="hidden"
+                                                                                                     name="id"
+                                                                                                     id="delId"></form>
+    <script>
+        function deleteCol(id, name) {
+            confirmAction('Delete the folder "' + name + '"? The contents (products/customers) will NOT be deleted, only removed from this folder.', function () {
+                document.getElementById('delId').value = id;
+                document.getElementById('delForm').submit();
+            });
+        }
+    </script>
+<?php
             renderLayout('Collections', ob_get_clean(), 'collections');
         } elseif ($action === 'view') {
             $id = (int) $_GET['id'];
@@ -11551,61 +11679,72 @@ if (!empty($_GET['ajax'])) {
                 $lowStockCount = count(array_filter($prods, fn($i) => $i['current_stock'] <= $i['min_stock_level']));
                 ob_start();
                 ?>
-                <div class="page-header">
-                    <h1>&#128194; Category Folder: <?= h($col['name']) ?></h1>
-                    <div class="page-header-actions">
-                        <span class="badge badge-warning" style="margin-right:8px;">READ-ONLY SYSTEM FOLDER</span>
-                        <a href="?page=collections" class="btn btn-secondary btn-sm">&#8592; Back</a>
-                    </div>
-                </div>
-                <div class="stats-grid" style="margin-bottom:16px;">
-                    <div class="stat-card primary">
-                        <div class="stat-card-title">Products Count</div>
-                        <div class="stat-card-value"><?= count($prods) ?></div>
-                        <div class="stat-card-sub" style="<?= $lowStockCount > 0 ? 'color:#d9534f;font-weight:bold;' : '' ?>"><?= $lowStockCount ?> low/out of stock</div>
-                    </div>
-                    <div class="stat-card info">
-                        <div class="stat-card-title">Inventory Value (Cost)</div>
-                        <div class="stat-card-value"><?= formatCurrency($totalStockCost) ?></div>
-                        <div class="stat-card-sub">Total purchase value</div>
-                    </div>
-                    <div class="stat-card success">
-                        <div class="stat-card-title">Retail Value (Sell)</div>
-                        <div class="stat-card-value"><?= formatCurrency($totalStockSell) ?></div>
-                        <div class="stat-card-sub">Total selling value</div>
-                    </div>
-                    <div class="stat-card warning">
-                        <div class="stat-card-title">Potential Profit</div>
-                        <div class="stat-card-value"><?= formatCurrency($potentialProfit) ?></div>
-                        <div class="stat-card-sub">Gross margin if all sold</div>
-                    </div>
-                </div>
-                <?php if ($col['description']): ?>
-                    <div style="background:#fff; padding:10px 14px; border:1px solid #ccc; margin-bottom:16px; border-left:4px solid #f0ad4e; font-size:13px; color:#555;">
-                        <?= nl2br(h($col['description'])) ?>
-                    </div>
-                <?php endif; ?>
-                <div class="lf">
-                    <span class="lf-title">Products in Category (<?= count($prods) ?>)</span>
-                    <div class="tbl-wrap">
-                        <table class="tbl">
-                            <thead><tr><th>SKU</th><th>Product</th><th class="text-right">Stock</th><th class="text-right">Selling Price</th><th class="text-right">Value (Cost)</th></tr></thead>
-                            <tbody>
-                                <?php if (empty($prods)) echo "<tr><td colspan='5' class='text-center text-muted'>No products in this category.</td></tr>"; ?>
-                                <?php foreach ($prods as $p): ?>
-                                <tr>
-                                    <td><code><?= h($p['sku']) ?></code></td>
-                                    <td><a href="?page=products&action=view&id=<?= $p['id'] ?>"><?= h($p['name']) ?></a></td>
-                                    <td class="text-right stock-<?= $p['current_stock'] <= 0 ? 'critical' : 'ok' ?>"><?= number_format($p['current_stock']) ?></td>
-                                    <td class="text-right"><?= formatCurrency((float) $p['selling_price']) ?></td>
-                                    <td class="text-right"><?= formatCurrency((float) ($p['current_stock'] * $p['purchase_price'])) ?></td>
-                                </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                <?php
+    <div class="page-header">
+        <h1>&#128194; Category Folder: <?= h($col['name']) ?></h1>
+        <div class="page-header-actions">
+            <span class="badge badge-warning" style="margin-right:8px;">READ-ONLY SYSTEM FOLDER</span>
+            <a href="?page=collections" class="btn btn-secondary btn-sm">&#8592; Back</a>
+        </div>
+    </div>
+    <div class="stats-grid" style="margin-bottom:16px;">
+        <div class="stat-card primary">
+            <div class="stat-card-title">Products Count</div>
+            <div class="stat-card-value"><?= count($prods) ?></div>
+            <div class="stat-card-sub"
+                 style="<?= $lowStockCount > 0 ? 'color:#d9534f;font-weight:bold;' : '' ?>"><?= $lowStockCount ?>low/out
+                of stock
+            </div>
+        </div>
+        <div class="stat-card info">
+            <div class="stat-card-title">Inventory Value (Cost)</div>
+            <div class="stat-card-value"><?= formatCurrency($totalStockCost) ?></div>
+            <div class="stat-card-sub">Total purchase value</div>
+        </div>
+        <div class="stat-card success">
+            <div class="stat-card-title">Retail Value (Sell)</div>
+            <div class="stat-card-value"><?= formatCurrency($totalStockSell) ?></div>
+            <div class="stat-card-sub">Total selling value</div>
+        </div>
+        <div class="stat-card warning">
+            <div class="stat-card-title">Potential Profit</div>
+            <div class="stat-card-value"><?= formatCurrency($potentialProfit) ?></div>
+            <div class="stat-card-sub">Gross margin if all sold</div>
+        </div>
+    </div>
+    <?php if ($col['description']): ?>
+    <div style="background:#fff; padding:10px 14px; border:1px solid #ccc; margin-bottom:16px; border-left:4px solid #f0ad4e; font-size:13px; color:#555;">
+        <?= nl2br(h($col['description'])) ?>
+    </div>
+<?php endif; ?>
+    <div class="lf">
+        <span class="lf-title">Products in Category (<?= count($prods) ?>)</span>
+        <div class="tbl-wrap">
+            <table class="tbl">
+                <thead>
+                <tr>
+                    <th>SKU</th>
+                    <th>Product</th>
+                    <th class="text-right">Stock</th>
+                    <th class="text-right">Selling Price</th>
+                    <th class="text-right">Value (Cost)</th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php if (empty($prods)) echo "<tr><td colspan='5' class='text-center text-muted'>No products in this category.</td></tr>"; ?>
+                <?php foreach ($prods as $p): ?>
+                    <tr>
+                        <td><code><?= h($p['sku']) ?></code></td>
+                        <td><a href="?page=products&action=view&id=<?= $p['id'] ?>"><?= h($p['name']) ?></a></td>
+                        <td class="text-right stock-<?= $p['current_stock'] <= 0 ? 'critical' : 'ok' ?>"><?= number_format($p['current_stock']) ?></td>
+                        <td class="text-right"><?= formatCurrency((float) $p['selling_price']) ?></td>
+                        <td class="text-right"><?= formatCurrency((float) ($p['current_stock'] * $p['purchase_price'])) ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <?php
                 renderLayout('Category: ' . $col['name'], ob_get_clean(), 'collections');
             } else {
                 $col = $pdo->prepare('SELECT * FROM collections WHERE id=?');
@@ -11640,171 +11779,214 @@ if (!empty($_GET['ajax'])) {
                 $totalCustCredit = array_reduce($custs, fn($c, $i) => $c + $i['credit_limit'], 0);
                 $totalSupBal = array_reduce($sups, fn($c, $i) => $c + $i['current_balance'], 0);
                 ob_start();
-                ?>
-                <div class="page-header">
-                    <h1>&#128194; Folder: <?= h($col['name']) ?></h1>
-                    <div class="page-header-actions">
-                        <a href="?page=collections" class="btn btn-secondary btn-sm">&#8592; Back</a>
-                    </div>
-                </div>
-                <?php if (isset($_SESSION['flash_msg'])): ?>
-                    <div class="alert alert-<?= h($_SESSION['flash_type']) ?>"><?= h($_SESSION['flash_msg']) ?></div>
-                    <?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']); ?>
+    ?>
+    <div class="page-header">
+        <h1>&#128194; Folder: <?= h($col['name']) ?></h1>
+        <div class="page-header-actions">
+            <a href="?page=collections" class="btn btn-secondary btn-sm">&#8592; Back</a>
+        </div>
+    </div>
+    <?php if (isset($_SESSION['flash_msg'])): ?>
+    <div class="alert alert-<?= h($_SESSION['flash_type']) ?>"><?= h($_SESSION['flash_msg']) ?></div>
+    <?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']); ?>
+<?php endif; ?>
+    <div class="stats-grid" style="margin-bottom:16px;">
+        <div class="stat-card primary">
+            <div class="stat-card-title">Inventory Value (Cost)</div>
+            <div class="stat-card-value"><?= formatCurrency($totalStockCost) ?></div>
+            <div class="stat-card-sub"><?= count($prods) ?> products linked</div>
+        </div>
+        <div class="stat-card success">
+            <div class="stat-card-title">Expected Retail / Profit</div>
+            <div class="stat-card-value"><?= formatCurrency($totalStockSell) ?></div>
+            <div class="stat-card-sub" style="color:#5cb85c;font-weight:bold;">
+                Profit: <?= formatCurrency($potentialProfit) ?></div>
+        </div>
+        <div class="stat-card warning">
+            <div class="stat-card-title">Receivables (Customers)</div>
+            <div class="stat-card-value"
+                 style="<?= $totalCustBal > 0 ? 'color:#d9534f;' : '' ?>"><?= formatCurrency($totalCustBal) ?></div>
+            <div class="stat-card-sub"><?= count($custs) ?> customers (Limit: <?= formatCurrency($totalCustCredit) ?>)
+            </div>
+        </div>
+        <div class="stat-card danger">
+            <div class="stat-card-title">Payables (Suppliers)</div>
+            <div class="stat-card-value"
+                 style="<?= $totalSupBal > 0 ? 'color:#d9534f;' : '' ?>"><?= formatCurrency($totalSupBal) ?></div>
+            <div class="stat-card-sub">Owed to <?= count($sups) ?> suppliers</div>
+        </div>
+    </div>
+    <?php if ($col['description']): ?>
+    <div style="background:#fff; padding:10px 14px; border:1px solid #ccc; margin-bottom:16px; border-left:4px solid #4a90d9; font-size:13px; color:#555;">
+        <?= nl2br(h($col['description'])) ?>
+    </div>
+<?php endif; ?>
+    <div class="cols-3" style="grid-template-columns: 1fr; gap:16px;">
+        <div class="lf">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <span class="lf-title" style="position:static;">Products (<?= count($prods) ?>)</span>
+                <?php if (hasPermission('collections', 'manage')): ?>
+                    <form method="POST" style="display:flex; gap:6px;">
+                        <?= csrfField() ?>
+                        <input type="hidden" name="add_item" value="1">
+                        <input type="hidden" name="collection_id" value="<?= $id ?>">
+                        <input type="hidden" name="item_type" value="product">
+                        <select name="item_id" required style="padding:2px 4px; font-size:11px;">
+                            <option value="">Add Product...</option>
+                            <?php foreach ($availProds as $ap) echo "<option value='{$ap['id']}'>" . h($ap['name']) . '</option>'; ?>
+                        </select>
+                        <button type="submit" class="btn btn-primary btn-xs">+</button>
+                    </form>
                 <?php endif; ?>
-                <div class="stats-grid" style="margin-bottom:16px;">
-                    <div class="stat-card primary">
-                        <div class="stat-card-title">Inventory Value (Cost)</div>
-                        <div class="stat-card-value"><?= formatCurrency($totalStockCost) ?></div>
-                        <div class="stat-card-sub"><?= count($prods) ?> products linked</div>
-                    </div>
-                    <div class="stat-card success">
-                        <div class="stat-card-title">Expected Retail / Profit</div>
-                        <div class="stat-card-value"><?= formatCurrency($totalStockSell) ?></div>
-                        <div class="stat-card-sub" style="color:#5cb85c;font-weight:bold;">Profit: <?= formatCurrency($potentialProfit) ?></div>
-                    </div>
-                    <div class="stat-card warning">
-                        <div class="stat-card-title">Receivables (Customers)</div>
-                        <div class="stat-card-value" style="<?= $totalCustBal > 0 ? 'color:#d9534f;' : '' ?>"><?= formatCurrency($totalCustBal) ?></div>
-                        <div class="stat-card-sub"><?= count($custs) ?> customers (Limit: <?= formatCurrency($totalCustCredit) ?>)</div>
-                    </div>
-                    <div class="stat-card danger">
-                        <div class="stat-card-title">Payables (Suppliers)</div>
-                        <div class="stat-card-value" style="<?= $totalSupBal > 0 ? 'color:#d9534f;' : '' ?>"><?= formatCurrency($totalSupBal) ?></div>
-                        <div class="stat-card-sub">Owed to <?= count($sups) ?> suppliers</div>
-                    </div>
-                </div>
-                <?php if ($col['description']): ?>
-                    <div style="background:#fff; padding:10px 14px; border:1px solid #ccc; margin-bottom:16px; border-left:4px solid #4a90d9; font-size:13px; color:#555;">
-                        <?= nl2br(h($col['description'])) ?>
-                    </div>
+            </div>
+            <div class="tbl-wrap">
+                <table class="tbl">
+                    <thead>
+                    <tr>
+                        <th>SKU</th>
+                        <th>Product</th>
+                        <th class="text-right">Stock</th>
+                        <th class="text-right">Price</th>
+                        <th></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php if (empty($prods)) echo "<tr><td colspan='5' class='text-center text-muted'>No products linked.</td></tr>"; ?>
+                    <?php foreach ($prods as $p): ?>
+                        <tr>
+                            <td><code><?= h($p['sku']) ?></code></td>
+                            <td><a href="?page=products&action=view&id=<?= $p['id'] ?>"><?= h($p['name']) ?></a></td>
+                            <td class="text-right stock-<?= $p['current_stock'] <= 0 ? 'critical' : 'ok' ?>"><?= number_format($p['current_stock']) ?></td>
+                            <td class="text-right"><?= formatCurrency((float) $p['selling_price']) ?></td>
+                            <td class="text-right">
+                                <?php if (hasPermission('collections', 'manage')): ?>
+                                    <form method="POST" style="display:inline;"
+                                          onsubmit="return confirm('Remove this product from folder?')">
+                                        <?= csrfField() ?><input type="hidden" name="remove_item" value="1"><input
+                                                type="hidden" name="collection_id" value="<?= $id ?>"><input
+                                                type="hidden" name="item_type" value="product"><input type="hidden"
+                                                                                                      name="item_id"
+                                                                                                      value="<?= $p['id'] ?>">
+                                        <button class="btn btn-danger btn-xs">&#215;</button>
+                                    </form>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="lf">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <span class="lf-title" style="position:static;">Customers (<?= count($custs) ?>)</span>
+                <?php if (hasPermission('collections', 'manage')): ?>
+                    <form method="POST" style="display:flex; gap:6px;">
+                        <?= csrfField() ?>
+                        <input type="hidden" name="add_item" value="1">
+                        <input type="hidden" name="collection_id" value="<?= $id ?>">
+                        <input type="hidden" name="item_type" value="customer">
+                        <select name="item_id" required style="padding:2px 4px; font-size:11px;">
+                            <option value="">Add Customer...</option>
+                            <?php foreach ($availCusts as $ac) echo "<option value='{$ac['id']}'>" . h($ac['name']) . '</option>'; ?>
+                        </select>
+                        <button type="submit" class="btn btn-primary btn-xs">+</button>
+                    </form>
                 <?php endif; ?>
-                <div class="cols-3" style="grid-template-columns: 1fr; gap:16px;">
-                    <div class="lf">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                            <span class="lf-title" style="position:static;">Products (<?= count($prods) ?>)</span>
-                            <?php if (hasPermission('collections', 'manage')): ?>
-                            <form method="POST" style="display:flex; gap:6px;">
-                                <?= csrfField() ?>
-                                <input type="hidden" name="add_item" value="1">
-                                <input type="hidden" name="collection_id" value="<?= $id ?>">
-                                <input type="hidden" name="item_type" value="product">
-                                <select name="item_id" required style="padding:2px 4px; font-size:11px;">
-                                    <option value="">Add Product...</option>
-                                    <?php foreach ($availProds as $ap) echo "<option value='{$ap['id']}'>" . h($ap['name']) . '</option>'; ?>
-                                </select>
-                                <button type="submit" class="btn btn-primary btn-xs">+</button>
-                            </form>
-                            <?php endif; ?>
-                        </div>
-                        <div class="tbl-wrap">
-                            <table class="tbl">
-                                <thead><tr><th>SKU</th><th>Product</th><th class="text-right">Stock</th><th class="text-right">Price</th><th></th></tr></thead>
-                                <tbody>
-                                    <?php if (empty($prods)) echo "<tr><td colspan='5' class='text-center text-muted'>No products linked.</td></tr>"; ?>
-                                    <?php foreach ($prods as $p): ?>
-                                    <tr>
-                                        <td><code><?= h($p['sku']) ?></code></td>
-                                        <td><a href="?page=products&action=view&id=<?= $p['id'] ?>"><?= h($p['name']) ?></a></td>
-                                        <td class="text-right stock-<?= $p['current_stock'] <= 0 ? 'critical' : 'ok' ?>"><?= number_format($p['current_stock']) ?></td>
-                                        <td class="text-right"><?= formatCurrency((float) $p['selling_price']) ?></td>
-                                        <td class="text-right">
-                                            <?php if (hasPermission('collections', 'manage')): ?>
-                                            <form method="POST" style="display:inline;" onsubmit="return confirm('Remove this product from folder?')">
-                                                <?= csrfField() ?><input type="hidden" name="remove_item" value="1"><input type="hidden" name="collection_id" value="<?= $id ?>"><input type="hidden" name="item_type" value="product"><input type="hidden" name="item_id" value="<?= $p['id'] ?>">
-                                                <button class="btn btn-danger btn-xs">&#215;</button>
-                                            </form>
-                                            <?php endif; ?>
-                                        </td>
-                                    </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <div class="lf">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                            <span class="lf-title" style="position:static;">Customers (<?= count($custs) ?>)</span>
-                            <?php if (hasPermission('collections', 'manage')): ?>
-                            <form method="POST" style="display:flex; gap:6px;">
-                                <?= csrfField() ?>
-                                <input type="hidden" name="add_item" value="1">
-                                <input type="hidden" name="collection_id" value="<?= $id ?>">
-                                <input type="hidden" name="item_type" value="customer">
-                                <select name="item_id" required style="padding:2px 4px; font-size:11px;">
-                                    <option value="">Add Customer...</option>
-                                    <?php foreach ($availCusts as $ac) echo "<option value='{$ac['id']}'>" . h($ac['name']) . '</option>'; ?>
-                                </select>
-                                <button type="submit" class="btn btn-primary btn-xs">+</button>
-                            </form>
-                            <?php endif; ?>
-                        </div>
-                        <div class="tbl-wrap">
-                            <table class="tbl">
-                                <thead><tr><th>Customer</th><th>Phone</th><th class="text-right">Balance</th><th></th></tr></thead>
-                                <tbody>
-                                    <?php if (empty($custs)) echo "<tr><td colspan='4' class='text-center text-muted'>No customers linked.</td></tr>"; ?>
-                                    <?php foreach ($custs as $c): ?>
-                                    <tr>
-                                        <td><a href="?page=customers&action=view&id=<?= $c['id'] ?>"><?= h($c['name']) ?></a></td>
-                                        <td><?= h($c['phone'] ?: '-') ?></td>
-                                        <td class="text-right <?= $c['current_balance'] > 0 ? 'stock-critical' : '' ?>"><?= formatCurrency((float) $c['current_balance']) ?></td>
-                                        <td class="text-right">
-                                            <?php if (hasPermission('collections', 'manage')): ?>
-                                            <form method="POST" style="display:inline;" onsubmit="return confirm('Remove customer from folder?')">
-                                                <?= csrfField() ?><input type="hidden" name="remove_item" value="1"><input type="hidden" name="collection_id" value="<?= $id ?>"><input type="hidden" name="item_type" value="customer"><input type="hidden" name="item_id" value="<?= $c['id'] ?>">
-                                                <button class="btn btn-danger btn-xs">&#215;</button>
-                                            </form>
-                                            <?php endif; ?>
-                                        </td>
-                                    </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <div class="lf">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                            <span class="lf-title" style="position:static;">Suppliers (<?= count($sups) ?>)</span>
-                            <?php if (hasPermission('collections', 'manage')): ?>
-                            <form method="POST" style="display:flex; gap:6px;">
-                                <?= csrfField() ?>
-                                <input type="hidden" name="add_item" value="1">
-                                <input type="hidden" name="collection_id" value="<?= $id ?>">
-                                <input type="hidden" name="item_type" value="supplier">
-                                <select name="item_id" required style="padding:2px 4px; font-size:11px;">
-                                    <option value="">Add Supplier...</option>
-                                    <?php foreach ($availSups as $as) echo "<option value='{$as['id']}'>" . h($as['company_name']) . '</option>'; ?>
-                                </select>
-                                <button type="submit" class="btn btn-primary btn-xs">+</button>
-                            </form>
-                            <?php endif; ?>
-                        </div>
-                        <div class="tbl-wrap">
-                            <table class="tbl">
-                                <thead><tr><th>Supplier</th><th>Contact</th><th class="text-right">Balance</th><th></th></tr></thead>
-                                <tbody>
-                                    <?php if (empty($sups)) echo "<tr><td colspan='4' class='text-center text-muted'>No suppliers linked.</td></tr>"; ?>
-                                    <?php foreach ($sups as $s): ?>
-                                    <tr>
-                                        <td><a href="?page=suppliers&action=view&id=<?= $s['id'] ?>"><?= h($s['company_name']) ?></a></td>
-                                        <td><?= h($s['contact_person'] ?: '-') ?></td>
-                                        <td class="text-right <?= $s['current_balance'] > 0 ? 'stock-critical' : '' ?>"><?= formatCurrency((float) $s['current_balance']) ?></td>
-                                        <td class="text-right">
-                                            <?php if (hasPermission('collections', 'manage')): ?>
-                                            <form method="POST" style="display:inline;" onsubmit="return confirm('Remove supplier from folder?')">
-                                                <?= csrfField() ?><input type="hidden" name="remove_item" value="1"><input type="hidden" name="collection_id" value="<?= $id ?>"><input type="hidden" name="item_type" value="supplier"><input type="hidden" name="item_id" value="<?= $s['id'] ?>">
-                                                <button class="btn btn-danger btn-xs">&#215;</button>
-                                            </form>
-                                            <?php endif; ?>
-                                        </td>
-                                    </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-                <?php
+            </div>
+            <div class="tbl-wrap">
+                <table class="tbl">
+                    <thead>
+                    <tr>
+                        <th>Customer</th>
+                        <th>Phone</th>
+                        <th class="text-right">Balance</th>
+                        <th></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php if (empty($custs)) echo "<tr><td colspan='4' class='text-center text-muted'>No customers linked.</td></tr>"; ?>
+                    <?php foreach ($custs as $c): ?>
+                        <tr>
+                            <td><a href="?page=customers&action=view&id=<?= $c['id'] ?>"><?= h($c['name']) ?></a></td>
+                            <td><?= h($c['phone'] ?: '-') ?></td>
+                            <td class="text-right <?= $c['current_balance'] > 0 ? 'stock-critical' : '' ?>"><?= formatCurrency((float) $c['current_balance']) ?></td>
+                            <td class="text-right">
+                                <?php if (hasPermission('collections', 'manage')): ?>
+                                    <form method="POST" style="display:inline;"
+                                          onsubmit="return confirm('Remove customer from folder?')">
+                                        <?= csrfField() ?><input type="hidden" name="remove_item" value="1"><input
+                                                type="hidden" name="collection_id" value="<?= $id ?>"><input
+                                                type="hidden" name="item_type" value="customer"><input type="hidden"
+                                                                                                       name="item_id"
+                                                                                                       value="<?= $c['id'] ?>">
+                                        <button class="btn btn-danger btn-xs">&#215;</button>
+                                    </form>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="lf">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <span class="lf-title" style="position:static;">Suppliers (<?= count($sups) ?>)</span>
+                <?php if (hasPermission('collections', 'manage')): ?>
+                    <form method="POST" style="display:flex; gap:6px;">
+                        <?= csrfField() ?>
+                        <input type="hidden" name="add_item" value="1">
+                        <input type="hidden" name="collection_id" value="<?= $id ?>">
+                        <input type="hidden" name="item_type" value="supplier">
+                        <select name="item_id" required style="padding:2px 4px; font-size:11px;">
+                            <option value="">Add Supplier...</option>
+                            <?php foreach ($availSups as $as) echo "<option value='{$as['id']}'>" . h($as['company_name']) . '</option>'; ?>
+                        </select>
+                        <button type="submit" class="btn btn-primary btn-xs">+</button>
+                    </form>
+                <?php endif; ?>
+            </div>
+            <div class="tbl-wrap">
+                <table class="tbl">
+                    <thead>
+                    <tr>
+                        <th>Supplier</th>
+                        <th>Contact</th>
+                        <th class="text-right">Balance</th>
+                        <th></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php if (empty($sups)) echo "<tr><td colspan='4' class='text-center text-muted'>No suppliers linked.</td></tr>"; ?>
+                    <?php foreach ($sups as $s): ?>
+                        <tr>
+                            <td>
+                                <a href="?page=suppliers&action=view&id=<?= $s['id'] ?>"><?= h($s['company_name']) ?></a>
+                            </td>
+                            <td><?= h($s['contact_person'] ?: '-') ?></td>
+                            <td class="text-right <?= $s['current_balance'] > 0 ? 'stock-critical' : '' ?>"><?= formatCurrency((float) $s['current_balance']) ?></td>
+                            <td class="text-right">
+                                <?php if (hasPermission('collections', 'manage')): ?>
+                                    <form method="POST" style="display:inline;"
+                                          onsubmit="return confirm('Remove supplier from folder?')">
+                                        <?= csrfField() ?><input type="hidden" name="remove_item" value="1"><input
+                                                type="hidden" name="collection_id" value="<?= $id ?>"><input
+                                                type="hidden" name="item_type" value="supplier"><input type="hidden"
+                                                                                                       name="item_id"
+                                                                                                       value="<?= $s['id'] ?>">
+                                        <button class="btn btn-danger btn-xs">&#215;</button>
+                                    </form>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <?php
                 renderLayout('Folder: ' . $col['name'], ob_get_clean(), 'collections');
             }
         }
