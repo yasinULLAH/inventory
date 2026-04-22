@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3306
--- Generation Time: Apr 21, 2026 at 12:58 PM
+-- Generation Time: Apr 22, 2026 at 06:15 AM
 -- Server version: 8.2.0
 -- PHP Version: 8.3.0
 
@@ -65,7 +65,8 @@ INSERT INTO `activity_log` (`id`, `user_id`, `action`, `module`, `description`, 
 (21, 1, 'CREATE', 'pos', 'Created POS invoice INV-20260421-004', '::1', '2026-04-21 11:47:43'),
 (22, 1, 'CREATE', 'pos', 'Created POS invoice INV-20260421-005', '::1', '2026-04-21 11:47:58'),
 (23, 1, 'UPDATE', 'settings', 'Updated system settings', '::1', '2026-04-21 11:50:22'),
-(24, 1, 'CREATE', 'pos', 'Created POS invoice INV-20260421-006', '::1', '2026-04-21 11:58:04');
+(24, 1, 'CREATE', 'pos', 'Created POS invoice INV-20260421-006', '::1', '2026-04-21 11:58:04'),
+(25, 1, 'LOGIN', 'auth', 'User logged in from ::1', '::1', '2026-04-21 15:47:51');
 
 -- --------------------------------------------------------
 
@@ -410,7 +411,8 @@ INSERT INTO `login_log` (`id`, `username`, `ip_address`, `status`, `user_agent`,
 (7, 'admin', '::1', 'success', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36', '2026-04-20 18:50:55'),
 (8, 'admin', '::1', 'success', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36', '2026-04-21 04:59:53'),
 (9, 'admin', '::1', 'success', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Mobile Safari/537.36', '2026-04-21 06:06:39'),
-(10, 'admin', '::1', 'success', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36', '2026-04-21 10:15:52');
+(10, 'admin', '::1', 'success', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36', '2026-04-21 10:15:52'),
+(11, 'admin', '::1', 'success', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36', '2026-04-21 15:47:51');
 
 -- --------------------------------------------------------
 
@@ -1215,7 +1217,7 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `username`, `password_hash`, `full_name`, `email`, `phone`, `avatar`, `commission_rate`, `role`, `role_id`, `status`, `last_login`, `login_attempts`, `locked_until`, `created_at`, `updated_at`) VALUES
-(1, 'admin', '$2y$12$s.JygRgZjg2f8geMc1FfG.4wpUK/g/TTTSXOWliq3AaDEm2USiyci', 'System Administrator', 'admin@inventorypro.com', NULL, NULL, 0.00, 'admin', 1, 'active', '2026-04-21 15:15:52', 0, NULL, '2026-04-20 07:09:17', '2026-04-21 10:15:52'),
+(1, 'admin', '$2y$12$s.JygRgZjg2f8geMc1FfG.4wpUK/g/TTTSXOWliq3AaDEm2USiyci', 'System Administrator', 'admin@inventorypro.com', NULL, NULL, 0.00, 'admin', 1, 'active', '2026-04-21 20:47:51', 0, NULL, '2026-04-20 07:09:17', '2026-04-21 15:47:51'),
 (2, 'manager1', '$2y$12$IXpzQHFBJ9B0Fx4oWAeD2u/Q6/abt/coBdlxb5xR9xPQnSCRx9zxS', 'Sarah Johnson', 'sarah.johnson@inventorypro.com', NULL, NULL, 0.00, 'manager', 2, 'active', '2026-04-20 23:44:39', 0, NULL, '2026-04-20 07:09:17', '2026-04-20 18:44:39'),
 (3, 'staff1', '$2y$12$nDPgFj.aEHCX5hpjAFMSdOy3CtH0gi.df2e/8J5yS03fAjElUpZGe', 'Michael Chen', 'michael.chen@inventorypro.com', NULL, NULL, 0.00, 'staff', NULL, 'active', NULL, 0, NULL, '2026-04-20 07:09:17', '2026-04-20 07:09:17'),
 (4, 'staff2', '$2y$12$nDPgFj.aEHCX5hpjAFMSdOy3CtH0gi.df2e/8J5yS03fAjElUpZGe', 'Aisha Malik', 'aisha.malik@inventorypro.com', NULL, NULL, 0.00, 'staff', NULL, 'active', NULL, 0, NULL, '2026-04-20 07:09:17', '2026-04-20 07:09:17');
@@ -1666,7 +1668,7 @@ ALTER TABLE `warehouses`
 -- AUTO_INCREMENT for table `activity_log`
 --
 ALTER TABLE `activity_log`
-  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=25;
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=26;
 
 --
 -- AUTO_INCREMENT for table `api_keys`
@@ -1738,7 +1740,7 @@ ALTER TABLE `invoice_items`
 -- AUTO_INCREMENT for table `login_log`
 --
 ALTER TABLE `login_log`
-  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
 
 --
 -- AUTO_INCREMENT for table `notifications`
