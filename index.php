@@ -600,7 +600,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $sup_row = $sup_r ? $sup_r->fetch_assoc() : null;
             $party = $sup_row ? $sup_row['name'] : 'Unknown Supplier';
             $chq_stmt = $conn->prepare("INSERT INTO cheque_register (cheque_number,bank_name,cheque_date,amount,type,status,reference_type,reference_id,party_name,notes) VALUES (?,?,?,?,'payment','pending','purchase_order',?,?,?)");
-            $chq_stmt->bind_param('sssdiiss', $cheque_number, $bank_name, $cheque_date, $cheque_amount, $po_id, $party, $notes);
+            $chq_stmt->bind_param('sssdiss', $cheque_number, $bank_name, $cheque_date, $cheque_amount, $po_id, $party, $notes);
             $chq_stmt->execute();
             $chq_stmt->close();
         }
@@ -936,7 +936,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BNI Enterprises - Bike Dealer Management System</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="chart.js"></script>
 <style>
 :root {
 --bg: #2b2b2b;
