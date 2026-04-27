@@ -1996,14 +1996,14 @@ document.addEventListener('DOMContentLoaded', function() {
         ]
     });
     $('select:not([name$="_length"])').select2({
-        minimumResultsForSearch: 0, 
+        minimumResultsForSearch: 10, 
         placeholder: '-- Select --',
         allowClear: false,
         theme: 'default'
     });
     $(document).on('DOMNodeInserted', function(e) {
         $(e.target).find('select:not([name$="_length"])').select2({
-            minimumResultsForSearch: 0,
+            minimumResultsForSearch: 10,
             placeholder: '-- Select --',
             allowClear: false,
             theme: 'default'
@@ -2541,7 +2541,7 @@ function addBikeRow() {
         $(d).find(`select[name="bikes[${bikeCount}][model_id]"]`).val(prefillModelId).trigger('change');
     }
     $(d).find('.select2-enable').select2({
-        minimumResultsForSearch: 0,
+        minimumResultsForSearch: 10,
         placeholder: '-- Select --',
         allowClear: false,
         theme: 'default'
@@ -2664,7 +2664,7 @@ addBikeRow();
 addPaymentRow();
 $(document).ready(function() {
     $('select[name="supplier_id"]').select2({
-        minimumResultsForSearch: 0,
+        minimumResultsForSearch: 10,
         placeholder: '-- Select Supplier --',
         allowClear: false,
         theme: 'default'
@@ -3215,7 +3215,7 @@ function addAccessoryRow() {
     </div>`;
     document.getElementById('accessoriesList').appendChild(d);
     $(d).find('.select2-enable').select2({
-        minimumResultsForSearch: 0,
+        minimumResultsForSearch: 10,
         placeholder: '-- Select Accessory --',
         allowClear: false,
         tags: true,
@@ -3325,7 +3325,7 @@ function toggleRetCheque(v) {
 }
 $(document).ready(function() {
     $('#returnBikeSelect, #refundMethod').select2({
-        minimumResultsForSearch: 0,
+        minimumResultsForSearch: 10,
         placeholder: '-- Select --',
         allowClear: false,
         theme: 'default'
@@ -3630,7 +3630,7 @@ function togglePayInstCheque(val) {
 }
 $(document).ready(function() {
     $('select[name="status_f"], select[name="customer_f"], #payInstallmentModal select[name="payment_type"]').select2({
-        minimumResultsForSearch: 0,
+        minimumResultsForSearch: 10,
         placeholder: '-- Select --',
         allowClear: false,
         theme: 'default'
@@ -3733,7 +3733,7 @@ $(document).ready(function() {
 <script>
 $(document).ready(function() {
     $('select[name="cust_id"]').select2({
-        minimumResultsForSearch: 0,
+        minimumResultsForSearch: 10,
         placeholder: '-- Select Customer --',
         allowClear: false,
         theme: 'default'
@@ -3842,7 +3842,7 @@ $(document).ready(function() {
 <script>
 $(document).ready(function() {
     $('select[name="sup_id"]').select2({
-        minimumResultsForSearch: 0,
+        minimumResultsForSearch: 10,
         placeholder: '-- Select Supplier --',
         allowClear: false,
         theme: 'default'
@@ -4700,7 +4700,7 @@ function addQuoteAccessoryRow() {
     </div>`;
     document.getElementById('quoteAccessoriesList').appendChild(d);
     $(d).find('.select2-enable').select2({
-        minimumResultsForSearch: 0,
+        minimumResultsForSearch: 10,
         placeholder: '-- Select Accessory --',
         allowClear: false,
         tags: true,
@@ -4727,13 +4727,13 @@ function calculateQuoteAccessoryPrice(index) {
 }
 $(document).ready(function() {
     $('#quotationForm select.select2-enable').select2({
-        minimumResultsForSearch: 0,
+        minimumResultsForSearch: 10,
         placeholder: '-- Select --',
         allowClear: false,
         theme: 'default'
     });
     $('#quoteAccessoriesList .select2-enable').select2({
-        minimumResultsForSearch: 0,
+        minimumResultsForSearch: 10,
         placeholder: '-- Select Accessory --',
         allowClear: false,
         tags: true,
