@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3306
--- Generation Time: Apr 27, 2026 at 03:57 PM
+-- Generation Time: Apr 27, 2026 at 04:16 PM
 -- Server version: 8.2.0
 -- PHP Version: 8.3.0
 
@@ -289,6 +289,7 @@ CREATE TABLE `payments` (
   `cheque_number` varchar(50) DEFAULT NULL,
   `bank_name` varchar(100) DEFAULT NULL,
   `cheque_date` date DEFAULT NULL,
+  `status` enum('pending','cleared','bounced','cancelled') DEFAULT 'pending',
   `transaction_type` enum('purchase','sale','installment','expense_payment','supplier_payment','customer_refund') NOT NULL,
   `reference_id` int DEFAULT NULL,
   `party_name` varchar(255) DEFAULT NULL,
@@ -300,8 +301,8 @@ CREATE TABLE `payments` (
 -- Dumping data for table `payments`
 --
 
-INSERT INTO `payments` (`id`, `payment_date`, `payment_type`, `amount`, `cheque_number`, `bank_name`, `cheque_date`, `transaction_type`, `reference_id`, `party_name`, `notes`, `created_at`) VALUES
-(1, '2026-04-26', 'cheque', 150000.00, NULL, NULL, NULL, 'sale', 28, 'Yasin Ullah', '', '2026-04-26 10:17:45');
+INSERT INTO `payments` (`id`, `payment_date`, `payment_type`, `amount`, `cheque_number`, `bank_name`, `cheque_date`, `status`, `transaction_type`, `reference_id`, `party_name`, `notes`, `created_at`) VALUES
+(1, '2026-04-26', 'cheque', 150000.00, NULL, NULL, NULL, 'pending', 'sale', 28, 'Yasin Ullah', '', '2026-04-26 10:17:45');
 
 -- --------------------------------------------------------
 
