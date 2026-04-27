@@ -1121,15 +1121,28 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 if (!empty($accessories_data)) {
                     $sa_stmt = $conn->prepare('INSERT INTO sale_accessories (bike_id, accessory_id, quantity, unit_price, discount_amount, final_price) VALUES (?,?,?,?,?,?)');
                     foreach ($accessories_data as $acc) {
-                        $acc_id = (int) ($acc['id'] ?? 0);
+                        $acc_input = $acc['id'] ?? '';
                         $qty = (int) ($acc['quantity'] ?? 0);
                         $unit_p = (float) ($acc['unit_price'] ?? 0);
                         $disc = (float) ($acc['discount'] ?? 0);
                         $final_p = (float) ($acc['final_price'] ?? 0);
-                        if ($acc_id > 0 && $qty > 0) {
-                            $sa_stmt->bind_param('iiiddd', $bike_id, $acc_id, $qty, $unit_p, $disc, $final_p);
-                            $sa_stmt->execute();
-                            $conn->query("UPDATE accessories SET current_stock = current_stock - $qty WHERE id = $acc_id");
+
+                        if (!empty($acc_input) && $qty > 0) {
+                            if (!is_numeric($acc_input)) {
+                                $new_name = sanitize($acc_input);
+                                $dummy_sku = 'CST-' . time() . '-' . rand(10, 99);
+                                $ins = $conn->prepare('INSERT INTO accessories (name, sku, current_stock) VALUES (?, ?, 0)');
+                                $ins->bind_param('ss', $new_name, $dummy_sku);
+                                $ins->execute();
+                                $acc_id = $conn->insert_id;
+                            } else {
+                                $acc_id = (int) $acc_input;
+                            }
+                            if ($acc_id > 0) {
+                                $sa_stmt->bind_param('iiiddd', $bike_id, $acc_id, $qty, $unit_p, $disc, $final_p);
+                                $sa_stmt->execute();
+                                $conn->query("UPDATE accessories SET current_stock = current_stock - $qty WHERE id = $acc_id");
+                            }
                         }
                     }
                 }
@@ -1200,15 +1213,29 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $st->close();
                 if (!empty($selected_accessories)) {
                     $sa_stmt = $conn->prepare('INSERT INTO sale_accessories (bike_id, accessory_id, quantity, unit_price, discount_amount, final_price) VALUES (?,?,?,?,?,?)');
-                    foreach ($selected_accessories as $acc_id => $data) {
+                    foreach ($selected_accessories as $key => $data) {
+                        $acc_input = $data['id'] ?? '';
                         $qty = (int) ($data['quantity'] ?? 0);
                         $unit_price = (float) ($data['unit_price'] ?? 0);
                         $discount = (float) ($data['discount'] ?? 0);
                         $final_price = (float) ($data['final_price'] ?? 0);
-                        if ($qty > 0 && $acc_id > 0) {
-                            $sa_stmt->bind_param('iiiddd', $bike_id, $acc_id, $qty, $unit_price, $discount, $final_price);
-                            $sa_stmt->execute();
-                            $conn->query("UPDATE accessories SET current_stock = current_stock - $qty WHERE id = $acc_id");
+
+                        if (!empty($acc_input) && $qty > 0) {
+                            if (!is_numeric($acc_input)) {
+                                $new_name = sanitize($acc_input);
+                                $dummy_sku = 'CST-' . time() . '-' . rand(10, 99);
+                                $ins = $conn->prepare('INSERT INTO accessories (name, sku, current_stock) VALUES (?, ?, 0)');
+                                $ins->bind_param('ss', $new_name, $dummy_sku);
+                                $ins->execute();
+                                $acc_id = $conn->insert_id;
+                            } else {
+                                $acc_id = (int) $acc_input;
+                            }
+                            if ($acc_id > 0) {
+                                $sa_stmt->bind_param('iiiddd', $bike_id, $acc_id, $qty, $unit_price, $discount, $final_price);
+                                $sa_stmt->execute();
+                                $conn->query("UPDATE accessories SET current_stock = current_stock - $qty WHERE id = $acc_id");
+                            }
                         }
                     }
                 }
@@ -2045,7 +2072,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 ]);
             }
             validator.onSuccess((event) => {
-                event.target.submit();
+                const form = event.target;
+                const btn = document.activeElement;
+                if (btn && btn.type === 'submit' && btn.name) {
+                    const hidden = document.createElement('input');
+                    hidden.type = 'hidden';
+                    hidden.name = btn.name;
+                    hidden.value = btn.value || '1';
+                    form.appendChild(hidden);
+                }
+                form.submit();
             });
         }
     });
@@ -3182,6 +3218,7 @@ function addAccessoryRow() {
         minimumResultsForSearch: 5,
         placeholder: '-- Select Accessory --',
         allowClear: true,
+        tags: true,
         theme: 'default'
     });
 }
@@ -3191,8 +3228,8 @@ function removeAccessoryRow(n) {
 }
 function updateAccessoryDetails(selectElement, index) {
     var selectedOption = selectElement.options[selectElement.selectedIndex];
-    var price = selectedOption.dataset.price || 0;
-    var stock = selectedOption.dataset.stock || 0;
+    var price = selectedOption && selectedOption.dataset ? (selectedOption.dataset.price || 0) : 0;
+    var stock = selectedOption && selectedOption.dataset ? (selectedOption.dataset.stock || 0) : 0;
     document.querySelector(`#accessoryRow_${index} input[name="selected_accessories[${index}][unit_price]"]`).value = price;
     document.querySelector(`#accStock_${index}`).innerText = `Available: ${stock}`;
     calculateAccessoryPrice(index);
@@ -4666,6 +4703,7 @@ function addQuoteAccessoryRow() {
         minimumResultsForSearch: 5,
         placeholder: '-- Select Accessory --',
         allowClear: true,
+        tags: true,
         theme: 'default'
     });
 }
@@ -4674,8 +4712,8 @@ function removeQuoteAccessoryRow(n) {
 }
 function updateQuoteAccessoryDetails(selectElement, index) {
     var selectedOption = selectElement.options[selectElement.selectedIndex];
-    var price = selectedOption.dataset.price || 0;
-    var stock = selectedOption.dataset.stock || 0;
+    var price = selectedOption && selectedOption.dataset ? (selectedOption.dataset.price || 0) : 0;
+    var stock = selectedOption && selectedOption.dataset ? (selectedOption.dataset.stock || 0) : 0;
     document.querySelector(`#quoteAccessoryRow_${index} input[name="accessories[${index}][unit_price]"]`).value = price;
     document.querySelector(`#quoteAccStock_${index}`).innerText = `Available: ${stock}`;
     calculateQuoteAccessoryPrice(index);
@@ -4698,6 +4736,7 @@ $(document).ready(function() {
         minimumResultsForSearch: 5,
         placeholder: '-- Select Accessory --',
         allowClear: true,
+        tags: true,
         theme: 'default'
     });
 });
