@@ -1379,10 +1379,73 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $err = 'Invalid status.';
                 goto end_payments_post;
             }
-            $stmt = $conn->prepare('UPDATE payments SET status=? WHERE id=? AND payment_type="cheque"');
-            $stmt->bind_param('si', $new_status, $pid);
-            $stmt->execute();
-            $msg = 'Payment status updated.';
+
+            $pay_q = $conn->query("SELECT * FROM payments WHERE id=$pid AND payment_type='cheque'");
+            $pay = $pay_q ? $pay_q->fetch_assoc() : null;
+
+            if ($pay) {
+                $old_status = $pay['status'] ?? 'pending';
+                if ($old_status !== 'bounced' && $new_status === 'bounced') {
+                    $conn->begin_transaction();
+                    try {
+                        $stmt = $conn->prepare('UPDATE payments SET status=? WHERE id=?');
+                        $stmt->bind_param('si', $new_status, $pid);
+                        $stmt->execute();
+
+                        if (in_array($pay['transaction_type'], ['sale', 'installment'])) {
+                            $cust_id = 0;
+                            if ($pay['transaction_type'] === 'sale') {
+                                $br = $conn->query("SELECT customer_id FROM bikes WHERE id=" . (int)$pay['reference_id']);
+                                $cust_id = $br && $br->num_rows > 0 ? (int)$br->fetch_assoc()['customer_id'] : 0;
+                            } else {
+                                $ir = $conn->query("SELECT customer_id FROM installments WHERE id=" . (int)$pay['reference_id']);
+                                $cust_id = $ir && $ir->num_rows > 0 ? (int)$ir->fetch_assoc()['customer_id'] : 0;
+                            }
+                            
+                            if ($cust_id > 0) {
+                                $bounced_date = date('Y-m-d');
+                                $led_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'debit',?,'customer',?,?,'cheque_bounce',?,?)");
+                                $desc = 'Cheque Bounced (Ref Payment #' . $pid . ')';
+                                $led_st->bind_param('sdisid', $bounced_date, $pay['amount'], $cust_id, $desc, $pid, $pay['amount']);
+                                $led_st->execute();
+                            }
+                        }
+
+                        if ($pay['transaction_type'] === 'installment') {
+                            $inst_id = (int)$pay['reference_id'];
+                            $inst_q = $conn->query("SELECT amount_paid, penalty_fee, installment_amount FROM installments WHERE id=$inst_id");
+                            if ($inst_q && $inst_q->num_rows > 0) {
+                                $inst = $inst_q->fetch_assoc();
+                                $deduct = $pay['amount'];
+                                $new_amount_paid = $inst['amount_paid'] - $deduct;
+                                $new_penalty = $inst['penalty_fee'];
+                                
+                                if ($new_amount_paid < 0) {
+                                    $new_penalty += $new_amount_paid; 
+                                    $new_amount_paid = 0;
+                                }
+                                if ($new_penalty < 0) $new_penalty = 0;
+                                
+                                $new_inst_status = ($new_amount_paid >= $inst['installment_amount']) ? 'paid' : 'pending';
+                                $conn->query("UPDATE installments SET amount_paid=$new_amount_paid, penalty_fee=$new_penalty, status='$new_inst_status' WHERE id=$inst_id");
+                            }
+                        }
+
+                        $conn->commit();
+                        $msg = 'Cheque marked as bounced. Accounting & installments reversed successfully.';
+                    } catch (Exception $e) {
+                        $conn->rollback();
+                        $err = 'Failed to process bounced cheque: ' . $e->getMessage();
+                    }
+                } else {
+                    $stmt = $conn->prepare('UPDATE payments SET status=? WHERE id=?');
+                    $stmt->bind_param('si', $new_status, $pid);
+                    $stmt->execute();
+                    $msg = 'Payment status updated.';
+                }
+            } else {
+                $err = 'Payment not found or not a cheque.';
+            }
         }
         if ($action === 'delete') {
             require_permission($conn, 'payments', 'delete');
@@ -1413,7 +1476,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             }
             $conn->begin_transaction();
             try {
-                $inst_q = $conn->query("SELECT i.bike_id, i.customer_id, i.installment_amount, i.amount_paid, b.chassis_number, c.name AS cust_name FROM installments i JOIN bikes b ON i.bike_id=b.id JOIN customers c ON i.customer_id=c.id WHERE i.id=$installment_id FOR UPDATE");
+                $inst_q = $conn->query("SELECT i.bike_id, i.customer_id, i.installment_amount, i.amount_paid, i.penalty_fee, b.chassis_number, c.name AS cust_name FROM installments i JOIN bikes b ON i.bike_id=b.id JOIN customers c ON i.customer_id=c.id WHERE i.id=$installment_id FOR UPDATE");
                 $inst = $inst_q->fetch_assoc();
                 if (!$inst) {
                     throw new Exception('Installment not found.');
@@ -1428,8 +1491,15 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $new_penalty_fee = $inst['penalty_fee'] + $penalty_fee;
                 $new_status = ($new_amount_paid >= $inst['installment_amount']) ? 'paid' : 'pending';
                 $upd_inst_stmt = $conn->prepare('UPDATE installments SET amount_paid=?, penalty_fee=?, status=?, payment_id=? WHERE id=?');
-                $upd_inst_stmt->bind_param('ddsi', $new_amount_paid, $new_penalty_fee, $new_status, $payment_id, $installment_id);
+                $upd_inst_stmt->bind_param('ddsii', $new_amount_paid, $new_penalty_fee, $new_status, $payment_id, $installment_id);
                 $upd_inst_stmt->execute();
+                if ($penalty_fee > 0) {
+                    $led_pen = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'debit',?,'customer',?,?,'penalty',?,?)");
+                    $desc_pen = 'Penalty fee for Chassis: ' . $inst['chassis_number'];
+                    $led_pen->bind_param('sdisid', $payment_date, $penalty_fee, $inst['customer_id'], $desc_pen, $installment_id, $penalty_fee);
+                    $led_pen->execute();
+                }
+
                 $led_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'credit',?,'customer',?,?,'installment',?,?)");
                 $desc = 'Installment payment for Chassis: ' . $inst['chassis_number'];
                 $led_st->bind_param('sdisid', $payment_date, $total_payment, $inst['customer_id'], $desc, $installment_id, $total_payment);
@@ -2418,7 +2488,7 @@ else:
         $total_sales_val = $conn->query("SELECT SUM(selling_price) as s FROM bikes WHERE status='sold'")->fetch_assoc()['s'] ?? 0;
         $total_tax = $conn->query("SELECT SUM(tax_amount) as s FROM bikes WHERE status='sold'")->fetch_assoc()['s'] ?? 0;
         $total_margin = $conn->query("SELECT SUM(margin) as s FROM bikes WHERE status='sold'")->fetch_assoc()['s'] ?? 0;
-        $pending_payments = $conn->query("SELECT COUNT(*) as c, SUM(amount) as s FROM payments WHERE payment_type='cheque' AND status='pending'")->fetch_assoc();
+        $pending_payments = $conn->query("SELECT COUNT(*) as c, SUM(amount) as s FROM payments WHERE payment_type='cheque' AND (status='pending' OR status IS NULL)")->fetch_assoc();
         $todays_sales = $conn->query("SELECT COUNT(*) as c, SUM(selling_price) as s FROM bikes WHERE status='sold' AND selling_date = CURDATE()")->fetch_assoc();
         $total_customers = $conn->query('SELECT COUNT(*) as c FROM customers')->fetch_assoc()['c'];
         $total_suppliers = $conn->query('SELECT COUNT(*) as c FROM suppliers')->fetch_assoc()['c'];
@@ -3146,7 +3216,7 @@ document.getElementById('bulkExportForm').addEventListener('submit', function(){
 <div class="form-group"><label>Margin / Profit</label><input type="text" id="marginDisplay" readonly style="background:var(--bg3);font-weight:700" placeholder="Auto-calculated"></div>
 </div>
 <div class="form-row">
-<div class="form-group">
+<div class="form-group" style="min-width: 350px; flex: 2;">
 <label>Customer <span class="req">*</span></label>
 <div style="display:flex;gap:4px">
 <select name="customer_id" id="customerSel" class="select2-enable" required style="flex:1" onchange="updateFilerStatus(this)">
@@ -3367,7 +3437,8 @@ function calcRemainingBalance() {
     calcInstallments();
 }
 function calcInstallments() {
-    var remainingBalance = parseFloat(document.getElementById('remainingBalance').value.replace(/[^0-9.-]/g, '')) || 0;
+    var remainingBalanceStr = document.getElementById('remainingBalance').value.replace('<?= $currency ?> ', '');
+    var remainingBalance = parseFloat(remainingBalanceStr.replace(/[^0-9.-]/g, '')) || 0;
     var totalInstallments = parseInt(document.getElementById('totalInstallments').value) || 0;
     var installmentAmount = 0;
     if (totalInstallments > 0) {
@@ -3539,8 +3610,13 @@ $(document).ready(function() {
         $chq_from = $_GET['chq_from'] ?? '';
         $chq_to = $_GET['chq_to'] ?? '';
         $chq_where = ['1=1'];
-        if ($chq_status_f && in_array($chq_status_f, ['pending', 'cleared', 'bounced', 'cancelled']))
-            $chq_where[] = "p.status='$chq_status_f'";
+        if ($chq_status_f && in_array($chq_status_f, ['pending', 'cleared', 'bounced', 'cancelled'])) {
+            if ($chq_status_f === 'pending') {
+                $chq_where[] = "p.payment_type='cheque' AND (p.status='pending' OR p.status IS NULL)";
+            } else {
+                $chq_where[] = "p.payment_type='cheque' AND p.status='$chq_status_f'";
+            }
+        }
         if ($chq_type_f && in_array($chq_type_f, ['purchase', 'sale', 'installment', 'expense_payment', 'supplier_payment', 'customer_refund']))
             $chq_where[] = "p.transaction_type='$chq_type_f'";
         if ($chq_bank_f)
@@ -3697,7 +3773,7 @@ $(document).ready(function() {
 <option value="cancelled" <?= $status_f === 'cancelled' ? 'selected' : '' ?>>Cancelled</option>
 </select>
 </div>
-<div class="form-group"><label>Customer</label>
+<div class="form-group" style="min-width: 350px;"><label>Customer</label>
 <select name="customer_f">
 <option value="0">All Customers</option>
 <?php while ($cl = $customers_list->fetch_assoc()): ?>
@@ -3844,7 +3920,7 @@ $(document).ready(function() {
 <div class="filter-bar no-print animate__animated animate__fadeInLeft">
 <form method="GET" action="index.php" style="display:contents">
 <input type="hidden" name="page" value="customer_ledger">
-<div class="form-group"><label>Select Customer <span class="req">*</span></label>
+<div class="form-group" style="min-width: 350px;"><label>Select Customer <span class="req">*</span></label>
 <select name="cust_id" required onchange="this.form.submit()">
 <option value="0">-- Select Customer --</option>
 <?php while ($cl = $customers_for_led->fetch_assoc()): ?>
@@ -3861,8 +3937,8 @@ $(document).ready(function() {
             $running_bal = 0;
 
             $sums = $conn->query("SELECT 
-                SUM(CASE WHEN reference_type='sale' THEN amount ELSE 0 END) - SUM(CASE WHEN reference_type='return_reversal' THEN amount ELSE 0 END) as total_billed, 
-                SUM(CASE WHEN reference_type IN ('payment','down_payment','installment') THEN amount ELSE 0 END) - SUM(CASE WHEN reference_type='return_refund' THEN amount ELSE 0 END) as total_paid,
+                SUM(CASE WHEN reference_type IN ('sale', 'penalty') THEN amount ELSE 0 END) - SUM(CASE WHEN reference_type='return_reversal' THEN amount ELSE 0 END) as total_billed, 
+                SUM(CASE WHEN reference_type IN ('payment','down_payment','installment') THEN amount ELSE 0 END) - SUM(CASE WHEN reference_type IN ('return_refund', 'cheque_bounce') THEN amount ELSE 0 END) as total_paid,
                 SUM(CASE WHEN entry_type='debit' THEN amount ELSE 0 END) as total_dr, 
                 SUM(CASE WHEN entry_type='credit' THEN amount ELSE 0 END) as total_cr 
                 FROM ledger WHERE party_type='customer' AND party_id=$sel_cust")->fetch_assoc();
@@ -3993,7 +4069,7 @@ $(document).ready(function() {
         if ($sel_sup > 0):
             $sup_info = $conn->query("SELECT * FROM suppliers WHERE id=$sel_sup")->fetch_assoc();
             $sup_orders = $conn->query("SELECT po.*, IFNULL(SUM(b.purchase_price), po.total_amount) as bikes_total, COUNT(b.id) as bike_count FROM purchase_orders po LEFT JOIN bikes b ON po.id=b.purchase_order_id WHERE po.supplier_id=$sel_sup GROUP BY po.id ORDER BY po.order_date ASC");
-            $supplier_payments = $conn->query("SELECT * FROM payments WHERE transaction_type='supplier_payment' AND (party_name = '" . mysqli_real_escape_string($conn, $sup_info['name']) . "' OR reference_id IN (SELECT id FROM purchase_orders WHERE supplier_id=$sel_sup)) ORDER BY payment_date ASC");
+            $supplier_payments = $conn->query("SELECT * FROM payments WHERE transaction_type='supplier_payment' AND IFNULL(status, '') != 'bounced' AND (party_name = '" . mysqli_real_escape_string($conn, $sup_info['name']) . "' OR reference_id IN (SELECT id FROM purchase_orders WHERE supplier_id=$sel_sup)) ORDER BY payment_date ASC");
             $running_bal = 0;
 
             $purchase_total_sum = 0;
@@ -4357,7 +4433,7 @@ $(document).ready(function() {
 </fieldset>
 <?php
         elseif ($sub === 'bank'):
-            $bank_result = $conn->query("SELECT bank_name, payment_type, transaction_type, COUNT(*) as cnt, SUM(amount) as total FROM payments WHERE payment_type = 'cheque' GROUP BY bank_name, payment_type, transaction_type ORDER BY bank_name, transaction_type");
+            $bank_result = $conn->query("SELECT bank_name, payment_type, transaction_type, COUNT(*) as cnt, SUM(amount) as total FROM payments WHERE payment_type = 'cheque' AND (status IS NULL OR status IN ('pending', 'cleared')) GROUP BY bank_name, payment_type, transaction_type ORDER BY bank_name, transaction_type");
             $bank_data = [];
             while ($br2 = $bank_result->fetch_assoc()) {
                 $bank_data[$br2['bank_name']][$br2['transaction_type']]['count'] = $br2['cnt'];
@@ -4824,7 +4900,7 @@ $(document).ready(function() {
 <div class="form-group"><label>Valid Until <span class="req">*</span></label><input type="date" name="valid_until" value="<?= $edit_quote['valid_until'] ?? date('Y-m-d', strtotime('+7 days')) ?>" required></div>
 </div>
 <div class="form-row">
-<div class="form-group" style="flex:1">
+<div class="form-group" style="min-width: 350px; flex: 2;">
     <label>Customer <span class="req">*</span></label>
     <select name="customer_id" id="quoteCustomerSel" required class="select2-enable" onchange="showQuoteCustomerDetails(this)">
         <option value="">-- Select Customer --</option>

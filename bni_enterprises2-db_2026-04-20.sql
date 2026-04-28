@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3306
--- Generation Time: Apr 27, 2026 at 04:16 PM
+-- Generation Time: Apr 28, 2026 at 11:25 AM
 -- Server version: 8.2.0
 -- PHP Version: 8.3.0
 
@@ -76,7 +76,7 @@ CREATE TABLE `bikes` (
 INSERT INTO `bikes` (`id`, `purchase_order_id`, `order_date`, `inventory_date`, `chassis_number`, `motor_number`, `model_id`, `color`, `purchase_price`, `selling_price`, `selling_date`, `customer_id`, `tax_amount`, `margin`, `status`, `return_date`, `return_amount`, `return_notes`, `safeguard_notes`, `notes`, `created_at`, `updated_at`) VALUES
 (1, 1, '2026-02-03', '2026-02-05', 'LY05G48270002304', '*XRLY48052125D0002228*', 1, 'Black', 125225.00, NULL, NULL, NULL, 125.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
 (2, 1, '2026-02-03', '2026-02-05', 'LY05G48270002202', '*XRLY48052125D0002322*', 1, 'Grey', 125225.00, NULL, NULL, NULL, 125.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
-(3, 1, '2026-02-03', '2026-02-05', 'DD35G48130001177', '*48V350WA8T454708922*', 13, 'Black', 94595.00, NULL, NULL, NULL, 95.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(3, 1, '2026-02-03', '2026-02-05', 'DD35G48130001177', '*48V350WA8T454708922*', 13, 'Black', 94595.00, 130000.00, '2026-04-28', 5, 9459.50, 25945.50, 'sold', NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-28 09:37:06'),
 (4, 1, '2026-02-03', '2026-02-05', 'M615G72380002665', 'A9A756800994', 9, 'Silver', 220721.00, 242000.00, NULL, NULL, 221.00, 0.00, 'returned', NULL, NULL, NULL, NULL, 'Returned on 200,000 Cheque to be issued.', '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
 (5, 1, '2026-02-03', '2026-02-05', 'T910G72260006966', '*XR9S72102825N0007369*', 2, 'Red', 161261.00, 179000.00, '2026-03-05', NULL, 161.00, 17578.00, 'sold', NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
 (6, 1, '2026-02-03', '2026-02-05', 'T910G72260007041', '*XR9S72102825N0007701*', 2, 'Black', 161261.00, 179000.00, NULL, NULL, 161.00, 17578.00, 'sold', NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
@@ -102,8 +102,12 @@ INSERT INTO `bikes` (`id`, `purchase_order_id`, `order_date`, `inventory_date`, 
 (26, 4, '2026-03-18', '2026-03-27', 'T910G72260008894', '*XR9S72102825D0008251*', 3, 'Unknown', 193694.00, NULL, NULL, NULL, 194.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, 'Diff ledger= (70,137)+ new delivery', '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
 (27, 4, '2026-03-18', '2026-03-27', 'T910G72260008737', '*XR9S72102825D0008003*', 3, 'Unknown', 193694.00, NULL, NULL, NULL, 194.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
 (28, 5, '2026-04-26', '2026-04-26', 'NW-21233', 'MT-002', 7, 'Red', 120000.00, 150000.00, '2026-04-26', 5, 120.00, 29880.00, 'returned', '2026-04-26', 190000.00, 'Said not appliable', 'must be charged 100 percent for the first time use', '', '2026-04-26 10:13:52', '2026-04-26 10:21:35'),
-(30, 7, '2026-04-27', '2026-04-27', 'NW-212331', 'MT-002', 7, 'Red', 190000.00, NULL, NULL, NULL, 190.00, 0.00, 'in_stock', NULL, NULL, NULL, 'must be charged 100 percent for the first time use', '', '2026-04-27 10:25:19', '2026-04-27 10:25:19'),
-(32, 9, '2026-04-27', '2026-04-27', 'NW-212331a', 'MT-002', 7, 'Red', 190000.00, NULL, NULL, NULL, 190.00, 0.00, 'in_stock', NULL, NULL, NULL, 'must be charged 100 percent for the first time use', '', '2026-04-27 10:29:45', '2026-04-27 10:29:45');
+(30, 7, '2026-04-27', '2026-04-27', 'NW-212331', 'MT-002', 7, 'Red', 190000.00, 240000.00, '2026-04-28', 5, 19000.00, 31000.00, 'sold', NULL, NULL, NULL, 'must be charged 100 percent for the first time use', '', '2026-04-27 10:25:19', '2026-04-28 04:50:16'),
+(32, 9, '2026-04-27', '2026-04-27', 'NW-212331a', 'MT-002', 7, 'Red', 190000.00, NULL, NULL, NULL, 0.00, 0.00, 'in_stock', NULL, NULL, NULL, 'must be charged 100 percent for the first time use', '', '2026-04-27 10:29:45', '2026-04-28 10:23:39'),
+(33, 10, '2026-04-28', '2026-04-28', 'NW-2123353', 'MT-GT-022', 8, 'Newd', 20000.00, 60000.00, '2026-04-28', 1, 2000.00, 38000.00, 'sold', NULL, NULL, NULL, 'must be charged 100 percent for the first time use a', '', '2026-04-28 04:24:26', '2026-04-28 05:08:07'),
+(34, 11, '2026-04-28', '2026-04-28', 'NW-212331aa', 'MT-GT-02a', 11, 'Newda', 40000.00, 60000.00, '2026-04-28', 1, 4000.00, 16000.00, 'sold', NULL, NULL, NULL, 'must be charged 100 percent for the first time use aa', '', '2026-04-28 04:29:37', '2026-04-28 05:09:01'),
+(35, 12, '2026-04-28', '2026-04-28', 'NW-21233213', 'MT-002414', 10, 'Reda', 90000.00, 130000.00, '2026-04-28', 5, 9000.00, 31000.00, 'sold', NULL, NULL, NULL, 'new hai', '', '2026-04-28 04:33:26', '2026-04-28 04:43:01'),
+(36, 13, '2026-04-28', '2026-04-28', 'NW-21233132', 'MT-0021231', 2, 'Yellow', 90000.00, 220000.00, '2026-04-28', 6, 9000.00, 121000.00, 'sold', NULL, NULL, NULL, 'theek hai', '', '2026-04-28 04:36:57', '2026-04-28 10:24:33');
 
 -- --------------------------------------------------------
 
@@ -163,7 +167,8 @@ INSERT INTO `customers` (`id`, `name`, `phone`, `cnic`, `is_filer`, `address`, `
 (2, 'Muhammad Usman', '0333-7654321', '35201-7654321-3', 1, 'Muzaffargarh, Punjab', '2026-04-20 08:56:23'),
 (3, 'Bilal Hussain', '0345-9876543', '35201-9876543-5', 1, 'Rajanpur, Punjab', '2026-04-20 08:56:23'),
 (4, 'Zafar Iqbal', '0312-4567890', '35201-4567890-7', 1, 'Layyah, Punjab', '2026-04-20 08:56:23'),
-(5, 'Yasin Ullah', '03139842219', '11102-0356023-4', 1, 'Post Office Domel District Bannu', '2026-04-26 10:16:43');
+(5, 'Yasin Ullah', '03139842219', '11102-0356023-4', 1, 'Post Office Domel District Bannu', '2026-04-26 10:16:43'),
+(6, 'Shams Uddin', '03338870707', '11102-0356233-4', 1, 'Al-Mandoos Shoes near Qasaban Gate Mazari Mandi Bannu', '2026-04-28 04:38:53');
 
 -- --------------------------------------------------------
 
@@ -190,7 +195,8 @@ CREATE TABLE `income_expenses` (
 
 INSERT INTO `income_expenses` (`id`, `entry_date`, `type`, `category`, `amount`, `payment_method`, `reference`, `notes`, `created_by`, `created_at`) VALUES
 (1, '2026-04-20', 'expense', 'Bijli', 900.00, 'cash', 'yasin ne diye', '', 2, '2026-04-20 11:21:25'),
-(2, '2026-04-20', 'income', 'Commission', 1500.00, 'cash', 'new', '', 1, '2026-04-20 11:29:39');
+(2, '2026-04-20', 'income', 'Commission', 1500.00, 'cash', 'new', '', 1, '2026-04-20 11:29:39'),
+(3, '2026-04-28', 'expense', 'Bijli', 9000.00, 'cash', '', '', 1, '2026-04-28 09:37:47');
 
 -- --------------------------------------------------------
 
@@ -212,6 +218,18 @@ CREATE TABLE `installments` (
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Dumping data for table `installments`
+--
+
+INSERT INTO `installments` (`id`, `bike_id`, `customer_id`, `due_date`, `installment_amount`, `amount_paid`, `penalty_fee`, `status`, `payment_id`, `notes`, `created_at`, `updated_at`) VALUES
+(7, 36, 6, '2026-05-28', 33000.00, 33000.00, 0.00, 'paid', 23, 'Installment 1 for Chassis NW-21233132', '2026-04-28 10:24:33', '2026-04-28 10:24:51'),
+(8, 36, 6, '2026-06-28', 33000.00, 33000.00, 9000.00, 'paid', 24, 'Installment 2 for Chassis NW-21233132', '2026-04-28 10:24:33', '2026-04-28 10:25:07'),
+(9, 36, 6, '2026-07-28', 33000.00, 0.00, 0.00, 'pending', NULL, 'Installment 3 for Chassis NW-21233132', '2026-04-28 10:24:33', '2026-04-28 10:24:33'),
+(10, 36, 6, '2026-08-28', 33000.00, 0.00, 0.00, 'pending', NULL, 'Installment 4 for Chassis NW-21233132', '2026-04-28 10:24:33', '2026-04-28 10:24:33'),
+(11, 36, 6, '2026-09-28', 33000.00, 0.00, 0.00, 'pending', NULL, 'Installment 5 for Chassis NW-21233132', '2026-04-28 10:24:33', '2026-04-28 10:24:33'),
+(12, 36, 6, '2026-10-28', 33000.00, 0.00, 0.00, 'pending', NULL, 'Installment 6 for Chassis NW-21233132', '2026-04-28 10:24:33', '2026-04-28 10:24:33');
 
 -- --------------------------------------------------------
 
@@ -239,7 +257,23 @@ CREATE TABLE `ledger` (
 
 INSERT INTO `ledger` (`id`, `entry_date`, `entry_type`, `amount`, `party_type`, `party_id`, `description`, `reference_type`, `reference_id`, `balance`, `created_at`) VALUES
 (1, '2026-04-26', 'credit', 150000.00, 'customer', 5, 'Sale of Chassis: NW-21233', 'sale', 28, 150000.00, '2026-04-26 10:17:45'),
-(2, '2026-04-26', 'debit', 190000.00, 'customer', 0, 'Return for Bike ID: 28', 'return', 28, 190000.00, '2026-04-26 10:21:35');
+(2, '2026-04-26', 'debit', 190000.00, 'customer', 0, 'Return for Bike ID: 28', 'return', 28, 190000.00, '2026-04-26 10:21:35'),
+(4, '2026-04-28', 'credit', 130000.00, 'customer', 5, 'Sale of Chassis: NW-21233213', 'sale', 35, 130000.00, '2026-04-28 04:43:01'),
+(5, '2026-04-28', 'debit', 240000.00, 'customer', 5, 'Sale of Chassis: NW-212331', 'sale', 30, 240000.00, '2026-04-28 04:50:16'),
+(6, '2026-04-28', 'credit', 220000.00, 'customer', 5, 'Down Payment for Chassis: NW-212331', 'down_payment', 30, 220000.00, '2026-04-28 04:50:16'),
+(7, '2026-04-28', 'debit', 60000.00, 'customer', 1, 'Sale of Chassis: NW-2123353', 'sale', 33, 60000.00, '2026-04-28 05:08:07'),
+(8, '2026-04-28', 'credit', 30000.00, 'customer', 1, 'Down Payment for Chassis: NW-2123353', 'down_payment', 33, 30000.00, '2026-04-28 05:08:07'),
+(9, '2026-04-28', 'debit', 60000.00, 'customer', 1, 'Sale of Chassis: NW-212331aa', 'sale', 34, 60000.00, '2026-04-28 05:09:01'),
+(10, '2026-04-28', 'credit', 60000.00, 'customer', 1, 'Down Payment for Chassis: NW-212331aa', 'down_payment', 34, 60000.00, '2026-04-28 05:09:01'),
+(11, '2026-04-28', 'credit', 30000.00, 'customer', 1, 'Payment Received: baqaya', 'payment', NULL, NULL, '2026-04-28 05:21:39'),
+(12, '2026-04-28', 'credit', 600.00, 'customer', 1, 'Payment Received: ', 'payment', NULL, NULL, '2026-04-28 05:25:33'),
+(13, '2026-04-28', 'debit', 130000.00, 'customer', 5, 'Sale of Chassis: DD35G48130001177 from Quote #1', 'sale', 3, 130000.00, '2026-04-28 09:37:06'),
+(14, '2026-04-28', 'credit', 130000.00, 'customer', 5, 'Payment for Quote #1', 'payment', 3, 130000.00, '2026-04-28 09:37:06'),
+(24, '2026-04-28', 'debit', 220000.00, 'customer', 6, 'Sale of Chassis: NW-21233132', 'sale', 36, 220000.00, '2026-04-28 10:24:33'),
+(25, '2026-04-28', 'credit', 22000.00, 'customer', 6, 'Down Payment for Chassis: NW-21233132', 'down_payment', 36, 22000.00, '2026-04-28 10:24:33'),
+(26, '2026-04-28', 'credit', 33000.00, 'customer', 6, 'Installment payment for Chassis: NW-21233132', 'installment', 7, 33000.00, '2026-04-28 10:24:51'),
+(27, '2026-04-28', 'debit', 9000.00, 'customer', 6, 'Penalty fee for Chassis: NW-21233132', 'penalty', 8, 9000.00, '2026-04-28 10:25:07'),
+(28, '2026-04-28', 'credit', 42000.00, 'customer', 6, 'Installment payment for Chassis: NW-21233132', 'installment', 8, 42000.00, '2026-04-28 10:25:07');
 
 -- --------------------------------------------------------
 
@@ -302,7 +336,22 @@ CREATE TABLE `payments` (
 --
 
 INSERT INTO `payments` (`id`, `payment_date`, `payment_type`, `amount`, `cheque_number`, `bank_name`, `cheque_date`, `status`, `transaction_type`, `reference_id`, `party_name`, `notes`, `created_at`) VALUES
-(1, '2026-04-26', 'cheque', 150000.00, NULL, NULL, NULL, 'pending', 'sale', 28, 'Yasin Ullah', '', '2026-04-26 10:17:45');
+(1, '2026-04-26', 'cheque', 150000.00, NULL, NULL, NULL, 'pending', 'sale', 28, 'Yasin Ullah', '', '2026-04-26 10:17:45'),
+(2, '2026-04-28', 'cash', 20000.00, NULL, NULL, NULL, 'pending', 'supplier_payment', 10, '0', '', '2026-04-28 04:24:26'),
+(3, '2026-04-28', 'cash', 40000.00, NULL, NULL, NULL, 'pending', 'supplier_payment', 11, '0', '', '2026-04-28 04:29:37'),
+(4, '2026-04-28', 'cash', 90000.00, NULL, NULL, NULL, 'pending', 'supplier_payment', 12, '0', 'new', '2026-04-28 04:33:26'),
+(5, '2026-04-28', 'cheque', 90000.00, 'nw1023900', '0', '2026-04-28', 'pending', 'supplier_payment', 13, '0', '', '2026-04-28 04:36:57'),
+(6, '2026-04-28', 'cash', 110000.00, '', '0', NULL, 'pending', 'sale', 36, '0', 'Down Payment for Chassis: NW-21233132', '2026-04-28 04:40:25'),
+(7, '2026-04-28', 'cash', 110000.00, '', '0', NULL, 'pending', 'sale', 35, '0', 'Down Payment for Chassis: NW-21233213', '2026-04-28 04:43:01'),
+(8, '2026-04-28', 'cash', 220000.00, '', '0', NULL, 'pending', 'sale', 30, '0', 'Down Payment for Chassis: NW-212331', '2026-04-28 04:50:16'),
+(9, '2026-04-28', 'cash', 30000.00, '', '0', NULL, 'pending', 'sale', 33, '0', 'Down Payment for Chassis: NW-2123353', '2026-04-28 05:08:07'),
+(10, '2026-04-28', 'cash', 60000.00, '', '0', NULL, 'pending', 'sale', 34, '0', 'Down Payment for Chassis: NW-212331aa', '2026-04-28 05:09:01'),
+(11, '2026-04-28', 'cash', 30000.00, NULL, NULL, NULL, 'pending', 'sale', NULL, 'Ahmed Ali', 'baqaya', '2026-04-28 05:21:39'),
+(12, '2026-04-28', 'cash', 600.00, NULL, NULL, NULL, 'pending', 'sale', NULL, 'Ahmed Ali', '', '2026-04-28 05:25:33'),
+(13, '2026-04-28', 'cash', 130000.00, NULL, NULL, NULL, 'pending', 'sale', 3, 'Yasin Ullah', 'Sale from Quotation #1', '2026-04-28 09:37:06'),
+(22, '2026-04-28', 'cash', 22000.00, '', '', NULL, 'pending', 'sale', 36, 'Shams Uddin', 'Down Payment for Chassis: NW-21233132', '2026-04-28 10:24:33'),
+(23, '2026-04-28', 'cash', 33000.00, '', '', NULL, 'pending', 'installment', 7, 'Shams Uddin', 'Installment payment for Chassis NW-21233132 (ID: 7)', '2026-04-28 10:24:51'),
+(24, '2026-04-28', 'cash', 42000.00, '', '', NULL, 'pending', 'installment', 8, 'Shams Uddin', 'Installment payment for Chassis NW-21233132 (ID: 8)', '2026-04-28 10:25:07');
 
 -- --------------------------------------------------------
 
@@ -333,7 +382,11 @@ INSERT INTO `purchase_orders` (`id`, `order_date`, `supplier_id`, `total_units`,
 (6, '2026-04-27', 1, 1, 0.00, '', '2026-04-27 10:25:09'),
 (7, '2026-04-27', 1, 1, 0.00, '', '2026-04-27 10:25:19'),
 (8, '2026-04-27', 1, 1, 0.00, '', '2026-04-27 10:29:22'),
-(9, '2026-04-27', 1, 1, 0.00, '', '2026-04-27 10:29:45');
+(9, '2026-04-27', 1, 1, 0.00, '', '2026-04-27 10:29:45'),
+(10, '2026-04-28', 5, 1, 20000.00, '', '2026-04-28 04:24:26'),
+(11, '2026-04-28', 2, 1, 40000.00, '', '2026-04-28 04:29:37'),
+(12, '2026-04-28', 2, 1, 90000.00, 'new', '2026-04-28 04:33:26'),
+(13, '2026-04-28', 3, 1, 90000.00, '', '2026-04-28 04:36:57');
 
 -- --------------------------------------------------------
 
@@ -354,6 +407,13 @@ CREATE TABLE `quotations` (
   `created_by` int DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Dumping data for table `quotations`
+--
+
+INSERT INTO `quotations` (`id`, `quote_date`, `customer_id`, `bike_id`, `accessories_json`, `quoted_price`, `valid_until`, `status`, `notes`, `created_by`, `created_at`) VALUES
+(1, '2026-04-28', 5, 3, '[]', 130000.00, '2026-05-05', 'converted', '0', 1, '2026-04-28 09:17:02');
 
 -- --------------------------------------------------------
 
@@ -474,7 +534,11 @@ CREATE TABLE `suppliers` (
 --
 
 INSERT INTO `suppliers` (`id`, `name`, `contact`, `address`, `created_at`) VALUES
-(1, 'Default Supplier', '0300-0000000', 'Pakistan', '2026-04-20 08:56:23');
+(1, 'Default Supplier', '0300-0000000', 'Pakistan', '2026-04-20 08:56:23'),
+(2, 'Yasin Ullah', '03139842219', 'New bannu wala', '2026-04-28 04:12:55'),
+(3, 'Shams Uddin', '0322213222', 'New Bannu', '2026-04-28 04:16:21'),
+(4, 'Noor udin', '0322213222', 'new', '2026-04-28 04:17:05'),
+(5, 'Nasim', '001239919023', 'newd', '2026-04-28 04:19:27');
 
 -- --------------------------------------------------------
 
@@ -640,7 +704,7 @@ ALTER TABLE `accessories`
 -- AUTO_INCREMENT for table `bikes`
 --
 ALTER TABLE `bikes`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=33;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=37;
 
 --
 -- AUTO_INCREMENT for table `cheque_register`
@@ -652,25 +716,25 @@ ALTER TABLE `cheque_register`
 -- AUTO_INCREMENT for table `customers`
 --
 ALTER TABLE `customers`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- AUTO_INCREMENT for table `income_expenses`
 --
 ALTER TABLE `income_expenses`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT for table `installments`
 --
 ALTER TABLE `installments`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
 
 --
 -- AUTO_INCREMENT for table `ledger`
 --
 ALTER TABLE `ledger`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=29;
 
 --
 -- AUTO_INCREMENT for table `models`
@@ -682,19 +746,19 @@ ALTER TABLE `models`
 -- AUTO_INCREMENT for table `payments`
 --
 ALTER TABLE `payments`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=25;
 
 --
 -- AUTO_INCREMENT for table `purchase_orders`
 --
 ALTER TABLE `purchase_orders`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
 
 --
 -- AUTO_INCREMENT for table `quotations`
 --
 ALTER TABLE `quotations`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT for table `roles`
@@ -724,7 +788,7 @@ ALTER TABLE `settings`
 -- AUTO_INCREMENT for table `suppliers`
 --
 ALTER TABLE `suppliers`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT for table `users`
