@@ -11,7 +11,6 @@ if (time() > $_SESSION['captcha_lifetime']) {
     unset($_SESSION['captcha_code']);
     $_SESSION['captcha_lifetime'] = time() + 300;
 }
-
 $_SESSION['csrf_token'] = $_SESSION['csrf_token'] ?? bin2hex(random_bytes(32));
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
@@ -823,7 +822,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     $sup_row = $sup_r ? $sup_r->fetch_assoc() : null;
                     $party = $sup_row ? $sup_row['name'] : 'Unknown Supplier';
                     $pay_stmt = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, cheque_number, bank_name, cheque_date, transaction_type, reference_id, party_name, notes) VALUES (?,?,?,?,?,?,'supplier_payment',?,?,?)");
-                    $pay_stmt->bind_param('ssdsssiss',$order_date, $pay_type, $pay_amount, $chq_num, $bank_name, $chq_date, $po_id, $party, $po_notes);
+                    $pay_stmt->bind_param('ssdsssiss', $order_date, $pay_type, $pay_amount, $chq_num, $bank_name, $chq_date, $po_id, $party, $po_notes);
                     $pay_stmt->execute();
                     $pay_stmt->close();
                 }
@@ -1122,7 +1121,6 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                         $unit_p = (float) ($acc['unit_price'] ?? 0);
                         $disc = (float) ($acc['discount'] ?? 0);
                         $final_p = (float) ($acc['final_price'] ?? 0);
-
                         if (!empty($acc_input) && $qty > 0) {
                             if (!is_numeric($acc_input)) {
                                 $new_name = sanitize($acc_input);
@@ -1149,17 +1147,14 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $pay_st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, transaction_type, reference_id, party_name, notes) VALUES (?,'cash',?,'sale',?,?,?)");
                 $pay_st->bind_param('sdiss', $sale_date, $selling_price, $bike_id, $party_name, $payment_notes);
                 $pay_st->execute();
-
                 $led_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'debit',?,'customer',?,?,'sale',?,?)");
                 $desc = 'Sale of Chassis: ' . $bike['chassis_number'] . ' from Quote #' . $quote_id;
                 $led_st->bind_param('sdisid', $sale_date, $selling_price, $customer_id, $desc, $bike_id, $selling_price);
                 $led_st->execute();
-
                 $led_dp_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'credit',?,'customer',?,?,'payment',?,?)");
                 $desc_dp = 'Payment for Quote #' . $quote_id;
                 $led_dp_st->bind_param('sdisid', $sale_date, $selling_price, $customer_id, $desc_dp, $bike_id, $selling_price);
                 $led_dp_st->execute();
-
                 $conn->query("UPDATE quotations SET status='converted' WHERE id=$quote_id");
                 $conn->commit();
                 $_SESSION['last_sale_bike_id'] = $bike_id;
@@ -1222,7 +1217,6 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                         $unit_price = (float) ($data['unit_price'] ?? 0);
                         $discount = (float) ($data['discount'] ?? 0);
                         $final_price = (float) ($data['final_price'] ?? 0);
-
                         if (!empty($acc_input) && $qty > 0) {
                             if (!is_numeric($acc_input)) {
                                 $new_name = sanitize($acc_input);
@@ -1247,11 +1241,10 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $party_name = $cust_row ? $cust_row['name'] : 'Walk-in Customer';
                 $payment_notes = 'Down Payment for Chassis: ' . $bike['chassis_number'];
                 $pay_st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, cheque_number, bank_name, cheque_date, transaction_type, reference_id, party_name, notes) VALUES (?,?,?,?,?,?,'sale',?,?,?)");
-                $pay_st->bind_param('ssdsssiss',$selling_date, $payment_method_dp, $down_payment, $cheque_number_dp, $bank_name_dp, $cheque_date_dp, $bike_id, $party_name, $payment_notes);
+                $pay_st->bind_param('ssdsssiss', $selling_date, $payment_method_dp, $down_payment, $cheque_number_dp, $bank_name_dp, $cheque_date_dp, $bike_id, $party_name, $payment_notes);
                 $pay_st->execute();
                 $dp_payment_id = $conn->insert_id;
                 $pay_st->close();
-
                 $total_acc_price = 0;
                 if (!empty($selected_accessories)) {
                     foreach ($selected_accessories as $key => $data) {
@@ -1259,13 +1252,11 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     }
                 }
                 $total_sale_amount = $selling_price + $total_acc_price;
-
                 $led_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'debit',?,'customer',?,?,'sale',?,?)");
                 $desc = 'Sale of Chassis: ' . $bike['chassis_number'];
                 $led_st->bind_param('sdisid', $selling_date, $total_sale_amount, $customer_id, $desc, $bike_id, $total_sale_amount);
                 $led_st->execute();
                 $led_st->close();
-
                 if ($down_payment > 0) {
                     $led_dp_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'credit',?,'customer',?,?,'down_payment',?,?)");
                     $desc_dp = 'Down Payment for Chassis: ' . $bike['chassis_number'];
@@ -1273,13 +1264,10 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     $led_dp_st->execute();
                     $led_dp_st->close();
                 }
-
                 $remaining_balance = $total_sale_amount - $down_payment;
-
                 if ($customer_id == 0 && round($remaining_balance, 2) > 0) {
                     throw new Exception('Walk-in customers must pay the full amount upfront. Partial payments are not allowed.');
                 }
-
                 if ($total_installments > 0 && $installment_amount > 0 && $remaining_balance > 0) {
                     $installment_per_month = $remaining_balance / $total_installments;
                     $current_date = new DateTime($first_due_date);
@@ -1327,11 +1315,9 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             if (!$bike_info) {
                 throw new Exception('Bike not found for return.');
             }
-
             $acc_q = $conn->query("SELECT SUM(final_price) as total_acc FROM sale_accessories WHERE bike_id=$bike_id");
             $acc_total = $acc_q ? (float) ($acc_q->fetch_assoc()['total_acc'] ?? 0) : 0;
             $full_reversal_amount = $bike_info['selling_price'] + $acc_total;
-
             $st = $conn->prepare("UPDATE bikes SET status='returned', return_date=?, return_amount=?, return_notes=? WHERE id=? AND status='sold'");
             $st->bind_param('sdsi', $return_date, $return_amount, $return_notes, $bike_id);
             $st->execute();
@@ -1339,19 +1325,16 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 throw new Exception("Bike not found or not in 'sold' status to be returned.");
             }
             $st->close();
-
             $party_name = $bike_info['cust_name'] ?? 'Unknown Customer';
             $pay_st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, cheque_number, bank_name, cheque_date, transaction_type, reference_id, party_name, notes) VALUES (?,?,?,?,?,?,'customer_refund',?,?,?)");
-            $pay_st->bind_param('ssdsssiss',$return_date, $refund_method, $return_amount, $cheque_number, $bank_name, $cheque_date, $bike_id, $party_name, $return_notes);
+            $pay_st->bind_param('ssdsssiss', $return_date, $refund_method, $return_amount, $cheque_number, $bank_name, $cheque_date, $bike_id, $party_name, $return_notes);
             $pay_st->execute();
             $pay_st->close();
-
             $led_st1 = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'credit',?,'customer',?,?,'return_reversal',?,?)");
             $desc1 = 'Bike Return (Reversal) for Chassis: ' . $bike_info['chassis_number'];
             $led_st1->bind_param('sdisid', $return_date, $full_reversal_amount, $bike_info['customer_id'], $desc1, $bike_id, $full_reversal_amount);
             $led_st1->execute();
             $led_st1->close();
-
             if ($return_amount > 0) {
                 $led_st2 = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'debit',?,'customer',?,?,'return_refund',?,?)");
                 $desc2 = 'Refund given for Chassis: ' . $bike_info['chassis_number'];
@@ -1359,7 +1342,6 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $led_st2->execute();
                 $led_st2->close();
             }
-
             $conn->commit();
             $msg = 'Return processed successfully.';
         } catch (Exception $e) {
@@ -1379,10 +1361,8 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $err = 'Invalid status.';
                 goto end_payments_post;
             }
-
             $pay_q = $conn->query("SELECT * FROM payments WHERE id=$pid AND payment_type='cheque'");
             $pay = $pay_q ? $pay_q->fetch_assoc() : null;
-
             if ($pay) {
                 $old_status = $pay['status'] ?? 'pending';
                 if ($old_status !== 'bounced' && $new_status === 'bounced') {
@@ -1391,17 +1371,15 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                         $stmt = $conn->prepare('UPDATE payments SET status=? WHERE id=?');
                         $stmt->bind_param('si', $new_status, $pid);
                         $stmt->execute();
-
                         if (in_array($pay['transaction_type'], ['sale', 'installment'])) {
                             $cust_id = 0;
                             if ($pay['transaction_type'] === 'sale') {
-                                $br = $conn->query("SELECT customer_id FROM bikes WHERE id=" . (int)$pay['reference_id']);
-                                $cust_id = $br && $br->num_rows > 0 ? (int)$br->fetch_assoc()['customer_id'] : 0;
+                                $br = $conn->query('SELECT customer_id FROM bikes WHERE id=' . (int) $pay['reference_id']);
+                                $cust_id = $br && $br->num_rows > 0 ? (int) $br->fetch_assoc()['customer_id'] : 0;
                             } else {
-                                $ir = $conn->query("SELECT customer_id FROM installments WHERE id=" . (int)$pay['reference_id']);
-                                $cust_id = $ir && $ir->num_rows > 0 ? (int)$ir->fetch_assoc()['customer_id'] : 0;
+                                $ir = $conn->query('SELECT customer_id FROM installments WHERE id=' . (int) $pay['reference_id']);
+                                $cust_id = $ir && $ir->num_rows > 0 ? (int) $ir->fetch_assoc()['customer_id'] : 0;
                             }
-                            
                             if ($cust_id > 0) {
                                 $bounced_date = date('Y-m-d');
                                 $led_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'debit',?,'customer',?,?,'cheque_bounce',?,?)");
@@ -1410,27 +1388,24 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                                 $led_st->execute();
                             }
                         }
-
                         if ($pay['transaction_type'] === 'installment') {
-                            $inst_id = (int)$pay['reference_id'];
+                            $inst_id = (int) $pay['reference_id'];
                             $inst_q = $conn->query("SELECT amount_paid, penalty_fee, installment_amount FROM installments WHERE id=$inst_id");
                             if ($inst_q && $inst_q->num_rows > 0) {
                                 $inst = $inst_q->fetch_assoc();
                                 $deduct = $pay['amount'];
                                 $new_amount_paid = $inst['amount_paid'] - $deduct;
                                 $new_penalty = $inst['penalty_fee'];
-                                
                                 if ($new_amount_paid < 0) {
-                                    $new_penalty += $new_amount_paid; 
+                                    $new_penalty += $new_amount_paid;
                                     $new_amount_paid = 0;
                                 }
-                                if ($new_penalty < 0) $new_penalty = 0;
-                                
+                                if ($new_penalty < 0)
+                                    $new_penalty = 0;
                                 $new_inst_status = ($new_amount_paid >= $inst['installment_amount']) ? 'paid' : 'pending';
                                 $conn->query("UPDATE installments SET amount_paid=$new_amount_paid, penalty_fee=$new_penalty, status='$new_inst_status' WHERE id=$inst_id");
                             }
                         }
-
                         $conn->commit();
                         $msg = 'Cheque marked as bounced. Accounting & installments reversed successfully.';
                     } catch (Exception $e) {
@@ -1484,7 +1459,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $total_payment = $amount_paid + $penalty_fee;
                 $payment_notes = 'Installment payment for Chassis ' . $inst['chassis_number'] . " (ID: $installment_id)";
                 $pay_st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, cheque_number, bank_name, cheque_date, transaction_type, reference_id, party_name, notes) VALUES (?,?,?,?,?,?,'installment',?,?,?)");
-                $pay_st->bind_param('ssdsssiss',$payment_date, $payment_type, $total_payment, $cheque_number, $bank_name, $cheque_date, $installment_id, $inst['cust_name'], $payment_notes);
+                $pay_st->bind_param('ssdsssiss', $payment_date, $payment_type, $total_payment, $cheque_number, $bank_name, $cheque_date, $installment_id, $inst['cust_name'], $payment_notes);
                 $pay_st->execute();
                 $payment_id = $conn->insert_id;
                 $new_amount_paid = $inst['amount_paid'] + $amount_paid;
@@ -1499,7 +1474,6 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     $led_pen->bind_param('sdisid', $payment_date, $penalty_fee, $inst['customer_id'], $desc_pen, $installment_id, $penalty_fee);
                     $led_pen->execute();
                 }
-
                 $led_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'credit',?,'customer',?,?,'installment',?,?)");
                 $desc = 'Installment payment for Chassis: ' . $inst['chassis_number'];
                 $led_st->bind_param('sdisid', $payment_date, $total_payment, $inst['customer_id'], $desc, $installment_id, $total_payment);
@@ -1620,7 +1594,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $err = 'New password must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, one number, and one special character.';
             } else {
                 $np = password_hash($new_password, PASSWORD_DEFAULT);
-                $conn->query("UPDATE users SET password_hash='" . mysqli_real_escape_string($conn, $np) . "' WHERE id=" . (int)$_SESSION['user_id']);
+                $conn->query("UPDATE users SET password_hash='" . mysqli_real_escape_string($conn, $np) . "' WHERE id=" . (int) $_SESSION['user_id']);
                 $msg .= ' Password updated.';
             }
         }
@@ -2172,13 +2146,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('msg')) Swal.fire({ title: 'Success!', text: urlParams.get('msg'), icon: 'success', timer: 3000, showConfirmButton: false });
     if (urlParams.get('err')) Swal.fire({ title: 'Error!', text: urlParams.get('err'), icon: 'error', confirmButtonColor: '#d33' });
-    
     if (urlParams.has('msg') || urlParams.has('err')) {
         urlParams.delete('msg');
         urlParams.delete('err');
         window.history.replaceState(null, '', window.location.pathname + '?' + urlParams.toString());
     }
-
     $('table.data-table:not(.no-dt)').DataTable({
         responsive: true,
         pagingType: 'full_numbers',
@@ -3412,7 +3384,6 @@ function calcRemainingBalance() {
         totalAccessoriesPrice += parseFloat(input.value) || 0;
     });
     var totalAmountDue = sellingPrice + totalAccessoriesPrice;
-    
     var custSel = document.getElementById('customerSel');
     if (custSel && custSel.value == '0') {
         document.getElementById('downPayment').value = totalAmountDue.toFixed(2);
@@ -3429,7 +3400,6 @@ function calcRemainingBalance() {
             instInput.readOnly = false;
         }
     }
-    
     var downPayment = parseFloat(document.getElementById('downPayment').value) || 0;
     var remainingBalance = totalAmountDue - downPayment;
     document.getElementById('totalAmountDue').value = '<?= $currency ?> ' + totalAmountDue.toFixed(2);
@@ -3935,7 +3905,6 @@ $(document).ready(function() {
             $cust_info = $conn->query("SELECT * FROM customers WHERE id=$sel_cust")->fetch_assoc();
             $ledger_entries = $conn->query("SELECT * FROM ledger WHERE party_type='customer' AND party_id=$sel_cust ORDER BY entry_date ASC, id ASC");
             $running_bal = 0;
-
             $sums = $conn->query("SELECT 
                 SUM(CASE WHEN reference_type IN ('sale', 'penalty') THEN amount ELSE 0 END) - SUM(CASE WHEN reference_type='return_reversal' THEN amount ELSE 0 END) as total_billed, 
                 SUM(CASE WHEN reference_type IN ('payment','down_payment','installment') THEN amount ELSE 0 END) - SUM(CASE WHEN reference_type IN ('return_refund', 'cheque_bounce') THEN amount ELSE 0 END) as total_paid,
@@ -3955,7 +3924,6 @@ $(document).ready(function() {
 <button onclick="document.getElementById('receivePaymentModal').classList.add('open')" class="btn btn-success btn-sm">+ Receive Payment</button>
 <button onclick="window.print()" class="btn btn-default btn-sm">🖨 Print Ledger</button>
 </div>
-
 <div class="modal-overlay" id="receivePaymentModal">
 <div class="modal">
 <div class="modal-header"><h3>Receive Payment</h3><button class="modal-close" onclick="document.getElementById('receivePaymentModal').classList.remove('open')">✕</button></div>
@@ -3969,7 +3937,6 @@ $(document).ready(function() {
 </form>
 </div>
 </div>
-
 <fieldset class="fieldset animate__animated animate__fadeInUp"><legend>👤 Customer Ledger — <?= sanitize($cust_info['name']) ?></legend>
 <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;font-size:0.83rem">
 <span><strong>Phone:</strong> <?= sanitize($cust_info['phone'] ?? '-') ?></span>
@@ -4071,7 +4038,6 @@ $(document).ready(function() {
             $sup_orders = $conn->query("SELECT po.*, IFNULL(SUM(b.purchase_price), po.total_amount) as bikes_total, COUNT(b.id) as bike_count FROM purchase_orders po LEFT JOIN bikes b ON po.id=b.purchase_order_id WHERE po.supplier_id=$sel_sup GROUP BY po.id ORDER BY po.order_date ASC");
             $supplier_payments = $conn->query("SELECT * FROM payments WHERE transaction_type='supplier_payment' AND IFNULL(status, '') != 'bounced' AND (party_name = '" . mysqli_real_escape_string($conn, $sup_info['name']) . "' OR reference_id IN (SELECT id FROM purchase_orders WHERE supplier_id=$sel_sup)) ORDER BY payment_date ASC");
             $running_bal = 0;
-
             $purchase_total_sum = 0;
             $payment_total_sum = 0;
             while ($order = $sup_orders->fetch_assoc())
@@ -4089,7 +4055,6 @@ $(document).ready(function() {
 <button onclick="document.getElementById('makePaymentModal').classList.add('open')" class="btn btn-success btn-sm">+ Make Payment</button>
 <button onclick="window.print()" class="btn btn-default btn-sm">🖨 Print Ledger</button>
 </div>
-
 <div class="modal-overlay" id="makePaymentModal">
 <div class="modal">
 <div class="modal-header"><h3>Make Payment to Supplier</h3><button class="modal-close" onclick="document.getElementById('makePaymentModal').classList.remove('open')">✕</button></div>
@@ -4103,7 +4068,6 @@ $(document).ready(function() {
 </form>
 </div>
 </div>
-
 <fieldset class="fieldset animate__animated animate__fadeInUp"><legend>🏭 Supplier Ledger — <?= sanitize($sup_info['name']) ?></legend>
 <div style="margin-bottom:10px;font-size:0.83rem">
 <strong>Contact:</strong> <?= sanitize($sup_info['contact'] ?? '-') ?> | <strong>Address:</strong> <?= sanitize($sup_info['address'] ?? '-') ?>
@@ -5081,14 +5045,11 @@ $(document).ready(function() {
         tags: true,
         theme: 'default'
     });
-    
     $('#quoteCustomerSel').on('change', function() { showQuoteCustomerDetails(this); });
     $('#quoteBikeSel').on('change', function() { showQuoteBikeDetails(this); });
-    
     if ($('#quoteCustomerSel').val()) showQuoteCustomerDetails(document.getElementById('quoteCustomerSel'));
     if ($('#quoteBikeSel').val()) showQuoteBikeDetails(document.getElementById('quoteBikeSel'));
 });
-
 function showQuoteCustomerDetails(sel) {
     var opt = sel.options[sel.selectedIndex];
     var detailsDiv = document.getElementById('quoteCustomerDetails');
@@ -5105,7 +5066,6 @@ function showQuoteCustomerDetails(sel) {
         detailsDiv.innerHTML = '';
     }
 }
-
 function showQuoteBikeDetails(sel) {
     var opt = sel.options[sel.selectedIndex];
     var detailsDiv = document.getElementById('quoteBikeDetails');
