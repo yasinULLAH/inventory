@@ -12,24 +12,16 @@ if (time() > $_SESSION['captcha_lifetime']) {
     $_SESSION['captcha_lifetime'] = time() + 300;
 }
 
+$_SESSION['csrf_token'] = $_SESSION['csrf_token'] ?? bin2hex(random_bytes(32));
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+        die('<div style="padding:40px;text-align:center;font-family:sans-serif"><h2>🚫 Invalid Request</h2><p>Security token missing or expired. Please refresh the page and try again.</p></div>');
+    }
+}
+
 function get_client_ip()
 {
-    $ipaddress = '';
-    if (isset($_SERVER['HTTP_CLIENT_IP']))
-        $ipaddress = $_SERVER['HTTP_CLIENT_IP'];
-    else if (isset($_SERVER['HTTP_X_FORWARDED_FOR']))
-        $ipaddress = $_SERVER['HTTP_X_FORWARDED_FOR'];
-    else if (isset($_SERVER['HTTP_X_FORWARDED']))
-        $ipaddress = $_SERVER['HTTP_X_FORWARDED'];
-    else if (isset($_SERVER['HTTP_FORWARDED_FOR']))
-        $ipaddress = $_SERVER['HTTP_FORWARDED_FOR'];
-    else if (isset($_SERVER['HTTP_FORWARDED']))
-        $ipaddress = $_SERVER['HTTP_FORWARDED'];
-    else if (isset($_SERVER['REMOTE_ADDR']))
-        $ipaddress = $_SERVER['REMOTE_ADDR'];
-    else
-        $ipaddress = 'UNKNOWN';
-    return $ipaddress;
+    return $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
 }
 
 $ip_address = get_client_ip();
@@ -532,6 +524,7 @@ if ($db_exists) {
                 $stmt->execute();
                 $u = $stmt->get_result()->fetch_assoc();
                 if ($u && $u['is_active'] && password_verify($upass, $u['password_hash'])) {
+                    session_regenerate_id(true);
                     $_SESSION['user_id'] = $u['id'];
                     $_SESSION['login_time'] = time();
                     $_SESSION['last_active'] = time();
@@ -596,6 +589,9 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             if (empty($name)) {
                 $err = 'Role name cannot be empty.';
                 goto end_roles_post;
+            }
+            if ($id == 1 && $name !== 'Administrator') {
+                $name = 'Administrator';
             }
             if ($id) {
                 $stmt = $conn->prepare('UPDATE roles SET name=?, description=? WHERE id=?');
@@ -827,7 +823,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     $sup_row = $sup_r ? $sup_r->fetch_assoc() : null;
                     $party = $sup_row ? $sup_row['name'] : 'Unknown Supplier';
                     $pay_stmt = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, cheque_number, bank_name, cheque_date, transaction_type, reference_id, party_name, notes) VALUES (?,?,?,?,?,?,'supplier_payment',?,?,?)");
-                    $pay_stmt->bind_param('ssdsdssis', $order_date, $pay_type, $pay_amount, $chq_num, $bank_name, $chq_date, $po_id, $party, $po_notes);
+                    $pay_stmt->bind_param('ssdsssiss',$order_date, $pay_type, $pay_amount, $chq_num, $bank_name, $chq_date, $po_id, $party, $po_notes);
                     $pay_stmt->execute();
                     $pay_stmt->close();
                 }
@@ -1151,7 +1147,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $party_name = $cust_row ? $cust_row['name'] : 'Walk-in Customer';
                 $payment_notes = "Sale from Quotation #$quote_id";
                 $pay_st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, transaction_type, reference_id, party_name, notes) VALUES (?,'cash',?,'sale',?,?,?)");
-                $pay_st->bind_param('sdisis', $sale_date, $selling_price, $bike_id, $party_name, $payment_notes);
+                $pay_st->bind_param('sdiss', $sale_date, $selling_price, $bike_id, $party_name, $payment_notes);
                 $pay_st->execute();
 
                 $led_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'debit',?,'customer',?,?,'sale',?,?)");
@@ -1251,7 +1247,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $party_name = $cust_row ? $cust_row['name'] : 'Walk-in Customer';
                 $payment_notes = 'Down Payment for Chassis: ' . $bike['chassis_number'];
                 $pay_st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, cheque_number, bank_name, cheque_date, transaction_type, reference_id, party_name, notes) VALUES (?,?,?,?,?,?,'sale',?,?,?)");
-                $pay_st->bind_param('ssdsdssis', $selling_date, $payment_method_dp, $down_payment, $cheque_number_dp, $bank_name_dp, $cheque_date_dp, $bike_id, $party_name, $payment_notes);
+                $pay_st->bind_param('ssdsssiss',$selling_date, $payment_method_dp, $down_payment, $cheque_number_dp, $bank_name_dp, $cheque_date_dp, $bike_id, $party_name, $payment_notes);
                 $pay_st->execute();
                 $dp_payment_id = $conn->insert_id;
                 $pay_st->close();
@@ -1346,7 +1342,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
 
             $party_name = $bike_info['cust_name'] ?? 'Unknown Customer';
             $pay_st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, cheque_number, bank_name, cheque_date, transaction_type, reference_id, party_name, notes) VALUES (?,?,?,?,?,?,'customer_refund',?,?,?)");
-            $pay_st->bind_param('ssdsdssis', $return_date, $refund_method, $return_amount, $cheque_number, $bank_name, $cheque_date, $bike_id, $party_name, $return_notes);
+            $pay_st->bind_param('ssdsssiss',$return_date, $refund_method, $return_amount, $cheque_number, $bank_name, $cheque_date, $bike_id, $party_name, $return_notes);
             $pay_st->execute();
             $pay_st->close();
 
@@ -1425,7 +1421,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $total_payment = $amount_paid + $penalty_fee;
                 $payment_notes = 'Installment payment for Chassis ' . $inst['chassis_number'] . " (ID: $installment_id)";
                 $pay_st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, cheque_number, bank_name, cheque_date, transaction_type, reference_id, party_name, notes) VALUES (?,?,?,?,?,?,'installment',?,?,?)");
-                $pay_st->bind_param('ssdsdssis', $payment_date, $payment_type, $total_payment, $cheque_number, $bank_name, $cheque_date, $installment_id, $inst['cust_name'], $payment_notes);
+                $pay_st->bind_param('ssdsssiss',$payment_date, $payment_type, $total_payment, $cheque_number, $bank_name, $cheque_date, $installment_id, $inst['cust_name'], $payment_notes);
                 $pay_st->execute();
                 $payment_id = $conn->insert_id;
                 $new_amount_paid = $inst['amount_paid'] + $amount_paid;
@@ -1554,8 +1550,8 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $err = 'New password must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, one number, and one special character.';
             } else {
                 $np = password_hash($new_password, PASSWORD_DEFAULT);
-                $conn->query("UPDATE users SET password_hash='" . mysqli_real_escape_string($conn, $np) . "' WHERE id=1");
-                $msg .= ' Admin password updated.';
+                $conn->query("UPDATE users SET password_hash='" . mysqli_real_escape_string($conn, $np) . "' WHERE id=" . (int)$_SESSION['user_id']);
+                $msg .= ' Password updated.';
             }
         }
         $st->close();
@@ -1652,9 +1648,25 @@ if ($db_exists && isset($_SESSION['user_id'])) {
     }
     if ($page === 'inventory' && isset($_GET['export_csv']) && $_GET['export_csv'] == 1) {
         $status_f = sanitize($_GET['status_f'] ?? '');
-        $where = '1=1';
+        $model_f = (int) ($_GET['model_f'] ?? 0);
+        $color_f = sanitize($_GET['color_f'] ?? '');
+        $search_f = sanitize($_GET['search_f'] ?? '');
+        $date_from = sanitize($_GET['date_from'] ?? '');
+        $date_to = sanitize($_GET['date_to'] ?? '');
+        $where_parts = ['1=1'];
         if ($status_f && in_array($status_f, ['in_stock', 'sold', 'returned', 'reserved']))
-            $where .= " AND b.status='$status_f'";
+            $where_parts[] = "b.status='$status_f'";
+        if ($model_f)
+            $where_parts[] = "b.model_id=$model_f";
+        if ($color_f)
+            $where_parts[] = "b.color LIKE '%" . mysqli_real_escape_string($conn, $color_f) . "%'";
+        if ($search_f)
+            $where_parts[] = "(b.chassis_number LIKE '%" . mysqli_real_escape_string($conn, $search_f) . "%' OR b.motor_number LIKE '%" . mysqli_real_escape_string($conn, $search_f) . "%' OR m.model_name LIKE '%" . mysqli_real_escape_string($conn, $search_f) . "%' OR b.color LIKE '%" . mysqli_real_escape_string($conn, $search_f) . "%')";
+        if ($date_from)
+            $where_parts[] = "b.inventory_date >= '" . mysqli_real_escape_string($conn, $date_from) . "'";
+        if ($date_to)
+            $where_parts[] = "b.inventory_date <= '" . mysqli_real_escape_string($conn, $date_to) . "'";
+        $where = implode(' AND ', $where_parts);
         $er = $conn->query("SELECT b.*, m.model_name, m.model_code, c.name as cust_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id WHERE $where ORDER BY b.id DESC");
         header('Content-Type: text/csv');
         header('Content-Disposition: attachment; filename="inventory_' . date('Ymd') . '.csv"');
@@ -1913,6 +1925,10 @@ body.sidebar-collapsed .sidebar-footer form button::after { content: '🚪'; fon
 .stat-box .stat-lbl{font-size:0.72rem;color:var(--text2);text-transform:uppercase}
 .sidebar-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:90}
 .print-btn-wrap{margin-bottom:10px}
+.select2-container {
+    width: 100% !important;
+    min-width: 180px !important;
+}
 .select2-container--default .select2-selection--single {
     background-color: var(--input-bg) !important;
     border: 1px solid var(--input-border) !important;
@@ -2120,6 +2136,8 @@ document.addEventListener('DOMContentLoaded', function() {
         allowClear: false,
         theme: 'default'
     });
+    var csrfToken = "<?= $_SESSION['csrf_token'] ?? '' ?>";
+    $('form[method="POST"]').append('<input type="hidden" name="csrf_token" value="' + csrfToken + '">');
     $(document).on('DOMNodeInserted', function(e) {
         if (e.target && e.target.nodeType === 1) {
             $(e.target).find('select:not([name$="_length"]):not(.swal2-select)').select2({
@@ -2950,7 +2968,7 @@ $(document).ready(function() {
 <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center" class="no-print animate__animated animate__fadeInLeft">
 <span style="font-size:0.8rem;color:var(--text2)">Total: <?= $bikes_result->num_rows ?> record(s)</span>
 <?php if (has_permission($conn, 'purchase', 'add')): ?><a href="index.php?page=purchase" class="btn btn-success btn-sm">+ New Purchase</a><?php endif; ?>
-<?php if (has_permission($conn, 'inventory', 'delete')): ?><button type="submit" name="bulk_action" value="bulk_delete" class="btn btn-danger btn-sm" onclick="event.preventDefault(); Swal.fire({title: 'Delete Selected?', text: 'Are you sure you want to delete selected bikes? This cannot be undone.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete them!'}).then((result) => { if(result.isConfirmed) this.closest('form').submit(); })">🗑 Delete Selected</button><?php endif; ?>
+<?php if (has_permission($conn, 'inventory', 'delete')): ?><button type="submit" name="bulk_action" value="bulk_delete" class="btn btn-danger btn-sm" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete Selected?', text: 'Are you sure you want to delete selected bikes? This cannot be undone.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete them!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑 Delete Selected</button><?php endif; ?>
 <button type="submit" form="bulkExportForm" class="btn btn-default btn-sm">⬇ Export Selected</button>
 <button onclick="window.print()" type="button" class="btn btn-default btn-sm">🖨 Print</button>
 <button type="button" class="btn btn-default btn-sm" onclick="toggleSelectAll()">☑ Select All</button>
@@ -3012,7 +3030,7 @@ $(document).ready(function() {
 <?php if (has_permission($conn, 'inventory', 'delete')): ?>
 <form method="POST" action="index.php?page=inventory&action=delete" style="display:inline">
 <input type="hidden" name="id" value="<?= $bike['id'] ?>">
-<button type="submit" class="btn btn-danger btn-sm" title="Delete" onclick="event.preventDefault(); Swal.fire({title: 'Delete this bike?', text: 'Are you sure you want to delete this bike? This cannot be undone.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) this.closest('form').submit(); })">🗑</button>
+<button type="submit" class="btn btn-danger btn-sm" title="Delete" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete this bike?', text: 'Are you sure you want to delete this bike? This cannot be undone.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button>
 </form>
 <?php endif; ?>
 </div>
@@ -3631,13 +3649,13 @@ $(document).ready(function() {
 <form method="POST" action="index.php?page=payments&action=status" style="display:inline">
 <input type="hidden" name="id" value="<?= $pay['id'] ?>">
 <input type="hidden" name="status" value="bounced">
-<button type="submit" class="btn btn-danger btn-sm" title="Mark Bounced" onclick="event.preventDefault(); Swal.fire({title: 'Mark as Bounced?', text: 'Are you sure you want to mark this cheque as bounced?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, mark bounced!'}).then((result) => { if(result.isConfirmed) this.closest('form').submit(); })">✗ Bounce</button>
+<button type="submit" class="btn btn-danger btn-sm" title="Mark Bounced" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Mark as Bounced?', text: 'Are you sure you want to mark this cheque as bounced?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, mark bounced!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">✗ Bounce</button>
 </form>
 <?php endif; ?>
 <?php if (has_permission($conn, 'payments', 'delete')): ?>
 <form method="POST" action="index.php?page=payments&action=delete" style="display:inline">
 <input type="hidden" name="id" value="<?= $pay['id'] ?>">
-<button type="submit" class="btn btn-danger btn-sm" title="Delete" onclick="event.preventDefault(); Swal.fire({title: 'Delete this payment?', text: 'Are you sure you want to delete this payment entry? This cannot be undone.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) this.closest('form').submit(); })">🗑</button>
+<button type="submit" class="btn btn-danger btn-sm" title="Delete" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete this payment?', text: 'Are you sure you want to delete this payment entry? This cannot be undone.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button>
 </form>
 <?php endif; ?>
 </div>
@@ -4706,7 +4724,7 @@ $(document).ready(function() {
 <?php if (has_permission($conn, 'models', 'delete')): ?>
 <form method="POST" action="index.php?page=models&action=delete" style="display:inline">
 <input type="hidden" name="id" value="<?= $mdl['id'] ?>">
-<button type="submit" class="btn btn-danger btn-sm" onclick="event.preventDefault(); Swal.fire({title: 'Delete this model?', text: 'Are you sure you want to delete this model? Only possible if no bikes are linked.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) this.closest('form').submit(); })">🗑</button>
+<button type="submit" class="btn btn-danger btn-sm" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete this model?', text: 'Are you sure you want to delete this model? Only possible if no bikes are linked.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button>
 </form>
 <?php endif; ?>
 </div>
@@ -4768,7 +4786,7 @@ $(document).ready(function() {
 <?php if (has_permission($conn, 'accessories', 'delete')): ?>
 <form method="POST" action="index.php?page=accessories&action=delete" style="display:inline">
 <input type="hidden" name="id" value="<?= $acc['id'] ?>">
-<button type="submit" class="btn btn-danger btn-sm" onclick="event.preventDefault(); Swal.fire({title: 'Delete this accessory?', text: 'Are you sure you want to delete this accessory? Only possible if no sales are linked.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) this.closest('form').submit(); })">🗑</button>
+<button type="submit" class="btn btn-danger btn-sm" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete this accessory?', text: 'Are you sure you want to delete this accessory? Only possible if no sales are linked.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button>
 </form>
 <?php endif; ?>
 </div>
@@ -4787,8 +4805,8 @@ $(document).ready(function() {
             $eq = $conn->query("SELECT * FROM quotations WHERE id=$edit_quote_id");
             $edit_quote = $eq ? $eq->fetch_assoc() : null;
         }
-        $customers_list_q = $conn->query('SELECT id, name, phone FROM customers ORDER BY name');
-        $bikes_list_q = $conn->query("SELECT b.id, b.chassis_number, m.model_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.status='in_stock' ORDER BY b.chassis_number");
+        $customers_list_q = $conn->query('SELECT id, name, phone, cnic, is_filer, address FROM customers ORDER BY name');
+        $bikes_list_q = $conn->query("SELECT b.id, b.chassis_number, m.model_name, b.color, b.purchase_price, m.category FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.status='in_stock' ORDER BY b.chassis_number");
         $accessories_list_q = $conn->query('SELECT id, name, selling_price, current_stock FROM accessories WHERE current_stock > 0 ORDER BY name');
 ?>
 <div style="display:flex;gap:8px;margin-bottom:10px" class="no-print animate__animated animate__fadeInLeft">
@@ -4806,25 +4824,27 @@ $(document).ready(function() {
 <div class="form-group"><label>Valid Until <span class="req">*</span></label><input type="date" name="valid_until" value="<?= $edit_quote['valid_until'] ?? date('Y-m-d', strtotime('+7 days')) ?>" required></div>
 </div>
 <div class="form-row">
-<div class="form-group">
+<div class="form-group" style="flex:1">
     <label>Customer <span class="req">*</span></label>
-    <select name="customer_id" required class="select2-enable">
+    <select name="customer_id" id="quoteCustomerSel" required class="select2-enable" onchange="showQuoteCustomerDetails(this)">
         <option value="">-- Select Customer --</option>
         <?php $customers_list_q->data_seek(0);
         while ($cust = $customers_list_q->fetch_assoc()): ?>
-            <option value="<?= $cust['id'] ?>" <?= (($edit_quote['customer_id'] ?? '') == $cust['id']) ? 'selected' : '' ?>><?= sanitize($cust['name']) ?> (<?= sanitize($cust['phone']) ?>)</option>
+            <option value="<?= $cust['id'] ?>" data-phone="<?= sanitize($cust['phone']) ?>" data-cnic="<?= sanitize($cust['cnic']) ?>" data-filer="<?= $cust['is_filer'] ? 'Filer' : 'Non-Filer' ?>" data-address="<?= sanitize($cust['address']) ?>" <?= (($edit_quote['customer_id'] ?? '') == $cust['id']) ? 'selected' : '' ?>><?= sanitize($cust['name']) ?> (<?= sanitize($cust['phone']) ?>)</option>
         <?php endwhile; ?>
     </select>
+    <div id="quoteCustomerDetails" style="margin-top:8px;font-size:0.8rem;color:var(--text);display:none;background:var(--bg2);padding:10px;border-radius:2px;border:1px solid var(--border);line-height:1.4"></div>
 </div>
-<div class="form-group">
+<div class="form-group" style="flex:1">
     <label>Bike <span class="req">*</span></label>
-    <select name="bike_id" required class="select2-enable">
+    <select name="bike_id" id="quoteBikeSel" required class="select2-enable" onchange="showQuoteBikeDetails(this)">
         <option value="">-- Select Bike --</option>
         <?php $bikes_list_q->data_seek(0);
         while ($bike = $bikes_list_q->fetch_assoc()): ?>
-            <option value="<?= $bike['id'] ?>" <?= (($edit_quote['bike_id'] ?? '') == $bike['id']) ? 'selected' : '' ?>><?= sanitize($bike['chassis_number']) ?> (<?= sanitize($bike['model_name']) ?>)</option>
+            <option value="<?= $bike['id'] ?>" data-model="<?= sanitize($bike['model_name']) ?>" data-color="<?= sanitize($bike['color']) ?>" data-pp="<?= fmt_money($bike['purchase_price']) ?>" data-cat="<?= sanitize($bike['category']) ?>" <?= (($edit_quote['bike_id'] ?? '') == $bike['id']) ? 'selected' : '' ?>><?= sanitize($bike['chassis_number']) ?> (<?= sanitize($bike['model_name']) ?>)</option>
         <?php endwhile; ?>
     </select>
+    <div id="quoteBikeDetails" style="margin-top:8px;font-size:0.8rem;color:var(--text);display:none;background:var(--bg2);padding:10px;border-radius:2px;border:1px solid var(--border);line-height:1.4"></div>
 </div>
 </div>
 <div class="form-group"><label>Quoted Price (<?= $currency ?>) <span class="req">*</span></label><input type="number" name="quoted_price" step="0.01" min="0" value="<?= $edit_quote['quoted_price'] ?? '0.00' ?>" required></div>
@@ -4900,14 +4920,16 @@ $(document).ready(function() {
 <?php if ($quote['status'] == 'pending' && has_permission($conn, 'quotations', 'edit')): ?>
 <form method="POST" action="index.php?page=quotations&action=convert_quote_to_sale" style="display:inline">
 <input type="hidden" name="quote_id" value="<?= $quote['id'] ?>">
-<button type="submit" class="btn btn-success btn-sm" title="Convert to Sale" onclick="event.preventDefault(); Swal.fire({title: 'Convert to Sale?', text: 'This will create a new sale entry and mark this quotation as converted. Are you sure?', icon: 'info', showCancelButton: true, confirmButtonText: 'Yes, convert it!'}).then((result) => { if(result.isConfirmed) this.closest('form').submit(); })">🛒</button>
+<input type="hidden" name="convert_quote_to_sale" value="1">
+<button type="submit" class="btn btn-success btn-sm" title="Convert to Sale" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Convert to Sale?', text: 'This will create a new sale entry and mark this quotation as converted. Are you sure?', icon: 'info', showCancelButton: true, confirmButtonText: 'Yes, convert it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🛒</button>
 </form>
 <a href="index.php?page=quotations&edit_id=<?= $quote['id'] ?>" class="btn btn-primary btn-sm" title="Edit">✏</a>
 <?php endif; ?>
 <?php if (has_permission($conn, 'quotations', 'delete')): ?>
 <form method="POST" action="index.php?page=quotations&action=delete" style="display:inline">
 <input type="hidden" name="id" value="<?= $quote['id'] ?>">
-<button type="submit" class="btn btn-danger btn-sm" title="Delete" onclick="event.preventDefault(); Swal.fire({title: 'Delete this quotation?', text: 'Are you sure you want to delete this quotation?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) this.closest('form').submit(); })">🗑</button>
+<input type="hidden" name="delete_quote" value="1">
+<button type="submit" class="btn btn-danger btn-sm" title="Delete" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete this quotation?', text: 'Are you sure you want to delete this quotation?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button>
 </form>
 <?php endif; ?>
 </div>
@@ -4983,7 +5005,46 @@ $(document).ready(function() {
         tags: true,
         theme: 'default'
     });
+    
+    $('#quoteCustomerSel').on('change', function() { showQuoteCustomerDetails(this); });
+    $('#quoteBikeSel').on('change', function() { showQuoteBikeDetails(this); });
+    
+    if ($('#quoteCustomerSel').val()) showQuoteCustomerDetails(document.getElementById('quoteCustomerSel'));
+    if ($('#quoteBikeSel').val()) showQuoteBikeDetails(document.getElementById('quoteBikeSel'));
 });
+
+function showQuoteCustomerDetails(sel) {
+    var opt = sel.options[sel.selectedIndex];
+    var detailsDiv = document.getElementById('quoteCustomerDetails');
+    if (sel.value && opt) {
+        var phone = opt.getAttribute('data-phone') || '-';
+        var cnic = opt.getAttribute('data-cnic') || '-';
+        var filer = opt.getAttribute('data-filer') || '-';
+        var addr = opt.getAttribute('data-address') || '-';
+        var filerBadge = filer === 'Filer' ? 'success' : 'danger';
+        detailsDiv.innerHTML = '<strong>Phone:</strong> ' + phone + '<br><strong>CNIC:</strong> ' + cnic + '<br><strong>Status:</strong> <span class="badge badge-' + filerBadge + '">' + filer + '</span><br><strong>Address:</strong> ' + addr;
+        detailsDiv.style.display = 'block';
+    } else {
+        detailsDiv.style.display = 'none';
+        detailsDiv.innerHTML = '';
+    }
+}
+
+function showQuoteBikeDetails(sel) {
+    var opt = sel.options[sel.selectedIndex];
+    var detailsDiv = document.getElementById('quoteBikeDetails');
+    if (sel.value && opt) {
+        var model = opt.getAttribute('data-model') || '-';
+        var color = opt.getAttribute('data-color') || '-';
+        var cat = opt.getAttribute('data-cat') || '-';
+        var pp = opt.getAttribute('data-pp') || '-';
+        detailsDiv.innerHTML = '<strong>Model:</strong> ' + model + '<br><strong>Category:</strong> ' + cat + '<br><strong>Color:</strong> ' + color + '<br><strong>Purchase Price:</strong> ' + pp;
+        detailsDiv.style.display = 'block';
+    } else {
+        detailsDiv.style.display = 'none';
+        detailsDiv.innerHTML = '';
+    }
+}
 </script>
 <?php
     elseif ($page === 'customers'):
@@ -5052,7 +5113,7 @@ $(document).ready(function() {
 <?php if (has_permission($conn, 'customers', 'delete')): ?>
 <form method="POST" action="index.php?page=customers&action=delete" style="display:inline">
 <input type="hidden" name="id" value="<?= $cu['id'] ?>">
-<button type="submit" class="btn btn-danger btn-sm" onclick="event.preventDefault(); Swal.fire({title: 'Delete customer?', text: 'Are you sure you want to delete this customer? Only possible if no bikes are linked.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) this.closest('form').submit(); })">🗑</button>
+<button type="submit" class="btn btn-danger btn-sm" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete customer?', text: 'Are you sure you want to delete this customer? Only possible if no bikes are linked.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button>
 </form>
 <?php endif; ?>
 </div>
@@ -5113,7 +5174,7 @@ $(document).ready(function() {
 <?php if (has_permission($conn, 'suppliers', 'delete')): ?>
 <form method="POST" action="index.php?page=suppliers&action=delete" style="display:inline">
 <input type="hidden" name="id" value="<?= $sv['id'] ?>">
-<button type="submit" class="btn btn-danger btn-sm" onclick="event.preventDefault(); Swal.fire({title: 'Delete supplier?', text: 'Are you sure you want to delete this supplier? Only possible if no purchase orders are linked.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) this.closest('form').submit(); })">🗑</button>
+<button type="submit" class="btn btn-danger btn-sm" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete supplier?', text: 'Are you sure you want to delete this supplier? Only possible if no purchase orders are linked.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button>
 </form>
 <?php endif; ?>
 </div>
@@ -5197,7 +5258,7 @@ $(document).ready(function() {
 <?php if ($r['id'] != 1 && has_permission($conn, 'roles', 'delete')): ?>
 <form method="POST" style="display:inline">
 <input type="hidden" name="id" value="<?= $r['id'] ?>">
-<button name="delete_role" class="btn btn-danger btn-sm" onclick="event.preventDefault(); Swal.fire({title: 'Delete role?', text: 'Are you sure you want to delete this role? Only possible if no users are linked.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) this.closest('form').submit(); })">🗑</button>
+<button name="delete_role" class="btn btn-danger btn-sm" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete role?', text: 'Are you sure you want to delete this role? Only possible if no users are linked.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button>
 </form>
 <?php endif; ?>
 </td>
@@ -5269,7 +5330,7 @@ $(document).ready(function() {
 <?php if ($u['id'] != 1 && $u['id'] != $_SESSION['user_id'] && has_permission($conn, 'users', 'delete')): ?>
 <form method="POST" style="display:inline">
 <input type="hidden" name="id" value="<?= $u['id'] ?>">
-<button name="delete_user" class="btn btn-danger btn-sm" onclick="event.preventDefault(); Swal.fire({title: 'Delete user?', text: 'Are you sure you want to delete this user?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) this.closest('form').submit(); })">🗑</button>
+<button name="delete_user" class="btn btn-danger btn-sm" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete user?', text: 'Are you sure you want to delete this user?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button>
 </form>
 <?php endif; ?>
 </td>
@@ -5372,7 +5433,7 @@ $(document).ready(function() {
 <td><?= sanitize($e['full_name'] ?? '-') ?></td>
 <td class="no-print">
 <?php if (has_permission($conn, 'income_expense', 'edit')): ?><a href="index.php?page=income_expense&edit_id=<?= $e['id'] ?>&from=<?= $filter_from ?>&to=<?= $filter_to ?>" class="btn btn-primary btn-sm">✏</a><?php endif; ?>
-<?php if (has_permission($conn, 'income_expense', 'delete')): ?><form method="POST" style="display:inline"><input type="hidden" name="id" value="<?= $e['id'] ?>"><button name="delete_entry" class="btn btn-danger btn-sm" onclick="event.preventDefault(); Swal.fire({title: 'Delete this entry?', text: 'Are you sure you want to delete this income/expense entry?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) this.closest('form').submit(); })">🗑</button></form><?php endif; ?>
+<?php if (has_permission($conn, 'income_expense', 'delete')): ?><form method="POST" style="display:inline"><input type="hidden" name="id" value="<?= $e['id'] ?>"><button name="delete_entry" class="btn btn-danger btn-sm" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete this entry?', text: 'Are you sure you want to delete this income/expense entry?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button></form><?php endif; ?>
 </td>
 </tr>
 <?php endwhile; ?>
@@ -5431,7 +5492,7 @@ $(document).ready(function() {
 </div>
 <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:14px">
 <input type="file" name="backup_file" accept=".sql" style="font-size:0.8rem;background:var(--input-bg);color:var(--input-text);border:1px solid var(--input-border);padding:5px;border-radius:2px">
-<button type="submit" name="restore_db" class="btn btn-danger" onclick="event.preventDefault(); Swal.fire({title: 'WARNING: Restore Database?', text: 'Restoring will OVERWRITE ALL CURRENT DATA! Are you absolutely sure?', icon: 'error', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, Restore!'}).then((result) => { if(result.isConfirmed) this.closest('form').submit(); })">⬆ Restore Database</button>
+<button type="submit" name="restore_db" class="btn btn-danger" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'WARNING: Restore Database?', text: 'Restoring will OVERWRITE ALL CURRENT DATA! Are you absolutely sure?', icon: 'error', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, Restore!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">⬆ Restore Database</button>
 <span style="font-size:0.8rem;color:var(--text2)">Upload a previously downloaded .sql backup file.</span>
 </div>
 </fieldset>
