@@ -1153,7 +1153,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $pay_st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, transaction_type, reference_id, party_name, notes) VALUES (?,'cash',?,'sale',?,?,?)");
                 $pay_st->bind_param('sdisis', $sale_date, $selling_price, $bike_id, $party_name, $payment_notes);
                 $pay_st->execute();
-                
+
                 $led_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'debit',?,'customer',?,?,'sale',?,?)");
                 $desc = 'Sale of Chassis: ' . $bike['chassis_number'] . ' from Quote #' . $quote_id;
                 $led_st->bind_param('sdisid', $sale_date, $selling_price, $customer_id, $desc, $bike_id, $selling_price);
@@ -1255,7 +1255,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $pay_st->execute();
                 $dp_payment_id = $conn->insert_id;
                 $pay_st->close();
-                
+
                 $total_acc_price = 0;
                 if (!empty($selected_accessories)) {
                     foreach ($selected_accessories as $key => $data) {
@@ -1279,7 +1279,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 }
 
                 $remaining_balance = $total_sale_amount - $down_payment;
-                
+
                 if ($customer_id == 0 && round($remaining_balance, 2) > 0) {
                     throw new Exception('Walk-in customers must pay the full amount upfront. Partial payments are not allowed.');
                 }
@@ -1331,9 +1331,9 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             if (!$bike_info) {
                 throw new Exception('Bike not found for return.');
             }
-            
+
             $acc_q = $conn->query("SELECT SUM(final_price) as total_acc FROM sale_accessories WHERE bike_id=$bike_id");
-            $acc_total = $acc_q ? (float)($acc_q->fetch_assoc()['total_acc'] ?? 0) : 0;
+            $acc_total = $acc_q ? (float) ($acc_q->fetch_assoc()['total_acc'] ?? 0) : 0;
             $full_reversal_amount = $bike_info['selling_price'] + $acc_total;
 
             $st = $conn->prepare("UPDATE bikes SET status='returned', return_date=?, return_amount=?, return_notes=? WHERE id=? AND status='sold'");
@@ -1343,13 +1343,13 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 throw new Exception("Bike not found or not in 'sold' status to be returned.");
             }
             $st->close();
-            
+
             $party_name = $bike_info['cust_name'] ?? 'Unknown Customer';
             $pay_st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, cheque_number, bank_name, cheque_date, transaction_type, reference_id, party_name, notes) VALUES (?,?,?,?,?,?,'customer_refund',?,?,?)");
             $pay_st->bind_param('ssdsdssis', $return_date, $refund_method, $return_amount, $cheque_number, $bank_name, $cheque_date, $bike_id, $party_name, $return_notes);
             $pay_st->execute();
             $pay_st->close();
-            
+
             $led_st1 = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'credit',?,'customer',?,?,'return_reversal',?,?)");
             $desc1 = 'Bike Return (Reversal) for Chassis: ' . $bike_info['chassis_number'];
             $led_st1->bind_param('sdisid', $return_date, $full_reversal_amount, $bike_info['customer_id'], $desc1, $bike_id, $full_reversal_amount);
@@ -1363,8 +1363,8 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $led_st2->execute();
                 $led_st2->close();
             }
-            
-            $conn->commit();    
+
+            $conn->commit();
             $msg = 'Return processed successfully.';
         } catch (Exception $e) {
             $conn->rollback();
@@ -1612,7 +1612,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
     }
     if ($page === 'customer_ledger' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_payment'])) {
         $sel_cust = (int) ($_GET['cust_id'] ?? 0);
-        $amount = (float)$_POST['amount'];
+        $amount = (float) $_POST['amount'];
         $pay_date = sanitize($_POST['payment_date']);
         $pay_method = sanitize($_POST['payment_method']);
         $notes = sanitize($_POST['notes']);
@@ -1629,12 +1629,12 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         } else {
             $err = 'Invalid payment amount or customer.';
         }
-        header("Location: index.php?page=customer_ledger&cust_id=$sel_cust&msg=".urlencode($msg).'&err='.urlencode($err));
+        header("Location: index.php?page=customer_ledger&cust_id=$sel_cust&msg=" . urlencode($msg) . '&err=' . urlencode($err));
         exit;
     }
     if ($page === 'supplier_ledger' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_sup_payment'])) {
         $sel_sup = (int) ($_GET['sup_id'] ?? 0);
-        $amount = (float)$_POST['amount'];
+        $amount = (float) $_POST['amount'];
         $pay_date = sanitize($_POST['payment_date']);
         $pay_method = sanitize($_POST['payment_method']);
         $notes = sanitize($_POST['notes']);
@@ -1647,7 +1647,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         } else {
             $err = 'Invalid payment amount or supplier.';
         }
-        header("Location: index.php?page=supplier_ledger&sup_id=$sel_sup&msg=".urlencode($msg).'&err='.urlencode($err));
+        header("Location: index.php?page=supplier_ledger&sup_id=$sel_sup&msg=" . urlencode($msg) . '&err=' . urlencode($err));
         exit;
     }
     if ($page === 'inventory' && isset($_GET['export_csv']) && $_GET['export_csv'] == 1) {
@@ -1752,6 +1752,10 @@ table{border-collapse:collapse;width:100%}
 img{display:block;max-width:100%}
 .layout{display:flex;min-height:100vh;flex-direction:row}
 .sidebar{width:var(--sidebar-w);background:var(--bg2);border-right:2px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;z-index:100;overflow-y:auto;transition:width 0.2s, transform 0.2s}
+.sidebar::-webkit-scrollbar { width: 6px; }
+.sidebar::-webkit-scrollbar-track { background: transparent; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+.sidebar::-webkit-scrollbar-thumb:hover { background: var(--text3); }
 .sidebar-header{padding:12px 10px;border-bottom:2px solid var(--border);display:flex;align-items:center;justify-content:center;gap:10px;text-align:left}
 .sidebar-header .logo{width:35px;height:35px;object-fit:contain;flex-shrink:0}
 .sidebar-header .company{font-size:0.85rem;font-weight:700;color:var(--accent);line-height:1.3}
@@ -2382,6 +2386,7 @@ else:
 <span style="font-size:0.75rem;color:var(--text3)"><?= date('d/m/Y H:i') ?></span>
 </div>
 </div>
+<div class="content">
 <?php
     $per_page = 20;
     $current_pg = max(1, (int) ($_GET['pg'] ?? 1));
@@ -3836,7 +3841,7 @@ $(document).ready(function() {
             $cust_info = $conn->query("SELECT * FROM customers WHERE id=$sel_cust")->fetch_assoc();
             $ledger_entries = $conn->query("SELECT * FROM ledger WHERE party_type='customer' AND party_id=$sel_cust ORDER BY entry_date ASC, id ASC");
             $running_bal = 0;
-            
+
             $sums = $conn->query("SELECT 
                 SUM(CASE WHEN reference_type='sale' THEN amount ELSE 0 END) - SUM(CASE WHEN reference_type='return_reversal' THEN amount ELSE 0 END) as total_billed, 
                 SUM(CASE WHEN reference_type IN ('payment','down_payment','installment') THEN amount ELSE 0 END) - SUM(CASE WHEN reference_type='return_refund' THEN amount ELSE 0 END) as total_paid,
@@ -3972,11 +3977,13 @@ $(document).ready(function() {
             $sup_orders = $conn->query("SELECT po.*, IFNULL(SUM(b.purchase_price), po.total_amount) as bikes_total, COUNT(b.id) as bike_count FROM purchase_orders po LEFT JOIN bikes b ON po.id=b.purchase_order_id WHERE po.supplier_id=$sel_sup GROUP BY po.id ORDER BY po.order_date ASC");
             $supplier_payments = $conn->query("SELECT * FROM payments WHERE transaction_type='supplier_payment' AND (party_name = '" . mysqli_real_escape_string($conn, $sup_info['name']) . "' OR reference_id IN (SELECT id FROM purchase_orders WHERE supplier_id=$sel_sup)) ORDER BY payment_date ASC");
             $running_bal = 0;
-            
+
             $purchase_total_sum = 0;
             $payment_total_sum = 0;
-            while ($order = $sup_orders->fetch_assoc()) $purchase_total_sum += $order['bikes_total'];
-            while ($payment = $supplier_payments->fetch_assoc()) $payment_total_sum += $payment['amount'];
+            while ($order = $sup_orders->fetch_assoc())
+                $purchase_total_sum += $order['bikes_total'];
+            while ($payment = $supplier_payments->fetch_assoc())
+                $payment_total_sum += $payment['amount'];
             $bal_summary = $purchase_total_sum - $payment_total_sum;
             ?>
 <div class="split-grid-3 animate__animated animate__fadeInDown" style="margin-bottom:14px">
@@ -5441,6 +5448,7 @@ $(document).ready(function() {
 <button type="submit" name="save_settings" class="btn btn-primary">💾 Save Settings</button>
 </form>
 <?php endif; ?>
+</div>
 </div>
 </div>
 </div>
