@@ -2089,7 +2089,7 @@ document.addEventListener('DOMContentLoaded', function() {
         window.history.replaceState(null, '', window.location.pathname + '?' + urlParams.toString());
     }
 
-    $('table.data-table').DataTable({
+    $('table.data-table:not(.no-dt)').DataTable({
         responsive: true,
         pagingType: 'full_numbers',
         lengthMenu: [10, 25, 50, 100],
@@ -2533,7 +2533,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <div class="split-grid">
 <fieldset class="fieldset animate__animated animate__fadeInUp"><legend>🛒 Recent 10 Sales</legend>
 <div class="data-table-wrap">
-<table class="data-table">
+<table class="data-table no-dt">
 <thead><tr><th>Date</th><th>Chassis</th><th>Model</th><th>Price</th><th>Margin</th></tr></thead>
 <tbody>
 <?php
@@ -2554,7 +2554,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </fieldset>
 <fieldset class="fieldset animate__animated animate__fadeInUp"><legend>📦 Recent 10 Purchases</legend>
 <div class="data-table-wrap">
-<table class="data-table">
+<table class="data-table no-dt">
 <thead><tr><th>Date</th><th>Chassis</th><th>Model</th><th>Price</th><th>Status</th></tr></thead>
 <tbody>
 <?php
