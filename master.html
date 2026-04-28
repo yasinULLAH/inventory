@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BNI Enterprises BDMS - Master Documentation</title>
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Noto+Nastaliq+Urdu:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+    
+    <style>
+        :root {
+            --bg-color: #09090b;
+            --text-main: #f4f4f5;
+            --text-muted: #a1a1aa;
+            --accent: #3b82f6;
+            --accent-glow: rgba(59, 130, 246, 0.4);
+            --card-bg: rgba(24, 24, 27, 0.6);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --sidebar-width: 300px;
+            --urdu-font: 'Noto Nastaliq Urdu', serif;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            display: flex;
+        }
+
+        /* 3D Background */
+        #canvas-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* Sidebar Navigation */
+        aside {
+            width: var(--sidebar-width);
+            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+            background: rgba(9, 9, 11, 0.8);
+            backdrop-filter: blur(20px);
+            border-right: 1px solid var(--card-border);
+            padding: 40px 20px;
+            overflow-y: auto;
+            z-index: 10;
+        }
+
+        aside h2 {
+            font-weight: 800;
+            font-size: 1.5rem;
+            margin-bottom: 30px;
+            background: linear-gradient(to right, #60a5fa, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        aside ul {
+            list-style: none;
+        }
+
+        aside ul li {
+            margin-bottom: 15px;
+        }
+
+        aside ul li a {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+            display: block;
+            padding: 8px 12px;
+            border-radius: 8px;
+        }
+
+        aside ul li a:hover {
+            color: var(--text-main);
+            background: rgba(255, 255, 255, 0.05);
+            transform: translateX(5px);
+        }
+
+        /* Main Content */
+        main {
+            margin-left: var(--sidebar-width);
+            padding: 60px 80px;
+            max-width: 1200px;
+            width: 100%;
+        }
+
+        section {
+            margin-bottom: 80px;
+            opacity: 0; /* For GSAP */
+            transform: translateY(30px);
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            font-weight: 800;
+            margin-bottom: 20px;
+            line-height: 1.2;
+        }
+
+        h2 {
+            font-size: 2.2rem;
+            font-weight: 600;
+            margin-bottom: 30px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--card-border);
+            color: var(--accent);
+        }
+
+        h3 {
+            font-size: 1.5rem;
+            margin-top: 40px;
+            margin-bottom: 20px;
+        }
+
+        p {
+            font-size: 1.1rem;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+        }
+
+        ul.feature-list {
+            list-style: none;
+            margin-bottom: 20px;
+        }
+
+        ul.feature-list li {
+            margin-bottom: 10px;
+            position: relative;
+            padding-left: 25px;
+            color: var(--text-muted);
+            font-size: 1.1rem;
+        }
+
+        ul.feature-list li::before {
+            content: '→';
+            position: absolute;
+            left: 0;
+            color: var(--accent);
+            font-weight: bold;
+        }
+
+        /* Glassmorphism Cards */
+        .glass-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .glass-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px var(--accent-glow);
+            border-color: rgba(59, 130, 246, 0.5);
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+            background: var(--card-bg);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        th, td {
+            padding: 15px 20px;
+            text-align: left;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        th {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--accent);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            letter-spacing: 1px;
+        }
+
+        td {
+            color: var(--text-muted);
+        }
+
+        /* Images */
+        .img-container {
+            margin: 30px 0;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--card-border);
+            position: relative;
+            cursor: pointer;
+        }
+
+        .img-container img {
+            width: 100%;
+            display: block;
+            transition: transform 0.5s ease;
+        }
+
+        .img-container:hover img {
+            transform: scale(1.03);
+        }
+
+        .img-container::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(180deg, transparent 80%, rgba(0,0,0,0.8));
+            pointer-events: none;
+        }
+
+        /* Code/Formula Blocks */
+        .formula-block {
+            background: #000;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid var(--accent);
+            font-family: monospace;
+            color: #10b981;
+            margin-bottom: 20px;
+            font-size: 1.1rem;
+        }
+
+        /* Urdu Section */
+        .urdu-text {
+            font-family: var(--urdu-font);
+            direction: rtl;
+            text-align: right;
+            font-size: 1.6rem;
+            line-height: 2.4;
+            color: #e4e4e7;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            body { flex-direction: column; }
+            aside { width: 100%; height: auto; position: relative; padding: 20px; border-right: none; border-bottom: 1px solid var(--card-border); }
+            main { margin-left: 0; padding: 40px 20px; }
+            h1 { font-size: 2.5rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 3D Canvas Background -->
+    <canvas id="canvas-bg"></canvas>
+
+    <!-- Sidebar Navigation -->
+    <aside>
+        <h2>BNI BDMS v2.0</h2>
+        <ul>
+            <li><a href="#overview">1. Project Overview</a></li>
+            <li><a href="#architecture">2. Tech Architecture</a></li>
+            <li><a href="#schema">3. Database Schema</a></li>
+            <li><a href="#rbac">4. RBAC & Security</a></li>
+            <li><a href="#dashboard">5.1 Intelligent Dashboard</a></li>
+            <li><a href="#inventory">5.2 Inventory Control</a></li>
+            <li><a href="#purchase">5.3 Purchase Entry</a></li>
+            <li><a href="#sales">5.4 Sales & Quotations</a></li>
+            <li><a href="#installments">5.5 Installment System</a></li>
+            <li><a href="#returns">5.6 Returns Management</a></li>
+            <li><a href="#finance">5.7 Financial Ecosystem</a></li>
+            <li><a href="#crm">5.8 Customers & Suppliers</a></li>
+            <li><a href="#settings">5.9 System Settings</a></li>
+            <li><a href="#logic">6. Business Logic & Math</a></li>
+            <li><a href="#urdu">7. User Manual (Urdu)</a></li>
+        </ul>
+    </aside>
+
+    <!-- Main Content -->
+    <main>
+        
+        <section id="title" style="opacity: 1; transform: translateY(0); margin-bottom: 60px;">
+            <p style="color: var(--accent); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px;">The Definitive Master Documentation</p>
+            <h1>BNI Enterprises<br>Bike Dealer Management System</h1>
+            <p style="font-size: 1.3rem;">This document contains every single detail, module specification, database schema, business logic formula, and visual evidence associated with the application. Nothing has been omitted.</p>
+        </section>
+
+        <section id="overview" class="gsap-reveal">
+            <h2>1. Project Overview</h2>
+            <div class="glass-card">
+                <p><strong>BNI Enterprises BDMS</strong> is an enterprise-grade inventory and financial management solution engineered from the ground up by <strong>Yasin Ullah</strong>. Designed specifically for high-volume motorcycle dealerships, it eliminates manual ledgers by digitizing the entire business lifecycle.</p>
+                <p>It handles procurement, inventory tracking at the chassis/motor level, dynamic sales margins, tax calculations, installment scheduling, and full double-entry accounting via integrated ledgers and cheque registers.</p>
+            </div>
+        </section>
+
+        <section id="architecture" class="gsap-reveal">
+            <h2>2. Technical Architecture & System Requirements</h2>
+            <div class="glass-card">
+                <ul class="feature-list">
+                    <li><strong>Backend:</strong> PHP (7.4 or 8.x compatibility).</li>
+                    <li><strong>Database:</strong> MySQL 5.7+ or MariaDB.</li>
+                    <li><strong>Frontend Stack:</strong> HTML5, CSS3 (Vanilla + Custom Variables), JavaScript (ES6), jQuery, Select2, DataTables, SweetAlert2.</li>
+                    <li><strong>Security - Password Hashing:</strong> `PASSWORD_DEFAULT` (Bcrypt).</li>
+                    <li><strong>Security - CSRF:</strong> Unique tokens per session validated on every POST request.</li>
+                    <li><strong>Security - Brute Force:</strong> IP banning after 7 failed attempts within 3 hours.</li>
+                    <li><strong>Security - Session Hardening:</strong> Configurable idle timeouts (default 40 mins) and absolute timeouts (default 8 hours).</li>
+                    <li><strong>Security - Captcha:</strong> Custom-generated SVG mathematical captcha for login validation.</li>
+                </ul>
+            </div>
+        </section>
+
+        <section id="schema" class="gsap-reveal">
+            <h2>3. Complete Database Schema</h2>
+            <p>The system operates on 16 highly normalized, relational tables ensuring data integrity and fast retrieval.</p>
+            <table>
+                <thead>
+                    <tr><th>Table Name</th><th>Primary Purpose & Key Columns</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>settings</code></td><td>Global configurations (Company name, tax rates, themes, timeouts).</td></tr>
+                    <tr><td><code>suppliers</code></td><td>Supplier directory (<code>name</code>, <code>contact</code>, <code>address</code>).</td></tr>
+                    <tr><td><code>customers</code></td><td>Customer CRM (<code>name</code>, <code>phone</code>, <code>cnic</code>, <code>is_filer</code>, <code>address</code>).</td></tr>
+                    <tr><td><code>models</code></td><td>Master list of bike variants (<code>model_code</code>, <code>model_name</code>, <code>category</code>).</td></tr>
+                    <tr><td><code>accessories</code></td><td>Helmets, chargers, etc. (<code>sku</code>, <code>purchase_price</code>, <code>selling_price</code>).</td></tr>
+                    <tr><td><code>purchase_orders</code></td><td>Header records for procurement (<code>order_date</code>, <code>supplier_id</code>, <code>total_amount</code>).</td></tr>
+                    <tr><td style="color:var(--accent);font-weight:bold;"><code>bikes</code></td><td><strong>Core Table:</strong> Tracks every unit (<code>chassis_number</code>, <code>motor_number</code>, <code>purchase_price</code>, <code>selling_price</code>, <code>status</code>, <code>margin</code>, <code>tax_amount</code>).</td></tr>
+                    <tr><td><code>sale_accessories</code></td><td>Linkage mapping sold bikes to purchased accessories.</td></tr>
+                    <tr><td><code>payments</code></td><td>Global transaction log for all cash, bank transfer, and cheque movements.</td></tr>
+                    <tr><td><code>installments</code></td><td>Tracks specific monthly payments, due dates, amounts paid, and penalty fees.</td></tr>
+                    <tr><td><code>ledger</code></td><td>Double-entry accounting system mapping debits and credits to customers/suppliers.</td></tr>
+                    <tr><td><code>roles</code></td><td>Access levels (e.g., Administrator, Manager).</td></tr>
+                    <tr><td><code>role_permissions</code></td><td>Granular page-level permissions (View, Add, Edit, Delete).</td></tr>
+                    <tr><td><code>users</code></td><td>System operators linked to roles.</td></tr>
+                    <tr><td><code>income_expenses</code></td><td>Operational accounting for daily showroom expenses or external income.</td></tr>
+                    <tr><td><code>quotations</code></td><td>Pre-sales documents with validity dates, converting to live sales.</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section id="rbac" class="gsap-reveal">
+            <h2>4. Role-Based Access Control (RBAC)</h2>
+            <div class="glass-card">
+                <p>The system uses a strict RBAC engine to prevent unauthorized data manipulation.</p>
+                <ul class="feature-list">
+                    <li><strong>Administrator:</strong> Unrestricted access to all modules, settings, and destructive actions.</li>
+                    <li><strong>Manager (Default):</strong> Limited to basic operations like viewing the dashboard and inventory, without access to global settings or role deletion.</li>
+                    <li><strong>Granularity:</strong> Permissions are evaluated at the page and action level (<code>can_view</code>, <code>can_add</code>, <code>can_edit</code>, <code>can_delete</code>).</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- Exhaustive Modules -->
+        
+        <section id="dashboard" class="gsap-reveal">
+            <h2>5.1 Intelligent Dashboard</h2>
+            <p>The nerve center providing real-time tracking, reporting, and classification of critical business records.</p>
+            <div class="glass-card">
+                <ul class="feature-list">
+                    <li><strong>Model-wise Availability:</strong> e.g., E8S M2 Electric Scooter: 2 Inventory, 1 Sold, 1 Available.</li>
+                    <li><strong>Recent Sales Grid:</strong> Shows Date, Chassis, Model, Price, and Exact Margin.</li>
+                    <li><strong>Recent Stock Additions:</strong> Shows Date, Chassis, Price, and Status.</li>
+                </ul>
+            </div>
+            <div class="img-container">
+                <img src="audit_assets/screenshots/dashboard.png" alt="Dashboard Module">
+            </div>
+        </section>
+
+        <section id="inventory" class="gsap-reveal">
+            <h2>5.2 Inventory / Stock Control</h2>
+            <p>Granular tracking of every physical asset in the dealership.</p>
+            <div class="glass-card">
+                <ul class="feature-list">
+                    <li><strong>Filters & Controls:</strong> Text Search, Status (In Stock, Sold, Returned, Reserved), Model Dropdown, Color, Date Range.</li>
+                    <li><strong>Grid Columns:</strong> Sr#, Chassis, Motor#, Model, Color, Purchase Price, Status, Selling Price, Selling Date, Margin, Actions.</li>
+                    <li><strong>Features:</strong> Bulk Deletion, Bulk CSV Export.</li>
+                </ul>
+            </div>
+            <div class="img-container">
+                <img src="audit_assets/screenshots/inventory.png" alt="Inventory Module">
+            </div>
+        </section>
+
+        <section id="purchase" class="gsap-reveal">
+            <h2>5.3 Purchase Entry & Procurement</h2>
+            <p>Workflow for ingesting new stock from suppliers, linking inventory to financial ledgers immediately.</p>
+            <div class="glass-card">
+                <ul class="feature-list">
+                    <li><strong>Header Fields:</strong> Order Date, Inventory Date, Supplier, Cheque Number/Bank/Date/Amount, PO Notes.</li>
+                    <li><strong>Bike Data Entry:</strong> Chassis Number (with Unique validation), Motor Number, Model, Color, Purchase Price, Safeguard Notes.</li>
+                    <li><strong>Modal Additions:</strong> Built-in modals to add new Suppliers or Models without leaving the purchase screen.</li>
+                </ul>
+            </div>
+            <div class="img-container">
+                <img src="audit_assets/screenshots/purchase.png" alt="Purchase Entry">
+            </div>
+            <div class="img-container">
+                <img src="audit_assets/screenshots/purchase_modal__.png" alt="Purchase Modal">
+            </div>
+        </section>
+
+        <section id="sales" class="gsap-reveal">
+            <h2>5.4 Sales Entry, Invoicing & Quotations</h2>
+            <p>Revenue generation, client fulfillment, and automated profit calculations.</p>
+            <div class="glass-card">
+                <ul class="feature-list">
+                    <li><strong>Sales Fields:</strong> Select Bike, Selling Date, Selling Price, Purchase Price (Visible for Profit Guard), Tax Amount (Auto-calculated), Margin/Profit (Auto-calculated).</li>
+                    <li><strong>Customer Details:</strong> Select existing or enter Name, Phone, CNIC, Address.</li>
+                    <li><strong>Payment Data:</strong> Payment Method, Down Payment, Total Installments, Installment Amount, First Due Date.</li>
+                    <li><strong>Accessories:</strong> Select accessories given with the sale, adjust final price and discounts.</li>
+                    <li><strong>Quotations:</strong> Create quotes that reserve bikes temporarily and convert to sales with 1-click.</li>
+                </ul>
+            </div>
+            <div class="img-container">
+                <img src="audit_assets/screenshots/sale.png" alt="Sales Entry">
+            </div>
+            <div class="img-container">
+                <img src="audit_assets/screenshots/sale_modal__.png" alt="Sale Modal">
+            </div>
+        </section>
+
+        <section id="installments" class="gsap-reveal">
+            <h2>5.5 Installment & Financing System</h2>
+            <div class="glass-card">
+                <p>Management of monthly payment plans.</p>
+                <ul class="feature-list">
+                    <li><strong>Functionality:</strong> When a sale is made with a down payment less than the total, the system automatically generates monthly installment rows.</li>
+                    <li><strong>Tracking:</strong> Monitors <code>Amount Paid</code> vs <code>Installment Amount</code>. Automatically handles <code>Penalty Fees</code> for late payments. Links directly to the ledger upon collection.</li>
+                </ul>
+            </div>
+        </section>
+
+        <section id="returns" class="gsap-reveal">
+            <h2>5.6 Returns Management</h2>
+            <p>Handling canceled sales and asset recovery.</p>
+            <div class="glass-card">
+                <ul class="feature-list">
+                    <li><strong>Fields:</strong> Select Sold Bike, Return Date, Return Amount (Refund), Refund Method, Return Notes.</li>
+                    <li><strong>Logic:</strong> Reverts the bike status from `sold` back to `returned` (making it available in stock), reverses the ledger entries, and logs the refund payment.</li>
+                </ul>
+            </div>
+            <div class="img-container">
+                <img src="audit_assets/screenshots/returns.png" alt="Returns Module">
+            </div>
+        </section>
+
+        <section id="finance" class="gsap-reveal">
+            <h2>5.7 Financial Ecosystem: Cheques & Ledgers</h2>
+            <p>Complete financial transparency and double-entry accounting.</p>
+            <div class="glass-card">
+                <ul class="feature-list">
+                    <li><strong>Cheque Register:</strong> Tracks all cheques (Payments & Receipts). Fields include Bank, Date, Amount, Type, Status (Pending, Cleared, Bounced), Party, and Reference.</li>
+                    <li><strong>Ledgers:</strong> Automated double-entry system. Every sale debits the customer ledger; every payment credits it. Same logic applies for suppliers. Shows running balances.</li>
+                </ul>
+            </div>
+            <div class="img-container">
+                <img src="audit_assets/screenshots/cheques.png" alt="Cheque Register">
+            </div>
+            <div class="img-container">
+                <img src="audit_assets/screenshots/customer_ledger.png" alt="Customer Ledger">
+            </div>
+            <div class="img-container">
+                <img src="audit_assets/screenshots/supplier_ledger.png" alt="Supplier Ledger">
+            </div>
+        </section>
+
+        <section id="crm" class="gsap-reveal">
+            <h2>5.8 Customers & Suppliers (CRM)</h2>
+            <p>Directory and relationship management.</p>
+            <div class="glass-card">
+                <ul class="feature-list">
+                    <li><strong>Customer Grid:</strong> Name, Phone, CNIC, Address, Total Bikes Purchased, Total Amount Spent.</li>
+                    <li><strong>Supplier Grid:</strong> Name, Contact, Address, Total Orders, Total Paid.</li>
+                </ul>
+            </div>
+            <div class="img-container">
+                <img src="audit_assets/screenshots/customers.png" alt="Customers CRM">
+            </div>
+            <div class="img-container">
+                <img src="audit_assets/screenshots/suppliers.png" alt="Suppliers CRM">
+            </div>
+        </section>
+
+        <section id="settings" class="gsap-reveal">
+            <h2>5.9 System Settings & Calibration</h2>
+            <p>Application behavior configuration and maintenance.</p>
+            <div class="glass-card">
+                <ul class="feature-list">
+                    <li><strong>Configurable Options:</strong> Company Name, Branch Name, Currency Symbol, Tax Rate (%), Tax Calculated On (Purchase Price vs Selling Price), Show Purchase Price on Invoice, Session Timeouts.</li>
+                    <li><strong>Maintenance:</strong> 1-Click Database Backup (.sql export) and Restore facility. Theme toggling. Password updating.</li>
+                </ul>
+            </div>
+            <div class="img-container">
+                <img src="audit_assets/screenshots/settings.png" alt="Settings Module">
+            </div>
+        </section>
+
+        <section id="logic" class="gsap-reveal">
+            <h2>6. Business Logic, Math & Tax Formulas</h2>
+            <p>The BDMS is built on strict financial rules to ensure accounting accuracy.</p>
+            
+            <h3>1. Base Profit Calculation</h3>
+            <div class="formula-block">
+                Margin = Selling Price - Purchase Price - Tax Amount
+            </div>
+
+            <h3>2. Tax Logic (Dynamic based on settings)</h3>
+            <div class="formula-block">
+                If Tax on Purchase: Tax Amount = Purchase Price * (Tax Rate / 100)<br>
+                If Tax on Selling: Tax Amount = Selling Price * (Tax Rate / 100)
+            </div>
+
+            <h3>3. Total Sale Value</h3>
+            <div class="formula-block">
+                Total Sale Amount = Selling Price + Sum(Accessories Final Price)
+            </div>
+
+            <h3>4. Installment Calculation</h3>
+            <div class="formula-block">
+                Remaining Balance = Total Sale Amount - Down Payment<br>
+                Monthly Installment = Remaining Balance / Total Installments
+            </div>
+
+            <h3>5. Ledger Double Entry (Example: Sale)</h3>
+            <div class="glass-card">
+                <p>System creates a <strong>Debit</strong> entry for the Customer for the Total Sale Amount.</p>
+                <p>If a Down Payment is made, system creates a <strong>Credit</strong> entry for the Customer for the Down Payment Amount.</p>
+                <p>Running balance is strictly maintained and updated instantly.</p>
+            </div>
+        </section>
+
+        <section id="urdu" class="gsap-reveal">
+            <h2>7. Bilingual User Manual (Urdu / اردو)</h2>
+            <div class="glass-card urdu-text">
+                <h3 style="color: var(--accent); margin-top: 0;">بی این آئی انٹرپرائزز (BNI Enterprises) - موٹر سائیکل شو روم مینجمنٹ سسٹم</h3>
+                <p>یہ دستاویز آپ کی نئی کمپیوٹر ایپ کو استعمال کرنے اور سمجھنے کے لیے بنائی گئی ہے۔ اس ایپ کا مقصد آپ کے شو روم کے تمام حساب کتاب کو خودکار اور آسان بنانا ہے تاکہ آپ کو رجسٹروں اور پنسل کے حساب سے نجات مل سکے۔</p>
+                
+                <h3 style="color: var(--accent);">1. آپ کی تجاویز اور ہمارا کام (ہم نے کیا بنایا؟)</h3>
+                <ul style="list-style-type: none;">
+                    <li>✔️ <strong>0.1% ٹیکس کا حساب:</strong> ایپ اب ہر بائیک کی قیمت پر 0.1% (یا آپ کی مرضی کا) ٹیکس خود نکال لیتی ہے۔</li>
+                    <li>✔️ <strong>منافع (Margin) کی رپورٹ:</strong> ایپ اب "فروخت کی قیمت" سے "خریداری" اور "ٹیکس" نکال کر آپ کا اصل نفع خود دکھاتی ہے۔</li>
+                    <li>✔️ <strong>چیسس اور موٹر نمبر ٹریکنگ:</strong> ہر بائیک اپنے چیسس اور موٹر نمبر سے پہچانی جاتی ہے، جس سے چوری یا غلطی کا خطرہ ختم ہو جاتا ہے۔</li>
+                    <li>✔️ <strong>چیک اور بینک ٹریکنگ:</strong> ایپ میں ایک مکمل "Cheque Register" ہے جہاں آپ یو بی ایل اور میزان بینک کے چیکوں کا ریکارڈ رکھ سکتے ہیں۔</li>
+                    <li>✔️ <strong>واپسی کا نظام (Returns):</strong> اگر کوئی بائیک واپس آئے تو اس کا اندراج الگ سے ہوتا ہے اور وہ خود بخود اسٹاک میں واپس آ جاتی ہے۔</li>
+                </ul>
+
+                <h3 style="color: var(--accent);">2. ایپ کو کیسے استعمال کریں؟ (قدم بہ قدم گائیڈ)</h3>
+                
+                <strong>پہلا قدم: نئی بائیک شامل کریں (Purchase)</strong>
+                <p>"Purchase Entry" والے خانے میں جائیں۔ بائیک کا چیسس نمبر، موٹر نمبر اور ماڈل لکھیں۔ خریداری کی قیمت درج کریں اور محفوظ کریں۔</p>
+
+                <strong>دوسرا قدم: بائیک فروخت کریں (Sale)</strong>
+                <p>"Sales Entry" میں جائیں، فہرست سے بائیک منتخب کریں۔ گاہک کا نام، فون نمبر اور فروخت کی قیمت لکھیں۔ اگر قسطیں ہیں تو ڈاؤن پیمنٹ اور قسطوں کی تعداد درج کریں۔</p>
+
+                <strong>تیسرا قدم: رسید پرنٹ کریں</strong>
+                <p>بیچنے کے بعد "Print Invoice" کا بٹن دبائیں۔ کمپیوٹر سے گاہک کے لیے ایک خوبصورت رسید نکل آئے گی۔</p>
+
+                <strong>چوتھا قدم: کھاتے چیک کریں (Ledger)</strong>
+                <p>کس نے کتنے پیسے دیے اور کتنے باقی ہیں، یہ سب "Customer Ledger" میں دیکھا جا سکتا ہے۔</p>
+
+                <h3 style="color: var(--accent);">5. عام سوالات اور جوابات (QA)</h3>
+                <p><strong>سوال: اگر بائیک واپس آ جائے تو کیا ہوگا؟</strong><br>
+                <strong>جواب:</strong> آپ "Returns" والے بٹن پر جائیں گے۔ ایپ خود بخود اسے اسٹاک میں واپس ڈال دے گی اور گاہک کا حساب برابر کر دے گی۔</p>
+
+                <p><strong>سوال: کیا میرا ڈیٹا محفوظ ہے؟</strong><br>
+                <strong>جواب:</strong> جی ہاں، "Settings" میں "Backup" کا آپشن دیا گیا ہے۔ آپ اپنا سارا ریکارڈ ایک کلک سے محفوظ کر سکتے ہیں۔</p>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // Three.js Background Animation (Abstract Particles representing data nodes)
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas-bg'), alpha: true, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+
+        const particlesGeometry = new THREE.BufferGeometry();
+        const particlesCount = 1500;
+        const posArray = new Float32Array(particlesCount * 3);
+
+        for(let i = 0; i < particlesCount * 3; i++) {
+            posArray[i] = (Math.random() - 0.5) * 20; // Spread particles
+        }
+
+        particlesGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+        
+        // Use a subtle blue color for particles
+        const material = new THREE.PointsMaterial({ size: 0.02, color: 0x3b82f6, transparent: true, opacity: 0.6 });
+        const particlesMesh = new THREE.Points(particlesGeometry, material);
+        scene.add(particlesMesh);
+
+        camera.position.z = 5;
+
+        // Mouse interaction
+        let mouseX = 0;
+        let mouseY = 0;
+
+        document.addEventListener('mousemove', (event) => {
+            mouseX = (event.clientX / window.innerWidth) - 0.5;
+            mouseY = (event.clientY / window.innerHeight) - 0.5;
+        });
+
+        function animate() {
+            requestAnimationFrame(animate);
+            particlesMesh.rotation.y += 0.0005; // Slow rotation
+            particlesMesh.rotation.x += 0.0002;
+            
+            // Subtle mouse parallax
+            camera.position.x += (mouseX * 0.5 - camera.position.x) * 0.05;
+            camera.position.y += (-mouseY * 0.5 - camera.position.y) * 0.05;
+            camera.lookAt(scene.position);
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Resize handler
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // GSAP Scroll Animations
+        gsap.registerPlugin(ScrollTrigger);
+
+        const sections = document.querySelectorAll('.gsap-reveal');
+        sections.forEach((sec) => {
+            gsap.to(sec, {
+                scrollTrigger: {
+                    trigger: sec,
+                    start: "top 85%", // Trigger when top of section hits 85% of viewport height
+                    toggleActions: "play none none reverse"
+                },
+                opacity: 1,
+                y: 0,
+                duration: 0.8,
+                ease: "power3.out"
+            });
+        });
+
+        // Smooth scroll for sidebar links
+        document.querySelectorAll('aside a').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const targetId = this.getAttribute('href');
+                const targetElement = document.querySelector(targetId);
+                window.scrollTo({
+                    top: targetElement.offsetTop - 40,
+                    behavior: 'smooth'
+                });
+            });
+        });
+    </script>
+</body>
+</html>
