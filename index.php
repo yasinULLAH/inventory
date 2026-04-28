@@ -576,8 +576,8 @@ if ($db_exists) {
 }
 $page = $_GET['page'] ?? 'dashboard';
 $action = $_GET['action'] ?? '';
-$msg = '';
-$err = '';
+$msg = $_GET['msg'] ?? '';
+$err = $_GET['err'] ?? '';
 if ($db_exists && isset($_SESSION['user_id'])) {
     $conn = db_connect();
     $currency = get_setting('currency') ?? 'Rs.';
@@ -1153,10 +1153,17 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $pay_st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, transaction_type, reference_id, party_name, notes) VALUES (?,'cash',?,'sale',?,?,?)");
                 $pay_st->bind_param('sdisis', $sale_date, $selling_price, $bike_id, $party_name, $payment_notes);
                 $pay_st->execute();
-                $led_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'credit',?,'customer',?,?,'sale',?,?)");
+                
+                $led_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'debit',?,'customer',?,?,'sale',?,?)");
                 $desc = 'Sale of Chassis: ' . $bike['chassis_number'] . ' from Quote #' . $quote_id;
                 $led_st->bind_param('sdisid', $sale_date, $selling_price, $customer_id, $desc, $bike_id, $selling_price);
                 $led_st->execute();
+
+                $led_dp_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'credit',?,'customer',?,?,'payment',?,?)");
+                $desc_dp = 'Payment for Quote #' . $quote_id;
+                $led_dp_st->bind_param('sdisid', $sale_date, $selling_price, $customer_id, $desc_dp, $bike_id, $selling_price);
+                $led_dp_st->execute();
+
                 $conn->query("UPDATE quotations SET status='converted' WHERE id=$quote_id");
                 $conn->commit();
                 $_SESSION['last_sale_bike_id'] = $bike_id;
@@ -1248,12 +1255,35 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $pay_st->execute();
                 $dp_payment_id = $conn->insert_id;
                 $pay_st->close();
-                $led_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'credit',?,'customer',?,?,'sale',?,?)");
+                
+                $total_acc_price = 0;
+                if (!empty($selected_accessories)) {
+                    foreach ($selected_accessories as $key => $data) {
+                        $total_acc_price += (float) ($data['final_price'] ?? 0);
+                    }
+                }
+                $total_sale_amount = $selling_price + $total_acc_price;
+
+                $led_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'debit',?,'customer',?,?,'sale',?,?)");
                 $desc = 'Sale of Chassis: ' . $bike['chassis_number'];
-                $led_st->bind_param('sdisid', $selling_date, $selling_price, $customer_id, $desc, $bike_id, $selling_price);
+                $led_st->bind_param('sdisid', $selling_date, $total_sale_amount, $customer_id, $desc, $bike_id, $total_sale_amount);
                 $led_st->execute();
                 $led_st->close();
-                $remaining_balance = $selling_price - $down_payment;
+
+                if ($down_payment > 0) {
+                    $led_dp_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'credit',?,'customer',?,?,'down_payment',?,?)");
+                    $desc_dp = 'Down Payment for Chassis: ' . $bike['chassis_number'];
+                    $led_dp_st->bind_param('sdisid', $selling_date, $down_payment, $customer_id, $desc_dp, $bike_id, $down_payment);
+                    $led_dp_st->execute();
+                    $led_dp_st->close();
+                }
+
+                $remaining_balance = $total_sale_amount - $down_payment;
+                
+                if ($customer_id == 0 && round($remaining_balance, 2) > 0) {
+                    throw new Exception('Walk-in customers must pay the full amount upfront. Partial payments are not allowed.');
+                }
+
                 if ($total_installments > 0 && $installment_amount > 0 && $remaining_balance > 0) {
                     $installment_per_month = $remaining_balance / $total_installments;
                     $current_date = new DateTime($first_due_date);
@@ -1296,11 +1326,16 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         }
         $conn->begin_transaction();
         try {
-            $bike_q = $conn->query("SELECT b.chassis_number, b.customer_id, c.name AS cust_name FROM bikes b LEFT JOIN customers c ON b.customer_id=c.id WHERE b.id=$bike_id");
+            $bike_q = $conn->query("SELECT b.chassis_number, b.customer_id, b.selling_price, c.name AS cust_name FROM bikes b LEFT JOIN customers c ON b.customer_id=c.id WHERE b.id=$bike_id");
             $bike_info = $bike_q ? $bike_q->fetch_assoc() : null;
             if (!$bike_info) {
                 throw new Exception('Bike not found for return.');
             }
+            
+            $acc_q = $conn->query("SELECT SUM(final_price) as total_acc FROM sale_accessories WHERE bike_id=$bike_id");
+            $acc_total = $acc_q ? (float)($acc_q->fetch_assoc()['total_acc'] ?? 0) : 0;
+            $full_reversal_amount = $bike_info['selling_price'] + $acc_total;
+
             $st = $conn->prepare("UPDATE bikes SET status='returned', return_date=?, return_amount=?, return_notes=? WHERE id=? AND status='sold'");
             $st->bind_param('sdsi', $return_date, $return_amount, $return_notes, $bike_id);
             $st->execute();
@@ -1308,17 +1343,28 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 throw new Exception("Bike not found or not in 'sold' status to be returned.");
             }
             $st->close();
+            
             $party_name = $bike_info['cust_name'] ?? 'Unknown Customer';
             $pay_st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, cheque_number, bank_name, cheque_date, transaction_type, reference_id, party_name, notes) VALUES (?,?,?,?,?,?,'customer_refund',?,?,?)");
             $pay_st->bind_param('ssdsdssis', $return_date, $refund_method, $return_amount, $cheque_number, $bank_name, $cheque_date, $bike_id, $party_name, $return_notes);
             $pay_st->execute();
             $pay_st->close();
-            $led_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'debit',?,'customer',?,?,'return',?,?)");
-            $desc = 'Return for Chassis: ' . $bike_info['chassis_number'];
-            $led_st->bind_param('sdisid', $return_date, $return_amount, $bike_info['customer_id'], $desc, $bike_id, $return_amount);
-            $led_st->execute();
-            $led_st->close();
-            $conn->commit();
+            
+            $led_st1 = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'credit',?,'customer',?,?,'return_reversal',?,?)");
+            $desc1 = 'Bike Return (Reversal) for Chassis: ' . $bike_info['chassis_number'];
+            $led_st1->bind_param('sdisid', $return_date, $full_reversal_amount, $bike_info['customer_id'], $desc1, $bike_id, $full_reversal_amount);
+            $led_st1->execute();
+            $led_st1->close();
+
+            if ($return_amount > 0) {
+                $led_st2 = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'debit',?,'customer',?,?,'return_refund',?,?)");
+                $desc2 = 'Refund given for Chassis: ' . $bike_info['chassis_number'];
+                $led_st2->bind_param('sdisid', $return_date, $return_amount, $bike_info['customer_id'], $desc2, $bike_id, $return_amount);
+                $led_st2->execute();
+                $led_st2->close();
+            }
+            
+            $conn->commit();    
             $msg = 'Return processed successfully.';
         } catch (Exception $e) {
             $conn->rollback();
@@ -1564,6 +1610,46 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         header('Location: index.php?page=settings&msg=' . urlencode($msg) . '&err=' . urlencode($err));
         exit;
     }
+    if ($page === 'customer_ledger' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_payment'])) {
+        $sel_cust = (int) ($_GET['cust_id'] ?? 0);
+        $amount = (float)$_POST['amount'];
+        $pay_date = sanitize($_POST['payment_date']);
+        $pay_method = sanitize($_POST['payment_method']);
+        $notes = sanitize($_POST['notes']);
+        if ($amount > 0 && $sel_cust > 0) {
+            $party_name = $conn->query("SELECT name FROM customers WHERE id=$sel_cust")->fetch_assoc()['name'] ?? 'Unknown';
+            $st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, transaction_type, party_name, notes) VALUES (?, ?, ?, 'sale', ?, ?)");
+            $st->bind_param('ssdss', $pay_date, $pay_method, $amount, $party_name, $notes);
+            $st->execute();
+            $led = $conn->prepare("INSERT INTO ledger (entry_date, entry_type, amount, party_type, party_id, description, reference_type) VALUES (?, 'credit', ?, 'customer', ?, ?, 'payment')");
+            $desc = 'Payment Received: ' . $notes;
+            $led->bind_param('sdis', $pay_date, $amount, $sel_cust, $desc);
+            $led->execute();
+            $msg = 'Payment recorded successfully.';
+        } else {
+            $err = 'Invalid payment amount or customer.';
+        }
+        header("Location: index.php?page=customer_ledger&cust_id=$sel_cust&msg=".urlencode($msg).'&err='.urlencode($err));
+        exit;
+    }
+    if ($page === 'supplier_ledger' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_sup_payment'])) {
+        $sel_sup = (int) ($_GET['sup_id'] ?? 0);
+        $amount = (float)$_POST['amount'];
+        $pay_date = sanitize($_POST['payment_date']);
+        $pay_method = sanitize($_POST['payment_method']);
+        $notes = sanitize($_POST['notes']);
+        if ($amount > 0 && $sel_sup > 0) {
+            $party_name = $conn->query("SELECT name FROM suppliers WHERE id=$sel_sup")->fetch_assoc()['name'] ?? 'Unknown';
+            $st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, transaction_type, reference_id, party_name, notes) VALUES (?, ?, ?, 'supplier_payment', 0, ?, ?)");
+            $st->bind_param('ssdss', $pay_date, $pay_method, $amount, $party_name, $notes);
+            $st->execute();
+            $msg = 'Supplier payment recorded successfully.';
+        } else {
+            $err = 'Invalid payment amount or supplier.';
+        }
+        header("Location: index.php?page=supplier_ledger&sup_id=$sel_sup&msg=".urlencode($msg).'&err='.urlencode($err));
+        exit;
+    }
     if ($page === 'inventory' && isset($_GET['export_csv']) && $_GET['export_csv'] == 1) {
         $status_f = sanitize($_GET['status_f'] ?? '');
         $where = '1=1';
@@ -1577,6 +1663,23 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         while ($row = $er->fetch_assoc()) {
             echo "$sr,\"{$row['chassis_number']}\",\"{$row['motor_number']}\",\"{$row['model_name']}\",\"{$row['color']}\",{$row['purchase_price']},{$row['status']},{$row['selling_price']},\"{$row['selling_date']}\",\"{$row['cust_name']}\",{$row['margin']}\n";
             $sr++;
+        }
+        exit;
+    }
+    if (isset($_GET['ajax'])) {
+        if ($_GET['ajax'] === 'check_chassis') {
+            $chassis = sanitize($_GET['chassis'] ?? '');
+            $r = $conn->query("SELECT id FROM bikes WHERE chassis_number='" . mysqli_real_escape_string($conn, $chassis) . "'");
+            echo ($r && $r->num_rows > 0) ? '1' : '0';
+        } elseif ($_GET['ajax'] === 'get_suppliers') {
+            $suppliers_list_ajax = $conn->query('SELECT id, name FROM suppliers ORDER BY name');
+            echo json_encode($suppliers_list_ajax->fetch_all(MYSQLI_ASSOC));
+        } elseif ($_GET['ajax'] === 'get_models') {
+            $models_list_ajax = $conn->query('SELECT id, model_code, model_name FROM models ORDER BY model_name');
+            echo json_encode($models_list_ajax->fetch_all(MYSQLI_ASSOC));
+        } elseif ($_GET['ajax'] === 'get_customers') {
+            $customers_list_ajax = $conn->query('SELECT id, name, phone, is_filer FROM customers ORDER BY name');
+            echo json_encode($customers_list_ajax->fetch_all(MYSQLI_ASSOC));
         }
         exit;
     }
@@ -1754,9 +1857,9 @@ body.sidebar-collapsed .sidebar-footer form button::after { content: '🚪'; fon
 .filter-bar .form-group{min-width:120px;flex:0 0 auto}
 .filter-bar .form-group label{font-size:0.72rem}
 .filter-bar .form-group input,.filter-bar .form-group select{font-size:0.82rem;padding:5px 7px}
-.modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:500;align-items:center;justify-content:center}
+.modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:500;align-items:flex-start;justify-content:center;padding-top:6vh}
 .modal-overlay.open{display:flex}
-.modal{background:var(--bg2);border:2px solid var(--border);padding:18px;width:90%;max-width:500px;max-height:90vh;overflow-y:auto;border-radius:2px;position:relative;animation: animate__zoomIn 0.3s;}
+.modal{background:var(--bg2);border:2px solid var(--border);padding:18px;width:90%;max-width:500px;max-height:85vh;overflow-y:auto;border-radius:2px;position:relative;animation: animate__zoomIn 0.3s;}
 .modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;border-bottom:1px solid var(--border);padding-bottom:8px}
 .modal-header h3{font-size:0.9rem;font-weight:700;color:var(--accent);text-transform:uppercase}
 .modal-close{background:var(--danger);border:none;color:#fff;padding:3px 8px;font-size:0.9rem;cursor:pointer;border-radius:1px}
@@ -1976,10 +2079,22 @@ if (localStorage.getItem('sidebarCollapsed') === '1' && window.innerWidth > 600)
     document.body.classList.add('sidebar-collapsed');
 }
 document.addEventListener('DOMContentLoaded', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('msg')) Swal.fire({ title: 'Success!', text: urlParams.get('msg'), icon: 'success', timer: 3000, showConfirmButton: false });
+    if (urlParams.get('err')) Swal.fire({ title: 'Error!', text: urlParams.get('err'), icon: 'error', confirmButtonColor: '#d33' });
+    
+    if (urlParams.has('msg') || urlParams.has('err')) {
+        urlParams.delete('msg');
+        urlParams.delete('err');
+        window.history.replaceState(null, '', window.location.pathname + '?' + urlParams.toString());
+    }
+
     $('table.data-table').DataTable({
         responsive: true,
         pagingType: 'full_numbers',
         lengthMenu: [10, 25, 50, 100],
+        pageLength: 100,
+        stateSave: true,
         language: {
             search: "_INPUT_",
             searchPlaceholder: "Search records...",
@@ -1995,19 +2110,21 @@ document.addEventListener('DOMContentLoaded', function() {
             { targets: 'no-sort', orderable: false }
         ]
     });
-    $('select:not([name$="_length"])').select2({
+    $('select:not([name$="_length"]):not(.swal2-select)').select2({
         minimumResultsForSearch: 10, 
         placeholder: '-- Select --',
         allowClear: false,
         theme: 'default'
     });
     $(document).on('DOMNodeInserted', function(e) {
-        $(e.target).find('select:not([name$="_length"])').select2({
-            minimumResultsForSearch: 10,
-            placeholder: '-- Select --',
-            allowClear: false,
-            theme: 'default'
-        });
+        if (e.target && e.target.nodeType === 1) {
+            $(e.target).find('select:not([name$="_length"]):not(.swal2-select)').select2({
+                minimumResultsForSearch: 10,
+                placeholder: '-- Select --',
+                allowClear: false,
+                theme: 'default'
+            });
+        }
     });
     window.originalAlert = window.alert;
     window.alert = function(message) {
@@ -2073,15 +2190,35 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             validator.onSuccess((event) => {
                 const form = event.target;
-                const btn = document.activeElement;
-                if (btn && btn.type === 'submit' && btn.name) {
+                const btn = form.querySelector('button[type="submit"][name], input[type="submit"][name]');
+                if (btn && btn.name && !form.querySelector('input[name="' + btn.name + '"]')) {
                     const hidden = document.createElement('input');
                     hidden.type = 'hidden';
                     hidden.name = btn.name;
                     hidden.value = btn.value || '1';
                     form.appendChild(hidden);
                 }
-                form.submit();
+                if (form.classList.contains('ajax-form')) {
+                    const enteredNameInput = form.querySelector('[name="name"]') || form.querySelector('[name="model_name"]');
+                    const enteredName = enteredNameInput ? enteredNameInput.value : null;
+                    $.ajax({
+                        type: form.method || 'POST',
+                        url: form.action,
+                        data: $(form).serialize(),
+                        success: function() {
+                            if (form.id === 'supplierForm') closeSupplierModal(enteredName);
+                            else if (form.id === 'modelForm') closeModelModal(enteredName);
+                            else if (form.id === 'customerForm') closeCustomerModal(enteredName);
+                            form.reset();
+                            Swal.fire({ title: 'Success', text: 'Added successfully!', icon: 'success', timer: 1500, showConfirmButton: false });
+                        },
+                        error: function() {
+                            Swal.fire('Error', 'Failed to add. Please try again.', 'error');
+                        }
+                    });
+                } else {
+                    form.submit();
+                }
             });
         }
     });
@@ -2245,9 +2382,6 @@ else:
 <span style="font-size:0.75rem;color:var(--text3)"><?= date('d/m/Y H:i') ?></span>
 </div>
 </div>
-<div class="content">
-<?php if ($msg): ?><div class="toast-wrap" id="toastWrap"><div class="toast success animate__animated animate__fadeInRight"><?= sanitize($msg) ?></div></div><?php endif; ?>
-<?php if ($err): ?><div class="toast-wrap" id="toastWrap"><div class="toast error animate__animated animate__fadeInRight"><?= sanitize($err) ?></div></div><?php endif; ?>
 <?php
     $per_page = 20;
     $current_pg = max(1, (int) ($_GET['pg'] ?? 1));
@@ -2447,6 +2581,7 @@ document.addEventListener('DOMContentLoaded', function() {
         $models_list = $conn->query('SELECT id, model_code, model_name FROM models ORDER BY model_name');
 ?>
 <form method="POST" id="purchaseForm" class="animate__animated animate__fadeIn">
+<input type="hidden" name="save_purchase" value="1">
 <fieldset class="fieldset"><legend>📦 Purchase Order Details</legend>
 <div class="form-row">
 <div class="form-group"><label>Order Date <span class="req">*</span></label><input type="date" name="order_date" value="<?= date('Y-m-d') ?>" required></div>
@@ -2485,7 +2620,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <div class="modal-overlay" id="addSupplierModal">
 <div class="modal">
 <div class="modal-header"><h3>Add New Supplier</h3><button class="modal-close" onclick="closeSupplierModal()">✕</button></div>
-<form id="supplierForm" method="POST" action="index.php?page=suppliers&action=add">
+<form id="supplierForm" class="ajax-form" method="POST" action="index.php?page=suppliers&action=add">
 <div class="form-group" style="margin-bottom:8px"><label>Name <span class="req">*</span></label><input type="text" name="name" required></div>
 <div class="form-group" style="margin-bottom:8px"><label>Contact</label><input type="text" name="contact"></div>
 <div class="form-group" style="margin-bottom:12px"><label>Address</label><textarea name="address" rows="2"></textarea></div>
@@ -2496,7 +2631,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <div class="modal-overlay" id="addModelModal">
 <div class="modal">
 <div class="modal-header"><h3>Add New Model</h3><button class="modal-close" onclick="closeModelModal()">✕</button></div>
-<form id="modelForm" method="POST" action="index.php?page=models&action=add">
+<form id="modelForm" class="ajax-form" method="POST" action="index.php?page=models&action=add">
 <div class="form-group" style="margin-bottom:8px"><label>Model Code <span class="req">*</span></label><input type="text" name="model_code" required></div>
 <div class="form-group" style="margin-bottom:8px"><label>Model Name <span class="req">*</span></label><input type="text" name="model_name" required></div>
 <div class="form-group" style="margin-bottom:8px"><label>Category</label><input type="text" name="category" value="Electric Bike"></div>
@@ -2625,37 +2760,54 @@ function checkChassis(inp) {
 function openSupplierModal() {
     document.getElementById('addSupplierModal').classList.add('open');
 }
-function closeSupplierModal() {
+function closeSupplierModal(selectName) {
     document.getElementById('addSupplierModal').classList.remove('open');
     $.ajax({
         url: 'index.php?ajax=get_suppliers',
         type: 'GET',
+        cache: false,
         success: function(response) {
             var newOptions = JSON.parse(response);
             var supplierSelect = $('select[name="supplier_id"]');
             var currentVal = supplierSelect.val();
             supplierSelect.empty();
             supplierSelect.append('<option value="">-- Select Supplier --</option>');
+            var newValToSelect = currentVal;
+            var sName = selectName ? selectName.trim().toLowerCase() : null;
             newOptions.forEach(function(sup) {
                 supplierSelect.append(`<option value="${sup.id}">${sup.name}</option>`);
+                if (sName && sup.name.toLowerCase() === sName) newValToSelect = sup.id;
             });
-            supplierSelect.val(currentVal).trigger('change');
+            supplierSelect.val(newValToSelect).trigger('change');
         }
     });
 }
 function openModelModal() {
     document.getElementById('addModelModal').classList.add('open');
 }
-function closeModelModal() {
+function closeModelModal(selectName) {
     document.getElementById('addModelModal').classList.remove('open');
     $.ajax({
         url: 'index.php?ajax=get_models',
         type: 'GET',
+        cache: false,
         success: function(response) {
-            modelsOptions = JSON.parse(response).map(m => `<option value="${m.id}">${m.model_code} - ${m.model_name}</option>`).join('');
+            var models = JSON.parse(response);
+            var newModelId = null;
+            var sName = selectName ? selectName.trim().toLowerCase() : null;
+            if (sName) {
+                var found = models.find(m => m.model_name.toLowerCase() === sName || m.model_code.toLowerCase() === sName);
+                if (found) newModelId = found.id;
+            }
+            modelsOptions = models.map(m => `<option value="${m.id}">${m.model_code} - ${m.model_name}</option>`).join('');
             $('select[name$="[model_id]"]').each(function() {
                 var currentVal = $(this).val();
-                $(this).empty().append('<option value="">-- Model --</option>' + modelsOptions).val(currentVal).trigger('change');
+                $(this).empty().append('<option value="">-- Model --</option>' + modelsOptions);
+                if (!currentVal && newModelId) {
+                    $(this).val(newModelId).trigger('change');
+                } else {
+                    $(this).val(currentVal).trigger('change');
+                }
             });
         }
     });
@@ -2938,6 +3090,7 @@ document.getElementById('bulkExportForm').addEventListener('submit', function(){
         unset($_SESSION['last_sale_bike_id']);
 ?>
 <form method="POST" id="saleForm" class="animate__animated animate__fadeIn">
+<input type="hidden" name="save_sale" value="1">
 <fieldset class="fieldset"><legend>🛒 Sale Details</legend>
 <div class="form-row">
 <div class="form-group">
@@ -3115,7 +3268,7 @@ document.getElementById('bulkExportForm').addEventListener('submit', function(){
 <div class="modal-overlay" id="addCustModal">
 <div class="modal">
 <div class="modal-header"><h3>Add New Customer</h3><button class="modal-close" onclick="closeCustomerModal()">✕</button></div>
-<form id="customerForm" method="POST" action="index.php?page=customers&action=add">
+<form id="customerForm" class="ajax-form" method="POST" action="index.php?page=customers&action=add">
 <div class="form-group" style="margin-bottom:8px"><label>Name <span class="req">*</span></label><input type="text" name="name" required></div>
 <div class="form-group" style="margin-bottom:8px"><label>Phone</label><input type="text" name="phone"></div>
 <div class="form-group" style="margin-bottom:8px"><label>CNIC</label><input type="text" name="cnic" placeholder="XXXXX-XXXXXXX-X"></div>
@@ -3161,12 +3314,30 @@ function calcMargin() {
 }
 function calcRemainingBalance() {
     var sellingPrice = parseFloat(document.getElementById('sellingPrice').value) || 0;
-    var downPayment = parseFloat(document.getElementById('downPayment').value) || 0;
     var totalAccessoriesPrice = 0;
     document.querySelectorAll('[name$="[final_price]"]').forEach(function(input) {
         totalAccessoriesPrice += parseFloat(input.value) || 0;
     });
     var totalAmountDue = sellingPrice + totalAccessoriesPrice;
+    
+    var custSel = document.getElementById('customerSel');
+    if (custSel && custSel.value == '0') {
+        document.getElementById('downPayment').value = totalAmountDue.toFixed(2);
+        document.getElementById('downPayment').readOnly = true;
+        document.getElementById('totalInstallments').value = '0';
+        document.getElementById('totalInstallments').readOnly = true;
+    } else {
+        var dpInput = document.getElementById('downPayment');
+        if (dpInput.readOnly) {
+            dpInput.readOnly = false;
+        }
+        var instInput = document.getElementById('totalInstallments');
+        if (instInput.readOnly) {
+            instInput.readOnly = false;
+        }
+    }
+    
+    var downPayment = parseFloat(document.getElementById('downPayment').value) || 0;
     var remainingBalance = totalAmountDue - downPayment;
     document.getElementById('totalAmountDue').value = '<?= $currency ?> ' + totalAmountDue.toFixed(2);
     document.getElementById('remainingBalance').value = '<?= $currency ?> ' + remainingBalance.toFixed(2);
@@ -3209,13 +3380,13 @@ function addAccessoryRow() {
             <span id="accStock_${accessoriesCount}" style="font-size:0.75rem;color:var(--text3)"></span>
         </div>
         <div class="form-group"><label>Quantity <span class="req">*</span></label><input type="number" name="selected_accessories[${accessoriesCount}][quantity]" value="1" min="1" required oninput="calculateAccessoryPrice(${accessoriesCount})"></div>
-        <div class="form-group"><label>Unit Price</label><input type="number" name="selected_accessories[${accessoriesCount}][unit_price]" step="0.01" min="0" readonly style="background:var(--bg3);color:var(--text2)"></div>
+        <div class="form-group"><label>Unit Price</label><input type="number" name="selected_accessories[${accessoriesCount}][unit_price]" step="0.01" min="0" oninput="calculateAccessoryPrice(${accessoriesCount})"></div>
         <div class="form-group"><label>Discount</label><input type="number" name="selected_accessories[${accessoriesCount}][discount]" value="0.00" step="0.01" min="0" oninput="calculateAccessoryPrice(${accessoriesCount})"></div>
         <div class="form-group"><label>Final Price</label><input type="number" name="selected_accessories[${accessoriesCount}][final_price]" step="0.01" min="0" readonly style="background:var(--bg3);color:var(--text2)"></div>
     </div>`;
     document.getElementById('accessoriesList').appendChild(d);
     $(d).find('.select2-enable').select2({
-        minimumResultsForSearch: 10,
+        minimumResultsForSearch: 0,
         placeholder: '-- Select Accessory --',
         allowClear: false,
         tags: true,
@@ -3245,21 +3416,25 @@ function calculateAccessoryPrice(index) {
 function openCustomerModal() {
     document.getElementById('addCustModal').classList.add('open');
 }
-function closeCustomerModal() {
+function closeCustomerModal(selectName) {
     document.getElementById('addCustModal').classList.remove('open');
     $.ajax({
         url: 'index.php?ajax=get_customers',
         type: 'GET',
+        cache: false,
         success: function(response) {
             var newOptions = JSON.parse(response);
             var customerSelect = $('#customerSel');
             var currentVal = customerSelect.val();
             customerSelect.empty();
             customerSelect.append('<option value="0" data-is-filer="1">-- Walk-in / Cash Customer --</option>');
+            var newValToSelect = currentVal;
+            var sName = selectName ? selectName.trim().toLowerCase() : null;
             newOptions.forEach(function(cust) {
                 customerSelect.append(`<option value="${cust.id}" data-is-filer="${cust.is_filer}">${cust.name} — ${cust.phone}</option>`);
+                if (sName && cust.name.toLowerCase() === sName) newValToSelect = cust.id;
             });
-            customerSelect.val(currentVal).trigger('change');
+            customerSelect.val(newValToSelect).trigger('change');
         }
     });
 }
@@ -3276,6 +3451,7 @@ window.onload = function() {
         $prefill_ret_id = (int) ($_GET['bike_id'] ?? 0);
 ?>
 <form method="POST" id="returnForm" class="animate__animated animate__fadeIn">
+<input type="hidden" name="save_return" value="1">
 <fieldset class="fieldset"><legend>↩ Return / Adjustment</legend>
 <div class="form-row">
 <div class="form-group">
@@ -3660,10 +3836,41 @@ $(document).ready(function() {
             $cust_info = $conn->query("SELECT * FROM customers WHERE id=$sel_cust")->fetch_assoc();
             $ledger_entries = $conn->query("SELECT * FROM ledger WHERE party_type='customer' AND party_id=$sel_cust ORDER BY entry_date ASC, id ASC");
             $running_bal = 0;
+            
+            $sums = $conn->query("SELECT 
+                SUM(CASE WHEN reference_type='sale' THEN amount ELSE 0 END) - SUM(CASE WHEN reference_type='return_reversal' THEN amount ELSE 0 END) as total_billed, 
+                SUM(CASE WHEN reference_type IN ('payment','down_payment','installment') THEN amount ELSE 0 END) - SUM(CASE WHEN reference_type='return_refund' THEN amount ELSE 0 END) as total_paid,
+                SUM(CASE WHEN entry_type='debit' THEN amount ELSE 0 END) as total_dr, 
+                SUM(CASE WHEN entry_type='credit' THEN amount ELSE 0 END) as total_cr 
+                FROM ledger WHERE party_type='customer' AND party_id=$sel_cust")->fetch_assoc();
+            $total_dr_summary = $sums['total_billed'] ?? 0;
+            $total_cr_summary = $sums['total_paid'] ?? 0;
+            $bal_summary = ($sums['total_dr'] ?? 0) - ($sums['total_cr'] ?? 0);
             ?>
-<div class="print-btn-wrap no-print animate__animated animate__fadeInRight">
+<div class="split-grid-3 animate__animated animate__fadeInDown" style="margin-bottom:14px">
+    <div class="card danger"><div class="card-icon">🛒</div><div class="card-body"><div class="card-label">Total Billed</div><div class="card-value"><?= fmt_money($total_dr_summary) ?></div></div></div>
+    <div class="card success"><div class="card-icon">💵</div><div class="card-body"><div class="card-label">Total Paid</div><div class="card-value"><?= fmt_money($total_cr_summary) ?></div></div></div>
+    <div class="card warning"><div class="card-icon">⚖️</div><div class="card-body"><div class="card-label">Remaining Balance</div><div class="card-value" style="color:<?= $bal_summary > 0 ? 'var(--danger)' : 'var(--success)' ?>"><?= fmt_money(abs($bal_summary)) ?> <?= $bal_summary > 0 ? 'Due' : 'Advance' ?></div></div></div>
+</div>
+<div class="print-btn-wrap no-print animate__animated animate__fadeInRight" style="display:flex;gap:8px;">
+<button onclick="document.getElementById('receivePaymentModal').classList.add('open')" class="btn btn-success btn-sm">+ Receive Payment</button>
 <button onclick="window.print()" class="btn btn-default btn-sm">🖨 Print Ledger</button>
 </div>
+
+<div class="modal-overlay" id="receivePaymentModal">
+<div class="modal">
+<div class="modal-header"><h3>Receive Payment</h3><button class="modal-close" onclick="document.getElementById('receivePaymentModal').classList.remove('open')">✕</button></div>
+<form method="POST">
+<input type="hidden" name="add_payment" value="1">
+<div class="form-group" style="margin-bottom:8px"><label>Date <span class="req">*</span></label><input type="date" name="payment_date" value="<?= date('Y-m-d') ?>" required></div>
+<div class="form-group" style="margin-bottom:8px"><label>Amount <span class="req">*</span></label><input type="number" name="amount" step="0.01" min="0.01" required value="<?= $bal_summary > 0 ? $bal_summary : '' ?>"></div>
+<div class="form-group" style="margin-bottom:8px"><label>Method</label><select name="payment_method"><option value="cash">Cash</option><option value="bank_transfer">Bank Transfer</option><option value="cheque">Cheque</option><option value="online">Online</option></select></div>
+<div class="form-group" style="margin-bottom:12px"><label>Notes</label><textarea name="notes" rows="2" placeholder="Cheque number, bank details, etc..."></textarea></div>
+<button type="submit" class="btn btn-primary">Save Payment</button>
+</form>
+</div>
+</div>
+
 <fieldset class="fieldset animate__animated animate__fadeInUp"><legend>👤 Customer Ledger — <?= sanitize($cust_info['name']) ?></legend>
 <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;font-size:0.83rem">
 <span><strong>Phone:</strong> <?= sanitize($cust_info['phone'] ?? '-') ?></span>
@@ -3762,10 +3969,40 @@ $(document).ready(function() {
 <?php
         if ($sel_sup > 0):
             $sup_info = $conn->query("SELECT * FROM suppliers WHERE id=$sel_sup")->fetch_assoc();
-            $sup_orders = $conn->query("SELECT po.*, SUM(b.purchase_price) as bikes_total, COUNT(b.id) as bike_count FROM purchase_orders po LEFT JOIN bikes b ON po.id=b.purchase_order_id WHERE po.supplier_id=$sel_sup GROUP BY po.id ORDER BY po.order_date ASC");
-            $supplier_payments = $conn->query("SELECT * FROM payments WHERE transaction_type='supplier_payment' AND reference_id IN (SELECT id FROM purchase_orders WHERE supplier_id=$sel_sup) ORDER BY payment_date ASC");
+            $sup_orders = $conn->query("SELECT po.*, IFNULL(SUM(b.purchase_price), po.total_amount) as bikes_total, COUNT(b.id) as bike_count FROM purchase_orders po LEFT JOIN bikes b ON po.id=b.purchase_order_id WHERE po.supplier_id=$sel_sup GROUP BY po.id ORDER BY po.order_date ASC");
+            $supplier_payments = $conn->query("SELECT * FROM payments WHERE transaction_type='supplier_payment' AND (party_name = '" . mysqli_real_escape_string($conn, $sup_info['name']) . "' OR reference_id IN (SELECT id FROM purchase_orders WHERE supplier_id=$sel_sup)) ORDER BY payment_date ASC");
             $running_bal = 0;
+            
+            $purchase_total_sum = 0;
+            $payment_total_sum = 0;
+            while ($order = $sup_orders->fetch_assoc()) $purchase_total_sum += $order['bikes_total'];
+            while ($payment = $supplier_payments->fetch_assoc()) $payment_total_sum += $payment['amount'];
+            $bal_summary = $purchase_total_sum - $payment_total_sum;
             ?>
+<div class="split-grid-3 animate__animated animate__fadeInDown" style="margin-bottom:14px">
+    <div class="card danger"><div class="card-icon">📦</div><div class="card-body"><div class="card-label">Total Purchased</div><div class="card-value"><?= fmt_money($purchase_total_sum) ?></div></div></div>
+    <div class="card success"><div class="card-icon">💵</div><div class="card-body"><div class="card-label">Total Paid</div><div class="card-value"><?= fmt_money($payment_total_sum) ?></div></div></div>
+    <div class="card warning"><div class="card-icon">⚖️</div><div class="card-body"><div class="card-label">Remaining Balance</div><div class="card-value" style="color:<?= $bal_summary > 0 ? 'var(--danger)' : 'var(--success)' ?>"><?= fmt_money(abs($bal_summary)) ?> <?= $bal_summary > 0 ? 'Payable' : 'Advance' ?></div></div></div>
+</div>
+<div class="print-btn-wrap no-print animate__animated animate__fadeInRight" style="display:flex;gap:8px;">
+<button onclick="document.getElementById('makePaymentModal').classList.add('open')" class="btn btn-success btn-sm">+ Make Payment</button>
+<button onclick="window.print()" class="btn btn-default btn-sm">🖨 Print Ledger</button>
+</div>
+
+<div class="modal-overlay" id="makePaymentModal">
+<div class="modal">
+<div class="modal-header"><h3>Make Payment to Supplier</h3><button class="modal-close" onclick="document.getElementById('makePaymentModal').classList.remove('open')">✕</button></div>
+<form method="POST">
+<input type="hidden" name="add_sup_payment" value="1">
+<div class="form-group" style="margin-bottom:8px"><label>Date <span class="req">*</span></label><input type="date" name="payment_date" value="<?= date('Y-m-d') ?>" required></div>
+<div class="form-group" style="margin-bottom:8px"><label>Amount <span class="req">*</span></label><input type="number" name="amount" step="0.01" min="0.01" required value="<?= $bal_summary > 0 ? $bal_summary : '' ?>"></div>
+<div class="form-group" style="margin-bottom:8px"><label>Method</label><select name="payment_method"><option value="cash">Cash</option><option value="bank_transfer">Bank Transfer</option><option value="cheque">Cheque</option><option value="online">Online</option></select></div>
+<div class="form-group" style="margin-bottom:12px"><label>Notes</label><textarea name="notes" rows="2" placeholder="Cheque number, bank details, etc..."></textarea></div>
+<button type="submit" class="btn btn-primary">Save Payment</button>
+</form>
+</div>
+</div>
+
 <fieldset class="fieldset animate__animated animate__fadeInUp"><legend>🏭 Supplier Ledger — <?= sanitize($sup_info['name']) ?></legend>
 <div style="margin-bottom:10px;font-size:0.83rem">
 <strong>Contact:</strong> <?= sanitize($sup_info['contact'] ?? '-') ?> | <strong>Address:</strong> <?= sanitize($sup_info['address'] ?? '-') ?>
@@ -4617,7 +4854,7 @@ $(document).ready(function() {
                         <span id="quoteAccStock_<?= $q_acc_count ?>" style="font-size:0.75rem;color:var(--text3)"></span>
                     </div>
                     <div class="form-group"><label>Quantity <span class="req">*</span></label><input type="number" name="accessories[<?= $q_acc_count ?>][quantity]" value="<?= $qty ?>" min="1" required oninput="calculateQuoteAccessoryPrice(<?= $q_acc_count ?>)"></div>
-                    <div class="form-group"><label>Unit Price</label><input type="number" name="accessories[<?= $q_acc_count ?>][unit_price]" step="0.01" min="0" value="<?= $unit_p ?>" readonly style="background:var(--bg3);color:var(--text2)"></div>
+                    <div class="form-group"><label>Unit Price</label><input type="number" name="accessories[<?= $q_acc_count ?>][unit_price]" step="0.01" min="0" value="<?= $unit_p ?>" oninput="calculateQuoteAccessoryPrice(<?= $q_acc_count ?>)"></div>
                     <div class="form-group"><label>Discount</label><input type="number" name="accessories[<?= $q_acc_count ?>][discount]" value="<?= $disc ?>" step="0.01" min="0" oninput="calculateQuoteAccessoryPrice(<?= $q_acc_count ?>)"></div>
                     <div class="form-group"><label>Final Price</label><input type="number" name="accessories[<?= $q_acc_count ?>][final_price]" step="0.01" min="0" value="<?= $final_p ?>" readonly style="background:var(--bg3);color:var(--text2)"></div>
                 </div>
@@ -4694,13 +4931,13 @@ function addQuoteAccessoryRow() {
             <span id="quoteAccStock_${quoteAccessoriesCount}" style="font-size:0.75rem;color:var(--text3)"></span>
         </div>
         <div class="form-group"><label>Quantity <span class="req">*</span></label><input type="number" name="accessories[${quoteAccessoriesCount}][quantity]" value="1" min="1" required oninput="calculateQuoteAccessoryPrice(${quoteAccessoriesCount})"></div>
-        <div class="form-group"><label>Unit Price</label><input type="number" name="accessories[${quoteAccessoriesCount}][unit_price]" step="0.01" min="0" readonly style="background:var(--bg3);color:var(--text2)"></div>
+        <div class="form-group"><label>Unit Price</label><input type="number" name="accessories[${quoteAccessoriesCount}][unit_price]" step="0.01" min="0" oninput="calculateQuoteAccessoryPrice(${quoteAccessoriesCount})"></div>
         <div class="form-group"><label>Discount</label><input type="number" name="accessories[${quoteAccessoriesCount}][discount]" value="0.00" step="0.01" min="0" oninput="calculateQuoteAccessoryPrice(${quoteAccessoriesCount})"></div>
         <div class="form-group"><label>Final Price</label><input type="number" name="accessories[${quoteAccessoriesCount}][final_price]" step="0.01" min="0" readonly style="background:var(--bg3);color:var(--text2)"></div>
     </div>`;
     document.getElementById('quoteAccessoriesList').appendChild(d);
     $(d).find('.select2-enable').select2({
-        minimumResultsForSearch: 10,
+        minimumResultsForSearch: 0,
         placeholder: '-- Select Accessory --',
         allowClear: false,
         tags: true,
@@ -4733,7 +4970,7 @@ $(document).ready(function() {
         theme: 'default'
     });
     $('#quoteAccessoriesList .select2-enable').select2({
-        minimumResultsForSearch: 10,
+        minimumResultsForSearch: 0,
         placeholder: '-- Select Accessory --',
         allowClear: false,
         tags: true,
@@ -5147,6 +5384,7 @@ $(document).ready(function() {
         $s_absolute_timeout = get_setting('session_timeout_absolute') ?? '28800';
 ?>
 <form id="settingsForm" method="POST" enctype="multipart/form-data" class="animate__animated animate__fadeIn">
+<input type="hidden" name="save_settings" value="1">
 <fieldset class="fieldset"><legend>⚙ Company Settings</legend>
 <div class="form-row">
 <div class="form-group"><label>Company Name</label><input type="text" name="company_name" value="<?= sanitize($s_company) ?>"></div>
@@ -5234,28 +5472,5 @@ if (toastWrap) {
 setInterval(function() {
 }, 60000); 
 </script>
-<?php
-if (isset($conn) && $conn) {
-    if (isset($_SESSION['user_id']) && isset($_GET['ajax'])) {
-        if ($_GET['ajax'] === 'check_chassis') {
-            $chassis = sanitize($_GET['chassis'] ?? '');
-            $r = $conn->query("SELECT id FROM bikes WHERE chassis_number='" . mysqli_real_escape_string($conn, $chassis) . "'");
-            echo ($r && $r->num_rows > 0) ? '1' : '0';
-        } elseif ($_GET['ajax'] === 'get_suppliers') {
-            $suppliers_list_ajax = $conn->query('SELECT id, name FROM suppliers ORDER BY name');
-            echo json_encode($suppliers_list_ajax->fetch_all(MYSQLI_ASSOC));
-        } elseif ($_GET['ajax'] === 'get_models') {
-            $models_list_ajax = $conn->query('SELECT id, model_code, model_name FROM models ORDER BY model_name');
-            echo json_encode($models_list_ajax->fetch_all(MYSQLI_ASSOC));
-        } elseif ($_GET['ajax'] === 'get_customers') {
-            $customers_list_ajax = $conn->query('SELECT id, name, phone, is_filer FROM customers ORDER BY name');
-            echo json_encode($customers_list_ajax->fetch_all(MYSQLI_ASSOC));
-        }
-        $conn->close();
-        exit;
-    }
-    $conn->close();
-}
-?>
 </body>
 </html>
