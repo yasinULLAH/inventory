@@ -184,6 +184,7 @@ function install_database()
             `model_name` VARCHAR(255) NOT NULL,
             `category` VARCHAR(100),
             `short_code` VARCHAR(20),
+            `image` VARCHAR(255) NULL,
             `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
         'CREATE TABLE IF NOT EXISTS `accessories` (
@@ -227,6 +228,7 @@ function install_database()
             `return_notes` TEXT NULL,
             `safeguard_notes` TEXT NULL,
             `notes` TEXT,
+            `image` VARCHAR(255) NULL,
             `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (`model_id`) REFERENCES `models`(`id`) ON DELETE SET NULL,
@@ -482,6 +484,46 @@ function fmt_date($d)
 function sanitize($val)
 {
     return htmlspecialchars(strip_tags(trim($val)), ENT_QUOTES, 'UTF-8');
+}
+
+function handle_image_upload($file, $dest_dir = 'uploads/') {
+    if (!isset($file['error']) || is_array($file['error']) || $file['error'] !== UPLOAD_ERR_OK) return null;
+    if (!is_dir($dest_dir)) mkdir($dest_dir, 0777, true);
+    $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+    if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'])) return null;
+    $filename = uniqid('img_') . '.jpg';
+    $dest = $dest_dir . $filename;
+    
+    $info = getimagesize($file['tmp_name']);
+    if (!$info) return null;
+    
+    if ($file['size'] > 400 * 1024) {
+        $img = null;
+        if ($info[2] == IMAGETYPE_JPEG) $img = imagecreatefromjpeg($file['tmp_name']);
+        elseif ($info[2] == IMAGETYPE_PNG) $img = imagecreatefrompng($file['tmp_name']);
+        elseif ($info[2] == IMAGETYPE_WEBP) $img = imagecreatefromwebp($file['tmp_name']);
+        elseif ($info[2] == IMAGETYPE_GIF) $img = imagecreatefromgif($file['tmp_name']);
+        
+        if ($img) {
+            $w = imagesx($img);
+            $h = imagesy($img);
+            $ratio = $w / $h;
+            $new_w = min($w, 800); 
+            $new_h = $new_w / $ratio;
+            $new_img = imagecreatetruecolor($new_w, $new_h);
+            if ($info[2] == IMAGETYPE_PNG) {
+                imagealphablending($new_img, false);
+                imagesavealpha($new_img, true);
+            }
+            imagecopyresampled($new_img, $img, 0, 0, 0, 0, $new_w, $new_h, $w, $h);
+            imagejpeg($new_img, $dest, 75); 
+            imagedestroy($img);
+            imagedestroy($new_img);
+            return $dest;
+        }
+    }
+    move_uploaded_file($file['tmp_name'], $dest);
+    return $dest;
 }
 
 $db_exists = false;
@@ -787,10 +829,10 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $po_stmt->execute();
             $po_id = $conn->insert_id;
             $po_stmt->close();
-            $bike_stmt = $conn->prepare("INSERT INTO bikes (purchase_order_id,order_date,inventory_date,chassis_number,motor_number,model_id,color,purchase_price,tax_amount,status,safeguard_notes,notes) VALUES (?,?,?,?,?,?,?,?,?,'in_stock',?,?)");
+            $bike_stmt = $conn->prepare("INSERT INTO bikes (purchase_order_id,order_date,inventory_date,chassis_number,motor_number,model_id,color,purchase_price,tax_amount,status,safeguard_notes,notes,image) VALUES (?,?,?,?,?,?,?,?,?,'in_stock',?,?,?)");
             $saved_count = 0;
             $errors_list = [];
-            foreach ($bikes_data as $b) {
+            foreach ($bikes_data as $key => $b) {
                 $chassis = sanitize($b['chassis'] ?? '');
                 $motor = sanitize($b['motor'] ?? '');
                 $model_id = (int) ($b['model_id'] ?? 0);
@@ -798,12 +840,23 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $pp = (float) ($b['purchase_price'] ?? 0);
                 $safe_notes = sanitize($b['safeguard_notes'] ?? '');
                 $bnotes = sanitize($b['notes'] ?? '');
+                $bike_img = null;
+                if (isset($_FILES['bikes']['name'][$key]['image']) && $_FILES['bikes']['error'][$key]['image'] === UPLOAD_ERR_OK) {
+                    $file_arr = [
+                        'name' => $_FILES['bikes']['name'][$key]['image'],
+                        'type' => $_FILES['bikes']['type'][$key]['image'],
+                        'tmp_name' => $_FILES['bikes']['tmp_name'][$key]['image'],
+                        'error' => $_FILES['bikes']['error'][$key]['image'],
+                        'size' => $_FILES['bikes']['size'][$key]['image']
+                    ];
+                    $bike_img = handle_image_upload($file_arr);
+                }
                 if (empty($chassis) || $model_id <= 0 || $pp <= 0) {
                     $errors_list[] = 'Bike entry requires Chassis, Model, and Purchase Price. Skipping incomplete bike.';
                     continue;
                 }
                 $tax = ($pp * $tax_rate);
-                $bike_stmt->bind_param('issssisddss', $po_id, $order_date, $inventory_date, $chassis, $motor, $model_id, $color, $pp, $tax, $safe_notes, $bnotes);
+                $bike_stmt->bind_param('issssisddsss', $po_id, $order_date, $inventory_date, $chassis, $motor, $model_id, $color, $pp, $tax, $safe_notes, $bnotes, $bike_img);
                 if (!$bike_stmt->execute()) {
                     $errors_list[] = "Chassis $chassis: " . $bike_stmt->error;
                 } else {
@@ -952,11 +1005,15 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $mn = sanitize($_POST['model_name'] ?? '');
             $cat = sanitize($_POST['category'] ?? '');
             $sc = sanitize($_POST['short_code'] ?? '');
+            $img_path = null;
+            if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+                $img_path = handle_image_upload($_FILES['image']);
+            }
             if (empty($mc) || empty($mn)) {
                 $err = 'Model code and name are required.';
             } else {
-                $st = $conn->prepare('INSERT INTO models (model_code,model_name,category,short_code) VALUES (?,?,?,?)');
-                $st->bind_param('ssss', $mc, $mn, $cat, $sc);
+                $st = $conn->prepare('INSERT INTO models (model_code,model_name,category,short_code,image) VALUES (?,?,?,?,?)');
+                $st->bind_param('sssss', $mc, $mn, $cat, $sc, $img_path);
                 $st->execute();
                 $st->close();
                 $msg = 'Model added.';
@@ -968,11 +1025,20 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $mn = sanitize($_POST['model_name'] ?? '');
             $cat = sanitize($_POST['category'] ?? '');
             $sc = sanitize($_POST['short_code'] ?? '');
+            $img_path = null;
+            if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+                $img_path = handle_image_upload($_FILES['image']);
+            }
             if (empty($mc) || empty($mn) || $mid <= 0) {
                 $err = 'Model ID, code and name are required.';
             } else {
-                $st = $conn->prepare('UPDATE models SET model_code=?,model_name=?,category=?,short_code=? WHERE id=?');
-                $st->bind_param('ssssi', $mc, $mn, $cat, $sc, $mid);
+                if ($img_path) {
+                    $st = $conn->prepare('UPDATE models SET model_code=?,model_name=?,category=?,short_code=?,image=? WHERE id=?');
+                    $st->bind_param('sssssi', $mc, $mn, $cat, $sc, $img_path, $mid);
+                } else {
+                    $st = $conn->prepare('UPDATE models SET model_code=?,model_name=?,category=?,short_code=? WHERE id=?');
+                    $st->bind_param('ssssi', $mc, $mn, $cat, $sc, $mid);
+                }
                 $st->execute();
                 $st->close();
                 $msg = 'Model updated.';
@@ -1514,11 +1580,20 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $status = sanitize($_POST['status'] ?? 'in_stock');
             $notes = sanitize($_POST['notes'] ?? '');
             $safe = sanitize($_POST['safeguard_notes'] ?? '');
+            $img_path = null;
+            if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+                $img_path = handle_image_upload($_FILES['image']);
+            }
             if ($bid <= 0 || $pp < 0) {
                 $err = 'Invalid bike ID or purchase price.';
             } else {
-                $stmt = $conn->prepare('UPDATE bikes SET color=?, purchase_price=?, status=?, notes=?, safeguard_notes=? WHERE id=?');
-                $stmt->bind_param('sddssi', $color, $pp, $status, $notes, $safe, $bid);
+                if ($img_path) {
+                    $stmt = $conn->prepare('UPDATE bikes SET color=?, purchase_price=?, status=?, notes=?, safeguard_notes=?, image=? WHERE id=?');
+                    $stmt->bind_param('sddsssi', $color, $pp, $status, $notes, $safe, $img_path, $bid);
+                } else {
+                    $stmt = $conn->prepare('UPDATE bikes SET color=?, purchase_price=?, status=?, notes=?, safeguard_notes=? WHERE id=?');
+                    $stmt->bind_param('sddssi', $color, $pp, $status, $notes, $safe, $bid);
+                }
                 $stmt->execute();
                 $msg = 'Bike updated.';
             }
@@ -2276,7 +2351,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     $.ajax({
                         type: form.method || 'POST',
                         url: form.action,
-                        data: $(form).serialize(),
+                        data: new FormData(form),
+                        processData: false,
+                        contentType: false,
                         success: function() {
                             if (form.id === 'supplierForm') closeSupplierModal(enteredName);
                             else if (form.id === 'modelForm') closeModelModal(enteredName);
@@ -2653,7 +2730,7 @@ document.addEventListener('DOMContentLoaded', function() {
         $suppliers_list = $conn->query('SELECT id, name FROM suppliers ORDER BY name');
         $models_list = $conn->query('SELECT id, model_code, model_name FROM models ORDER BY model_name');
 ?>
-<form method="POST" id="purchaseForm" class="animate__animated animate__fadeIn">
+<form method="POST" id="purchaseForm" enctype="multipart/form-data" class="animate__animated animate__fadeIn">
 <input type="hidden" name="save_purchase" value="1">
 <fieldset class="fieldset"><legend>📦 Purchase Order Details</legend>
 <div class="form-row">
@@ -2710,11 +2787,12 @@ document.addEventListener('DOMContentLoaded', function() {
 <div class="modal-overlay" id="addModelModal">
 <div class="modal">
 <div class="modal-header"><h3>Add New Model</h3><button class="modal-close" onclick="closeModelModal()">✕</button></div>
-<form id="modelForm" class="ajax-form" method="POST" action="index.php?page=models&action=add">
+<form id="modelForm" class="ajax-form" method="POST" enctype="multipart/form-data" action="index.php?page=models&action=add">
 <div class="form-group" style="margin-bottom:8px"><label>Model Code <span class="req">*</span></label><input type="text" name="model_code" required></div>
 <div class="form-group" style="margin-bottom:8px"><label>Model Name <span class="req">*</span></label><input type="text" name="model_name" required></div>
 <div class="form-group" style="margin-bottom:8px"><label>Category</label><input type="text" name="category" value="Electric Bike"></div>
-<div class="form-group" style="margin-bottom:12px"><label>Short Code</label><input type="text" name="short_code"></div>
+<div class="form-group" style="margin-bottom:8px"><label>Short Code</label><input type="text" name="short_code"></div>
+<div class="form-group" style="margin-bottom:12px"><label>Image</label><input type="file" name="image" accept="image/*" style="padding:4px"></div>
 <button type="submit" class="btn btn-primary">Save Model</button>
 </form>
 </div>
@@ -2774,6 +2852,7 @@ function addBikeRow() {
     </div>
     <div class="form-row">
     <div class="form-group"><label>Notes</label><input type="text" name="bikes[${bikeCount}][notes]" placeholder="Any notes..."></div>
+    <div class="form-group"><label>Image (Optional)</label><input type="file" name="bikes[${bikeCount}][image]" accept="image/*" style="padding:4px"></div>
     </div>`;
     document.getElementById('bikesList').appendChild(d);
     if (prefillModelId && bikeCount === 1) {
@@ -2971,6 +3050,9 @@ $(document).ready(function() {
 <?php if ($view_bike): ?>
 <div class="print-btn-wrap no-print"><button onclick="window.print()" class="btn btn-default btn-sm">🖨 Print</button> <a href="index.php?page=inventory" class="btn btn-default btn-sm">← Back</a></div>
 <fieldset class="fieldset animate__animated animate__fadeIn"><legend>🚲 Bike Details — <?= sanitize($view_bike['chassis_number']) ?></legend>
+<?php if (!empty($view_bike['image'])): ?>
+<div style="margin-bottom:14px"><img src="<?= sanitize($view_bike['image']) ?>" style="max-height:150px;border-radius:2px;border:1px solid var(--border)"></div>
+<?php endif; ?>
 <div class="split-grid-3" style="margin-bottom:12px">
 <?php
             $detail_fields = [
@@ -3064,6 +3146,7 @@ $(document).ready(function() {
 <tr>
 <th style="width:30px"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()" class="no-sort"></th>
 <th>Sr#</th>
+<th class="no-sort">Pic</th>
 <th>Chassis</th>
 <th>Motor#</th>
 <th>Model</th>
@@ -3091,6 +3174,7 @@ $(document).ready(function() {
 <tr class="row-<?= $bike['status'] ?>">
 <td><input type="checkbox" name="selected_bikes[]" value="<?= $bike['id'] ?>" class="bike-check"></td>
 <td><?= $sr++ ?></td>
+<td><?php if (!empty($bike['image'])): ?><img src="<?= sanitize($bike['image']) ?>" style="height:24px;width:auto;border-radius:2px;cursor:pointer" onclick="window.open(this.src)"><?php else: ?>-<?php endif; ?></td>
 <td style="font-family:Consolas,monospace;font-size:0.8rem"><?= sanitize($bike['chassis_number']) ?></td>
 <td style="font-family:Consolas,monospace;font-size:0.8rem"><?= sanitize($bike['motor_number'] ?? '-') ?></td>
 <td><?= sanitize($bike['model_name'] ?? '-') ?></td>
@@ -3144,7 +3228,7 @@ $(document).ready(function() {
 <div class="modal-overlay open" id="editBikeModal">
 <div class="modal animate__animated animate__zoomIn">
 <div class="modal-header"><h3>✏ Edit Bike — <?= sanitize($edit_bike['chassis_number']) ?></h3><a href="index.php?page=inventory" class="modal-close">✕</a></div>
-<form id="editBikeForm" method="POST" action="index.php?page=inventory&action=edit">
+<form id="editBikeForm" method="POST" enctype="multipart/form-data" action="index.php?page=inventory&action=edit">
 <input type="hidden" name="id" value="<?= $edit_bike['id'] ?>">
 <div class="form-group" style="margin-bottom:8px"><label>Color</label><input type="text" name="color" value="<?= sanitize($edit_bike['color']) ?>"></div>
 <div class="form-group" style="margin-bottom:8px"><label>Purchase Price</label><input type="number" name="purchase_price" step="0.01" value="<?= $edit_bike['purchase_price'] ?>"></div>
@@ -3157,7 +3241,8 @@ $(document).ready(function() {
 </select>
 </div>
 <div class="form-group" style="margin-bottom:8px"><label>Safeguard Notes</label><input type="text" name="safeguard_notes" value="<?= sanitize($edit_bike['safeguard_notes'] ?? '') ?>"></div>
-<div class="form-group" style="margin-bottom:12px"><label>Notes</label><textarea name="notes" rows="2"><?= sanitize($edit_bike['notes'] ?? '') ?></textarea></div>
+<div class="form-group" style="margin-bottom:8px"><label>Notes</label><textarea name="notes" rows="2"><?= sanitize($edit_bike['notes'] ?? '') ?></textarea></div>
+<div class="form-group" style="margin-bottom:12px"><label>Image (Optional)</label><input type="file" name="image" accept="image/*" style="padding:4px"></div>
 <button type="submit" class="btn btn-primary">💾 Save Changes</button>
 </form>
 </div>
@@ -4771,13 +4856,14 @@ $(document).ready(function() {
 </div>
 <div id="addModelFormArea" style="display:<?= $edit_model ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
 <fieldset class="fieldset"><legend><?= $edit_model ? '✏ Edit Model' : '+ Add New Model' ?></legend>
-<form id="modelForm" method="POST" action="index.php?page=models&action=<?= $edit_model ? 'edit' : 'add' ?>">
+<form id="modelForm" method="POST" enctype="multipart/form-data" action="index.php?page=models&action=<?= $edit_model ? 'edit' : 'add' ?>">
 <?php if ($edit_model): ?><input type="hidden" name="id" value="<?= $edit_model['id'] ?>"><?php endif; ?>
 <div class="form-row">
 <div class="form-group"><label>Model Code <span class="req">*</span></label><input type="text" name="model_code" value="<?= sanitize($edit_model['model_code'] ?? '') ?>" required></div>
 <div class="form-group"><label>Model Name <span class="req">*</span></label><input type="text" name="model_name" value="<?= sanitize($edit_model['model_name'] ?? '') ?>" required></div>
 <div class="form-group"><label>Category</label><input type="text" name="category" value="<?= sanitize($edit_model['category'] ?? 'Electric Bike') ?>"></div>
 <div class="form-group"><label>Short Code</label><input type="text" name="short_code" value="<?= sanitize($edit_model['short_code'] ?? '') ?>"></div>
+<div class="form-group"><label>Image</label><input type="file" name="image" accept="image/*" style="padding:4px"></div>
 </div>
 <button type="submit" class="btn btn-primary">💾 Save</button>
 <button type="button" class="btn btn-default" onclick="document.getElementById('addModelFormArea').style.display='none'">Cancel</button>
@@ -4786,12 +4872,13 @@ $(document).ready(function() {
 </div>
 <div class="data-table-wrap animate__animated animate__fadeInUp">
 <table class="data-table">
-<thead><tr><th>Sr#</th><th>Model Code</th><th>Model Name</th><th>Category</th><th>Short Code</th><th>Total Inventory</th><th>In Stock</th><th>Sold</th><th class="no-sort">Actions</th></tr></thead>
+<thead><tr><th>Sr#</th><th>Image</th><th>Model Code</th><th>Model Name</th><th>Category</th><th>Short Code</th><th>Total Inventory</th><th>In Stock</th><th>Sold</th><th class="no-sort">Actions</th></tr></thead>
 <tbody>
 <?php $sr = 1;
         while ($mdl = $models_result->fetch_assoc()): ?>
 <tr>
 <td><?= $sr++ ?></td>
+<td><?php if (!empty($mdl['image'])): ?><img src="<?= sanitize($mdl['image']) ?>" style="height:30px;width:auto;border-radius:2px"><?php else: ?>-<?php endif; ?></td>
 <td><strong><?= sanitize($mdl['model_code']) ?></strong></td>
 <td><?= sanitize($mdl['model_name']) ?></td>
 <td><?= sanitize($mdl['category']) ?></td>
