@@ -29,7 +29,7 @@ Execute a deep audit for this at [http://localhost/testingspace3/index.php]. Use
 
 and tenat admin login
 http://localhost/testingspace3/
-username is "admin" and password "admin@123"
+username is "admin" and password "admin@123" no spaces in username and password exactly as is in the quotes
 
 also disable the captcha to be not required for the time bieng so that we dont have any issue with logins
 

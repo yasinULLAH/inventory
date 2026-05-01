@@ -1913,8 +1913,9 @@ body.sidebar-collapsed .sidebar-footer form button::after { content: '🚪'; fon
 [data-theme="light"] .badge-danger{background:#f4d4d4;color:#4d1a1a}
 [data-theme="light"] .badge-warning{background:#f4e8d4;color:#4d2a00}
 [data-theme="light"] .badge-info{background:#d4e8f4;color:#1a2d4d}
-.filter-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;padding:10px;background:var(--bg2);border:1px solid var(--border)}
-.filter-bar .form-group{min-width:120px;flex:0 0 auto}
+.filter-bar{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;padding:14px;background:var(--bg2);border:1px solid var(--border);border-radius:2px}
+.filter-bar .form-group{min-width:140px;flex:1 1 auto}
+.filter-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .filter-bar .form-group label{font-size:0.72rem}
 .filter-bar .form-group input,.filter-bar .form-group select{font-size:0.82rem;padding:5px 7px}
 .modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:500;align-items:flex-start;justify-content:center;padding-top:6vh}
@@ -2103,7 +2104,10 @@ body{background:#fff!important;color:#111!important}
 .main-wrap{margin-left:0}
 .form-row{flex-direction:column}
 .form-group{min-width:0}
-.filter-bar{flex-direction:column}
+.filter-bar{flex-direction:column;align-items:stretch}
+.filter-bar .form-group{width:100%}
+.filter-bar .btn, .filter-bar button{width:100%;justify-content:center;margin-top:4px}
+.filter-actions{width:100%;display:flex;flex-direction:column;gap:8px}
 .data-table th,.data-table td{font-size:0.75rem;padding:4px 6px}
 .btn{font-size:0.78rem;padding:6px 10px}
 .modal{width:98%;padding:12px}
@@ -2130,6 +2134,10 @@ a.paginate_button.current {
     background: #322727 !important;
 }
 </style>
+<link rel="icon" type="image/png" href="favicon-96x96.png" sizes="96x96" />
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="shortcut icon" href="favicon.ico" />
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
 </head>
 <body>
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -2677,6 +2685,12 @@ document.addEventListener('DOMContentLoaded', function() {
 <div id="bikesList"></div>
 <button type="button" class="btn btn-success" onclick="addBikeRow()" style="margin-top:6px">+ Add Bike</button>
 </fieldset>
+<div id="purchaseSummaryBox" style="background:var(--bg3);padding:12px;border-radius:2px;margin-bottom:14px;display:flex;gap:15px;align-items:center;border:1px solid var(--border);flex-wrap:wrap;">
+    <div style="flex:1;min-width:140px"><strong style="color:var(--text2);display:block;font-size:0.75rem;text-transform:uppercase">Total Payment</strong> <span id="sumPay" style="font-size:1.3rem;font-weight:bold;color:var(--success)">0.00</span></div>
+    <div style="flex:1;min-width:140px"><strong style="color:var(--text2);display:block;font-size:0.75rem;text-transform:uppercase">Total Purchase</strong> <span id="sumPurch" style="font-size:1.3rem;font-weight:bold;color:var(--warning)">0.00</span></div>
+    <div style="flex:1;min-width:140px"><strong style="color:var(--text2);display:block;font-size:0.75rem;text-transform:uppercase">Difference</strong> <span id="sumDiff" style="font-size:1.3rem;font-weight:bold">0.00</span></div>
+    <div style="flex:1;min-width:140px"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:bold;color:var(--accent);font-size:0.85rem"><input type="checkbox" id="autoDivideCb" checked onchange="updatePurchaseTotals(true)" style="width:16px;height:16px"> Auto-Divide Payment</label></div>
+</div>
 <div style="display:flex;gap:8px;flex-wrap:wrap">
 <button type="submit" name="save_purchase" class="btn btn-primary">💾 Save Purchase Order</button>
 <a href="index.php?page=inventory" class="btn btn-default">← Back to Inventory</a>
@@ -2715,6 +2729,31 @@ var modelsOptions = `<?php $models_list->data_seek(0);
             $mo .= '<option value="' . $m['id'] . '">' . $m['model_code'] . ' - ' . $m['model_name'] . '</option>';
         echo $mo; ?>`;
 var allSuppliers = <?= json_encode($conn->query('SELECT id, name FROM suppliers ORDER BY name')->fetch_all(MYSQLI_ASSOC)) ?>;
+function updatePurchaseTotals(triggeredByGlobalChange = false) {
+    let autoDivideCb = document.getElementById('autoDivideCb');
+    if (!triggeredByGlobalChange && autoDivideCb) {
+        autoDivideCb.checked = false;
+    }
+    let totalPay = 0;
+    document.querySelectorAll('.pay-amount-input').forEach(inp => totalPay += parseFloat(inp.value) || 0);
+    let bikeInputs = document.querySelectorAll('.bike-price-input');
+    if (triggeredByGlobalChange && autoDivideCb && autoDivideCb.checked && bikeInputs.length > 0) {
+        let divided = (totalPay / bikeInputs.length).toFixed(2);
+        bikeInputs.forEach(inp => inp.value = divided);
+    }
+    let totalPurch = 0;
+    bikeInputs.forEach(inp => totalPurch += parseFloat(inp.value) || 0);
+    let diff = totalPay - totalPurch;
+    let sumPayEl = document.getElementById('sumPay');
+    let sumPurchEl = document.getElementById('sumPurch');
+    let sumDiffEl = document.getElementById('sumDiff');
+    if (sumPayEl) sumPayEl.innerText = totalPay.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    if (sumPurchEl) sumPurchEl.innerText = totalPurch.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    if (sumDiffEl) {
+        sumDiffEl.innerText = Math.abs(diff).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        sumDiffEl.style.color = diff === 0 ? 'var(--text)' : (diff > 0 ? 'var(--success)' : 'var(--danger)');
+    }
+}
 function addBikeRow() {
     bikeCount++;
     var d = document.createElement('div');
@@ -2730,7 +2769,7 @@ function addBikeRow() {
     </div>
     <div class="form-row">
     <div class="form-group"><label>Color</label><input type="text" name="bikes[${bikeCount}][color]" placeholder="Red, Black, White..."></div>
-    <div class="form-group"><label>Purchase Price (Rs.) <span class="req">*</span></label><input type="number" name="bikes[${bikeCount}][purchase_price]" step="0.01" min="0" required placeholder="0.00"></div>
+    <div class="form-group"><label>Purchase Price (Rs.) <span class="req">*</span></label><input type="number" name="bikes[${bikeCount}][purchase_price]" class="bike-price-input" step="0.01" min="0" required placeholder="0.00" oninput="updatePurchaseTotals(false)"></div>
     <div class="form-group"><label>Safeguard Notes</label><input type="text" name="bikes[${bikeCount}][safeguard_notes]" placeholder="Helmet, Tyre, Warranty..."></div>
     </div>
     <div class="form-row">
@@ -2746,6 +2785,7 @@ function addBikeRow() {
         allowClear: false,
         theme: 'default'
     });
+    if (typeof updatePurchaseTotals === 'function') updatePurchaseTotals(true);
 }
 function addPaymentRow() {
     paymentCount++;
@@ -2762,7 +2802,7 @@ function addPaymentRow() {
             <option value="online">Online</option>
         </select>
     </div>
-    <div class="form-group"><label>Amount (Rs.) <span class="req">*</span></label><input type="number" name="payments[${paymentCount}][amount]" step="0.01" min="0" required placeholder="0.00"></div>
+    <div class="form-group"><label>Amount (Rs.) <span class="req">*</span></label><input type="number" name="payments[${paymentCount}][amount]" class="pay-amount-input" step="0.01" min="0" required placeholder="0.00" oninput="updatePurchaseTotals(true)"></div>
     </div>
     <div id="paymentChequeFields_${paymentCount}" style="display:none" class="form-row">
         <div class="form-group"><label>Cheque Number</label><input type="text" name="payments[${paymentCount}][cheque_number]" placeholder="CHQ-001"></div>
@@ -2770,6 +2810,7 @@ function addPaymentRow() {
         <div class="form-group"><label>Cheque Date</label><input type="date" name="payments[${paymentCount}][cheque_date]"></div>
     </div>`;
     document.getElementById('paymentsList').appendChild(d);
+    if (typeof updatePurchaseTotals === 'function') updatePurchaseTotals(true);
 }
 function togglePaymentFields(selectElement, index) {
     var chequeFields = document.getElementById('paymentChequeFields_' + index);
@@ -2784,10 +2825,12 @@ function togglePaymentFields(selectElement, index) {
 function removeBikeRow(n) {
     var el = document.getElementById('bikeRow_'+n);
     if (el) el.remove();
+    if (typeof updatePurchaseTotals === 'function') updatePurchaseTotals(true);
 }
 function removePaymentRow(n) {
     var el = document.getElementById('paymentRow_'+n);
     if (el) el.remove();
+    if (typeof updatePurchaseTotals === 'function') updatePurchaseTotals(true);
 }
 function checkChassis(inp) {
     var val = inp.value.trim();
@@ -3000,7 +3043,7 @@ $(document).ready(function() {
 <div class="form-group"><label>Color</label><input type="text" name="color_f" value="<?= sanitize($color_f) ?>" placeholder="Color"></div>
 <div class="form-group"><label>From</label><input type="date" name="date_from" value="<?= $date_from ?>"></div>
 <div class="form-group"><label>To</label><input type="date" name="date_to" value="<?= $date_to ?>"></div>
-<div class="form-group" style="justify-content:flex-end">
+<div class="filter-actions">
 <button type="submit" class="btn btn-primary btn-sm">🔍 Apply Filters</button>
 <a href="index.php?page=inventory" class="btn btn-default btn-sm">Reset</a>
 <a href="index.php?page=inventory&export_csv=1&status_f=<?= urlencode($status_f) ?>&model_f=<?= $model_f ?>&color_f=<?= urlencode($color_f) ?>&search_f=<?= urlencode($search_f) ?>&date_from=<?= urlencode($date_from) ?>&date_to=<?= urlencode($date_to) ?>" class="btn btn-default btn-sm">⬇ CSV</a>
