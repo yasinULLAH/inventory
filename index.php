@@ -486,29 +486,38 @@ function sanitize($val)
     return htmlspecialchars(strip_tags(trim($val)), ENT_QUOTES, 'UTF-8');
 }
 
-function handle_image_upload($file, $dest_dir = 'uploads/') {
-    if (!isset($file['error']) || is_array($file['error']) || $file['error'] !== UPLOAD_ERR_OK) return null;
-    if (!is_dir($dest_dir)) mkdir($dest_dir, 0777, true);
+function handle_image_upload($file, $dest_dir = 'uploads/')
+{
+    if (!isset($file['error']) || is_array($file['error']) || $file['error'] !== UPLOAD_ERR_OK)
+        return null;
+    if (!is_dir($dest_dir))
+        mkdir($dest_dir, 0777, true);
     $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-    if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'])) return null;
+    if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif']))
+        return null;
     $filename = uniqid('img_') . '.jpg';
     $dest = $dest_dir . $filename;
-    
+
     $info = getimagesize($file['tmp_name']);
-    if (!$info) return null;
-    
+    if (!$info)
+        return null;
+
     if ($file['size'] > 400 * 1024) {
         $img = null;
-        if ($info[2] == IMAGETYPE_JPEG) $img = imagecreatefromjpeg($file['tmp_name']);
-        elseif ($info[2] == IMAGETYPE_PNG) $img = imagecreatefrompng($file['tmp_name']);
-        elseif ($info[2] == IMAGETYPE_WEBP) $img = imagecreatefromwebp($file['tmp_name']);
-        elseif ($info[2] == IMAGETYPE_GIF) $img = imagecreatefromgif($file['tmp_name']);
-        
+        if ($info[2] == IMAGETYPE_JPEG)
+            $img = imagecreatefromjpeg($file['tmp_name']);
+        elseif ($info[2] == IMAGETYPE_PNG)
+            $img = imagecreatefrompng($file['tmp_name']);
+        elseif ($info[2] == IMAGETYPE_WEBP)
+            $img = imagecreatefromwebp($file['tmp_name']);
+        elseif ($info[2] == IMAGETYPE_GIF)
+            $img = imagecreatefromgif($file['tmp_name']);
+
         if ($img) {
             $w = imagesx($img);
             $h = imagesy($img);
             $ratio = $w / $h;
-            $new_w = min($w, 800); 
+            $new_w = min($w, 800);
             $new_h = $new_w / $ratio;
             $new_img = imagecreatetruecolor($new_w, $new_h);
             if ($info[2] == IMAGETYPE_PNG) {
@@ -516,7 +525,7 @@ function handle_image_upload($file, $dest_dir = 'uploads/') {
                 imagesavealpha($new_img, true);
             }
             imagecopyresampled($new_img, $img, 0, 0, 0, 0, $new_w, $new_h, $w, $h);
-            imagejpeg($new_img, $dest, 75); 
+            imagejpeg($new_img, $dest, 75);
             imagedestroy($img);
             imagedestroy($new_img);
             return $dest;
@@ -1993,7 +2002,7 @@ body.sidebar-collapsed .sidebar-footer form button::after { content: '🚪'; fon
 .filter-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .filter-bar .form-group label{font-size:0.72rem}
 .filter-bar .form-group input,.filter-bar .form-group select{font-size:0.82rem;padding:5px 7px}
-.modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:500;align-items:flex-start;justify-content:center;padding-top:6vh}
+.modal-overlay{display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center;}
 .modal-overlay.open{display:flex}
 .modal{background:var(--bg2);border:2px solid var(--border);padding:18px;width:90%;max-width:500px;max-height:85vh;overflow-y:auto;border-radius:2px;position:relative;animation: animate__zoomIn 0.3s;}
 .modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;border-bottom:1px solid var(--border);padding-bottom:8px}
@@ -2516,7 +2525,7 @@ else:
 <form method="GET" action="index.php"><input type="hidden" name="logout" value="1"><button type="submit">🚪 Logout</button></form>
 </div>
 </div>
-<div class="main-wrap animate__animated animate__fadeIn">
+<div class="main-wrap">
 <div class="topbar">
 <button class="hamburger" onclick="toggleSidebar()">☰</button>
 <div class="page-title">
