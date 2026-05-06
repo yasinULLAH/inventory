@@ -1215,7 +1215,8 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                         }
                     }
                 }
-                $cust_r = $conn->query("SELECT name FROM customers WHERE id=$customer_id");
+                $cust_sql_id = (int)$customer_id;
+                $cust_r = $conn->query("SELECT name FROM customers WHERE id=$cust_sql_id");
                 $cust_row = $cust_r ? $cust_r->fetch_assoc() : null;
                 $party_name = $cust_row ? $cust_row['name'] : 'Walk-in Customer';
                 $payment_notes = "Sale from Quotation #$quote_id";
@@ -1258,7 +1259,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         $bike_id = (int) ($_POST['bike_id'] ?? 0);
         $selling_price = (float) ($_POST['selling_price'] ?? 0);
         $selling_date = sanitize($_POST['selling_date'] ?? date('Y-m-d'));
-        $customer_id = (int) ($_POST['customer_id'] ?? 0);
+        $customer_id = empty($_POST['customer_id']) ? null : (int) $_POST['customer_id'];
         $down_payment = (float) ($_POST['down_payment'] ?? 0);
         $total_installments = (int) ($_POST['total_installments'] ?? 0);
         $installment_amount = (float) ($_POST['installment_amount'] ?? 0);
@@ -1311,7 +1312,8 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                         }
                     }
                 }
-                $cust_r = $conn->query("SELECT name FROM customers WHERE id=$customer_id");
+                $cust_sql_id = (int)$customer_id;
+                $cust_r = $conn->query("SELECT name FROM customers WHERE id=$cust_sql_id");
                 $cust_row = $cust_r ? $cust_r->fetch_assoc() : null;
                 $party_name = $cust_row ? $cust_row['name'] : 'Walk-in Customer';
                 $payment_notes = 'Down Payment for Chassis: ' . $bike['chassis_number'];
@@ -1340,7 +1342,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     $led_dp_st->close();
                 }
                 $remaining_balance = $total_sale_amount - $down_payment;
-                if ($customer_id == 0 && round($remaining_balance, 2) > 0) {
+                if (empty($customer_id) && round($remaining_balance, 2) > 0) {
                     throw new Exception('Walk-in customers must pay the full amount upfront. Partial payments are not allowed.');
                 }
                 if ($total_installments > 0 && $installment_amount > 0 && $remaining_balance > 0) {
