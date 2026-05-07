@@ -1210,12 +1210,12 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                             if ($acc_id > 0) {
                                 $sa_stmt->bind_param('iiiddd', $bike_id, $acc_id, $qty, $unit_p, $disc, $final_p);
                                 $sa_stmt->execute();
-                                $conn->query("UPDATE accessories SET current_stock = current_stock - $qty WHERE id = $acc_id");
+                                $conn->query("UPDATE accessories SET current_stock = GREATEST(0, current_stock - $qty) WHERE id = $acc_id");
                             }
                         }
                     }
                 }
-                $cust_sql_id = (int)$customer_id;
+                $cust_sql_id = (int) $customer_id;
                 $cust_r = $conn->query("SELECT name FROM customers WHERE id=$cust_sql_id");
                 $cust_row = $cust_r ? $cust_r->fetch_assoc() : null;
                 $party_name = $cust_row ? $cust_row['name'] : 'Walk-in Customer';
@@ -1312,7 +1312,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                         }
                     }
                 }
-                $cust_sql_id = (int)$customer_id;
+                $cust_sql_id = (int) $customer_id;
                 $cust_r = $conn->query("SELECT name FROM customers WHERE id=$cust_sql_id");
                 $cust_row = $cust_r ? $cust_r->fetch_assoc() : null;
                 $party_name = $cust_row ? $cust_row['name'] : 'Walk-in Customer';
@@ -2596,8 +2596,9 @@ else:
 <div class="card accent"><div class="card-icon">👥</div><div class="card-body"><div class="card-label">Customers</div><div class="card-value"><?= number_format($total_customers) ?></div></div></div>
 <div class="card warning"><div class="card-icon">🏭</div><div class="card-body"><div class="card-label">Suppliers</div><div class="card-value"><?= number_format($total_suppliers) ?></div></div></div>
 </div>
+<style>.quick-actions-wrap .btn { flex: 1 1 auto; justify-content: center; min-width: 140px; text-align: center; }</style>
 <fieldset class="fieldset"><legend>⚡ Quick Actions</legend>
-<div style="display:flex;gap:8px;flex-wrap:wrap">
+<div class="quick-actions-wrap" style="display:flex;gap:8px;flex-wrap:wrap">
 <?php if (has_permission($conn, 'sale', 'add')): ?><a href="index.php?page=sale" class="btn btn-success animate__animated animate__pulse">🛒 New Sale</a><?php endif; ?>
 <?php if (has_permission($conn, 'purchase', 'add')): ?><a href="index.php?page=purchase" class="btn btn-primary animate__animated animate__pulse">📦 New Purchase</a><?php endif; ?>
 <?php if (has_permission($conn, 'customers', 'add')): ?><a href="index.php?page=customers" class="btn btn-default">👥 Add Customer</a><?php endif; ?>
@@ -4924,7 +4925,53 @@ $(document).ready(function() {
             $ea = $conn->query("SELECT * FROM accessories WHERE id=$edit_acc_id");
             $edit_acc = $ea ? $ea->fetch_assoc() : null;
         }
+
+        // Accessories Reporting Stats
+        $acc_stats = $conn->query('SELECT COUNT(id) as total_items, SUM(current_stock) as total_stock, SUM(current_stock * purchase_price) as total_pp_val, SUM(current_stock * selling_price) as total_sp_val FROM accessories')->fetch_assoc();
+        $sold_stats = $conn->query('SELECT SUM(sa.quantity) as total_sold_qty, SUM(sa.final_price) as total_revenue, SUM(sa.discount_amount) as total_discount, SUM(sa.final_price - (sa.quantity * a.purchase_price)) as total_profit FROM sale_accessories sa JOIN accessories a ON sa.accessory_id = a.id')->fetch_assoc();
+
+        $top_sold = $conn->query('SELECT a.name, SUM(sa.quantity) as qty FROM sale_accessories sa JOIN accessories a ON sa.accessory_id = a.id GROUP BY sa.accessory_id ORDER BY qty DESC LIMIT 5');
+        $ts_labels = [];
+        $ts_data = [];
+        if ($top_sold) {
+            while ($r = $top_sold->fetch_assoc()) {
+                $ts_labels[] = $r['name'];
+                $ts_data[] = $r['qty'];
+            }
+        }
 ?>
+<div class="card-grid animate__animated animate__fadeInDown">
+    <div class="card accent"><div class="card-icon">🛠️</div><div class="card-body"><div class="card-label">Unique Items</div><div class="card-value"><?= number_format((float) ($acc_stats['total_items'] ?? 0)) ?></div></div></div>
+    <div class="card success"><div class="card-icon">📦</div><div class="card-body"><div class="card-label">Total Stock Qty</div><div class="card-value"><?= number_format((float) ($acc_stats['total_stock'] ?? 0)) ?></div></div></div>
+    <div class="card warning"><div class="card-icon">💰</div><div class="card-body"><div class="card-label">Stock Value (PP)</div><div class="card-value" style="font-size:1rem"><?= $currency ?> <?= number_format((float) ($acc_stats['total_pp_val'] ?? 0)) ?></div></div></div>
+    <div class="card danger"><div class="card-icon">🛒</div><div class="card-body"><div class="card-label">Qty Sold</div><div class="card-value"><?= number_format((float) ($sold_stats['total_sold_qty'] ?? 0)) ?></div></div></div>
+    <div class="card success"><div class="card-icon">💵</div><div class="card-body"><div class="card-label">Total Revenue</div><div class="card-value" style="font-size:1rem"><?= $currency ?> <?= number_format((float) ($sold_stats['total_revenue'] ?? 0)) ?></div></div></div>
+    <div class="card accent"><div class="card-icon">📈</div><div class="card-body"><div class="card-label">Total Profit</div><div class="card-value" style="font-size:1rem;color:var(--success)"><?= $currency ?> <?= number_format((float) ($sold_stats['total_profit'] ?? 0)) ?></div></div></div>
+    <div class="card warning"><div class="card-icon">💸</div><div class="card-body"><div class="card-label">Discounts Given</div><div class="card-value" style="font-size:1rem"><?= $currency ?> <?= number_format((float) ($sold_stats['total_discount'] ?? 0)) ?></div></div></div>
+    <div class="card"><div class="card-icon">🎯</div><div class="card-body"><div class="card-label">Stock Value (SP)</div><div class="card-value" style="font-size:1rem"><?= $currency ?> <?= number_format((float) ($acc_stats['total_sp_val'] ?? 0)) ?></div></div></div>
+</div>
+<div class="split-grid" style="margin-bottom:16px;">
+    <fieldset class="fieldset animate__animated animate__fadeInUp"><legend>🏆 Top 5 Sold Accessories</legend><div style="position:relative;height:250px;width:100%"><canvas id="accTopSoldChart"></canvas></div></fieldset>
+    <fieldset class="fieldset animate__animated animate__fadeInUp"><legend>📊 Stock & Sales Overview</legend>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">
+            <div style="background:var(--bg2);border:1px solid var(--border);padding:10px;border-radius:2px;"><strong>Revenue to Cost Ratio:</strong> <?= ($sold_stats['total_revenue'] ?? 0) > 0 && ($sold_stats['total_revenue'] - $sold_stats['total_profit']) > 0 ? round(($sold_stats['total_revenue'] / ($sold_stats['total_revenue'] - $sold_stats['total_profit'])), 2) . 'x' : 'N/A' ?></div>
+            <div style="background:var(--bg2);border:1px solid var(--border);padding:10px;border-radius:2px;"><strong>Avg Profit per Item:</strong> <?= ($sold_stats['total_sold_qty'] ?? 0) > 0 ? $currency . ' ' . number_format($sold_stats['total_profit'] / $sold_stats['total_sold_qty'], 2) : 'N/A' ?></div>
+            <div style="background:var(--bg2);border:1px solid var(--border);padding:10px;border-radius:2px;"><strong>Estimated Future Profit (Current Stock):</strong> <?= $currency ?> <?= number_format((float) ($acc_stats['total_sp_val'] ?? 0) - (float) ($acc_stats['total_pp_val'] ?? 0)) ?></div>
+        </div>
+    </fieldset>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    if(document.getElementById('accTopSoldChart')) {
+        new Chart(document.getElementById('accTopSoldChart'), {
+            type: 'bar',
+            data: { labels: <?= json_encode($ts_labels) ?>, datasets: [{ label: 'Quantity Sold', data: <?= json_encode($ts_data) ?>, backgroundColor: '#4a9eff', borderRadius: 2 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: 'var(--border)' } }, x: { grid: { color: 'var(--border)' } } } }
+        });
+    }
+});
+</script>
+
 <div style="display:flex;gap:8px;margin-bottom:10px" class="no-print animate__animated animate__fadeInLeft">
 <?php if (has_permission($conn, 'accessories', 'add')): ?>
 <button class="btn btn-success" onclick="document.getElementById('addAccFormArea').style.display='block';document.getElementById('addAccFormArea').scrollIntoView()">+ Add Accessory</button>
