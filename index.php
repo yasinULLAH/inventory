@@ -228,7 +228,7 @@ function install_database()
             `customer_id` INT NULL,
             `tax_amount` DECIMAL(15,2) DEFAULT 0,
             `margin` DECIMAL(15,2) DEFAULT 0,
-            `status` ENUM('in_stock','sold','returned','reserved') DEFAULT 'in_stock',
+            `status` ENUM('in_stock','sold','returned','reserved','damaged_lost') DEFAULT 'in_stock',
             `return_date` DATE NULL,
             `return_amount` DECIMAL(15,2) NULL,
             `return_notes` TEXT NULL,
@@ -1569,7 +1569,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $stmt_check_sold->bind_param('i', $bid);
             $stmt_check_sold->execute();
             $bike_status = $stmt_check_sold->get_result()->fetch_assoc()['status'] ?? '';
-            if ($bike_status === 'sold' || $bike_status === 'returned') {
+            if ($bike_status === 'sold' || $bike_status === 'returned' || $bike_status === 'damaged_lost') {
                 $err = 'Cannot delete a sold or returned bike. Please adjust its status if necessary.';
             } else {
                 $stmt = $conn->prepare('DELETE FROM bikes WHERE id=?');
@@ -1617,7 +1617,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                         $stmt_check_sold->bind_param('i', $id);
                         $stmt_check_sold->execute();
                         $bike_status = $stmt_check_sold->get_result()->fetch_assoc()['status'] ?? '';
-                        if ($bike_status === 'sold' || $bike_status === 'returned') {
+                        if ($bike_status === 'sold' || $bike_status === 'returned' || $bike_status === 'damaged_lost') {
                             $err .= "Cannot delete bike ID $id (status: $bike_status). ";
                             $errors_found = true;
                         } else {
@@ -2059,6 +2059,10 @@ body.sidebar-collapsed .sidebar-footer form button::after { content: '🚪'; fon
 [data-theme="light"] .badge-danger{background:#f4d4d4;color:#4d1a1a}
 [data-theme="light"] .badge-warning{background:#f4e8d4;color:#4d2a00}
 [data-theme="light"] .badge-info{background:#d4e8f4;color:#1a2d4d}
+.badge-dark{background:#444;color:#ddd}
+[data-theme="light"] .badge-dark{background:#ddd;color:#333}
+.data-table tbody tr.row-damaged_lost{background:#3d2020 !important}
+[data-theme="light"] .data-table tbody tr.row-damaged_lost{background:#f4d4d4 !important}
 .filter-bar{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;padding:14px;background:var(--bg2);border:1px solid var(--border);border-radius:2px}
 .filter-bar .form-group{min-width:140px;flex:1 1 auto}
 .filter-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -2612,6 +2616,7 @@ else:
         $total_stock = $conn->query("SELECT COUNT(*) as c FROM bikes WHERE status='in_stock'")->fetch_assoc()['c'];
         $total_sold = $conn->query("SELECT COUNT(*) as c FROM bikes WHERE status='sold'")->fetch_assoc()['c'];
         $total_returned = $conn->query("SELECT COUNT(*) as c FROM bikes WHERE status='returned'")->fetch_assoc()['c'];
+        $total_damaged = $conn->query("SELECT COUNT(*) as c FROM bikes WHERE status='damaged_lost'")->fetch_assoc()['c'];
         $total_purchase_val = $conn->query('SELECT SUM(purchase_price) as s FROM bikes')->fetch_assoc()['s'] ?? 0;
         $total_sales_val = $conn->query("SELECT SUM(selling_price) as s FROM bikes WHERE status='sold'")->fetch_assoc()['s'] ?? 0;
         $total_tax = $conn->query("SELECT SUM(tax_amount) as s FROM bikes WHERE status='sold'")->fetch_assoc()['s'] ?? 0;
@@ -2646,6 +2651,7 @@ else:
 <div class="card accent"><div class="card-icon">📦</div><div class="card-body"><div class="card-label">In Stock</div><div class="card-value"><?= number_format($total_stock) ?></div><div class="card-sub">bikes</div></div></div>
 <div class="card success"><div class="card-icon">✅</div><div class="card-body"><div class="card-label">Total Sold</div><div class="card-value"><?= number_format($total_sold) ?></div><div class="card-sub">bikes</div></div></div>
 <div class="card danger"><div class="card-icon">↩</div><div class="card-body"><div class="card-label">Returned</div><div class="card-value"><?= number_format($total_returned) ?></div><div class="card-sub">bikes</div></div></div>
+<div class="card" style="border-color:#444"><div class="card-icon">🚨</div><div class="card-body"><div class="card-label">Damaged/Lost</div><div class="card-value"><?= number_format($total_damaged) ?></div><div class="card-sub">bikes</div></div></div>
 <div class="card warning"><div class="card-icon">💰</div><div class="card-body"><div class="card-label">Purchase Value</div><div class="card-value" style="font-size:1rem"><?= $currency ?> <?= number_format($total_purchase_val) ?></div></div></div>
 <div class="card success"><div class="card-icon">💵</div><div class="card-body"><div class="card-label">Sales Value</div><div class="card-value" style="font-size:1rem"><?= $currency ?> <?= number_format($total_sales_val) ?></div></div></div>
 <div class="card"><div class="card-icon">🧾</div><div class="card-body"><div class="card-label">Total Tax Paid</div><div class="card-value" style="font-size:1rem"><?= $currency ?> <?= number_format($total_tax, 2) ?></div></div></div>
@@ -2728,6 +2734,7 @@ document.addEventListener('DOMContentLoaded', function() {
     SUM(CASE WHEN 1=1 THEN 1 ELSE 0 END) as total_inv,
     SUM(CASE WHEN b.status='sold' THEN 1 ELSE 0 END) as sold_cnt,
     SUM(CASE WHEN b.status='returned' THEN 1 ELSE 0 END) as ret_cnt,
+    SUM(CASE WHEN b.status='damaged_lost' THEN 1 ELSE 0 END) as dmg_cnt,
     SUM(CASE WHEN b.status='in_stock' THEN 1 ELSE 0 END) as avail_cnt
     FROM models m LEFT JOIN bikes b ON m.id=b.model_id
     GROUP BY m.id, m.model_name, m.category ORDER BY m.model_name");
@@ -3091,7 +3098,7 @@ $(document).ready(function() {
         $date_from = $_GET['date_from'] ?? '';
         $date_to = $_GET['date_to'] ?? '';
         $where_parts = ['1=1'];
-        if ($status_f && in_array($status_f, ['in_stock', 'sold', 'returned', 'reserved']))
+        if ($status_f && in_array($status_f, ['in_stock', 'sold', 'returned', 'reserved', 'damaged_lost']))
             $where_parts[] = "b.status='$status_f'";
         if ($model_f)
             $where_parts[] = "b.model_id=$model_f";
@@ -3165,6 +3172,9 @@ $(document).ready(function() {
 <?php if ($view_bike['status'] === 'sold' || $view_bike['selling_date']): ?>
 <li><div class="timeline-dot" style="background:#4ec94e"></div><div class="timeline-content"><div class="timeline-date"><?= fmt_date($view_bike['selling_date']) ?></div><div class="timeline-text">🛒 <strong>Sold</strong> to <?= sanitize($view_bike['cust_name'] ?? 'Cash Customer') ?> — <?= fmt_money($view_bike['selling_price']) ?> | Margin: <?= fmt_money($view_bike['margin']) ?></div></div></li>
 <?php endif; ?>
+<?php if ($view_bike['status'] === 'damaged_lost'): ?>
+<li><div class="timeline-dot" style="background:#444"></div><div class="timeline-content"><div class="timeline-text">🚨 <strong>Marked as Damaged / Lost</strong></div></div></li>
+<?php endif; ?>
 <?php if ($view_bike['status'] === 'returned' || $view_bike['return_date']): ?>
 <li><div class="timeline-dot" style="background:#e74c3c"></div><div class="timeline-content"><div class="timeline-date"><?= fmt_date($view_bike['return_date']) ?></div><div class="timeline-text">↩ <strong>Returned</strong> — Amount: <?= fmt_money($view_bike['return_amount']) ?> | Notes: <?= sanitize($view_bike['return_notes'] ?? '-') ?></div></div></li>
 <?php endif; ?>
@@ -3183,6 +3193,7 @@ $(document).ready(function() {
 <option value="sold" <?= $status_f === 'sold' ? 'selected' : '' ?>>Sold</option>
 <option value="returned" <?= $status_f === 'returned' ? 'selected' : '' ?>>Returned</option>
 <option value="reserved" <?= $status_f === 'reserved' ? 'selected' : '' ?>>Reserved</option>
+<option value="damaged_lost" <?= $status_f === 'damaged_lost' ? 'selected' : '' ?>>Damaged / Lost</option>
 </select>
 </div>
 <div class="form-group"><label>Model</label>
@@ -3238,7 +3249,7 @@ $(document).ready(function() {
             $total_sp = 0;
             $total_mg = 0;
             while ($bike = $bikes_result->fetch_assoc()):
-                $st_badge = $bike['status'] === 'sold' ? 'badge-success' : ($bike['status'] === 'returned' ? 'badge-danger' : ($bike['status'] === 'reserved' ? 'badge-warning' : 'badge-info'));
+                $st_badge = $bike['status'] === 'sold' ? 'badge-success' : ($bike['status'] === 'returned' ? 'badge-danger' : ($bike['status'] === 'damaged_lost' ? 'badge-dark' : ($bike['status'] === 'reserved' ? 'badge-warning' : 'badge-info')));
                 $total_pp += $bike['purchase_price'];
                 $total_sp += $bike['selling_price'] ?? 0;
                 $total_mg += $bike['margin'] ?? 0;
@@ -3310,6 +3321,7 @@ $(document).ready(function() {
 <option value="sold" <?= $edit_bike['status'] === 'sold' ? 'selected' : '' ?>>Sold</option>
 <option value="returned" <?= $edit_bike['status'] === 'returned' ? 'selected' : '' ?>>Returned</option>
 <option value="reserved" <?= $edit_bike['status'] === 'reserved' ? 'selected' : '' ?>>Reserved</option>
+<option value="damaged_lost" <?= $edit_bike['status'] === 'damaged_lost' ? 'selected' : '' ?>>Damaged / Lost</option>
 </select>
 </div>
 <div class="form-group" style="margin-bottom:8px"><label>Safeguard Notes</label><input type="text" name="safeguard_notes" value="<?= sanitize($edit_bike['safeguard_notes'] ?? '') ?>"></div>
@@ -4518,6 +4530,7 @@ $(document).ready(function() {
     SUM(CASE WHEN b.status='sold' THEN 1 ELSE 0 END) as sold_cnt,
     SUM(CASE WHEN b.status='in_stock' THEN 1 ELSE 0 END) as avail_cnt,
     SUM(CASE WHEN b.status='returned' THEN 1 ELSE 0 END) as ret_cnt,
+    SUM(CASE WHEN b.status='damaged_lost' THEN 1 ELSE 0 END) as dmg_cnt,
     SUM(b.purchase_price) as total_pp,
     SUM(CASE WHEN b.status='sold' THEN b.selling_price ELSE 0 END) as total_sp,
     SUM(CASE WHEN b.status='sold' THEN b.margin ELSE 0 END) as total_mg
@@ -4528,7 +4541,7 @@ $(document).ready(function() {
 <fieldset class="fieldset animate__animated animate__fadeInUp"><legend>📊 Model-wise Sales Report</legend>
 <div class="data-table-wrap">
 <table class="data-table">
-<thead><tr><th>Model</th><th>Short Code</th><th>Category</th><th>Inventory</th><th>Sold</th><th>Available</th><th>Returned</th><th>Total Purchase</th><th>Total Sales</th><th>Total Margin</th></tr></thead>
+<thead><tr><th>Model</th><th>Short Code</th><th>Category</th><th>Inventory</th><th>Sold</th><th>Available</th><th>Returned</th><th>Damaged/Lost</th><th>Total Purchase</th><th>Total Sales</th><th>Total Margin</th></tr></thead>
 <tbody>
 <?php
             while ($mw = $mw_result->fetch_assoc()):
@@ -4536,6 +4549,7 @@ $(document).ready(function() {
                 $mw_t[1] += $mw['sold_cnt'];
                 $mw_t[2] += $mw['avail_cnt'];
                 $mw_t[3] += $mw['ret_cnt'];
+                $mw_t[7] += $mw['dmg_cnt'];
                 $mw_t[4] += $mw['total_pp'];
                 $mw_t[5] += $mw['total_sp'];
                 $mw_t[6] += $mw['total_mg'];
@@ -4548,13 +4562,14 @@ $(document).ready(function() {
 <td><span class="badge badge-success"><?= $mw['sold_cnt'] ?></span></td>
 <td><span class="badge badge-info"><?= $mw['avail_cnt'] ?></span></td>
 <td><span class="badge badge-danger"><?= $mw['ret_cnt'] ?></span></td>
+<td><span class="badge badge-dark"><?= $mw['dmg_cnt'] ?></span></td>
 <td><?= fmt_money($mw['total_pp']) ?></td>
 <td><?= fmt_money($mw['total_sp']) ?></td>
 <td style="color:<?= $mw['total_mg'] >= 0 ? 'var(--success)' : 'var(--danger)' ?>"><?= fmt_money($mw['total_mg']) ?></td>
 </tr>
 <?php endwhile; ?>
 </tbody>
-<tfoot><tr><td><strong>TOTAL</strong></td><td colspan="3"><strong><?= $mw_t[0] ?></strong></td><td><strong><?= $mw_t[1] ?></strong></td><td><strong><?= $mw_t[2] ?></strong></td><td><strong><?= $mw_t[3] ?></strong></td><td><strong><?= fmt_money($mw_t[4]) ?></strong></td><td><strong><?= fmt_money($mw_t[5]) ?></strong></td><td style="color:var(--success)"><strong><?= fmt_money($mw_t[6]) ?></strong></td></tr></tfoot>
+<tfoot><tr><td><strong>TOTAL</strong></td><td colspan="3"><strong><?= $mw_t[0] ?></strong></td><td><strong><?= $mw_t[1] ?></strong></td><td><strong><?= $mw_t[2] ?></strong></td><td><strong><?= $mw_t[3] ?></strong></td><td><strong><?= $mw_t[7] ?? 0 ?></strong></td><td><strong><?= fmt_money($mw_t[4]) ?></strong></td><td><strong><?= fmt_money($mw_t[5]) ?></strong></td><td style="color:var(--success)"><strong><?= fmt_money($mw_t[6]) ?></strong></td></tr></tfoot>
 </table>
 </div>
 </fieldset>
