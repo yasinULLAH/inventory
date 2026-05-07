@@ -1,4 +1,7 @@
 <?php
+ini_set('session.cookie_httponly', 1);
+ini_set('session.use_only_cookies', 1);
+ini_set('session.cookie_samesite', 'Strict');
 session_start();
 $db_host = 'localhost';
 $db_user = 'root';
@@ -24,28 +27,30 @@ function get_client_ip()
 }
 
 $ip_address = get_client_ip();
-$attempt_key = 'login_attempts_' . $ip_address;
-$ban_key = 'banned_ip_' . $ip_address;
-$_SESSION[$attempt_key] = $_SESSION[$attempt_key] ?? ['count' => 0, 'time' => time()];
-if (isset($_SESSION[$ban_key]) && $_SESSION[$ban_key] > time()) {
-    die('<div style="padding:40px;text-align:center;font-family:sans-serif"><h2>🚫 Access Denied</h2><p>Too many failed login attempts. Your IP has been temporarily banned. Please try again after 3 hours.</p></div>');
+$ban_file = sys_get_temp_dir() . '/bni_bans.json';
+$bans = file_exists($ban_file) ? json_decode(file_get_contents($ban_file), true) : [];
+if (isset($bans[$ip_address]) && $bans[$ip_address]['ban_until'] > time()) {
+    die('<div style="padding:40px;text-align:center;font-family:sans-serif"><h2>🚫 Access Denied</h2><p>Too many failed login attempts. Your IP has been temporarily banned.</p></div>');
 }
 
 function record_failed_attempt()
 {
-    global $attempt_key, $ban_key;
-    $_SESSION[$attempt_key]['count']++;
-    $_SESSION[$attempt_key]['time'] = time();
-    if ($_SESSION[$attempt_key]['count'] >= 7) {
-        $_SESSION[$ban_key] = time() + (3 * 3600);
-        $_SESSION[$attempt_key] = ['count' => 0, 'time' => time()];
+    global $ip_address, $ban_file, $bans;
+    $bans[$ip_address]['count'] = ($bans[$ip_address]['count'] ?? 0) + 1;
+    if ($bans[$ip_address]['count'] >= 7) {
+        $bans[$ip_address]['ban_until'] = time() + (3 * 3600);
+        $bans[$ip_address]['count'] = 0;
     }
+    file_put_contents($ban_file, json_encode($bans));
 }
 
 function reset_attempts()
 {
-    global $attempt_key;
-    $_SESSION[$attempt_key] = ['count' => 0, 'time' => time()];
+    global $ip_address, $ban_file, $bans;
+    if (isset($bans[$ip_address])) {
+        unset($bans[$ip_address]);
+        file_put_contents($ban_file, json_encode($bans));
+    }
 }
 
 function db_connect($create_db = false)
@@ -150,6 +155,7 @@ if (isset($_GET['captcha'])) {
 
 function install_database()
 {
+    return true;
     global $db_name;
     $conn = db_connect(true);
     if (!$conn)
@@ -254,7 +260,7 @@ function install_database()
             `cheque_number` VARCHAR(50) NULL,
             `bank_name` VARCHAR(100) NULL,
             `cheque_date` DATE NULL,
-            `transaction_type` ENUM('purchase','sale','installment','expense_payment','supplier_payment','customer_refund') NOT NULL,
+            `transaction_type` ENUM('purchase','sale','installment','expense_payment','supplier_payment','customer_refund','customer_advance','supplier_refund') NOT NULL,
             `reference_id` INT NULL,
             `party_name` VARCHAR(255),
             `notes` TEXT,
@@ -488,6 +494,7 @@ function sanitize($val)
 
 function handle_image_upload($file, $dest_dir = 'uploads/')
 {
+    $dest_dir = basename($dest_dir) . '/';
     if (!isset($file['error']) || is_array($file['error']) || $file['error'] !== UPLOAD_ERR_OK)
         return null;
     if (!is_dir($dest_dir))
@@ -535,19 +542,7 @@ function handle_image_upload($file, $dest_dir = 'uploads/')
     return $dest;
 }
 
-$db_exists = false;
-$test_conn = db_connect(true);
-if ($test_conn) {
-    $r = $test_conn->query("SHOW DATABASES LIKE '$db_name'");
-    if ($r && $r->num_rows > 0) {
-        $test_conn->select_db($db_name);
-        $r2 = $test_conn->query("SHOW TABLES LIKE 'settings'");
-        if ($r2 && $r2->num_rows > 0) {
-            $db_exists = true;
-        }
-    }
-    $test_conn->close();
-}
+$db_exists = true;
 if (isset($_POST['do_install'])) {
     if (install_database()) {
         $db_exists = true;
@@ -867,7 +862,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $tax = ($pp * $tax_rate);
                 $bike_stmt->bind_param('issssisddsss', $po_id, $order_date, $inventory_date, $chassis, $motor, $model_id, $color, $pp, $tax, $safe_notes, $bnotes, $bike_img);
                 if (!$bike_stmt->execute()) {
-                    $errors_list[] = "Chassis $chassis: " . $bike_stmt->error;
+                    $errors_list[] = "Chassis $chassis: Could not be saved (duplicate or database constraint error).";
                 } else {
                     $saved_count++;
                 }
@@ -1727,7 +1722,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $conn->query('SET FOREIGN_KEY_CHECKS=1;');
                 $msg = 'Database restored successfully.';
             } else {
-                $err = 'Restore failed: ' . $conn->error;
+                $err = 'Restore failed. Invalid SQL structure or constraints violated.';
                 $conn->query('SET FOREIGN_KEY_CHECKS=1;');
             }
         } else {
@@ -1743,15 +1738,62 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         $pay_method = sanitize($_POST['payment_method']);
         $notes = sanitize($_POST['notes']);
         if ($amount > 0 && $sel_cust > 0) {
+            $conn->begin_transaction();
+            try {
+                $party_name = $conn->query("SELECT name FROM customers WHERE id=$sel_cust")->fetch_assoc()['name'] ?? 'Unknown';
+                $st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, transaction_type, party_name, notes) VALUES (?, ?, ?, 'sale', ?, ?)");
+                $st->bind_param('ssdss', $pay_date, $pay_method, $amount, $party_name, $notes);
+                $st->execute();
+                $payment_id = $conn->insert_id;
+
+                $led = $conn->prepare("INSERT INTO ledger (entry_date, entry_type, amount, party_type, party_id, description, reference_type, reference_id) VALUES (?, 'credit', ?, 'customer', ?, ?, 'payment', ?)");
+                $desc = 'Payment Received: ' . $notes;
+                $led->bind_param('sdisi', $pay_date, $amount, $sel_cust, $desc, $payment_id);
+                $led->execute();
+
+                $rem_amount = $amount;
+                $inst_q = $conn->query("SELECT id, installment_amount, amount_paid, penalty_fee FROM installments WHERE customer_id=$sel_cust AND status IN ('pending', 'overdue') ORDER BY due_date ASC");
+                while ($inst = $inst_q->fetch_assoc()) {
+                    if ($rem_amount <= 0) break;
+                    $due = ($inst['installment_amount'] + $inst['penalty_fee']) - $inst['amount_paid'];
+                    if ($due > 0) {
+                        $pay_to_inst = min($due, $rem_amount);
+                        $new_paid = $inst['amount_paid'] + $pay_to_inst;
+                        $new_status = ($new_paid >= ($inst['installment_amount'] + $inst['penalty_fee'])) ? 'paid' : 'pending';
+                        $conn->query("UPDATE installments SET amount_paid=$new_paid, status='$new_status', payment_id=$payment_id WHERE id=" . $inst['id']);
+                        $rem_amount -= $pay_to_inst;
+                    }
+                }
+                $conn->commit();
+                $msg = 'Payment recorded and distributed to installments successfully.';
+            } catch (Exception $e) {
+                $conn->rollback();
+                $err = 'Error: ' . $e->getMessage();
+            }
+        } else {
+            $err = 'Invalid payment amount or customer.';
+        }
+        header("Location: index.php?page=customer_ledger&cust_id=$sel_cust&msg=" . urlencode($msg) . '&err=' . urlencode($err));
+        exit;
+    }
+    if ($page === 'customer_ledger' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['make_payment_cust'])) {
+        $sel_cust = (int) ($_GET['cust_id'] ?? 0);
+        $amount = (float) $_POST['amount'];
+        $pay_date = sanitize($_POST['payment_date']);
+        $pay_method = sanitize($_POST['payment_method']);
+        $notes = sanitize($_POST['notes']);
+        if ($amount > 0 && $sel_cust > 0) {
             $party_name = $conn->query("SELECT name FROM customers WHERE id=$sel_cust")->fetch_assoc()['name'] ?? 'Unknown';
-            $st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, transaction_type, party_name, notes) VALUES (?, ?, ?, 'sale', ?, ?)");
+            $st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, transaction_type, party_name, notes) VALUES (?, ?, ?, 'customer_advance', ?, ?)");
             $st->bind_param('ssdss', $pay_date, $pay_method, $amount, $party_name, $notes);
             $st->execute();
-            $led = $conn->prepare("INSERT INTO ledger (entry_date, entry_type, amount, party_type, party_id, description, reference_type) VALUES (?, 'credit', ?, 'customer', ?, ?, 'payment')");
-            $desc = 'Payment Received: ' . $notes;
-            $led->bind_param('sdis', $pay_date, $amount, $sel_cust, $desc);
+            $payment_id = $conn->insert_id;
+            
+            $led = $conn->prepare("INSERT INTO ledger (entry_date, entry_type, amount, party_type, party_id, description, reference_type, reference_id) VALUES (?, 'debit', ?, 'customer', ?, ?, 'advance_given', ?)");
+            $desc = 'Advance / Loan Given: ' . $notes;
+            $led->bind_param('sdisi', $pay_date, $amount, $sel_cust, $desc, $payment_id);
             $led->execute();
-            $msg = 'Payment recorded successfully.';
+            $msg = 'Advance payment recorded successfully.';
         } else {
             $err = 'Invalid payment amount or customer.';
         }
@@ -1770,6 +1812,24 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $st->bind_param('ssdss', $pay_date, $pay_method, $amount, $party_name, $notes);
             $st->execute();
             $msg = 'Supplier payment recorded successfully.';
+        } else {
+            $err = 'Invalid payment amount or supplier.';
+        }
+        header("Location: index.php?page=supplier_ledger&sup_id=$sel_sup&msg=" . urlencode($msg) . '&err=' . urlencode($err));
+        exit;
+    }
+    if ($page === 'supplier_ledger' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['receive_sup_payment'])) {
+        $sel_sup = (int) ($_GET['sup_id'] ?? 0);
+        $amount = (float) $_POST['amount'];
+        $pay_date = sanitize($_POST['payment_date']);
+        $pay_method = sanitize($_POST['payment_method']);
+        $notes = sanitize($_POST['notes']);
+        if ($amount > 0 && $sel_sup > 0) {
+            $party_name = $conn->query("SELECT name FROM suppliers WHERE id=$sel_sup")->fetch_assoc()['name'] ?? 'Unknown';
+            $st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, transaction_type, reference_id, party_name, notes) VALUES (?, ?, ?, 'supplier_refund', 0, ?, ?)");
+            $st->bind_param('ssdss', $pay_date, $pay_method, $amount, $party_name, $notes);
+            $st->execute();
+            $msg = 'Supplier refund recorded successfully.';
         } else {
             $err = 'Invalid payment amount or supplier.';
         }
@@ -4062,6 +4122,7 @@ $(document).ready(function() {
 </div>
 <div class="print-btn-wrap no-print animate__animated animate__fadeInRight" style="display:flex;gap:8px;">
 <button onclick="document.getElementById('receivePaymentModal').classList.add('open')" class="btn btn-success btn-sm">+ Receive Payment</button>
+<button onclick="document.getElementById('makePaymentCustModal').classList.add('open')" class="btn btn-warning btn-sm">💸 Make Payment (Advance)</button>
 <button onclick="window.print()" class="btn btn-default btn-sm">🖨 Print Ledger</button>
 </div>
 <div class="modal-overlay" id="receivePaymentModal">
@@ -4074,6 +4135,19 @@ $(document).ready(function() {
 <div class="form-group" style="margin-bottom:8px"><label>Method</label><select name="payment_method"><option value="cash">Cash</option><option value="bank_transfer">Bank Transfer</option><option value="cheque">Cheque</option><option value="online">Online</option></select></div>
 <div class="form-group" style="margin-bottom:12px"><label>Notes</label><textarea name="notes" rows="2" placeholder="Cheque number, bank details, etc..."></textarea></div>
 <button type="submit" class="btn btn-primary">Save Payment</button>
+</form>
+</div>
+</div>
+<div class="modal-overlay" id="makePaymentCustModal">
+<div class="modal">
+<div class="modal-header"><h3>Make Payment (Advance/Loan)</h3><button class="modal-close" onclick="document.getElementById('makePaymentCustModal').classList.remove('open')">✕</button></div>
+<form method="POST">
+<input type="hidden" name="make_payment_cust" value="1">
+<div class="form-group" style="margin-bottom:8px"><label>Date <span class="req">*</span></label><input type="date" name="payment_date" value="<?= date('Y-m-d') ?>" required></div>
+<div class="form-group" style="margin-bottom:8px"><label>Amount <span class="req">*</span></label><input type="number" name="amount" step="0.01" min="0.01" required></div>
+<div class="form-group" style="margin-bottom:8px"><label>Method</label><select name="payment_method"><option value="cash">Cash</option><option value="bank_transfer">Bank Transfer</option><option value="cheque">Cheque</option><option value="online">Online</option></select></div>
+<div class="form-group" style="margin-bottom:12px"><label>Notes</label><textarea name="notes" rows="2" placeholder="Reason for advance, cheque details, etc..."></textarea></div>
+<button type="submit" class="btn btn-primary">Save Advance Payment</button>
 </form>
 </div>
 </div>
@@ -4176,14 +4250,19 @@ $(document).ready(function() {
         if ($sel_sup > 0):
             $sup_info = $conn->query("SELECT * FROM suppliers WHERE id=$sel_sup")->fetch_assoc();
             $sup_orders = $conn->query("SELECT po.*, IFNULL(SUM(b.purchase_price), po.total_amount) as bikes_total, COUNT(b.id) as bike_count FROM purchase_orders po LEFT JOIN bikes b ON po.id=b.purchase_order_id WHERE po.supplier_id=$sel_sup GROUP BY po.id ORDER BY po.order_date ASC");
-            $supplier_payments = $conn->query("SELECT * FROM payments WHERE transaction_type='supplier_payment' AND IFNULL(status, '') != 'bounced' AND (party_name = '" . mysqli_real_escape_string($conn, $sup_info['name']) . "' OR reference_id IN (SELECT id FROM purchase_orders WHERE supplier_id=$sel_sup)) ORDER BY payment_date ASC");
+            $supplier_payments = $conn->query("SELECT * FROM payments WHERE transaction_type IN ('supplier_payment', 'supplier_refund') AND IFNULL(status, '') != 'bounced' AND (party_name = '" . mysqli_real_escape_string($conn, $sup_info['name']) . "' OR reference_id IN (SELECT id FROM purchase_orders WHERE supplier_id=$sel_sup)) ORDER BY payment_date ASC");
             $running_bal = 0;
             $purchase_total_sum = 0;
             $payment_total_sum = 0;
             while ($order = $sup_orders->fetch_assoc())
                 $purchase_total_sum += $order['bikes_total'];
-            while ($payment = $supplier_payments->fetch_assoc())
-                $payment_total_sum += $payment['amount'];
+            while ($payment = $supplier_payments->fetch_assoc()) {
+                if ($payment['transaction_type'] === 'supplier_refund') {
+                    $purchase_total_sum += $payment['amount'];
+                } else {
+                    $payment_total_sum += $payment['amount'];
+                }
+            }
             $bal_summary = $purchase_total_sum - $payment_total_sum;
             ?>
 <div class="split-grid-3 animate__animated animate__fadeInDown" style="margin-bottom:14px">
@@ -4193,6 +4272,7 @@ $(document).ready(function() {
 </div>
 <div class="print-btn-wrap no-print animate__animated animate__fadeInRight" style="display:flex;gap:8px;">
 <button onclick="document.getElementById('makePaymentModal').classList.add('open')" class="btn btn-success btn-sm">+ Make Payment</button>
+<button onclick="document.getElementById('receiveRefundSupModal').classList.add('open')" class="btn btn-warning btn-sm">💸 Receive Refund</button>
 <button onclick="window.print()" class="btn btn-default btn-sm">🖨 Print Ledger</button>
 </div>
 <div class="modal-overlay" id="makePaymentModal">
@@ -4205,6 +4285,19 @@ $(document).ready(function() {
 <div class="form-group" style="margin-bottom:8px"><label>Method</label><select name="payment_method"><option value="cash">Cash</option><option value="bank_transfer">Bank Transfer</option><option value="cheque">Cheque</option><option value="online">Online</option></select></div>
 <div class="form-group" style="margin-bottom:12px"><label>Notes</label><textarea name="notes" rows="2" placeholder="Cheque number, bank details, etc..."></textarea></div>
 <button type="submit" class="btn btn-primary">Save Payment</button>
+</form>
+</div>
+</div>
+<div class="modal-overlay" id="receiveRefundSupModal">
+<div class="modal">
+<div class="modal-header"><h3>Receive Refund from Supplier</h3><button class="modal-close" onclick="document.getElementById('receiveRefundSupModal').classList.remove('open')">✕</button></div>
+<form method="POST">
+<input type="hidden" name="receive_sup_payment" value="1">
+<div class="form-group" style="margin-bottom:8px"><label>Date <span class="req">*</span></label><input type="date" name="payment_date" value="<?= date('Y-m-d') ?>" required></div>
+<div class="form-group" style="margin-bottom:8px"><label>Amount <span class="req">*</span></label><input type="number" name="amount" step="0.01" min="0.01" required></div>
+<div class="form-group" style="margin-bottom:8px"><label>Method</label><select name="payment_method"><option value="cash">Cash</option><option value="bank_transfer">Bank Transfer</option><option value="cheque">Cheque</option><option value="online">Online</option></select></div>
+<div class="form-group" style="margin-bottom:12px"><label>Notes</label><textarea name="notes" rows="2" placeholder="Reason for refund, cheque details, etc..."></textarea></div>
+<button type="submit" class="btn btn-primary">Save Refund</button>
 </form>
 </div>
 </div>
@@ -4235,9 +4328,9 @@ $(document).ready(function() {
             while ($payment = $supplier_payments->fetch_assoc()) {
                 $transactions[] = [
                     'date' => $payment['payment_date'],
-                    'type' => 'payment',
+                    'type' => $payment['transaction_type'] === 'supplier_refund' ? 'refund' : 'payment',
                     'amount' => $payment['amount'],
-                    'description' => "Payment #{$payment['id']} ({$payment['payment_type']} - " . ($payment['cheque_number'] ?? '-') . ')',
+                    'description' => ($payment['transaction_type'] === 'supplier_refund' ? "Refund Received #" : "Payment #") . "{$payment['id']} ({$payment['payment_type']} - " . ($payment['cheque_number'] ?? '-') . ')',
                     'id' => $payment['id']
                 ];
             }
@@ -4250,7 +4343,7 @@ $(document).ready(function() {
             foreach ($transactions as $trans):
                 $debit = 0;
                 $credit = 0;
-                if ($trans['type'] === 'purchase') {
+                if ($trans['type'] === 'purchase' || $trans['type'] === 'refund') {
                     $debit = $trans['amount'];
                     $running_bal -= $debit;
                     $purchase_total += $debit;
