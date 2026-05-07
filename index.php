@@ -3281,7 +3281,7 @@ $(document).ready(function() {
 </tbody>
 <tfoot>
 <tr>
-<td colspan="6"><strong>PAGE TOTAL</strong></td>
+<td colspan="7"><strong>PAGE TOTAL</strong></td>
 <td><strong><?= fmt_money($total_pp) ?></strong></td>
 <td></td>
 <td><strong><?= fmt_money($total_sp) ?></strong></td>
