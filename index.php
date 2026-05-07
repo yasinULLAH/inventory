@@ -21,6 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING & ~E_DEPRECATED & ~E_STRICT & ~E_USER_DEPRECATED);
+
 function get_client_ip()
 {
     return $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
@@ -495,20 +496,29 @@ function sanitize($val)
 function handle_image_upload($file, $dest_dir = 'uploads/')
 {
     $dest_dir = basename($dest_dir) . '/';
-    if (!isset($file['error']) || is_array($file['error']) || $file['error'] !== UPLOAD_ERR_OK) return null;
-    if (!is_dir($dest_dir)) mkdir($dest_dir, 0777, true);
+    if (!isset($file['error']) || is_array($file['error']) || $file['error'] !== UPLOAD_ERR_OK)
+        return null;
+    if (!is_dir($dest_dir))
+        mkdir($dest_dir, 0777, true);
     $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-    if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'])) return null;
+    if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif']))
+        return null;
     $filename = uniqid('img_') . '.jpg';
     $dest = $dest_dir . $filename;
     $info = getimagesize($file['tmp_name']);
-    if (!$info) return null;
+    if (!$info)
+        return null;
     $img = null;
-    if ($info[2] == IMAGETYPE_JPEG) $img = imagecreatefromjpeg($file['tmp_name']);
-    elseif ($info[2] == IMAGETYPE_PNG) $img = imagecreatefrompng($file['tmp_name']);
-    elseif ($info[2] == IMAGETYPE_WEBP) $img = imagecreatefromwebp($file['tmp_name']);
-    elseif ($info[2] == IMAGETYPE_GIF) $img = imagecreatefromgif($file['tmp_name']);
-    if (!$img) return null;
+    if ($info[2] == IMAGETYPE_JPEG)
+        $img = imagecreatefromjpeg($file['tmp_name']);
+    elseif ($info[2] == IMAGETYPE_PNG)
+        $img = imagecreatefrompng($file['tmp_name']);
+    elseif ($info[2] == IMAGETYPE_WEBP)
+        $img = imagecreatefromwebp($file['tmp_name']);
+    elseif ($info[2] == IMAGETYPE_GIF)
+        $img = imagecreatefromgif($file['tmp_name']);
+    if (!$img)
+        return null;
     $w = imagesx($img);
     $h = imagesy($img);
     $new_w = min($w, 800);
@@ -1121,6 +1131,10 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $customer_id = (int) ($_POST['customer_id'] ?? 0);
             $bike_id = (int) ($_POST['bike_id'] ?? 0);
             $quoted_price = (float) ($_POST['quoted_price'] ?? 0);
+            $is_installment = isset($_POST['is_installment']) ? 1 : 0;
+            $down_payment = (float) ($_POST['down_payment'] ?? 0);
+            $total_installments = (int) ($_POST['total_installments'] ?? 0);
+            $installment_amount = (float) ($_POST['installment_amount'] ?? 0);
             $valid_until = sanitize($_POST['valid_until'] ?? '');
             $notes = sanitize($_POST['notes'] ?? '');
             $accessories_data = $_POST['accessories'] ?? [];
@@ -1132,11 +1146,11 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $accessories_json = json_encode($accessories_data);
             if ($id) {
                 require_permission($conn, 'quotations', 'edit');
-                $stmt = $conn->prepare('UPDATE quotations SET quote_date=?, customer_id=?, bike_id=?, accessories_json=?, quoted_price=?, valid_until=?, notes=? WHERE id=?');
-                $stmt->bind_param('siisdsis', $quote_date, $customer_id, $bike_id, $accessories_json, $quoted_price, $valid_until, $notes, $id);
+                $stmt = $conn->prepare('UPDATE quotations SET quote_date=?, customer_id=?, bike_id=?, accessories_json=?, quoted_price=?, is_installment=?, down_payment=?, total_installments=?, installment_amount=?, valid_until=?, notes=? WHERE id=?');
+                $stmt->bind_param('siisdididsis', $quote_date, $customer_id, $bike_id, $accessories_json, $quoted_price, $is_installment, $down_payment, $total_installments, $installment_amount, $valid_until, $notes, $id);
             } else {
-                $stmt = $conn->prepare('INSERT INTO quotations (quote_date, customer_id, bike_id, accessories_json, quoted_price, valid_until, notes, created_by) VALUES (?,?,?,?,?,?,?,?)');
-                $stmt->bind_param('siisdsis', $quote_date, $customer_id, $bike_id, $accessories_json, $quoted_price, $valid_until, $notes, $created_by);
+                $stmt = $conn->prepare('INSERT INTO quotations (quote_date, customer_id, bike_id, accessories_json, quoted_price, is_installment, down_payment, total_installments, installment_amount, valid_until, notes, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
+                $stmt->bind_param('siisdididsis', $quote_date, $customer_id, $bike_id, $accessories_json, $quoted_price, $is_installment, $down_payment, $total_installments, $installment_amount, $valid_until, $notes, $created_by);
             }
             $stmt->execute();
             $msg = 'Quotation saved successfully.';
@@ -1206,18 +1220,50 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $cust_r = $conn->query("SELECT name FROM customers WHERE id=$cust_sql_id");
                 $cust_row = $cust_r ? $cust_r->fetch_assoc() : null;
                 $party_name = $cust_row ? $cust_row['name'] : 'Walk-in Customer';
-                $payment_notes = "Sale from Quotation #$quote_id";
-                $pay_st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, transaction_type, reference_id, party_name, notes) VALUES (?,'cash',?,'sale',?,?,?)");
-                $pay_st->bind_param('sdiss', $sale_date, $selling_price, $bike_id, $party_name, $payment_notes);
-                $pay_st->execute();
+
+                $total_acc_price = 0;
+                if (!empty($accessories_data)) {
+                    foreach ($accessories_data as $acc) {
+                        $total_acc_price += (float) ($acc['final_price'] ?? 0);
+                    }
+                }
+                $total_sale_amount = $selling_price + $total_acc_price;
+                $is_inst = $quote['is_installment'] == 1;
+                $dp_amount = $is_inst ? (float) $quote['down_payment'] : $total_sale_amount;
+
+                $payment_notes = ($is_inst ? 'Down Payment' : 'Full Payment') . " from Quotation #$quote_id";
+                if ($dp_amount > 0) {
+                    $pay_st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, transaction_type, reference_id, party_name, notes) VALUES (?,'cash',?,'sale',?,?,?)");
+                    $pay_st->bind_param('sdiss', $sale_date, $dp_amount, $bike_id, $party_name, $payment_notes);
+                    $pay_st->execute();
+                }
+
                 $led_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'debit',?,'customer',?,?,'sale',?,?)");
                 $desc = 'Sale of Chassis: ' . $bike['chassis_number'] . ' from Quote #' . $quote_id;
-                $led_st->bind_param('sdisid', $sale_date, $selling_price, $customer_id, $desc, $bike_id, $selling_price);
+                $led_st->bind_param('sdisid', $sale_date, $total_sale_amount, $customer_id, $desc, $bike_id, $total_sale_amount);
                 $led_st->execute();
-                $led_dp_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'credit',?,'customer',?,?,'payment',?,?)");
-                $desc_dp = 'Payment for Quote #' . $quote_id;
-                $led_dp_st->bind_param('sdisid', $sale_date, $selling_price, $customer_id, $desc_dp, $bike_id, $selling_price);
-                $led_dp_st->execute();
+
+                if ($dp_amount > 0) {
+                    $led_dp_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'credit',?,'customer',?,?,'down_payment',?,?)");
+                    $desc_dp = 'Payment for Quote #' . $quote_id;
+                    $led_dp_st->bind_param('sdisid', $sale_date, $dp_amount, $customer_id, $desc_dp, $bike_id, $dp_amount);
+                    $led_dp_st->execute();
+                }
+
+                if ($is_inst && $quote['total_installments'] > 0) {
+                    $installment_per_month = ($total_sale_amount - $dp_amount) / $quote['total_installments'];
+                    $current_date = new DateTime($sale_date);
+                    $current_date->modify('+1 month');
+                    $inst_stmt = $conn->prepare("INSERT INTO installments (bike_id, customer_id, due_date, installment_amount, status, notes) VALUES (?,?,?,?,'pending',?)");
+                    for ($i = 0; $i < $quote['total_installments']; $i++) {
+                        $due_date = $current_date->format('Y-m-d');
+                        $inst_notes = 'Installment ' . ($i + 1) . ' from Quote #' . $quote_id;
+                        $inst_stmt->bind_param('iisds', $bike_id, $customer_id, $due_date, $installment_per_month, $inst_notes);
+                        $inst_stmt->execute();
+                        $current_date->modify('+1 month');
+                    }
+                }
+
                 $conn->query("UPDATE quotations SET status='converted' WHERE id=$quote_id");
                 $conn->commit();
                 $_SESSION['last_sale_bike_id'] = $bike_id;
@@ -2967,10 +3013,11 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 </form>
 
-<?php 
-$last_purchase_id = $_SESSION['last_purchase_id'] ?? 0;
-unset($_SESSION['last_purchase_id']);
-if ($last_purchase_id): ?>
+<?php
+        $last_purchase_id = $_SESSION['last_purchase_id'] ?? 0;
+        unset($_SESSION['last_purchase_id']);
+        if ($last_purchase_id):
+            ?>
 <div style="margin-top:16px; display:flex; gap:10px;">
 <a href="index.php?page=purchase&print_po=<?= $last_purchase_id ?>&format=a4" class="btn btn-primary" target="_blank">🖨 Print Letterhead (A4)</a>
 <a href="index.php?page=purchase&print_po=<?= $last_purchase_id ?>&format=thermal" class="btn btn-warning" target="_blank">🧾 Print Thermal (POS)</a>
@@ -2978,16 +3025,16 @@ if ($last_purchase_id): ?>
 <?php endif; ?>
 
 <?php
-$print_po_id = (int) ($_GET['print_po'] ?? 0);
-if ($print_po_id):
-    echo '<style>.sidebar, .topbar { display: none !important; } .main-wrap { margin-left: 0 !important; } .content > *:not(#receiptArea):not(.no-print) { display: none !important; } .content { padding: 40px !important; background: #333 !important; } body { background: #333 !important; } @media print { .content, body { padding: 0 !important; background: #fff !important; } }</style>';
-    $po_r = $conn->query("SELECT po.*, s.name as sup_name, s.contact, s.address FROM purchase_orders po LEFT JOIN suppliers s ON po.supplier_id=s.id WHERE po.id=$print_po_id");
-    $po = $po_r ? $po_r->fetch_assoc() : null;
-    $po_no = 'PO-' . date('Ymd') . '-' . str_pad($print_po_id, 3, '0', STR_PAD_LEFT);
-    $format = $_GET['format'] ?? 'a4';
-    $container_class = $format === 'thermal' ? 'thermal-receipt' : 'a4-invoice';
-    if ($po):
-?>
+        $print_po_id = (int) ($_GET['print_po'] ?? 0);
+        if ($print_po_id):
+            echo '<style>.sidebar, .topbar { display: none !important; } .main-wrap { margin-left: 0 !important; } .content > *:not(#receiptArea):not(.no-print) { display: none !important; } .content { padding: 40px !important; background: #333 !important; } body { background: #333 !important; } @media print { .content, body { padding: 0 !important; background: #fff !important; } }</style>';
+            $po_r = $conn->query("SELECT po.*, s.name as sup_name, s.contact, s.address FROM purchase_orders po LEFT JOIN suppliers s ON po.supplier_id=s.id WHERE po.id=$print_po_id");
+            $po = $po_r ? $po_r->fetch_assoc() : null;
+            $po_no = 'PO-' . date('Ymd') . '-' . str_pad($print_po_id, 3, '0', STR_PAD_LEFT);
+            $format = $_GET['format'] ?? 'a4';
+            $container_class = $format === 'thermal' ? 'thermal-receipt' : 'a4-invoice';
+            if ($po):
+                ?>
 <div class="<?= $container_class ?>" id="receiptArea">
     <div class="invoice-header">
         <h1>⚡ <?= sanitize(get_setting('company_name') ?? 'BNI Enterprises') ?></h1>
@@ -3014,12 +3061,13 @@ if ($print_po_id):
                 </tr>
             </thead>
             <tbody>
-                <?php 
+                <?php
                 $bikes_po = $conn->query("SELECT b.chassis_number, b.color, b.purchase_price, m.model_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.purchase_order_id=$print_po_id");
-                while ($bpo = $bikes_po->fetch_assoc()): ?>
+                while ($bpo = $bikes_po->fetch_assoc()):
+                    ?>
                 <tr>
-                    <td style="font-family:Consolas,monospace"><?= sanitize($bpo['chassis_number']) ?><?= $format === 'thermal' ? '<br><small>'.sanitize($bpo['model_name']).'</small>' : '' ?></td>
-                    <?= $format === 'a4' ? '<td>'.sanitize($bpo['model_name']).'</td><td>'.sanitize($bpo['color']).'</td>' : '' ?>
+                    <td style="font-family:Consolas,monospace"><?= sanitize($bpo['chassis_number']) ?><?= $format === 'thermal' ? '<br><small>' . sanitize($bpo['model_name']) . '</small>' : '' ?></td>
+                    <?= $format === 'a4' ? '<td>' . sanitize($bpo['model_name']) . '</td><td>' . sanitize($bpo['color']) . '</td>' : '' ?>
                     <td style="text-align:right"><?= fmt_money($bpo['purchase_price']) ?></td>
                 </tr>
                 <?php endwhile; ?>
@@ -3044,7 +3092,8 @@ if ($print_po_id):
     <button onclick="window.print()" class="btn btn-success">🖨 Print Receipt</button>
     <a href="index.php?page=inventory" class="btn btn-default">Back to Inventory</a>
 </div>
-<?php endif; endif; ?>
+<?php endif;
+        endif; ?>
 <div class="modal-overlay" id="addSupplierModal">
 <div class="modal">
 <div class="modal-header"><h3>Add New Supplier</h3><button class="modal-close" onclick="closeSupplierModal()">✕</button></div>
@@ -3664,27 +3713,29 @@ document.getElementById('bulkExportForm').addEventListener('submit', function(){
 <?php endif; ?>
 
 <?php
-$print_inv_id = (int) ($_GET['print_invoice'] ?? 0);
-if ($print_inv_id):
-    echo '<style>.sidebar, .topbar { display: none !important; } .main-wrap { margin-left: 0 !important; } .content > *:not(#receiptArea):not(.no-print) { display: none !important; } .content { padding: 40px !important; background: #333 !important; } body { background: #333 !important; } @media print { .content, body { padding: 0 !important; background: #fff !important; } }</style>';
-    $inv_r = $conn->query("SELECT b.*, m.model_name, m.model_code, m.category, c.name as cust_name, c.phone as cust_phone, c.cnic as cust_cnic, c.address as cust_addr, c.is_filer FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id WHERE b.id=$print_inv_id");
-    $inv = $inv_r ? $inv_r->fetch_assoc() : null;
-    $show_pp = get_setting('show_purchase_on_invoice') == '1';
-    $inv_no = 'INV-' . date('Ymd') . '-' . str_pad($print_inv_id, 3, '0', STR_PAD_LEFT);
-    $format = $_GET['format'] ?? 'a4';
-    $container_class = $format === 'thermal' ? 'thermal-receipt' : 'a4-invoice';
+        $print_inv_id = (int) ($_GET['print_invoice'] ?? 0);
+        if ($print_inv_id):
+            echo '<style>.sidebar, .topbar { display: none !important; } .main-wrap { margin-left: 0 !important; } .content > *:not(#receiptArea):not(.no-print) { display: none !important; } .content { padding: 40px !important; background: #333 !important; } body { background: #333 !important; } @media print { .content, body { padding: 0 !important; background: #fff !important; } }</style>';
+            $inv_r = $conn->query("SELECT b.*, m.model_name, m.model_code, m.category, c.name as cust_name, c.phone as cust_phone, c.cnic as cust_cnic, c.address as cust_addr, c.is_filer FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id WHERE b.id=$print_inv_id");
+            $inv = $inv_r ? $inv_r->fetch_assoc() : null;
+            $show_pp = get_setting('show_purchase_on_invoice') == '1';
+            $inv_no = 'INV-' . date('Ymd') . '-' . str_pad($print_inv_id, 3, '0', STR_PAD_LEFT);
+            $format = $_GET['format'] ?? 'a4';
+            $container_class = $format === 'thermal' ? 'thermal-receipt' : 'a4-invoice';
 
-    if ($inv):
-        $sold_acc_r = $conn->query('SELECT sa.*, a.name FROM sale_accessories sa JOIN accessories a ON sa.accessory_id=a.id WHERE sa.bike_id=' . $inv['id']);
-        $dp_amount = $conn->query("SELECT SUM(amount) FROM payments WHERE transaction_type='sale' AND reference_id=" . $inv['id'] . " AND payment_date='" . $inv['selling_date'] . "'")->fetch_row()[0] ?? 0;
-        $installments_r = $conn->query('SELECT installment_amount, amount_paid, penalty_fee FROM installments WHERE bike_id=' . $inv['id']);
-        $total_installments = 0; $total_paid_installments = 0; $total_penalty = 0;
-        while ($inst = $installments_r->fetch_assoc()) {
-            $total_installments += $inst['installment_amount'];
-            $total_paid_installments += $inst['amount_paid'];
-            $total_penalty += $inst['penalty_fee'];
-        }
-?>
+            if ($inv):
+                $sold_acc_r = $conn->query('SELECT sa.*, a.name FROM sale_accessories sa JOIN accessories a ON sa.accessory_id=a.id WHERE sa.bike_id=' . $inv['id']);
+                $dp_amount = $conn->query("SELECT SUM(amount) FROM payments WHERE transaction_type='sale' AND reference_id=" . $inv['id'] . " AND payment_date='" . $inv['selling_date'] . "'")->fetch_row()[0] ?? 0;
+                $installments_r = $conn->query('SELECT installment_amount, amount_paid, penalty_fee FROM installments WHERE bike_id=' . $inv['id']);
+                $total_installments = 0;
+                $total_paid_installments = 0;
+                $total_penalty = 0;
+                while ($inst = $installments_r->fetch_assoc()) {
+                    $total_installments += $inst['installment_amount'];
+                    $total_paid_installments += $inst['amount_paid'];
+                    $total_penalty += $inst['penalty_fee'];
+                }
+                ?>
 <div class="<?= $container_class ?>" id="receiptArea">
     <div class="invoice-header">
         <h1>⚡ <?= sanitize(get_setting('company_name') ?? 'BNI Enterprises') ?></h1>
@@ -3717,7 +3768,7 @@ if ($print_inv_id):
                         <strong><?= sanitize($inv['model_name']) ?> (<?= sanitize($inv['model_code']) ?>)</strong><br>
                         <small>Chassis: <span style="font-family:Consolas"><?= sanitize($inv['chassis_number']) ?></span> | Color: <?= sanitize($inv['color']) ?></small>
                     </td>
-                    <?= $format === 'a4' ? '<td>'.sanitize($inv['category']).'</td>' : '' ?>
+                    <?= $format === 'a4' ? '<td>' . sanitize($inv['category']) . '</td>' : '' ?>
                     <td style="text-align:right"><?= fmt_money($inv['selling_price']) ?></td>
                 </tr>
                 <?php if ($sold_acc_r->num_rows > 0): ?>
@@ -3758,7 +3809,8 @@ if ($print_inv_id):
 <div class="no-print" style="margin-top:10px">
     <button onclick="window.print()" class="btn btn-success">🖨 Print Receipt</button>
 </div>
-<?php endif; endif; ?>
+<?php endif;
+        endif; ?>
 <div class="modal-overlay" id="addCustModal">
 <div class="modal">
 <div class="modal-header"><h3>Add New Customer</h3><button class="modal-close" onclick="closeCustomerModal()">✕</button></div>
@@ -5459,7 +5511,17 @@ document.addEventListener('DOMContentLoaded', function() {
     <div id="quoteBikeDetails" style="margin-top:8px;font-size:0.8rem;color:var(--text);display:none;background:var(--bg2);padding:10px;border-radius:2px;border:1px solid var(--border);line-height:1.4"></div>
 </div>
 </div>
-<div class="form-group"><label>Quoted Price (<?= $currency ?>) <span class="req">*</span></label><input type="number" name="quoted_price" step="0.01" min="0" value="<?= $edit_quote['quoted_price'] ?? '0.00' ?>" required></div>
+<div class="form-row">
+    <div class="form-group"><label>Quoted Price (<?= $currency ?>) <span class="req">*</span></label><input type="number" id="quotePrice" name="quoted_price" step="0.01" min="0" value="<?= $edit_quote['quoted_price'] ?? '0.00' ?>" required oninput="calcQuoteInstallment()"></div>
+</div>
+<div class="form-row">
+    <div class="form-group" style="flex:0 0 100%;"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:bold;color:var(--accent)"><input type="checkbox" name="is_installment" id="quoteIsInstallment" value="1" <?= ($edit_quote['is_installment'] ?? 0) ? 'checked' : '' ?> onchange="toggleQuoteInstallments()" style="width:16px;height:16px"> Calculate Installment Plan?</label></div>
+</div>
+<div class="form-row animate__animated animate__fadeIn" id="quoteInstallmentFields" style="display:<?= ($edit_quote['is_installment'] ?? 0) ? 'flex' : 'none' ?>; background:var(--bg3); padding:12px; border-radius:2px; border:1px dashed var(--accent); margin-bottom:10px;">
+    <div class="form-group"><label>Down Payment (<?= $currency ?>)</label><input type="number" name="down_payment" id="quoteDownPayment" step="0.01" min="0" value="<?= $edit_quote['down_payment'] ?? '0.00' ?>" oninput="calcQuoteInstallment()"></div>
+    <div class="form-group"><label>Total Installments (Months)</label><input type="number" name="total_installments" id="quoteTotalInst" min="1" value="<?= $edit_quote['total_installments'] ?? '0' ?>" oninput="calcQuoteInstallment()"></div>
+    <div class="form-group"><label>Monthly Installment</label><input type="number" name="installment_amount" id="quoteInstAmount" step="0.01" min="0" value="<?= $edit_quote['installment_amount'] ?? '0.00' ?>" readonly style="background:var(--bg);color:var(--text2)"></div>
+</div>
 <fieldset class="fieldset" style="margin-top:10px;"><legend>Accessories Included</legend>
     <div id="quoteAccessoriesList">
         <?php
@@ -5529,6 +5591,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <td><?= sanitize($quote['created_by_user'] ?? '-') ?></td>
 <td class="no-print">
 <div class="actions-col">
+<a href="index.php?page=quotations&print_quote=<?= $quote['id'] ?>" class="btn btn-primary btn-sm" title="Print Quotation" target="_blank">📄</a>    
 <?php if ($quote['status'] == 'pending' && has_permission($conn, 'quotations', 'edit')): ?>
 <form method="POST" action="index.php?page=quotations&action=convert_quote_to_sale" style="display:inline">
 <input type="hidden" name="quote_id" value="<?= $quote['id'] ?>">
@@ -5551,6 +5614,143 @@ document.addEventListener('DOMContentLoaded', function() {
 </tbody>
 </table>
 </div>
+
+<?php
+        $print_quote_id = (int) ($_GET['print_quote'] ?? 0);
+        if ($print_quote_id):
+            echo '<style>.sidebar, .topbar { display: none !important; } .main-wrap { margin-left: 0 !important; } .content > *:not(#receiptArea):not(.no-print) { display: none !important; } .content { padding: 40px !important; background: #333 !important; } body { background: #333 !important; } @media print { .content, body { padding: 0 !important; background: #fff !important; } }</style>';
+
+            $q_r = $conn->query("SELECT q.*, b.chassis_number, b.color, m.model_name, m.model_code, m.category, c.name as cust_name, c.phone as cust_phone, c.cnic as cust_cnic, c.address as cust_addr FROM quotations q LEFT JOIN bikes b ON q.bike_id=b.id LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON q.customer_id=c.id WHERE q.id=$print_quote_id");
+            $q_data = $q_r ? $q_r->fetch_assoc() : null;
+            if ($q_data):
+                $q_no = 'QT-' . date('Ymd') . '-' . str_pad($print_quote_id, 3, '0', STR_PAD_LEFT);
+                $q_accs = json_decode($q_data['accessories_json'], true) ?: [];
+                $acc_total = 0;
+                ?>
+<div class="a4-invoice" id="receiptArea">
+    <div class="invoice-header">
+        <h1>⚡ <?= sanitize(get_setting('company_name') ?? 'BNI Enterprises') ?></h1>
+        <h2><?= sanitize(get_setting('branch_name') ?? 'Dera (Ahmed Metro)') ?></h2>
+        <div style="font-size:1.1rem;margin-top:8px;font-weight:700;letter-spacing:2px;color:#333;">OFFICIAL QUOTATION</div>
+    </div>
+    
+    <div class="invoice-meta">
+        <div>
+            <strong>Quotation #:</strong> <?= $q_no ?><br>
+            <strong>Date Generated:</strong> <?= fmt_date($q_data['quote_date']) ?><br>
+            <strong>Valid Until:</strong> <span style="color:#c0392b;font-weight:bold;"><?= fmt_date($q_data['valid_until']) ?></span>
+        </div>
+        <div style="text-align:right;">
+            <strong>Customer:</strong> <?= sanitize($q_data['cust_name'] ?? 'Walk-in') ?><br>
+            <?php if ($q_data['cust_phone']): ?><strong>Phone:</strong> <?= sanitize($q_data['cust_phone']) ?><br><?php endif; ?>
+            <?php if ($q_data['cust_addr']): ?><strong>Address:</strong> <?= sanitize($q_data['cust_addr']) ?><br><?php endif; ?>
+            <div style="margin-top:10px; padding:5px; border:1px solid #ddd; background:#f9f9f9; display:inline-block; border-radius:3px;">
+                <strong>Status:</strong> <span style="font-weight:bold;color:<?= $q_data['status'] == 'converted' ? '#27ae60' : ($q_data['status'] == 'rejected' ? '#c0392b' : '#f39c12') ?>;text-transform:uppercase;"><?= $q_data['status'] ?></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="invoice-section">
+        <h3>Proposed Items</h3>
+        <table class="invoice-table">
+            <thead>
+                <tr>
+                    <th>Description</th>
+                    <th>Category</th>
+                    <th style="text-align:right">Quoted Price</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        <strong><?= sanitize($q_data['model_name']) ?> (<?= sanitize($q_data['model_code']) ?>)</strong><br>
+                        <small>Chassis: <span style="font-family:Consolas"><?= sanitize($q_data['chassis_number']) ?></span> | Color: <?= sanitize($q_data['color']) ?></small>
+                    </td>
+                    <td><?= sanitize($q_data['category']) ?></td>
+                    <td style="text-align:right"><?= fmt_money($q_data['quoted_price']) ?></td>
+                </tr>
+                <?php if (!empty($q_accs)): ?>
+                    <?php
+                    foreach ($q_accs as $acc):
+                        $acc_name_r = $conn->query('SELECT name FROM accessories WHERE id=' . (int) $acc['id']);
+                        $acc_name = $acc_name_r && $acc_name_r->num_rows ? $acc_name_r->fetch_row()[0] : 'Custom Accessory';
+                        $acc_total += $acc['final_price'];
+                        ?>
+                    <tr>
+                        <td><small>+ <?= sanitize($acc_name) ?> (Qty: <?= $acc['quantity'] ?>)</small></td>
+                        <td><small>Accessory</small></td>
+                        <td style="text-align:right"><small><?= fmt_money($acc['final_price']) ?></small></td>
+                    </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="invoice-section">
+        <h3>Financial Summary</h3>
+        <table class="invoice-table" style="width:50%; margin-left:auto;">
+            <tbody>
+                <tr><td>Bike Price</td><td style="text-align:right"><?= fmt_money($q_data['quoted_price']) ?></td></tr>
+                <?php if ($acc_total > 0): ?><tr><td>Accessories Total</td><td style="text-align:right">+ <?= fmt_money($acc_total) ?></td></tr><?php endif; ?>
+                <tr style="background:#eef2f5;font-weight:bold;font-size:1.1rem;border-top:2px solid #ccc;">
+                    <td>Grand Total</td><td style="text-align:right;color:#1a6fc4;"><?= fmt_money($q_data['quoted_price'] + $acc_total) ?></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    
+    <?php if ($q_data['is_installment']): ?>
+    <div class="invoice-section">
+        <h3>Proposed Installment Plan</h3>
+        <table class="invoice-table">
+            <thead>
+                <tr>
+                    <th>Grand Total</th>
+                    <th>Down Payment</th>
+                    <th>Remaining Balance</th>
+                    <th>Total Months</th>
+                    <th>Monthly Installment</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><?= fmt_money($q_data['quoted_price'] + $acc_total) ?></td>
+                    <td><?= fmt_money($q_data['down_payment']) ?></td>
+                    <td><?= fmt_money(($q_data['quoted_price'] + $acc_total) - $q_data['down_payment']) ?></td>
+                    <td><?= $q_data['total_installments'] ?> Months</td>
+                    <td style="font-weight:bold;color:#c0392b;"><?= fmt_money($q_data['installment_amount']) ?></td>
+                </tr>
+            </tbody>
+        </table>
+        <p style="font-size:0.8rem;color:#555;margin-top:5px;">* Installment plan is subject to final verification and approval of documents at the time of sale.</p>
+    </div>
+    <?php endif; ?>
+    
+    <?php if ($q_data['notes']): ?>
+    <div class="invoice-section">
+        <h3>Terms & Additional Notes</h3>
+        <p style="font-size:0.9rem;border:1px solid #ddd;padding:10px;background:#f9f9f9;"><?= nl2br(sanitize($q_data['notes'])) ?></p>
+    </div>
+    <?php endif; ?>
+    
+    <div style="margin-top:60px; display:flex; justify-content:space-between; border-top:1px solid #ddd; padding-top:50px; font-weight:bold; color:#444;">
+        <div style="text-align:center; width:250px; border-top:2px solid #333; padding-top:5px;">Authorized Signature</div>
+        <div style="text-align:center; width:250px; border-top:2px solid #333; padding-top:5px;">Customer Signature (Acceptance)</div>
+    </div>
+    
+    <div class="invoice-footer">
+        This is a system generated quotation. Valid until <?= fmt_date($q_data['valid_until']) ?>.<br>
+        Generated by: Yasin Ullah – BSS | System: https://www.yasinbss.com | WhatsApp: 03361593533
+    </div>
+</div>
+<div class="no-print" style="margin-top:10px">
+    <button onclick="window.print()" class="btn btn-success">🖨 Print Quotation</button>
+    <a href="index.php?page=quotations" class="btn btn-default">Back to List</a>
+</div>
+<?php endif;
+        endif; ?>
+
 <script>
 var quoteAccessoriesCount = <?= $q_acc_count ?? 0 ?>;
 var allAvailableAccessories = <?= json_encode($conn->query('SELECT id, name, selling_price, current_stock FROM accessories WHERE current_stock > 0 ORDER BY name')->fetch_all(MYSQLI_ASSOC)) ?>;
@@ -5587,6 +5787,7 @@ function addQuoteAccessoryRow() {
 }
 function removeQuoteAccessoryRow(n) {
     document.getElementById('quoteAccessoryRow_' + n).remove();
+    if(typeof calcQuoteInstallment === 'function') calcQuoteInstallment();
 }
 function updateQuoteAccessoryDetails(selectElement, index) {
     var selectedOption = selectElement.options[selectElement.selectedIndex];
@@ -5602,6 +5803,25 @@ function calculateQuoteAccessoryPrice(index) {
     var discount = parseFloat(document.querySelector(`#quoteAccessoryRow_${index} input[name="accessories[${index}][discount]"]`).value) || 0;
     var finalPrice = (quantity * unitPrice) - discount;
     document.querySelector(`#quoteAccessoryRow_${index} input[name="accessories[${index}][final_price]"]`).value = finalPrice.toFixed(2);
+    calcQuoteInstallment();
+}
+
+function toggleQuoteInstallments() {
+    document.getElementById('quoteInstallmentFields').style.display = document.getElementById('quoteIsInstallment').checked ? 'flex' : 'none';
+    calcQuoteInstallment();
+}
+
+function calcQuoteInstallment() {
+    var quotedPrice = parseFloat(document.getElementById('quotePrice').value) || 0;
+    var accTotal = 0;
+    document.querySelectorAll('#quoteAccessoriesList input[name$="[final_price]"]').forEach(function(inp) {
+        accTotal += parseFloat(inp.value) || 0;
+    });
+    var total = quotedPrice + accTotal;
+    var down = parseFloat(document.getElementById('quoteDownPayment').value) || 0;
+    var months = parseInt(document.getElementById('quoteTotalInst').value) || 0;
+    var instAmount = months > 0 ? (total - down) / months : 0;
+    document.getElementById('quoteInstAmount').value = instAmount > 0 ? instAmount.toFixed(2) : '0.00';
 }
 $(document).ready(function() {
     $('#quotationForm select.select2-enable').select2({

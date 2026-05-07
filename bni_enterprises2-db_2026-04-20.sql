@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3306
--- Generation Time: May 07, 2026 at 07:04 AM
+-- Generation Time: May 07, 2026 at 06:00 PM
 -- Server version: 8.2.0
 -- PHP Version: 8.3.0
 
@@ -43,7 +43,9 @@ CREATE TABLE `accessories` (
 --
 
 INSERT INTO `accessories` (`id`, `name`, `sku`, `purchase_price`, `selling_price`, `current_stock`, `created_at`, `updated_at`) VALUES
-(1, 'Type', 'CST-1777618962-70', 0.00, 0.00, -1, '2026-05-01 07:02:42', '2026-05-01 07:02:42');
+(1, 'Type', 'CST-1777618962-70', 0.00, 0.00, -1, '2026-05-01 07:02:42', '2026-05-01 07:02:42'),
+(2, 'Helmet', '1231', 900.00, 1200.00, 90, '2026-05-07 06:49:31', '2026-05-07 06:49:31'),
+(3, 'Helmet', 'CST-1778136637-40', 0.00, 0.00, 0, '2026-05-07 06:50:37', '2026-05-07 06:50:37');
 
 -- --------------------------------------------------------
 
@@ -117,7 +119,9 @@ INSERT INTO `bikes` (`id`, `purchase_order_id`, `order_date`, `inventory_date`, 
 (35, 12, '2026-04-28', '2026-04-28', 'NW-21233213', 'MT-002414', 10, 'Reda', 90000.00, 130000.00, '2026-04-28', 5, 9000.00, 31000.00, 'sold', NULL, NULL, NULL, 'new hai', '', NULL, '2026-04-28 04:33:26', '2026-04-28 04:43:01'),
 (36, 13, '2026-04-28', '2026-04-28', 'NW-21233132', 'MT-0021231', 2, 'Yellow', 90000.00, 220000.00, '2026-04-28', 6, 9000.00, 121000.00, 'sold', NULL, NULL, NULL, 'theek hai', '', NULL, '2026-04-28 04:36:57', '2026-04-28 10:24:33'),
 (37, 14, '2026-05-01', '2026-05-01', 'NW-212335123', 'MT-GT-02aa', 7, 'Yellow', 290000.00, 340000.00, '2026-05-01', 5, 29000.00, 21000.00, 'sold', NULL, NULL, NULL, '', '', NULL, '2026-05-01 06:59:16', '2026-05-01 07:02:42'),
-(38, 15, '2026-05-06', '2026-05-06', 'T929283007', 'TI8399uue', 2, 'Rad', 200000.00, 220000.00, '2026-05-06', NULL, 20000.00, 0.00, 'sold', NULL, NULL, NULL, '', '', 'uploads/img_69fb71525af01.jpg', '2026-05-06 16:50:26', '2026-05-06 16:51:52');
+(38, 15, '2026-05-06', '2026-05-06', 'T929283007', 'TI8399uue', 2, 'Rad', 200000.00, 220000.00, '2026-05-06', NULL, 20000.00, 0.00, 'sold', NULL, NULL, NULL, '', '', 'uploads/img_69fb71525af01.jpg', '2026-05-06 16:50:26', '2026-05-06 16:51:52'),
+(39, 16, '2026-05-07', '2026-05-07', 'NW-21233123', 'MT-GT-0223', 14, 'Red', 250000.00, NULL, NULL, NULL, 25000.00, 0.00, 'in_stock', NULL, NULL, NULL, '', '', NULL, '2026-05-07 06:41:42', '2026-05-07 06:41:42'),
+(40, 16, '2026-05-07', '2026-05-07', 'qrqwer', '12341', 14, 'Yellow', 250000.00, 320000.00, '2026-05-07', 2, 25000.00, 45000.00, 'sold', NULL, NULL, NULL, '', '', NULL, '2026-05-07 06:41:42', '2026-05-07 06:50:37');
 
 -- --------------------------------------------------------
 
@@ -211,7 +215,8 @@ INSERT INTO `income_expenses` (`id`, `entry_date`, `type`, `category`, `amount`,
 (5, '2026-05-07', 'income', 'Commission', 12000.00, 'cash', '', '', 1, '2026-05-07 04:24:01'),
 (6, '2026-05-07', 'expense', 'Monthly Expense', 15000.00, 'cash', '', '', 1, '2026-05-07 04:24:28'),
 (7, '2026-05-07', 'income', 'Monthly Income', 19000.00, 'cash', '', '', 1, '2026-05-07 04:24:55'),
-(10, '2026-05-07', 'expense', 'Inventory Loss', 193694.00, 'other', 'Bike ID: 11 (T910L72300000632)', 'Automated expense for Damaged/Lost bike.', 1, '2026-05-07 05:26:12');
+(10, '2026-05-07', 'expense', 'Inventory Loss', 193694.00, 'other', 'Bike ID: 11 (T910L72300000632)', 'Automated expense for Damaged/Lost bike.', 1, '2026-05-07 05:26:12'),
+(11, '2026-05-07', 'expense', 'Rent', 12000.00, 'cash', '', '', 1, '2026-05-07 06:57:30');
 
 -- --------------------------------------------------------
 
@@ -313,7 +318,9 @@ INSERT INTO `ledger` (`id`, `entry_date`, `entry_type`, `amount`, `party_type`, 
 (38, '2026-05-06', 'credit', 220000.00, 'customer', NULL, 'Down Payment for Chassis: T929283007', 'down_payment', 38, 220000.00, '2026-05-06 16:51:52'),
 (39, '2026-05-06', 'debit', 200000.00, 'customer', NULL, 'Sale of Chassis: TH12G72260006004', 'sale', 10, 200000.00, '2026-05-06 16:54:50'),
 (40, '2026-05-06', 'credit', 200000.00, 'customer', NULL, 'Down Payment for Chassis: TH12G72260006004', 'down_payment', 10, 200000.00, '2026-05-06 16:54:50'),
-(41, '2026-05-07', 'credit', 200000.00, 'customer', NULL, 'Bike Return (Reversal) for Chassis: TH12G72260006004', 'return_reversal', 10, 200000.00, '2026-05-06 16:57:35');
+(41, '2026-05-07', 'credit', 200000.00, 'customer', NULL, 'Bike Return (Reversal) for Chassis: TH12G72260006004', 'return_reversal', 10, 200000.00, '2026-05-06 16:57:35'),
+(42, '2026-05-07', 'debit', 320000.00, 'customer', 2, 'Sale of Chassis: qrqwer', 'sale', 40, 320000.00, '2026-05-07 06:50:37'),
+(43, '2026-05-07', 'credit', 320000.00, 'customer', 2, 'Down Payment for Chassis: qrqwer', 'down_payment', 40, 320000.00, '2026-05-07 06:50:37');
 
 -- --------------------------------------------------------
 
@@ -348,7 +355,8 @@ INSERT INTO `models` (`id`, `model_code`, `model_name`, `category`, `short_code`
 (10, 'M6 NP', 'M6 NP Electric Bike', 'Electric Bike', 'M6 NP', NULL, '2026-04-20 08:56:23'),
 (11, 'M6 Lithium NP', 'M6 Lithium NP Electric Bike', 'Electric Bike', 'M6 L', NULL, '2026-04-20 08:56:23'),
 (12, 'Premium', 'Premium Electric Bike', 'Electric Bike', 'Premium', NULL, '2026-04-20 08:56:23'),
-(13, 'W. Bike H2', 'W. Bike H2 Electric Bike', 'Electric Bike', 'W. Bike', NULL, '2026-04-20 08:56:23');
+(13, 'W. Bike H2', 'W. Bike H2 Electric Bike', 'Electric Bike', 'W. Bike', NULL, '2026-04-20 08:56:23'),
+(14, 'SP12', 'Super Star 70', 'Electric Bike', '123', NULL, '2026-05-07 06:34:51');
 
 -- --------------------------------------------------------
 
@@ -400,7 +408,9 @@ INSERT INTO `payments` (`id`, `payment_date`, `payment_type`, `amount`, `cheque_
 (29, '2026-05-06', 'cash', 210000.00, '', '', NULL, 'pending', 'sale', 1, 'Walk-in Customer', 'Down Payment for Chassis: LY05G48270002304', '2026-05-06 16:38:41'),
 (30, '2026-05-06', 'cash', 220000.00, '', '', NULL, 'pending', 'sale', 38, 'Walk-in Customer', 'Down Payment for Chassis: T929283007', '2026-05-06 16:51:52'),
 (31, '2026-05-06', 'online', 200000.00, '', '', NULL, 'pending', 'sale', 10, 'Walk-in Customer', 'Down Payment for Chassis: TH12G72260006004', '2026-05-06 16:54:50'),
-(32, '2026-05-07', 'cash', 0.00, '', '', NULL, 'pending', 'customer_refund', 10, 'Unknown Customer', '30000', '2026-05-06 16:57:35');
+(32, '2026-05-07', 'cash', 0.00, '', '', NULL, 'pending', 'customer_refund', 10, 'Unknown Customer', '30000', '2026-05-06 16:57:35'),
+(33, '2026-05-07', 'cash', 500000.00, NULL, NULL, NULL, 'pending', 'supplier_payment', 16, 'Khan Gull', '', '2026-05-07 06:41:42'),
+(34, '2026-05-07', 'cash', 320000.00, '', '', NULL, 'pending', 'sale', 40, 'Muhammad Usman', 'Down Payment for Chassis: qrqwer', '2026-05-07 06:50:37');
 
 -- --------------------------------------------------------
 
@@ -437,7 +447,8 @@ INSERT INTO `purchase_orders` (`id`, `order_date`, `supplier_id`, `total_units`,
 (12, '2026-04-28', 2, 1, 90000.00, 'new', '2026-04-28 04:33:26'),
 (13, '2026-04-28', 3, 1, 90000.00, '', '2026-04-28 04:36:57'),
 (14, '2026-05-01', 2, 1, 290000.00, '', '2026-05-01 06:59:16'),
-(15, '2026-05-06', 4, 1, 200000.00, '', '2026-05-06 16:50:26');
+(15, '2026-05-06', 4, 1, 200000.00, '', '2026-05-06 16:50:26'),
+(16, '2026-05-07', 6, 2, 500000.00, '', '2026-05-07 06:41:42');
 
 -- --------------------------------------------------------
 
@@ -452,6 +463,10 @@ CREATE TABLE `quotations` (
   `bike_id` int DEFAULT NULL,
   `accessories_json` text,
   `quoted_price` decimal(15,2) NOT NULL,
+  `is_installment` tinyint(1) DEFAULT '0',
+  `down_payment` decimal(15,2) DEFAULT '0.00',
+  `total_installments` int DEFAULT '0',
+  `installment_amount` decimal(15,2) DEFAULT '0.00',
   `valid_until` date DEFAULT NULL,
   `status` enum('pending','accepted','rejected','converted') DEFAULT 'pending',
   `notes` text,
@@ -463,8 +478,8 @@ CREATE TABLE `quotations` (
 -- Dumping data for table `quotations`
 --
 
-INSERT INTO `quotations` (`id`, `quote_date`, `customer_id`, `bike_id`, `accessories_json`, `quoted_price`, `valid_until`, `status`, `notes`, `created_by`, `created_at`) VALUES
-(1, '2026-04-28', 5, 3, '[]', 130000.00, '2026-05-05', 'converted', '0', 1, '2026-04-28 09:17:02');
+INSERT INTO `quotations` (`id`, `quote_date`, `customer_id`, `bike_id`, `accessories_json`, `quoted_price`, `is_installment`, `down_payment`, `total_installments`, `installment_amount`, `valid_until`, `status`, `notes`, `created_by`, `created_at`) VALUES
+(1, '2026-04-28', 5, 3, '[]', 130000.00, 0, 0.00, 0, 0.00, '2026-05-05', 'converted', '0', 1, '2026-04-28 09:17:02');
 
 -- --------------------------------------------------------
 
@@ -487,7 +502,8 @@ INSERT INTO `roles` (`id`, `name`, `description`, `created_at`) VALUES
 (1, 'Administrator', 'Full access', '2026-04-20 10:50:00'),
 (2, 'Manager', 'Limited access', '2026-04-20 10:50:00'),
 (3, 'income and expenses guy', 'only handle income and expenses', '2026-04-20 11:19:38'),
-(4, 'income and expense', '', '2026-05-01 07:06:02');
+(4, 'income and expense', '', '2026-05-01 07:06:02'),
+(5, 'Sales man', '', '2026-05-07 07:02:14');
 
 -- --------------------------------------------------------
 
@@ -540,7 +556,24 @@ INSERT INTO `role_permissions` (`id`, `role_id`, `page`, `can_view`, `can_add`, 
 (28, 4, 'income_expense', 1, 1, 1, 1),
 (29, 4, 'accessories', 0, 0, 0, 0),
 (30, 4, 'quotations', 0, 0, 0, 0),
-(31, 4, 'installments', 0, 0, 0, 0);
+(31, 4, 'installments', 0, 0, 0, 0),
+(49, 5, 'dashboard', 0, 0, 0, 0),
+(50, 5, 'inventory', 0, 0, 0, 0),
+(51, 5, 'purchase', 0, 0, 0, 0),
+(52, 5, 'sale', 1, 1, 1, 1),
+(53, 5, 'customers', 0, 0, 0, 0),
+(54, 5, 'suppliers', 0, 0, 0, 0),
+(55, 5, 'models', 0, 0, 0, 0),
+(56, 5, 'reports', 0, 0, 0, 0),
+(57, 5, 'returns', 0, 0, 0, 0),
+(58, 5, 'payments', 0, 0, 0, 0),
+(59, 5, 'settings', 0, 0, 0, 0),
+(60, 5, 'roles', 0, 0, 0, 0),
+(61, 5, 'users', 0, 0, 0, 0),
+(62, 5, 'income_expense', 0, 0, 0, 0),
+(63, 5, 'accessories', 0, 0, 0, 0),
+(64, 5, 'quotations', 0, 0, 0, 0),
+(65, 5, 'installments', 0, 0, 0, 0);
 
 -- --------------------------------------------------------
 
@@ -563,7 +596,8 @@ CREATE TABLE `sale_accessories` (
 --
 
 INSERT INTO `sale_accessories` (`id`, `bike_id`, `accessory_id`, `quantity`, `unit_price`, `discount_amount`, `final_price`) VALUES
-(1, 37, 1, 1, 0.00, 0.00, 0.00);
+(1, 37, 1, 1, 0.00, 0.00, 0.00),
+(2, 40, 3, 1, 1200.00, 1200.00, 0.00);
 
 -- --------------------------------------------------------
 
@@ -614,7 +648,8 @@ INSERT INTO `suppliers` (`id`, `name`, `contact`, `address`, `created_at`) VALUE
 (2, 'Yasin Ullah', '03139842219', 'New bannu wala', '2026-04-28 04:12:55'),
 (3, 'Shams Uddin', '0322213222', 'New Bannu', '2026-04-28 04:16:21'),
 (4, 'Noor udin', '0322213222', 'new', '2026-04-28 04:17:05'),
-(5, 'Nasim', '001239919023', 'newd', '2026-04-28 04:19:27');
+(5, 'Nasim', '001239919023', 'newd', '2026-04-28 04:19:27'),
+(6, 'Khan Gull', '0322213222', 'domel bannu', '2026-05-07 06:36:10');
 
 -- --------------------------------------------------------
 
@@ -639,7 +674,8 @@ CREATE TABLE `users` (
 INSERT INTO `users` (`id`, `username`, `password_hash`, `full_name`, `role_id`, `is_active`, `created_at`) VALUES
 (1, 'admin', '$2y$10$KdSnze47ye.inqU8FvyrrO.ugHe3xSXPFiJJ1PsntZN9KJTND5Fa6', 'System Administrator', 1, 1, '2026-04-20 10:50:00'),
 (2, 'admin1', '$2y$10$Yk7.BNVuTU6lpNYVo10UfuQ0cprC2y84gMMGj6ei0T8q0tLXhHyW2', 'Yasin Ullah', 3, 1, '2026-04-20 11:20:03'),
-(3, 'admin3', '$2y$10$N1XGevQPOl7HgShVSSnsuuDXFX2gW/MAxoIbEUgpUG.jPIWWN.8sG', 'Hussain', 4, 1, '2026-05-01 07:06:32');
+(3, 'admin3', '$2y$10$N1XGevQPOl7HgShVSSnsuuDXFX2gW/MAxoIbEUgpUG.jPIWWN.8sG', 'Hussain', 4, 1, '2026-05-01 07:06:32'),
+(4, 'yasin', '$2y$10$Q9QhMYsE76W.nlL4Z.qsk.cG4j7IUvd2FdDRPcCfwcL/wEo0tUQlS', 'Ahmed Khan', 5, 1, '2026-05-07 07:03:14');
 
 --
 -- Indexes for dumped tables
@@ -781,13 +817,13 @@ ALTER TABLE `users`
 -- AUTO_INCREMENT for table `accessories`
 --
 ALTER TABLE `accessories`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT for table `bikes`
 --
 ALTER TABLE `bikes`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=39;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=41;
 
 --
 -- AUTO_INCREMENT for table `cheque_register`
@@ -805,7 +841,7 @@ ALTER TABLE `customers`
 -- AUTO_INCREMENT for table `income_expenses`
 --
 ALTER TABLE `income_expenses`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
 
 --
 -- AUTO_INCREMENT for table `installments`
@@ -817,49 +853,49 @@ ALTER TABLE `installments`
 -- AUTO_INCREMENT for table `ledger`
 --
 ALTER TABLE `ledger`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=42;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=44;
 
 --
 -- AUTO_INCREMENT for table `models`
 --
 ALTER TABLE `models`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
 
 --
 -- AUTO_INCREMENT for table `payments`
 --
 ALTER TABLE `payments`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=33;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=35;
 
 --
 -- AUTO_INCREMENT for table `purchase_orders`
 --
 ALTER TABLE `purchase_orders`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
 
 --
 -- AUTO_INCREMENT for table `quotations`
 --
 ALTER TABLE `quotations`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `roles`
 --
 ALTER TABLE `roles`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT for table `role_permissions`
 --
 ALTER TABLE `role_permissions`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=32;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=66;
 
 --
 -- AUTO_INCREMENT for table `sale_accessories`
 --
 ALTER TABLE `sale_accessories`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `settings`
@@ -871,13 +907,13 @@ ALTER TABLE `settings`
 -- AUTO_INCREMENT for table `suppliers`
 --
 ALTER TABLE `suppliers`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- Constraints for dumped tables
