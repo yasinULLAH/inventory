@@ -1593,14 +1593,40 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             if ($bid <= 0 || $pp < 0) {
                 $err = 'Invalid bike ID or purchase price.';
             } else {
+                $old_bike_q = $conn->query("SELECT status, chassis_number FROM bikes WHERE id=$bid");
+                $old_bike = $old_bike_q->fetch_assoc();
+                $old_status = $old_bike['status'] ?? '';
+
                 if ($img_path) {
                     $stmt = $conn->prepare('UPDATE bikes SET color=?, purchase_price=?, status=?, notes=?, safeguard_notes=?, image=? WHERE id=?');
-                    $stmt->bind_param('sddsssi', $color, $pp, $status, $notes, $safe, $img_path, $bid);
+                    $stmt->bind_param('sdssssi', $color, $pp, $status, $notes, $safe, $img_path, $bid);
                 } else {
                     $stmt = $conn->prepare('UPDATE bikes SET color=?, purchase_price=?, status=?, notes=?, safeguard_notes=? WHERE id=?');
-                    $stmt->bind_param('sddssi', $color, $pp, $status, $notes, $safe, $bid);
+                    $stmt->bind_param('sdsssi', $color, $pp, $status, $notes, $safe, $bid);
                 }
                 $stmt->execute();
+
+                if ($old_status !== 'damaged_lost' && $status === 'damaged_lost') {
+                    $entry_date = date('Y-m-d');
+                    $category = 'Inventory Loss';
+                    $reference = 'Bike ID: ' . $bid . ' (' . $old_bike['chassis_number'] . ')';
+                    $exp_notes = 'Automated expense for Damaged/Lost bike.';
+                    $created_by = $_SESSION['user_id'];
+                    $exp_stmt = $conn->prepare("INSERT INTO income_expenses (entry_date, type, category, amount, payment_method, reference, notes, created_by) VALUES (?,'expense',?,?, 'other', ?, ?, ?)");
+                    $exp_stmt->bind_param('ssdssi', $entry_date, $category, $pp, $reference, $exp_notes, $created_by);
+                    $exp_stmt->execute();
+                } elseif ($old_status === 'damaged_lost' && $status !== 'damaged_lost') {
+                    $reference = 'Bike ID: ' . $bid . ' (' . $old_bike['chassis_number'] . ')';
+                    $del_exp = $conn->prepare("DELETE FROM income_expenses WHERE category='Inventory Loss' AND reference=?");
+                    $del_exp->bind_param('s', $reference);
+                    $del_exp->execute();
+                } elseif ($old_status === 'damaged_lost' && $status === 'damaged_lost') {
+                    $reference = 'Bike ID: ' . $bid . ' (' . $old_bike['chassis_number'] . ')';
+                    $upd_exp = $conn->prepare("UPDATE income_expenses SET amount=? WHERE category='Inventory Loss' AND reference=?");
+                    $upd_exp->bind_param('ds', $pp, $reference);
+                    $upd_exp->execute();
+                }
+
                 $msg = 'Bike updated.';
             }
         }
@@ -1754,7 +1780,8 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $rem_amount = $amount;
                 $inst_q = $conn->query("SELECT id, installment_amount, amount_paid, penalty_fee FROM installments WHERE customer_id=$sel_cust AND status IN ('pending', 'overdue') ORDER BY due_date ASC");
                 while ($inst = $inst_q->fetch_assoc()) {
-                    if ($rem_amount <= 0) break;
+                    if ($rem_amount <= 0)
+                        break;
                     $due = ($inst['installment_amount'] + $inst['penalty_fee']) - $inst['amount_paid'];
                     if ($due > 0) {
                         $pay_to_inst = min($due, $rem_amount);
@@ -1788,7 +1815,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $st->bind_param('ssdss', $pay_date, $pay_method, $amount, $party_name, $notes);
             $st->execute();
             $payment_id = $conn->insert_id;
-            
+
             $led = $conn->prepare("INSERT INTO ledger (entry_date, entry_type, amount, party_type, party_id, description, reference_type, reference_id) VALUES (?, 'debit', ?, 'customer', ?, ?, 'advance_given', ?)");
             $desc = 'Advance / Loan Given: ' . $notes;
             $led->bind_param('sdisi', $pay_date, $amount, $sel_cust, $desc, $payment_id);
@@ -2147,6 +2174,9 @@ body.sidebar-collapsed .sidebar-footer form button::after { content: '🚪'; fon
 }
 .select2-container--default.select2-container--focus .select2-selection--single {
     border-color: var(--accent) !important;
+}
+.select2-container--open {
+    z-index: 99999 !important;
 }
 .select2-dropdown {
     background-color: var(--input-bg) !important;
@@ -4342,7 +4372,7 @@ $(document).ready(function() {
                     'date' => $payment['payment_date'],
                     'type' => $payment['transaction_type'] === 'supplier_refund' ? 'refund' : 'payment',
                     'amount' => $payment['amount'],
-                    'description' => ($payment['transaction_type'] === 'supplier_refund' ? "Refund Received #" : "Payment #") . "{$payment['id']} ({$payment['payment_type']} - " . ($payment['cheque_number'] ?? '-') . ')',
+                    'description' => ($payment['transaction_type'] === 'supplier_refund' ? 'Refund Received #' : 'Payment #') . "{$payment['id']} ({$payment['payment_type']} - " . ($payment['cheque_number'] ?? '-') . ')',
                     'id' => $payment['id']
                 ];
             }

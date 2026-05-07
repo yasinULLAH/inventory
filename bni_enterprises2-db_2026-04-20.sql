@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3306
--- Generation Time: May 07, 2026 at 06:13 AM
+-- Generation Time: May 07, 2026 at 06:26 AM
 -- Server version: 8.2.0
 -- PHP Version: 8.3.0
 
@@ -92,7 +92,7 @@ INSERT INTO `bikes` (`id`, `purchase_order_id`, `order_date`, `inventory_date`, 
 (8, 1, '2026-02-03', '2026-02-05', 'E820G72380002293', '*PJE872203525N0002160*', 7, 'Grey', 251351.00, 279000.00, '2026-02-23', NULL, 251.00, 27398.00, 'sold', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
 (9, 1, '2026-02-03', '2026-02-05', 'TH12G72260005515', 'AIMTP721240259005364', 5, 'Grey', 179279.00, 199000.00, '2026-02-22', NULL, 179.00, 19542.00, 'sold', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
 (10, 1, '2026-02-03', '2026-02-05', 'TH12G72260006004', 'AIMTP721240259006297', 5, 'Black', 179279.00, 200000.00, '2026-05-06', NULL, 17927.90, 2793.10, 'returned', '2026-05-07', 0.00, '30000', NULL, '', NULL, '2026-04-20 09:01:57', '2026-05-06 16:57:35'),
-(11, 1, '2026-02-03', '2026-02-05', 'T910L72300000632', '*XR9S7210282500000640*', 3, 'Silver', 193694.00, NULL, NULL, NULL, 194.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(11, 1, '2026-02-03', '2026-02-05', 'T910L72300000632', '*XR9S7210282500000640*', 3, 'Silver', 193694.00, NULL, NULL, NULL, 194.00, 0.00, 'damaged_lost', NULL, NULL, NULL, '', '', NULL, '2026-04-20 09:01:57', '2026-05-07 05:26:12'),
 (12, 1, '2026-02-03', '2026-02-05', 'T910L72300000916', '*XR9S7210282500000927*', 3, 'Black', 193694.00, 234000.00, '2026-03-07', NULL, 194.00, 40112.00, 'sold', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
 (13, 1, '2026-02-03', '2026-02-05', 'TH12L72300000445', 'AIMTP72124025N001005', 6, 'Black', 211712.00, NULL, NULL, NULL, 212.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
 (14, 1, '2026-02-03', '2026-02-05', 'TH12L72300000416', 'AIMTP72124025N001176', 6, 'Grey', 211712.00, 246000.00, '2026-03-18', NULL, 212.00, 34076.00, 'sold', NULL, NULL, NULL, NULL, '(2,470,276) Received', NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
@@ -210,7 +210,8 @@ INSERT INTO `income_expenses` (`id`, `entry_date`, `type`, `category`, `amount`,
 (4, '2026-05-07', 'expense', 'Bijli', 599.00, 'cash', '', '', 1, '2026-05-07 04:23:48'),
 (5, '2026-05-07', 'income', 'Commission', 12000.00, 'cash', '', '', 1, '2026-05-07 04:24:01'),
 (6, '2026-05-07', 'expense', 'Monthly Expense', 15000.00, 'cash', '', '', 1, '2026-05-07 04:24:28'),
-(7, '2026-05-07', 'income', 'Monthly Income', 19000.00, 'cash', '', '', 1, '2026-05-07 04:24:55');
+(7, '2026-05-07', 'income', 'Monthly Income', 19000.00, 'cash', '', '', 1, '2026-05-07 04:24:55'),
+(10, '2026-05-07', 'expense', 'Inventory Loss', 193694.00, 'other', 'Bike ID: 11 (T910L72300000632)', 'Automated expense for Damaged/Lost bike.', 1, '2026-05-07 05:26:12');
 
 -- --------------------------------------------------------
 
@@ -804,7 +805,7 @@ ALTER TABLE `customers`
 -- AUTO_INCREMENT for table `income_expenses`
 --
 ALTER TABLE `income_expenses`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT for table `installments`
