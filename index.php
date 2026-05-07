@@ -20,7 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         die('<div style="padding:40px;text-align:center;font-family:sans-serif"><h2>🚫 Invalid Request</h2><p>Security token missing or expired. Please refresh the page and try again.</p></div>');
     }
 }
-
+error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING & ~E_DEPRECATED & ~E_STRICT & ~E_USER_DEPRECATED);
 function get_client_ip()
 {
     return $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
@@ -29,7 +29,7 @@ function get_client_ip()
 $ip_address = get_client_ip();
 $ban_file = sys_get_temp_dir() . '/bni_bans.json';
 $bans = file_exists($ban_file) ? json_decode(file_get_contents($ban_file), true) : [];
-if (isset($bans[$ip_address]) && $bans[$ip_address]['ban_until'] > time()) {
+if (isset($bans[$ip_address]['ban_until']) && $bans[$ip_address]['ban_until'] > time()) {
     die('<div style="padding:40px;text-align:center;font-family:sans-serif"><h2>🚫 Access Denied</h2><p>Too many failed login attempts. Your IP has been temporarily banned.</p></div>');
 }
 
@@ -559,7 +559,7 @@ if ($db_exists) {
             $uname = trim($_POST['username'] ?? '');
             $upass = $_POST['password'] ?? '';
             $captcha = $_POST['captcha_code'] ?? '';
-            if (empty($captcha) || $_SESSION['captcha_code'] != $captcha) {
+            if (empty($captcha) || !isset($_SESSION['captcha_code']) || $_SESSION['captcha_code'] != $captcha) {
                 record_failed_attempt();
                 $login_error = 'Invalid CAPTCHA.';
             } else {
@@ -594,12 +594,12 @@ if ($db_exists) {
             }
         }
     } else {
-        if (time() - $_SESSION['login_time'] > $absolute_timeout) {
+        if (time() - ($_SESSION['login_time'] ?? time()) > $absolute_timeout) {
             session_destroy();
             header('Location: index.php?msg=session_expired');
             exit;
         }
-        if (time() - ($_SESSION['last_active'] ?? $_SESSION['login_time']) > $idle_timeout) {
+        if (time() - ($_SESSION['last_active'] ?? $_SESSION['login_time'] ?? time()) > $idle_timeout) {
             session_destroy();
             header('Location: index.php?msg=idle_logout');
             exit;
