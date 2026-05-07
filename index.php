@@ -2248,7 +2248,7 @@ document.addEventListener('DOMContentLoaded', function() {
     $('table.data-table:not(.no-dt)').DataTable({
         responsive: true,
         pagingType: 'full_numbers',
-        lengthMenu: [10, 25, 50, 100],
+        lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
         pageLength: 100,
         stateSave: true,
         language: {
@@ -5567,24 +5567,73 @@ function showQuoteBikeDetails(sel) {
     elseif ($page === 'income_expense'):
         require_permission($conn, 'income_expense', 'view');
         $filter_type = $_GET['type'] ?? '';
-        $filter_from = $_GET['from'] ?? date('Y-m-01');
-        $filter_to = $_GET['to'] ?? date('Y-m-d');
+        $filter_from = $_GET['from'] ?? '';
+        $filter_to = $_GET['to'] ?? '';
         $filter_cat = $_GET['category'] ?? '';
-        $where = "WHERE entry_date BETWEEN '$filter_from' AND '$filter_to'";
+        $where = 'WHERE 1=1';
+        if ($filter_from && $filter_to)
+            $where .= " AND entry_date BETWEEN '$filter_from' AND '$filter_to'";
+        elseif ($filter_from)
+            $where .= " AND entry_date >= '$filter_from'";
+        elseif ($filter_to)
+            $where .= " AND entry_date <= '$filter_to'";
+
         if ($filter_type)
             $where .= " AND type='$filter_type'";
         if ($filter_cat)
             $where .= " AND category='" . mysqli_real_escape_string($conn, $filter_cat) . "'";
         $entries = $conn->query("SELECT ie.*, u.full_name FROM income_expenses ie LEFT JOIN users u ON ie.created_by=u.id $where ORDER BY entry_date DESC, id DESC");
         $cats = $conn->query('SELECT DISTINCT category FROM income_expenses ORDER BY category');
-        $totals = $conn->query("SELECT type, SUM(amount) total FROM income_expenses $where GROUP BY type");
+        $totals = $conn->query("SELECT type, COUNT(*) as cnt, SUM(amount) total FROM income_expenses $where GROUP BY type");
         $sum_income = 0;
         $sum_expense = 0;
+        $cnt_income = 0;
+        $cnt_expense = 0;
         while ($t = $totals->fetch_assoc()) {
-            if ($t['type'] == 'income')
+            if ($t['type'] == 'income') {
                 $sum_income = $t['total'];
-            else
+                $cnt_income = $t['cnt'];
+            } else {
                 $sum_expense = $t['total'];
+                $cnt_expense = $t['cnt'];
+            }
+        }
+
+        $cat_stats = $conn->query("SELECT type, category, SUM(amount) as total FROM income_expenses $where GROUP BY type, category ORDER BY total DESC");
+        $inc_cats = [];
+        $exp_cats = [];
+        $top_inc_cat = ['name' => 'None', 'amount' => 0];
+        $top_exp_cat = ['name' => 'None', 'amount' => 0];
+        while ($cs = $cat_stats->fetch_assoc()) {
+            if ($cs['type'] == 'income') {
+                $inc_cats[] = $cs;
+                if ($cs['total'] > $top_inc_cat['amount'])
+                    $top_inc_cat = ['name' => $cs['category'], 'amount' => $cs['total']];
+            } else {
+                $exp_cats[] = $cs;
+                if ($cs['total'] > $top_exp_cat['amount'])
+                    $top_exp_cat = ['name' => $cs['category'], 'amount' => $cs['total']];
+            }
+        }
+
+        $trend_stats = $conn->query("SELECT entry_date, type, SUM(amount) as total FROM income_expenses $where GROUP BY entry_date, type ORDER BY entry_date ASC");
+        $trend_labels = [];
+        $trend_inc = [];
+        $trend_exp = [];
+        $trend_map = [];
+        while ($ts = $trend_stats->fetch_assoc()) {
+            $date = $ts['entry_date'];
+            if (!isset($trend_map[$date]))
+                $trend_map[$date] = ['inc' => 0, 'exp' => 0];
+            if ($ts['type'] == 'income')
+                $trend_map[$date]['inc'] = $ts['total'];
+            else
+                $trend_map[$date]['exp'] = $ts['total'];
+        }
+        foreach ($trend_map as $d => $v) {
+            $trend_labels[] = date('d M', strtotime($d));
+            $trend_inc[] = $v['inc'];
+            $trend_exp[] = $v['exp'];
         }
         $edit_id = (int) ($_GET['edit_id'] ?? 0);
         $edit_entry = null;
@@ -5610,11 +5659,58 @@ function showQuoteBikeDetails(sel) {
     <button class="btn btn-success" onclick="document.getElementById('ieForm').style.display='block';document.getElementById('ieForm').scrollIntoView()">+ Add Entry</button>
     <?php endif; ?>
 </div>
-<div class="split-grid animate__animated animate__fadeInUp" style="margin-bottom:12px">
-<div class="card"><div class="card-body"><div class="card-label">Total Income</div><div class="card-value" style="color:var(--success)"><?= fmt_money($sum_income) ?></div></div></div>
-<div class="card"><div class="card-body"><div class="card-label">Total Expense</div><div class="card-value" style="color:var(--danger)"><?= fmt_money($sum_expense) ?></div></div></div>
-<div class="card"><div class="card-body"><div class="card-label">Net</div><div class="card-value" style="color:<?= ($sum_income - $sum_expense) >= 0 ? 'var(--success)' : 'var(--danger)' ?>"><?= fmt_money($sum_income - $sum_expense) ?></div></div></div>
+<div class="card-grid animate__animated animate__fadeInDown" style="margin-bottom:12px">
+    <div class="card success"><div class="card-icon">💰</div><div class="card-body"><div class="card-label">Total Income</div><div class="card-value" style="font-size:1.1rem"><?= fmt_money($sum_income) ?></div><div class="card-sub"><?= $cnt_income ?> transactions</div></div></div>
+    <div class="card danger"><div class="card-icon">💸</div><div class="card-body"><div class="card-label">Total Expense</div><div class="card-value" style="font-size:1.1rem"><?= fmt_money($sum_expense) ?></div><div class="card-sub"><?= $cnt_expense ?> transactions</div></div></div>
+    <div class="card"><div class="card-icon">⚖️</div><div class="card-body"><div class="card-label">Net Balance</div><div class="card-value" style="font-size:1.1rem;color:<?= ($sum_income - $sum_expense) >= 0 ? 'var(--success)' : 'var(--danger)' ?>"><?= fmt_money($sum_income - $sum_expense) ?></div></div></div>
+    <div class="card"><div class="card-icon">📊</div><div class="card-body"><div class="card-label">Avg Transaction</div><div class="card-value" style="font-size:1.1rem"><?= fmt_money((($cnt_income + $cnt_expense) > 0) ? ($sum_income + $sum_expense) / ($cnt_income + $cnt_expense) : 0) ?></div></div></div>
+    <div class="card success"><div class="card-icon">📈</div><div class="card-body"><div class="card-label">Top Income Cat.</div><div class="card-value" style="font-size:1.1rem"><?= sanitize($top_inc_cat['name']) ?></div><div class="card-sub"><?= fmt_money($top_inc_cat['amount']) ?></div></div></div>
+    <div class="card danger"><div class="card-icon">📉</div><div class="card-body"><div class="card-label">Top Expense Cat.</div><div class="card-value" style="font-size:1.1rem"><?= sanitize($top_exp_cat['name']) ?></div><div class="card-sub"><?= fmt_money($top_exp_cat['amount']) ?></div></div></div>
 </div>
+
+<div class="split-grid-3 animate__animated animate__fadeInUp" style="margin-bottom:16px;">
+    <fieldset class="fieldset" style="margin-bottom:0"><legend>💰 Income by Category</legend><div style="position:relative;height:200px;width:100%"><canvas id="incCatChart"></canvas></div></fieldset>
+    <fieldset class="fieldset" style="margin-bottom:0"><legend>💸 Expense by Category</legend><div style="position:relative;height:200px;width:100%"><canvas id="expCatChart"></canvas></div></fieldset>
+    <fieldset class="fieldset" style="margin-bottom:0"><legend>📈 Daily Trend</legend><div style="position:relative;height:200px;width:100%"><canvas id="ieTrendChart"></canvas></div></fieldset>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    if(typeof Chart !== 'undefined') {
+        const commonPieOpts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: 'var(--text)' } } } };
+        
+        <?php if (!empty($inc_cats)): ?>
+        new Chart(document.getElementById('incCatChart'), {
+            type: 'doughnut',
+            data: { labels: <?= json_encode(array_column($inc_cats, 'category')) ?>, datasets: [{ data: <?= json_encode(array_column($inc_cats, 'total')) ?>, backgroundColor: ['#4ec94e','#4a9eff','#e0a800','#9b59b6','#16a085'] }] },
+            options: commonPieOpts
+        });
+        <?php endif; ?>
+
+        <?php if (!empty($exp_cats)): ?>
+        new Chart(document.getElementById('expCatChart'), {
+            type: 'doughnut',
+            data: { labels: <?= json_encode(array_column($exp_cats, 'category')) ?>, datasets: [{ data: <?= json_encode(array_column($exp_cats, 'total')) ?>, backgroundColor: ['#e74c3c','#e67e22','#d35400','#c0392b','#bdc3c7'] }] },
+            options: commonPieOpts
+        });
+        <?php endif; ?>
+
+        <?php if (!empty($trend_labels)): ?>
+        new Chart(document.getElementById('ieTrendChart'), {
+            type: 'line',
+            data: { 
+                labels: <?= json_encode($trend_labels) ?>, 
+                datasets: [
+                    { label: 'Income', data: <?= json_encode($trend_inc) ?>, borderColor: '#4ec94e', tension: 0.3 },
+                    { label: 'Expense', data: <?= json_encode($trend_exp) ?>, borderColor: '#e74c3c', tension: 0.3 }
+                ] 
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'var(--border)' } }, y: { grid: { color: 'var(--border)' } } } }
+        });
+        <?php endif; ?>
+    }
+});
+</script>
 <div id="ieForm" style="display:<?= $edit_entry ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
 <fieldset class="fieldset"><legend><?= $edit_entry ? '✏ Edit' : ' + Add' ?> Income/Expense</legend>
 <form id="ieEntryForm" method="POST">
