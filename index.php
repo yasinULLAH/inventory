@@ -228,7 +228,7 @@ function install_database()
             `customer_id` INT NULL,
             `tax_amount` DECIMAL(15,2) DEFAULT 0,
             `margin` DECIMAL(15,2) DEFAULT 0,
-            `status` ENUM('in_stock','sold','returned','reserved','damaged_lost') DEFAULT 'in_stock',
+            `status` ENUM('in_stock','sold','returned','returned_to_supplier','reserved','damaged_lost') DEFAULT 'in_stock',
             `return_date` DATE NULL,
             `return_amount` DECIMAL(15,2) NULL,
             `return_notes` TEXT NULL,
@@ -815,8 +815,8 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         $inventory_date = sanitize($_POST['inventory_date'] ?? date('Y-m-d'));
         $supplier_id = (int) ($_POST['supplier_id'] ?? 0);
         $po_notes = sanitize($_POST['po_notes'] ?? '');
-        $bikes_data = $_POST['bikes'] ?? [];
-        $payments_data = $_POST['payments'] ?? [];
+        $bikes_data = isset($_POST['bikes']) && is_array($_POST['bikes']) ? $_POST['bikes'] : [];
+        $payments_data = isset($_POST['payments']) && is_array($_POST['payments']) ? $_POST['payments'] : [];
         if (empty($order_date) || empty($inventory_date) || $supplier_id <= 0 || empty($bikes_data)) {
             $err = 'Purchase order requires date, supplier and at least one bike.';
             goto end_purchase_post;
@@ -1302,7 +1302,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                             if ($acc_id > 0) {
                                 $sa_stmt->bind_param('iiiddd', $bike_id, $acc_id, $qty, $unit_price, $discount, $final_price);
                                 $sa_stmt->execute();
-                                $conn->query("UPDATE accessories SET current_stock = current_stock - $qty WHERE id = $acc_id");
+                                $conn->query("UPDATE accessories SET current_stock = GREATEST(0, current_stock - $qty) WHERE id = $acc_id");
                             }
                         }
                     }
@@ -1366,8 +1366,67 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         header('Location: index.php?page=sale&msg=' . urlencode($msg) . '&err=' . urlencode($err));
         exit;
     }
-    if ($page === 'returns' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_return'])) {
+    if ($page === 'returns' && $_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['save_return']) || isset($_POST['save_purchase_return']))) {
         require_permission($conn, 'returns', 'add');
+
+        if (isset($_POST['save_purchase_return'])) {
+            $bike_id = (int) ($_POST['bike_id'] ?? 0);
+            $return_date = sanitize(!empty($_POST['return_date']) ? $_POST['return_date'] : date('Y-m-d'));
+            $return_amount = (float) ($_POST['return_amount'] ?? 0);
+            $refund_method = sanitize($_POST['refund_method'] ?? 'cash');
+            $cheque_number = sanitize($_POST['cheque_number'] ?? '');
+            $bank_name = sanitize($_POST['bank_name'] ?? '');
+            $cheque_date = !empty($_POST['cheque_date']) ? $_POST['cheque_date'] : null;
+            $return_notes = sanitize($_POST['return_notes'] ?? '');
+
+            if ($bike_id <= 0 || empty($return_date) || $return_amount < 0) {
+                $err = 'Please fill all required fields correctly.';
+                goto end_returns_post;
+            }
+            $conn->begin_transaction();
+            try {
+                $bike_q = $conn->query("SELECT b.chassis_number, b.purchase_price, po.supplier_id, s.name AS sup_name FROM bikes b LEFT JOIN purchase_orders po ON b.purchase_order_id=po.id LEFT JOIN suppliers s ON po.supplier_id=s.id WHERE b.id=$bike_id");
+                $bike_info = $bike_q ? $bike_q->fetch_assoc() : null;
+                if (!$bike_info) {
+                    throw new Exception('Bike not found for return.');
+                }
+                $full_reversal_amount = $bike_info['purchase_price'];
+                $st = $conn->prepare("UPDATE bikes SET status='returned_to_supplier', return_date=?, return_amount=?, return_notes=? WHERE id=? AND status='in_stock'");
+                $st->bind_param('sdsi', $return_date, $return_amount, $return_notes, $bike_id);
+                $st->execute();
+                if ($st->affected_rows === 0) {
+                    throw new Exception("Bike not found or not in 'in_stock' status.");
+                }
+                $st->close();
+                $party_name = $bike_info['sup_name'] ?? 'Unknown Supplier';
+                $pay_st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, cheque_number, bank_name, cheque_date, transaction_type, reference_id, party_name, notes) VALUES (?,?,?,?,?,?,'supplier_refund',?,?,?)");
+                $pay_st->bind_param('ssdsssiss', $return_date, $refund_method, $return_amount, $cheque_number, $bank_name, $cheque_date, $bike_id, $party_name, $return_notes);
+                $pay_st->execute();
+                $pay_st->close();
+
+                $led_st1 = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'debit',?,'supplier',?,?,'purchase_reversal',?,?)");
+                $desc1 = 'Bike Returned to Supplier (Chassis: ' . $bike_info['chassis_number'] . ')';
+                $led_st1->bind_param('sdisid', $return_date, $full_reversal_amount, $bike_info['supplier_id'], $desc1, $bike_id, $full_reversal_amount);
+                $led_st1->execute();
+                $led_st1->close();
+
+                if ($return_amount > 0) {
+                    $led_st2 = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'credit',?,'supplier',?,?,'supplier_refund',?,?)");
+                    $desc2 = 'Refund received for Chassis: ' . $bike_info['chassis_number'];
+                    $led_st2->bind_param('sdisid', $return_date, $return_amount, $bike_info['supplier_id'], $desc2, $bike_id, $return_amount);
+                    $led_st2->execute();
+                    $led_st2->close();
+                }
+                $conn->commit();
+                $msg = 'Purchase Return processed successfully.';
+            } catch (Exception $e) {
+                $conn->rollback();
+                $err = 'Return transaction failed: ' . $e->getMessage();
+            }
+            header('Location: index.php?page=returns&sub=purchase&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+            exit;
+        }
+
         $bike_id = (int) ($_POST['bike_id'] ?? 0);
         $return_date = sanitize(!empty($_POST['return_date']) ? $_POST['return_date'] : date('Y-m-d'));
         $return_amount = (float) ($_POST['return_amount'] ?? 0);
@@ -1443,6 +1502,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                         $stmt = $conn->prepare('UPDATE payments SET status=? WHERE id=?');
                         $stmt->bind_param('si', $new_status, $pid);
                         $stmt->execute();
+                        $bounced_date = date('Y-m-d');
                         if (in_array($pay['transaction_type'], ['sale', 'installment'])) {
                             $cust_id = 0;
                             if ($pay['transaction_type'] === 'sale') {
@@ -1453,10 +1513,26 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                                 $cust_id = $ir && $ir->num_rows > 0 ? (int) $ir->fetch_assoc()['customer_id'] : 0;
                             }
                             if ($cust_id > 0) {
-                                $bounced_date = date('Y-m-d');
                                 $led_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'debit',?,'customer',?,?,'cheque_bounce',?,?)");
                                 $desc = 'Cheque Bounced (Ref Payment #' . $pid . ')';
                                 $led_st->bind_param('sdisid', $bounced_date, $pay['amount'], $cust_id, $desc, $pid, $pay['amount']);
+                                $led_st->execute();
+                            }
+                        } elseif (in_array($pay['transaction_type'], ['supplier_payment', 'supplier_refund'])) {
+                            $sup_id = 0;
+                            if ($pay['reference_id'] > 0 && $pay['transaction_type'] === 'supplier_payment') {
+                                $sr = $conn->query('SELECT supplier_id FROM purchase_orders WHERE id=' . (int) $pay['reference_id']);
+                                $sup_id = $sr && $sr->num_rows > 0 ? (int) $sr->fetch_assoc()['supplier_id'] : 0;
+                            }
+                            if ($sup_id === 0 && !empty($pay['party_name'])) {
+                                $sr2 = $conn->query("SELECT id FROM suppliers WHERE name='" . mysqli_real_escape_string($conn, $pay['party_name']) . "' LIMIT 1");
+                                $sup_id = $sr2 && $sr2->num_rows > 0 ? (int) $sr2->fetch_assoc()['id'] : 0;
+                            }
+                            if ($sup_id > 0) {
+                                $entry_type = $pay['transaction_type'] === 'supplier_payment' ? 'credit' : 'debit';
+                                $led_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,?,?,'supplier',?,?,'cheque_bounce',?,?)");
+                                $desc = 'Supplier Cheque Bounced (Ref Payment #' . $pid . ')';
+                                $led_st->bind_param('ssdisid', $bounced_date, $entry_type, $pay['amount'], $sup_id, $desc, $pid, $pay['amount']);
                                 $led_st->execute();
                             }
                         }
@@ -1569,7 +1645,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $stmt_check_sold->bind_param('i', $bid);
             $stmt_check_sold->execute();
             $bike_status = $stmt_check_sold->get_result()->fetch_assoc()['status'] ?? '';
-            if ($bike_status === 'sold' || $bike_status === 'returned' || $bike_status === 'damaged_lost') {
+            if ($bike_status === 'sold' || $bike_status === 'returned' || $bike_status === 'returned_to_supplier' || $bike_status === 'damaged_lost') {
                 $err = 'Cannot delete a sold or returned bike. Please adjust its status if necessary.';
             } else {
                 $stmt = $conn->prepare('DELETE FROM bikes WHERE id=?');
@@ -1643,7 +1719,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                         $stmt_check_sold->bind_param('i', $id);
                         $stmt_check_sold->execute();
                         $bike_status = $stmt_check_sold->get_result()->fetch_assoc()['status'] ?? '';
-                        if ($bike_status === 'sold' || $bike_status === 'returned' || $bike_status === 'damaged_lost') {
+                        if ($bike_status === 'sold' || $bike_status === 'returned' || $bike_status === 'returned_to_supplier' || $bike_status === 'damaged_lost') {
                             $err .= "Cannot delete bike ID $id (status: $bike_status). ";
                             $errors_found = true;
                         } else {
@@ -2267,7 +2343,8 @@ body.sidebar-collapsed .sidebar-footer form button::after { content: '🚪'; fon
 .main-wrap{margin-left:0!important}
 .content{padding:0!important}
 body{background:#fff!important;color:#111!important}
-.data-table th,.data-table td{color:#111!important;background:#fff!important;border-color:#666!important}
+.data-table th,.data-table td{color:#111!important;background:#fff!important;border-color:#666!important;white-space:normal!important;word-wrap:break-word!important}
+.data-table-wrap{overflow:visible!important;overflow-x:visible!important}
 .invoice-wrap{border:none!important;padding:0!important}
 .invoice-footer{position:fixed;bottom:0;width:100%;text-align:center;padding:10px;font-size:10px;color:#777;border-top:1px solid #ccc;background:#fff;}
 }
@@ -3128,7 +3205,7 @@ $(document).ready(function() {
         $date_from = $_GET['date_from'] ?? '';
         $date_to = $_GET['date_to'] ?? '';
         $where_parts = ['1=1'];
-        if ($status_f && in_array($status_f, ['in_stock', 'sold', 'returned', 'reserved', 'damaged_lost']))
+        if ($status_f && in_array($status_f, ['in_stock', 'sold', 'returned', 'returned_to_supplier', 'reserved', 'damaged_lost']))
             $where_parts[] = "b.status='$status_f'";
         if ($model_f)
             $where_parts[] = "b.model_id=$model_f";
@@ -3205,8 +3282,10 @@ $(document).ready(function() {
 <?php if ($view_bike['status'] === 'damaged_lost'): ?>
 <li><div class="timeline-dot" style="background:#444"></div><div class="timeline-content"><div class="timeline-text">🚨 <strong>Marked as Damaged / Lost</strong></div></div></li>
 <?php endif; ?>
-<?php if ($view_bike['status'] === 'returned' || $view_bike['return_date']): ?>
-<li><div class="timeline-dot" style="background:#e74c3c"></div><div class="timeline-content"><div class="timeline-date"><?= fmt_date($view_bike['return_date']) ?></div><div class="timeline-text">↩ <strong>Returned</strong> — Amount: <?= fmt_money($view_bike['return_amount']) ?> | Notes: <?= sanitize($view_bike['return_notes'] ?? '-') ?></div></div></li>
+<?php if ($view_bike['status'] === 'returned_to_supplier'): ?>
+<li><div class="timeline-dot" style="background:#e74c3c"></div><div class="timeline-content"><div class="timeline-date"><?= fmt_date($view_bike['return_date']) ?></div><div class="timeline-text">📤 <strong>Returned to Supplier</strong> — Refund: <?= fmt_money($view_bike['return_amount']) ?> | Notes: <?= sanitize($view_bike['return_notes'] ?? '-') ?></div></div></li>
+<?php elseif ($view_bike['status'] === 'returned' || $view_bike['return_date']): ?>
+<li><div class="timeline-dot" style="background:#e74c3c"></div><div class="timeline-content"><div class="timeline-date"><?= fmt_date($view_bike['return_date']) ?></div><div class="timeline-text">↩ <strong>Returned by Customer</strong> — Refund: <?= fmt_money($view_bike['return_amount']) ?> | Notes: <?= sanitize($view_bike['return_notes'] ?? '-') ?></div></div></li>
 <?php endif; ?>
 </ul>
 </fieldset>
@@ -3221,7 +3300,8 @@ $(document).ready(function() {
 <option value="">All</option>
 <option value="in_stock" <?= $status_f === 'in_stock' ? 'selected' : '' ?>>In Stock</option>
 <option value="sold" <?= $status_f === 'sold' ? 'selected' : '' ?>>Sold</option>
-<option value="returned" <?= $status_f === 'returned' ? 'selected' : '' ?>>Returned</option>
+<option value="returned" <?= $status_f === 'returned' ? 'selected' : '' ?>>Returned (Sales)</option>
+<option value="returned_to_supplier" <?= $status_f === 'returned_to_supplier' ? 'selected' : '' ?>>Returned (Purchase)</option>
 <option value="reserved" <?= $status_f === 'reserved' ? 'selected' : '' ?>>Reserved</option>
 <option value="damaged_lost" <?= $status_f === 'damaged_lost' ? 'selected' : '' ?>>Damaged / Lost</option>
 </select>
@@ -3279,7 +3359,7 @@ $(document).ready(function() {
             $total_sp = 0;
             $total_mg = 0;
             while ($bike = $bikes_result->fetch_assoc()):
-                $st_badge = $bike['status'] === 'sold' ? 'badge-success' : ($bike['status'] === 'returned' ? 'badge-danger' : ($bike['status'] === 'damaged_lost' ? 'badge-dark' : ($bike['status'] === 'reserved' ? 'badge-warning' : 'badge-info')));
+                $st_badge = $bike['status'] === 'sold' ? 'badge-success' : (in_array($bike['status'], ['returned', 'returned_to_supplier']) ? 'badge-danger' : ($bike['status'] === 'damaged_lost' ? 'badge-dark' : ($bike['status'] === 'reserved' ? 'badge-warning' : 'badge-info')));
                 $total_pp += $bike['purchase_price'];
                 $total_sp += $bike['selling_price'] ?? 0;
                 $total_mg += $bike['margin'] ?? 0;
@@ -3349,7 +3429,8 @@ $(document).ready(function() {
 <select name="status">
 <option value="in_stock" <?= $edit_bike['status'] === 'in_stock' ? 'selected' : '' ?>>In Stock</option>
 <option value="sold" <?= $edit_bike['status'] === 'sold' ? 'selected' : '' ?>>Sold</option>
-<option value="returned" <?= $edit_bike['status'] === 'returned' ? 'selected' : '' ?>>Returned</option>
+<option value="returned" <?= $edit_bike['status'] === 'returned' ? 'selected' : '' ?>>Returned (Sales)</option>
+<option value="returned_to_supplier" <?= $edit_bike['status'] === 'returned_to_supplier' ? 'selected' : '' ?>>Returned (Purchase)</option>
 <option value="reserved" <?= $edit_bike['status'] === 'reserved' ? 'selected' : '' ?>>Reserved</option>
 <option value="damaged_lost" <?= $edit_bike['status'] === 'damaged_lost' ? 'selected' : '' ?>>Damaged / Lost</option>
 </select>
@@ -3753,12 +3834,21 @@ window.onload = function() {
 </script>
 <?php
     elseif ($page === 'returns'):
-        $sold_bikes = $conn->query("SELECT b.id, b.chassis_number, b.color, b.selling_price, b.purchase_price, m.model_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.status='sold' ORDER BY b.selling_date DESC");
+        $sub = sanitize($_GET['sub'] ?? 'sale');
         $prefill_ret_id = (int) ($_GET['bike_id'] ?? 0);
 ?>
+<div class="sub-tabs no-print animate__animated animate__fadeInDown">
+<a href="index.php?page=returns&sub=sale" class="sub-tab <?= $sub === 'sale' ? 'active' : '' ?>">🛒 Sales Returns</a>
+<a href="index.php?page=returns&sub=purchase" class="sub-tab <?= $sub === 'purchase' ? 'active' : '' ?>">📤 Purchase Returns</a>
+</div>
+
+<?php
+        if ($sub === 'sale'):
+            $sold_bikes = $conn->query("SELECT b.id, b.chassis_number, b.color, b.selling_price, b.purchase_price, m.model_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.status='sold' ORDER BY b.selling_date DESC");
+            ?>
 <form method="POST" id="returnForm" class="animate__animated animate__fadeIn">
 <input type="hidden" name="save_return" value="1">
-<fieldset class="fieldset"><legend>↩ Return / Adjustment</legend>
+<fieldset class="fieldset"><legend>↩ Sales Return / Adjustment</legend>
 <div class="form-row">
 <div class="form-group">
 <label>Select Sold Bike <span class="req">*</span></label>
@@ -3770,11 +3860,11 @@ window.onload = function() {
 </select>
 </div>
 <div class="form-group"><label>Return Date <span class="req">*</span></label><input type="date" name="return_date" value="<?= date('Y-m-d') ?>" required></div>
-<div class="form-group"><label>Return Amount (<?= $currency ?>) <span class="req">*</span></label><input type="number" name="return_amount" step="0.01" min="0" required placeholder="0.00"></div>
+<div class="form-group"><label>Refund Amount (<?= $currency ?>) <span class="req">*</span></label><input type="number" name="return_amount" step="0.01" min="0" required placeholder="0.00"></div>
 </div>
 <div class="form-row">
 <div class="form-group"><label>Refund Method <span class="req">*</span></label>
-<select name="refund_method" id="refundMethod" onchange="toggleRetCheque(this.value)">
+<select name="refund_method" id="refundMethod" onchange="toggleRetCheque(this.value, 'retChequeFields')">
 <option value="cash">Cash</option>
 <option value="bank_transfer">Bank Transfer</option>
 <option value="cheque">Cheque</option>
@@ -3791,12 +3881,57 @@ window.onload = function() {
 <div class="form-group"><label>Return Notes</label><textarea name="return_notes" rows="3" placeholder="Reason for return, cheque details, account number, etc."></textarea></div>
 </div>
 </fieldset>
-<button type="submit" name="save_return" class="btn btn-warning">↩ Process Return</button>
+<button type="submit" name="save_return" class="btn btn-warning">↩ Process Sales Return</button>
 <a href="index.php?page=inventory" class="btn btn-default">← Cancel</a>
 </form>
+
+<?php
+        elseif ($sub === 'purchase'):
+            $purchased_bikes = $conn->query("SELECT b.id, b.chassis_number, b.color, b.purchase_price, m.model_name, s.name AS sup_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN purchase_orders po ON b.purchase_order_id=po.id LEFT JOIN suppliers s ON po.supplier_id=s.id WHERE b.status='in_stock' ORDER BY b.inventory_date DESC");
+?>
+<form method="POST" id="purchaseReturnForm" class="animate__animated animate__fadeIn">
+<input type="hidden" name="save_purchase_return" value="1">
+<fieldset class="fieldset"><legend>📤 Purchase Return (To Supplier)</legend>
+<div class="form-row">
+<div class="form-group">
+<label>Select In-Stock Bike <span class="req">*</span></label>
+<select name="bike_id" id="purchReturnBikeSelect" required onchange="fillPurchReturnAmount(this)">
+<option value="">-- Select Bike --</option>
+<?php while ($pb = $purchased_bikes->fetch_assoc()): ?>
+<option value="<?= $pb['id'] ?>" data-pp="<?= $pb['purchase_price'] ?>"><?= sanitize($pb['chassis_number']) ?> | <?= sanitize($pb['model_name']) ?> | <?= sanitize($pb['sup_name'] ?? 'Unknown Supplier') ?> | PP: <?= fmt_money($pb['purchase_price']) ?></option>
+<?php endwhile; ?>
+</select>
+</div>
+<div class="form-group"><label>Return Date <span class="req">*</span></label><input type="date" name="return_date" value="<?= date('Y-m-d') ?>" required></div>
+<div class="form-group"><label>Refund Received (<?= $currency ?>) <span class="req">*</span></label><input type="number" name="return_amount" id="purchReturnAmount" step="0.01" min="0" required placeholder="0.00"></div>
+</div>
+<div class="form-row">
+<div class="form-group"><label>Refund Receipt Method <span class="req">*</span></label>
+<select name="refund_method" id="purchRefundMethod" onchange="toggleRetCheque(this.value, 'purchRetChequeFields')">
+<option value="cash">Cash</option>
+<option value="bank_transfer">Bank Transfer</option>
+<option value="cheque">Cheque</option>
+<option value="online">Online</option>
+</select>
+</div>
+</div>
+<div id="purchRetChequeFields" style="display:none" class="form-row">
+<div class="form-group"><label>Cheque Number</label><input type="text" name="cheque_number" placeholder="CHQ-001"></div>
+<div class="form-group"><label>Bank Name</label><input type="text" name="bank_name" placeholder="HBL, MCB..."></div>
+<div class="form-group"><label>Cheque Date</label><input type="date" name="cheque_date"></div>
+</div>
+<div class="form-row">
+<div class="form-group"><label>Return Notes</label><textarea name="return_notes" rows="3" placeholder="Reason for return, replacement info, etc."></textarea></div>
+</div>
+</fieldset>
+<button type="submit" name="save_purchase_return" class="btn btn-danger">📤 Process Purchase Return</button>
+<a href="index.php?page=inventory" class="btn btn-default">← Cancel</a>
+</form>
+<?php endif; ?>
+
 <script>
-function toggleRetCheque(v) {
-    var chequeFields = document.getElementById('retChequeFields');
+function toggleRetCheque(v, targetId) {
+    var chequeFields = document.getElementById(targetId);
     if (v === 'cheque') {
         chequeFields.style.display = 'flex';
         $(chequeFields).find('input').attr('required', true);
@@ -3805,8 +3940,13 @@ function toggleRetCheque(v) {
         $(chequeFields).find('input').removeAttr('required');
     }
 }
+function fillPurchReturnAmount(sel) {
+    var opt = sel.options[sel.selectedIndex];
+    var pp = opt.dataset.pp || '';
+    document.getElementById('purchReturnAmount').value = pp;
+}
 $(document).ready(function() {
-    $('#returnBikeSelect, #refundMethod').select2({
+    $('#returnBikeSelect, #refundMethod, #purchReturnBikeSelect, #purchRefundMethod').select2({
         minimumResultsForSearch: 10,
         placeholder: '-- Select --',
         allowClear: false,
@@ -4559,7 +4699,7 @@ $(document).ready(function() {
     COUNT(b.id) as total_inv,
     SUM(CASE WHEN b.status='sold' THEN 1 ELSE 0 END) as sold_cnt,
     SUM(CASE WHEN b.status='in_stock' THEN 1 ELSE 0 END) as avail_cnt,
-    SUM(CASE WHEN b.status='returned' THEN 1 ELSE 0 END) as ret_cnt,
+    SUM(CASE WHEN b.status IN ('returned', 'returned_to_supplier') THEN 1 ELSE 0 END) as ret_cnt,
     SUM(CASE WHEN b.status='damaged_lost' THEN 1 ELSE 0 END) as dmg_cnt,
     SUM(b.purchase_price) as total_pp,
     SUM(CASE WHEN b.status='sold' THEN b.selling_price ELSE 0 END) as total_sp,

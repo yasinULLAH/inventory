@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3306
--- Generation Time: May 07, 2026 at 06:26 AM
+-- Generation Time: May 07, 2026 at 07:04 AM
 -- Server version: 8.2.0
 -- PHP Version: 8.3.0
 
@@ -66,7 +66,7 @@ CREATE TABLE `bikes` (
   `customer_id` int DEFAULT NULL,
   `tax_amount` decimal(15,2) DEFAULT '0.00',
   `margin` decimal(15,2) DEFAULT '0.00',
-  `status` enum('in_stock','sold','returned','reserved','damaged_lost') DEFAULT 'in_stock',
+  `status` enum('in_stock','sold','returned','returned_to_supplier','reserved','damaged_lost') DEFAULT 'in_stock',
   `return_date` date DEFAULT NULL,
   `return_amount` decimal(15,2) DEFAULT NULL,
   `return_notes` text,
