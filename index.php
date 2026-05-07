@@ -495,50 +495,41 @@ function sanitize($val)
 function handle_image_upload($file, $dest_dir = 'uploads/')
 {
     $dest_dir = basename($dest_dir) . '/';
-    if (!isset($file['error']) || is_array($file['error']) || $file['error'] !== UPLOAD_ERR_OK)
-        return null;
-    if (!is_dir($dest_dir))
-        mkdir($dest_dir, 0777, true);
+    if (!isset($file['error']) || is_array($file['error']) || $file['error'] !== UPLOAD_ERR_OK) return null;
+    if (!is_dir($dest_dir)) mkdir($dest_dir, 0777, true);
     $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-    if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif']))
-        return null;
+    if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'])) return null;
     $filename = uniqid('img_') . '.jpg';
     $dest = $dest_dir . $filename;
-
     $info = getimagesize($file['tmp_name']);
-    if (!$info)
-        return null;
-
-    if ($file['size'] > 400 * 1024) {
-        $img = null;
-        if ($info[2] == IMAGETYPE_JPEG)
-            $img = imagecreatefromjpeg($file['tmp_name']);
-        elseif ($info[2] == IMAGETYPE_PNG)
-            $img = imagecreatefrompng($file['tmp_name']);
-        elseif ($info[2] == IMAGETYPE_WEBP)
-            $img = imagecreatefromwebp($file['tmp_name']);
-        elseif ($info[2] == IMAGETYPE_GIF)
-            $img = imagecreatefromgif($file['tmp_name']);
-
-        if ($img) {
-            $w = imagesx($img);
-            $h = imagesy($img);
-            $ratio = $w / $h;
-            $new_w = min($w, 800);
-            $new_h = $new_w / $ratio;
-            $new_img = imagecreatetruecolor($new_w, $new_h);
-            if ($info[2] == IMAGETYPE_PNG) {
-                imagealphablending($new_img, false);
-                imagesavealpha($new_img, true);
-            }
-            imagecopyresampled($new_img, $img, 0, 0, 0, 0, $new_w, $new_h, $w, $h);
-            imagejpeg($new_img, $dest, 75);
-            imagedestroy($img);
-            imagedestroy($new_img);
-            return $dest;
-        }
+    if (!$info) return null;
+    $img = null;
+    if ($info[2] == IMAGETYPE_JPEG) $img = imagecreatefromjpeg($file['tmp_name']);
+    elseif ($info[2] == IMAGETYPE_PNG) $img = imagecreatefrompng($file['tmp_name']);
+    elseif ($info[2] == IMAGETYPE_WEBP) $img = imagecreatefromwebp($file['tmp_name']);
+    elseif ($info[2] == IMAGETYPE_GIF) $img = imagecreatefromgif($file['tmp_name']);
+    if (!$img) return null;
+    $w = imagesx($img);
+    $h = imagesy($img);
+    $new_w = min($w, 800);
+    $new_h = ($new_w / $w) * $h;
+    $new_img = imagecreatetruecolor($new_w, $new_h);
+    if ($info[2] == IMAGETYPE_PNG || $info[2] == IMAGETYPE_GIF) {
+        $white = imagecolorallocate($new_img, 255, 255, 255);
+        imagefill($new_img, 0, 0, $white);
     }
-    move_uploaded_file($file['tmp_name'], $dest);
+    imagecopyresampled($new_img, $img, 0, 0, 0, 0, $new_w, $new_h, $w, $h);
+    $quality = 90;
+    do {
+        ob_start();
+        imagejpeg($new_img, null, $quality);
+        $size = ob_get_length();
+        $imgData = ob_get_clean();
+        $quality -= 10;
+    } while ($size > 307200 && $quality > 10);
+    file_put_contents($dest, $imgData);
+    imagedestroy($img);
+    imagedestroy($new_img);
     return $dest;
 }
 
@@ -890,6 +881,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             } else {
                 $msg = "Purchase order saved. $saved_count bike(s) added to inventory.";
             }
+            $_SESSION['last_purchase_id'] = $po_id;
         } catch (Exception $e) {
             $conn->rollback();
             $err = 'Transaction failed: ' . $e->getMessage();
@@ -2200,17 +2192,32 @@ body.sidebar-collapsed .sidebar-footer form button::after { content: '🚪'; fon
 .sub-tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .sub-panel{display:none}
 .sub-panel.active{display:block}
-.invoice-wrap{background:#fff;color:#111;padding:20px;font-family:Arial,sans-serif;font-size:12px;max-width:700px;margin:0 auto;border:1px solid #ccc}
-.invoice-header{text-align:center;margin-bottom:16px;border-bottom:2px solid #333;padding-bottom:10px}
-.invoice-header h1{font-size:1.3rem;color:#1a1a1a;font-weight:700}
-.invoice-header h2{font-size:0.85rem;color:#555;font-weight:400}
-.invoice-section{margin-bottom:12px}
-.invoice-section h3{font-size:0.78rem;text-transform:uppercase;font-weight:700;border-bottom:1px solid #ccc;padding-bottom:3px;margin-bottom:6px}
-.invoice-table{width:100%;border-collapse:collapse;font-size:0.83rem}
-.invoice-table th,.invoice-table td{border:1px solid #ccc;padding:5px 8px}
-.invoice-table th{background:#f0f0f0;font-weight:700}
-.invoice-total{text-align:right;font-size:0.95rem;font-weight:700;margin-top:10px;padding:8px;background:#f0f0f0;border:1px solid #ccc}
-.invoice-footer{text-align:center;margin-top:16px;border-top:1px solid #ccc;padding-top:8px;font-size:0.75rem;color:#777}
+/* --- A4 Letterhead Style --- */
+.a4-invoice { background: #fff; color: #111; padding: 40px; font-family: 'Segoe UI', Arial, sans-serif; max-width: 800px; margin: 20px auto; border: 1px solid #ddd; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+.a4-invoice .invoice-header { text-align: center; border-bottom: 3px solid #1a6fc4; padding-bottom: 15px; margin-bottom: 25px; }
+.a4-invoice .invoice-header h1 { font-size: 1.8rem; color: #1a6fc4; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
+.a4-invoice .invoice-header h2 { font-size: 1rem; color: #555; font-weight: 600; margin-top: 5px; }
+.a4-invoice .invoice-meta { display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 0.9rem; line-height: 1.5; }
+.a4-invoice .invoice-section { margin-bottom: 20px; }
+.a4-invoice .invoice-section h3 { font-size: 1rem; text-transform: uppercase; font-weight: 700; background: #f4f7f6; border-left: 4px solid #1a6fc4; padding: 6px 10px; margin-bottom: 10px; }
+.a4-invoice .invoice-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.a4-invoice .invoice-table th, .a4-invoice .invoice-table td { border: 1px solid #ddd; padding: 8px 12px; }
+.a4-invoice .invoice-table th { background: #f8f9fa; font-weight: 700; text-align: left; }
+.a4-invoice .invoice-total { text-align: right; font-size: 1.1rem; font-weight: 800; margin-top: 10px; padding: 10px; background: #eef2f5; border: 1px solid #cdd5dc; color: #111; }
+.a4-invoice .invoice-footer { text-align: center; margin-top: 30px; border-top: 1px solid #ddd; padding-top: 15px; font-size: 0.8rem; color: #777; }
+
+/* --- Thermal Receipt Style --- */
+.thermal-receipt { background: #fff; color: #000; padding: 15px; font-family: 'Courier New', Courier, monospace; width: 80mm; margin: 0 auto; font-size: 12px; line-height: 1.4; }
+.thermal-receipt .invoice-header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 10px; margin-bottom: 10px; }
+.thermal-receipt .invoice-header h1 { font-size: 1.2rem; font-weight: bold; }
+.thermal-receipt .invoice-header h2 { font-size: 0.85rem; font-weight: normal; }
+.thermal-receipt .invoice-meta { margin-bottom: 10px; border-bottom: 1px dashed #000; padding-bottom: 10px; }
+.thermal-receipt .invoice-section h3 { font-size: 0.9rem; font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 5px; }
+.thermal-receipt .invoice-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+.thermal-receipt .invoice-table th, .thermal-receipt .invoice-table td { padding: 4px 2px; text-align: left; vertical-align: top; border-bottom: 1px dotted #ccc; }
+.thermal-receipt .invoice-table th { border-bottom: 1px solid #000; font-weight: bold; }
+.thermal-receipt .invoice-total { text-align: right; font-size: 1rem; font-weight: bold; border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 5px 0; margin-top: 5px; }
+.thermal-receipt .invoice-footer { text-align: center; margin-top: 15px; font-size: 10px; border-top: 1px dashed #000; padding-top: 5px; }
 .timeline{list-style:none;padding:0;margin:0}
 .timeline li{display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)}
 .timeline-dot{width:12px;height:12px;border-radius:50%;background:var(--accent);margin-top:4px;flex-shrink:0}
@@ -2345,8 +2352,8 @@ body.sidebar-collapsed .sidebar-footer form button::after { content: '🚪'; fon
 body{background:#fff!important;color:#111!important}
 .data-table th,.data-table td{color:#111!important;background:#fff!important;border-color:#666!important;white-space:normal!important;word-wrap:break-word!important}
 .data-table-wrap{overflow:visible!important;overflow-x:visible!important}
-.invoice-wrap{border:none!important;padding:0!important}
-.invoice-footer{position:fixed;bottom:0;width:100%;text-align:center;padding:10px;font-size:10px;color:#777;border-top:1px solid #ccc;background:#fff;}
+.a4-invoice { border: none !important; box-shadow: none !important; width: 100% !important; max-width: none !important; margin: 0 !important; padding: 0 !important; }
+.thermal-receipt { margin: 0 !important; padding: 0 !important; width: 80mm !important; }
 }
 @media(max-width:900px){
 .card-grid{grid-template-columns:repeat(2,1fr)}
@@ -2959,6 +2966,85 @@ document.addEventListener('DOMContentLoaded', function() {
 <a href="index.php?page=inventory" class="btn btn-default">← Back to Inventory</a>
 </div>
 </form>
+
+<?php 
+$last_purchase_id = $_SESSION['last_purchase_id'] ?? 0;
+unset($_SESSION['last_purchase_id']);
+if ($last_purchase_id): ?>
+<div style="margin-top:16px; display:flex; gap:10px;">
+<a href="index.php?page=purchase&print_po=<?= $last_purchase_id ?>&format=a4" class="btn btn-primary" target="_blank">🖨 Print Letterhead (A4)</a>
+<a href="index.php?page=purchase&print_po=<?= $last_purchase_id ?>&format=thermal" class="btn btn-warning" target="_blank">🧾 Print Thermal (POS)</a>
+</div>
+<?php endif; ?>
+
+<?php
+$print_po_id = (int) ($_GET['print_po'] ?? 0);
+if ($print_po_id):
+    echo '<style>.sidebar, .topbar { display: none !important; } .main-wrap { margin-left: 0 !important; } .content > *:not(#receiptArea):not(.no-print) { display: none !important; } .content { padding: 40px !important; background: #333 !important; } body { background: #333 !important; } @media print { .content, body { padding: 0 !important; background: #fff !important; } }</style>';
+    $po_r = $conn->query("SELECT po.*, s.name as sup_name, s.contact, s.address FROM purchase_orders po LEFT JOIN suppliers s ON po.supplier_id=s.id WHERE po.id=$print_po_id");
+    $po = $po_r ? $po_r->fetch_assoc() : null;
+    $po_no = 'PO-' . date('Ymd') . '-' . str_pad($print_po_id, 3, '0', STR_PAD_LEFT);
+    $format = $_GET['format'] ?? 'a4';
+    $container_class = $format === 'thermal' ? 'thermal-receipt' : 'a4-invoice';
+    if ($po):
+?>
+<div class="<?= $container_class ?>" id="receiptArea">
+    <div class="invoice-header">
+        <h1>⚡ <?= sanitize(get_setting('company_name') ?? 'BNI Enterprises') ?></h1>
+        <h2><?= sanitize(get_setting('branch_name') ?? 'Dera (Ahmed Metro)') ?></h2>
+        <div style="font-size:0.9rem;margin-top:4px"><strong>PURCHASE RECEIPT</strong></div>
+    </div>
+    
+    <div class="invoice-meta">
+        <div><strong>PO #:</strong> <?= $po_no ?><br><strong>Date:</strong> <?= fmt_date($po['order_date']) ?></div>
+        <div class="<?= $format === 'thermal' ? '' : 'text-right' ?>" style="<?= $format === 'thermal' ? 'margin-top:10px;' : 'text-align:right;' ?>">
+            <strong>Supplier:</strong> <?= sanitize($po['sup_name'] ?? 'Unknown') ?><br>
+            <?php if ($po['contact']): ?><strong>Contact:</strong> <?= sanitize($po['contact']) ?><br><?php endif; ?>
+        </div>
+    </div>
+
+    <div class="invoice-section">
+        <h3>Bikes Purchased</h3>
+        <table class="invoice-table">
+            <thead>
+                <tr>
+                    <th>Chassis</th>
+                    <?= $format === 'a4' ? '<th>Model</th><th>Color</th>' : '' ?>
+                    <th style="text-align:right">Price</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php 
+                $bikes_po = $conn->query("SELECT b.chassis_number, b.color, b.purchase_price, m.model_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.purchase_order_id=$print_po_id");
+                while ($bpo = $bikes_po->fetch_assoc()): ?>
+                <tr>
+                    <td style="font-family:Consolas,monospace"><?= sanitize($bpo['chassis_number']) ?><?= $format === 'thermal' ? '<br><small>'.sanitize($bpo['model_name']).'</small>' : '' ?></td>
+                    <?= $format === 'a4' ? '<td>'.sanitize($bpo['model_name']).'</td><td>'.sanitize($bpo['color']).'</td>' : '' ?>
+                    <td style="text-align:right"><?= fmt_money($bpo['purchase_price']) ?></td>
+                </tr>
+                <?php endwhile; ?>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="invoice-section">
+        <h3>Summary</h3>
+        <table class="invoice-table" style="width:<?= $format === 'thermal' ? '100%' : '50%' ?>; margin-left:<?= $format === 'thermal' ? '0' : 'auto' ?>;">
+            <tbody>
+                <tr><td><strong>Total Units</strong></td><td style="text-align:right"><?= $po['total_units'] ?></td></tr>
+                <tr><td><strong>Total Amount</strong></td><td style="text-align:right"><?= fmt_money($po['total_amount']) ?></td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="invoice-footer">
+        Generated by: Yasin Ullah – BSS<br>System: https://www.yasinbss.com<br>WhatsApp: 03361593533
+    </div>
+</div>
+<div class="no-print" style="margin-top:10px">
+    <button onclick="window.print()" class="btn btn-success">🖨 Print Receipt</button>
+    <a href="index.php?page=inventory" class="btn btn-default">Back to Inventory</a>
+</div>
+<?php endif; endif; ?>
 <div class="modal-overlay" id="addSupplierModal">
 <div class="modal">
 <div class="modal-header"><h3>Add New Supplier</h3><button class="modal-close" onclick="closeSupplierModal()">✕</button></div>
@@ -3386,6 +3472,14 @@ $(document).ready(function() {
 <?php if ($bike['status'] === 'sold' && has_permission($conn, 'returns', 'add')): ?>
 <a href="index.php?page=returns&bike_id=<?= $bike['id'] ?>" class="btn btn-warning btn-sm" title="Return">↩</a>
 <?php endif; ?>
+<?php if ($bike['status'] === 'sold' && has_permission($conn, 'sale', 'view')): ?>
+<a href="index.php?page=sale&print_invoice=<?= $bike['id'] ?>&format=a4" class="btn btn-primary btn-sm" title="A4 Invoice" target="_blank">📄</a>
+<a href="index.php?page=sale&print_invoice=<?= $bike['id'] ?>&format=thermal" class="btn btn-warning btn-sm" title="Thermal POS" target="_blank">🧾</a>
+<?php endif; ?>
+<?php if ($bike['purchase_order_id'] && has_permission($conn, 'purchase', 'view')): ?>
+<a href="index.php?page=purchase&print_po=<?= $bike['purchase_order_id'] ?>&format=a4" class="btn btn-primary btn-sm" title="A4 Purchase Receipt" target="_blank">📄</a>
+<a href="index.php?page=purchase&print_po=<?= $bike['purchase_order_id'] ?>&format=thermal" class="btn btn-default btn-sm" title="Thermal Purchase Receipt" target="_blank">📦</a>
+<?php endif; ?>
 <?php if (has_permission($conn, 'inventory', 'edit')): ?>
 <a href="index.php?page=inventory&edit_id=<?= $bike['id'] ?>" class="btn btn-primary btn-sm" title="Edit">✏</a>
 <?php endif; ?>
@@ -3563,96 +3657,108 @@ document.getElementById('bulkExportForm').addEventListener('submit', function(){
 </div>
 </form>
 <?php if ($last_sale_bike_id): ?>
-<div style="margin-top:16px">
-<a href="index.php?page=sale&print_invoice=<?= $last_sale_bike_id ?>" class="btn btn-primary" target="_blank">🖨 Print Invoice</a>
+<div style="margin-top:16px; display:flex; gap:10px;">
+<a href="index.php?page=sale&print_invoice=<?= $last_sale_bike_id ?>&format=a4" class="btn btn-primary" target="_blank">🖨 Print Letterhead (A4)</a>
+<a href="index.php?page=sale&print_invoice=<?= $last_sale_bike_id ?>&format=thermal" class="btn btn-warning" target="_blank">🧾 Print Thermal (POS)</a>
 </div>
 <?php endif; ?>
+
 <?php
-        $print_inv_id = (int) ($_GET['print_invoice'] ?? 0);
-        if ($print_inv_id):
-            $inv_r = $conn->query("SELECT b.*, m.model_name, m.model_code, m.category, c.name as cust_name, c.phone as cust_phone, c.cnic as cust_cnic, c.address as cust_addr, c.is_filer FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id WHERE b.id=$print_inv_id");
-            $inv = $inv_r ? $inv_r->fetch_assoc() : null;
-            $show_pp = get_setting('show_purchase_on_invoice') == '1';
-            $inv_no = 'INV-' . date('Ymd') . '-' . str_pad($print_inv_id, 3, '0', STR_PAD_LEFT);
-            if ($inv):
-                ?>
-<div class="invoice-wrap" id="invoiceArea">
-<div class="invoice-header">
-<h1>⚡ <?= sanitize(get_setting('company_name') ?? 'BNI Enterprises') ?></h1>
-<h2><?= sanitize(get_setting('branch_name') ?? 'Dera (Ahmed Metro)') ?></h2>
-<div style="font-size:0.8rem;margin-top:4px">Sale Invoice</div>
-</div>
-<div style="display:flex;justify-content:space-between;margin-bottom:12px;font-size:0.82rem">
-<div><strong>Invoice #:</strong> <?= $inv_no ?><br><strong>Date:</strong> <?= fmt_date($inv['selling_date']) ?></div>
-<div style="text-align:right"><strong>Customer:</strong> <?= sanitize($inv['cust_name'] ?? 'Walk-in Customer') ?><br>
-<?php if ($inv['cust_phone']): ?><strong>Phone:</strong> <?= sanitize($inv['cust_phone']) ?><br><?php endif; ?>
-<?php if ($inv['cust_cnic']): ?><strong>CNIC:</strong> <?= sanitize($inv['cust_cnic']) ?> (<?= $inv['is_filer'] ? 'Filer' : 'Non-Filer' ?>)<br><?php endif; ?>
-</div>
-</div>
-<div class="invoice-section">
-<h3>Bike Details</h3>
-<table class="invoice-table">
-<thead><tr><th>Field</th><th>Details</th></tr></thead>
-<tbody>
-<tr><td>Model</td><td><?= sanitize($inv['model_name']) ?> (<?= sanitize($inv['model_code']) ?>)</td></tr>
-<tr><td>Category</td><td><?= sanitize($inv['category']) ?></td></tr>
-<tr><td>Chassis No.</td><td style="font-family:Consolas,monospace"><?= sanitize($inv['chassis_number']) ?></td></tr>
-<tr><td>Motor No.</td><td style="font-family:Consolas,monospace"><?= sanitize($inv['motor_number'] ?? '-') ?></td></tr>
-<tr><td>Color</td><td><?= sanitize($inv['color']) ?></td></tr>
-<?php
-                $sold_acc_r = $conn->query('SELECT sa.*, a.name FROM sale_accessories sa JOIN accessories a ON sa.accessory_id=a.id WHERE sa.bike_id=' . $inv['id']);
-                if ($sold_acc_r->num_rows > 0):
-                    ?>
-<tr><td colspan="2">
-    <table style="width:100%;border:none;margin-top:5px;font-size:0.8em">
-    <thead><tr style="background:#f9f9f9"><th>Accessory</th><th>Qty</th><th>Unit Price</th><th>Discount</th><th>Total</th></tr></thead>
-    <tbody>
-    <?php while ($sa = $sold_acc_r->fetch_assoc()): ?>
-    <tr><td><?= sanitize($sa['name']) ?></td><td><?= $sa['quantity'] ?></td><td><?= fmt_money($sa['unit_price']) ?></td><td><?= fmt_money($sa['discount_amount']) ?></td><td><?= fmt_money($sa['final_price']) ?></td></tr>
-    <?php endwhile; ?>
-    </tbody>
-    </table>
-</td></tr>
-<?php endif; ?>
-</tbody>
-</table>
-</div>
-<div class="invoice-section">
-<h3>Payment Details</h3>
-<table class="invoice-table">
-<thead><tr><th>Description</th><th style="text-align:right">Amount</th></tr></thead>
-<tbody>
-<?php if ($show_pp): ?>
-<tr><td>Purchase Price</td><td style="text-align:right"><?= fmt_money($inv['purchase_price']) ?></td></tr>
-<?php endif; ?>
-<tr><td>Selling Price</td><td style="text-align:right"><?= fmt_money($inv['selling_price']) ?></td></tr>
-<tr><td>Tax (<?= get_setting('tax_rate') * 100 ?? 0.1 ?>%)</td><td style="text-align:right"><?= fmt_money($inv['tax_amount']) ?></td></tr>
-<?php
-                $dp_amount = $conn->query("SELECT SUM(amount) FROM payments WHERE transaction_type='sale' AND reference_id=" . $inv['id'] . " AND payment_date='" . $inv['selling_date'] . "'")->fetch_row()[0] ?? 0;
-                $installments_r = $conn->query('SELECT installment_amount, amount_paid, penalty_fee FROM installments WHERE bike_id=' . $inv['id']);
-                $total_installments = 0;
-                $total_paid_installments = 0;
-                $total_penalty = 0;
-                while ($inst = $installments_r->fetch_assoc()) {
-                    $total_installments += $inst['installment_amount'];
-                    $total_paid_installments += $inst['amount_paid'];
-                    $total_penalty += $inst['penalty_fee'];
-                }
+$print_inv_id = (int) ($_GET['print_invoice'] ?? 0);
+if ($print_inv_id):
+    echo '<style>.sidebar, .topbar { display: none !important; } .main-wrap { margin-left: 0 !important; } .content > *:not(#receiptArea):not(.no-print) { display: none !important; } .content { padding: 40px !important; background: #333 !important; } body { background: #333 !important; } @media print { .content, body { padding: 0 !important; background: #fff !important; } }</style>';
+    $inv_r = $conn->query("SELECT b.*, m.model_name, m.model_code, m.category, c.name as cust_name, c.phone as cust_phone, c.cnic as cust_cnic, c.address as cust_addr, c.is_filer FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id WHERE b.id=$print_inv_id");
+    $inv = $inv_r ? $inv_r->fetch_assoc() : null;
+    $show_pp = get_setting('show_purchase_on_invoice') == '1';
+    $inv_no = 'INV-' . date('Ymd') . '-' . str_pad($print_inv_id, 3, '0', STR_PAD_LEFT);
+    $format = $_GET['format'] ?? 'a4';
+    $container_class = $format === 'thermal' ? 'thermal-receipt' : 'a4-invoice';
+
+    if ($inv):
+        $sold_acc_r = $conn->query('SELECT sa.*, a.name FROM sale_accessories sa JOIN accessories a ON sa.accessory_id=a.id WHERE sa.bike_id=' . $inv['id']);
+        $dp_amount = $conn->query("SELECT SUM(amount) FROM payments WHERE transaction_type='sale' AND reference_id=" . $inv['id'] . " AND payment_date='" . $inv['selling_date'] . "'")->fetch_row()[0] ?? 0;
+        $installments_r = $conn->query('SELECT installment_amount, amount_paid, penalty_fee FROM installments WHERE bike_id=' . $inv['id']);
+        $total_installments = 0; $total_paid_installments = 0; $total_penalty = 0;
+        while ($inst = $installments_r->fetch_assoc()) {
+            $total_installments += $inst['installment_amount'];
+            $total_paid_installments += $inst['amount_paid'];
+            $total_penalty += $inst['penalty_fee'];
+        }
 ?>
-<?php if ($dp_amount > 0): ?><tr><td>Down Payment Received</td><td style="text-align:right"><?= fmt_money($dp_amount) ?></td></tr><?php endif; ?>
-<?php if ($total_installments > 0): ?><tr><td>Total Installments</td><td style="text-align:right"><?= fmt_money($total_installments) ?></td></tr><?php endif; ?>
-<?php if ($total_paid_installments > 0): ?><tr><td>Installments Paid</td><td style="text-align:right"><?= fmt_money($total_paid_installments) ?></td></tr><?php endif; ?>
-<?php if ($total_penalty > 0): ?><tr><td>Total Penalty</td><td style="text-align:right"><?= fmt_money($total_penalty) ?></td></tr><?php endif; ?>
-</tbody>
-</table>
-<div class="invoice-total">Total Amount: <?= fmt_money($inv['selling_price'] + $total_installments + $total_penalty) ?></div>
-<div class="invoice-total">Amount Due: <?= fmt_money(($inv['selling_price'] + $total_installments + $total_penalty) - ($dp_amount + $total_paid_installments)) ?></div>
+<div class="<?= $container_class ?>" id="receiptArea">
+    <div class="invoice-header">
+        <h1>⚡ <?= sanitize(get_setting('company_name') ?? 'BNI Enterprises') ?></h1>
+        <h2><?= sanitize(get_setting('branch_name') ?? 'Dera (Ahmed Metro)') ?></h2>
+        <div style="font-size:0.9rem;margin-top:4px"><strong>SALE RECEIPT</strong></div>
+    </div>
+    
+    <div class="invoice-meta">
+        <div><strong>Invoice #:</strong> <?= $inv_no ?><br><strong>Date:</strong> <?= fmt_date($inv['selling_date']) ?></div>
+        <div class="<?= $format === 'thermal' ? '' : 'text-right' ?>" style="<?= $format === 'thermal' ? 'margin-top:10px;' : 'text-align:right;' ?>">
+            <strong>Customer:</strong> <?= sanitize($inv['cust_name'] ?? 'Walk-in Customer') ?><br>
+            <?php if ($inv['cust_phone']): ?><strong>Phone:</strong> <?= sanitize($inv['cust_phone']) ?><br><?php endif; ?>
+            <?php if ($inv['cust_cnic']): ?><strong>CNIC:</strong> <?= sanitize($inv['cust_cnic']) ?> (<?= $inv['is_filer'] ? 'Filer' : 'Non-Filer' ?>)<br><?php endif; ?>
+        </div>
+    </div>
+
+    <div class="invoice-section">
+        <h3>Items Details</h3>
+        <table class="invoice-table">
+            <thead>
+                <tr>
+                    <th>Description</th>
+                    <?= $format === 'a4' ? '<th>Category</th>' : '' ?>
+                    <th style="text-align:right">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        <strong><?= sanitize($inv['model_name']) ?> (<?= sanitize($inv['model_code']) ?>)</strong><br>
+                        <small>Chassis: <span style="font-family:Consolas"><?= sanitize($inv['chassis_number']) ?></span> | Color: <?= sanitize($inv['color']) ?></small>
+                    </td>
+                    <?= $format === 'a4' ? '<td>'.sanitize($inv['category']).'</td>' : '' ?>
+                    <td style="text-align:right"><?= fmt_money($inv['selling_price']) ?></td>
+                </tr>
+                <?php if ($sold_acc_r->num_rows > 0): ?>
+                    <?php while ($sa = $sold_acc_r->fetch_assoc()): ?>
+                    <tr>
+                        <td><small>+ <?= sanitize($sa['name']) ?> (Qty: <?= $sa['quantity'] ?>)</small></td>
+                        <?= $format === 'a4' ? '<td>Accessory</td>' : '' ?>
+                        <td style="text-align:right"><?= fmt_money($sa['final_price']) ?></td>
+                    </tr>
+                    <?php endwhile; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="invoice-section">
+        <h3>Payment Summary</h3>
+        <table class="invoice-table" style="width:<?= $format === 'thermal' ? '100%' : '60%' ?>; margin-left:<?= $format === 'thermal' ? '0' : 'auto' ?>;">
+            <tbody>
+                <?php if ($show_pp): ?><tr><td>Purchase Price</td><td style="text-align:right"><?= fmt_money($inv['purchase_price']) ?></td></tr><?php endif; ?>
+                <tr><td><strong>Total Sale Price</strong></td><td style="text-align:right"><strong><?= fmt_money($inv['selling_price'] + ($sold_acc_r->num_rows > 0 ? 0 : 0) /* Acc already included in ledger */) ?></strong></td></tr>
+                <tr><td>Tax (<?= get_setting('tax_rate') * 100 ?? 0.1 ?>%)</td><td style="text-align:right"><?= fmt_money($inv['tax_amount']) ?></td></tr>
+                <?php if ($dp_amount > 0): ?><tr><td>Down Payment Received</td><td style="text-align:right; color:green;">- <?= fmt_money($dp_amount) ?></td></tr><?php endif; ?>
+                <?php if ($total_installments > 0): ?><tr><td>Total Installments Plan</td><td style="text-align:right"><?= fmt_money($total_installments) ?></td></tr><?php endif; ?>
+                <?php if ($total_paid_installments > 0): ?><tr><td>Installments Paid</td><td style="text-align:right; color:green;">- <?= fmt_money($total_paid_installments) ?></td></tr><?php endif; ?>
+                <?php if ($total_penalty > 0): ?><tr><td>Total Penalty</td><td style="text-align:right">+ <?= fmt_money($total_penalty) ?></td></tr><?php endif; ?>
+            </tbody>
+        </table>
+        
+        <div class="invoice-total">Net Total: <?= fmt_money($inv['selling_price'] + $total_installments + $total_penalty) ?></div>
+        <div class="invoice-total" style="background:#fff; border-color:#000;">Amount Due: <?= fmt_money(($inv['selling_price'] + $total_installments + $total_penalty) - ($dp_amount + $total_paid_installments)) ?></div>
+    </div>
+    
+    <div class="invoice-footer">
+        Generated by: Yasin Ullah – BSS<br>System: https://www.yasinbss.com<br>WhatsApp: 03361593533
+    </div>
 </div>
-<div class="invoice-footer">Created by: Yasin Ullah – Bannu Software Solutions<br>Website: <a href="https://www.yasinbss.com" target="_blank">https://www.yasinbss.com</a><br>WhatsApp: 03361593533</div>
+<div class="no-print" style="margin-top:10px">
+    <button onclick="window.print()" class="btn btn-success">🖨 Print Receipt</button>
 </div>
-<div class="no-print" style="margin-top:10px"><button onclick="window.print()" class="btn btn-primary">🖨 Print Invoice</button></div>
-<?php endif; ?>
-<?php endif; ?>
+<?php endif; endif; ?>
 <div class="modal-overlay" id="addCustModal">
 <div class="modal">
 <div class="modal-header"><h3>Add New Customer</h3><button class="modal-close" onclick="closeCustomerModal()">✕</button></div>
