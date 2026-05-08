@@ -1695,6 +1695,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         if ($action === 'edit') {
             require_permission($conn, 'inventory', 'edit');
             $bid = (int) ($_POST['id'] ?? 0);
+            $model_id = (int) ($_POST['model_id'] ?? 0);
             $color = sanitize($_POST['color'] ?? '');
             $pp = (float) ($_POST['purchase_price'] ?? 0);
             $status = sanitize($_POST['status'] ?? 'in_stock');
@@ -1704,19 +1705,23 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
                 $img_path = handle_image_upload($_FILES['image']);
             }
-            if ($bid <= 0 || $pp < 0) {
-                $err = 'Invalid bike ID or purchase price.';
+            if ($bid <= 0 || $pp < 0 || $model_id <= 0) {
+                $err = 'Invalid bike ID, model, or purchase price.';
             } else {
-                $old_bike_q = $conn->query("SELECT status, chassis_number FROM bikes WHERE id=$bid");
+                $old_bike_q = $conn->query("SELECT status, chassis_number, selling_price FROM bikes WHERE id=$bid");
                 $old_bike = $old_bike_q->fetch_assoc();
                 $old_status = $old_bike['status'] ?? '';
 
+                $base_tax = ($tax_on === 'selling_price') ? (float)$old_bike['selling_price'] : $pp;
+                $tax_amount = ($base_tax * $tax_rate);
+                $margin = (float)$old_bike['selling_price'] > 0 ? ((float)$old_bike['selling_price'] - $pp - $tax_amount) : 0;
+
                 if ($img_path) {
-                    $stmt = $conn->prepare('UPDATE bikes SET color=?, purchase_price=?, status=?, notes=?, safeguard_notes=?, image=? WHERE id=?');
-                    $stmt->bind_param('sdssssi', $color, $pp, $status, $notes, $safe, $img_path, $bid);
+                    $stmt = $conn->prepare('UPDATE bikes SET model_id=?, color=?, purchase_price=?, tax_amount=?, margin=?, status=?, notes=?, safeguard_notes=?, image=? WHERE id=?');
+                    $stmt->bind_param('isddsssssi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $img_path, $bid);
                 } else {
-                    $stmt = $conn->prepare('UPDATE bikes SET color=?, purchase_price=?, status=?, notes=?, safeguard_notes=? WHERE id=?');
-                    $stmt->bind_param('sdsssi', $color, $pp, $status, $notes, $safe, $bid);
+                    $stmt = $conn->prepare('UPDATE bikes SET model_id=?, color=?, purchase_price=?, tax_amount=?, margin=?, status=?, notes=?, safeguard_notes=? WHERE id=?');
+                    $stmt->bind_param('isddssssi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $bid);
                 }
                 $stmt->execute();
 
@@ -3354,7 +3359,7 @@ $(document).ready(function() {
             $where_parts[] = "b.inventory_date <= '" . mysqli_real_escape_string($conn, $date_to) . "'";
         $where = implode(' AND ', $where_parts);
         $bikes_result = $conn->query("SELECT b.*, m.model_name, m.model_code, c.name as cust_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id WHERE $where ORDER BY b.created_at DESC");
-        $models_filter_list = $conn->query('SELECT id, model_code FROM models ORDER BY model_name');
+        $models_filter_list = $conn->query('SELECT id, model_code, model_name FROM models ORDER BY model_name');
         $edit_bike_id = (int) ($_GET['edit_id'] ?? 0);
         $edit_bike = null;
         if ($edit_bike_id) {
@@ -3566,6 +3571,15 @@ $(document).ready(function() {
 <div class="modal-header"><h3>✏ Edit Bike — <?= sanitize($edit_bike['chassis_number']) ?></h3><a href="index.php?page=inventory" class="modal-close">✕</a></div>
 <form id="editBikeForm" method="POST" enctype="multipart/form-data" action="index.php?page=inventory&action=edit">
 <input type="hidden" name="id" value="<?= $edit_bike['id'] ?>">
+<div class="form-group" style="margin-bottom:8px"><label>Model</label>
+<select name="model_id" required>
+<?php 
+$models_filter_list->data_seek(0);
+while($m = $models_filter_list->fetch_assoc()): ?>
+<option value="<?= $m['id'] ?>" <?= $edit_bike['model_id'] == $m['id'] ? 'selected' : '' ?>><?= sanitize($m['model_code'] . ' - ' . $m['model_name']) ?></option>
+<?php endwhile; ?>
+</select>
+</div>
 <div class="form-group" style="margin-bottom:8px"><label>Color</label><input type="text" name="color" value="<?= sanitize($edit_bike['color']) ?>"></div>
 <div class="form-group" style="margin-bottom:8px"><label>Purchase Price</label><input type="number" name="purchase_price" step="0.01" value="<?= $edit_bike['purchase_price'] ?>"></div>
 <div class="form-group" style="margin-bottom:8px"><label>Status</label>
