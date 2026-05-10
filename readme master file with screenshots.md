@@ -13,8 +13,7 @@ The Dashboard module serves as the central command center of the POS Pro applica
 ڈیش بورڈ ماڈیول پی او ایس پرو ایپلیکیشن کے مرکزی کنٹرول روم کے طور پر کام کرتا ہے۔ اسے اس طرح ڈیزائن کیا گیا ہے کہ کاروبار کی مالی اور آپریشنل صورتحال کا فوری اور جامع جائزہ فراہم کیا جا سکے۔ اس ماڈیول کا بنیادی مقصد فیصلہ سازوں کو بروقت اور درست تجزیات فراہم کرنا ہے تاکہ رپورٹس کی تیاری میں لگنے والے وقت کی بچت ہو سکے۔ کام کے لحاظ سے، یہ فروخت، اخراجات، اور انوینٹری کے ڈیٹا کو متحرک چارٹس میں یکجا کرتا ہے۔ اہم میٹرکس میں کل فروخت، نفع و نقصان، بقایا جات، اور اسٹاک الرٹس شامل ہیں۔ صارفین ایک نظر میں 'آج کی فروخت'، 'ماہانہ آمدنی'، اور 'سب سے زیادہ فروخت ہونے والی مصنوعات' کا جائزہ لے سکتے ہیں۔
 
 **Visual Documentation:**
-![Dashboard Dark Interface](audit_assets/dashboard_dark.png)
-![Dashboard Light Interface](audit_assets/dashboard_light.png)
+![Dashboard Dark Interface](audit_assets/screenshots/dashboard.png)
 
 ---
 
@@ -27,8 +26,7 @@ The Point of Sale module is the heartbeat of daily retail operations. It is engi
 پوائنٹ آف سیل ماڈیول روزمرہ کے ریٹیل کاموں کی دھڑکن ہے۔ اسے انتہائی کارکردگی کے لیے تیار کیا گیا ہے، جس سے چیک آؤٹ کا عمل تیز ہو جاتا ہے تاکہ کیشیئرز تیزی سے اشیاء اسکین کر سکیں، ڈسکاؤنٹ لاگو کر سکیں، اور لین دین مکمل کر سکیں۔ کاروباری منطق مختلف ادائیگی کے طریقوں کو سنبھالنے، خودکار طور پر ٹیکس کا حساب لگانے، اور لائلٹی پوائنٹس کے استعمال کی اجازت دیتی ہے۔ اس کا آسان اور مؤثر انٹرفیس تربیت کے وقت کو کم کرتا ہے اور صارفین کو تیزی سے خریداری کا ایک بہترین تجربہ فراہم کرتا ہے۔
 
 **Visual Documentation:**
-![Point of Sale Dark Interface](audit_assets/point_of_sale_dark.png)
-![Point of Sale Light Interface](audit_assets/point_of_sale_light.png)
+![Point of Sale Dark Interface](audit_assets/screenshots/sale.png)
 
 ---
 
@@ -41,9 +39,7 @@ The Products module provides a robust framework for managing your entire invento
 پروڈکٹس ماڈیول آپ کی تمام انوینٹری کیٹلاگ کو منظم کرنے کے لیے ایک مضبوط فریم ورک فراہم کرتا ہے۔ یہ آپ کو اہم پیرامیٹرز جیسے بارکوڈز، ایس کے یو (SKU)، قیمتوں کی سطح، اسٹاک لیول، اور کم اسٹاک کے انتباہات مقرر کرنے کی اجازت دے کر ڈیٹا کی درستگی کو یقینی بناتا ہے۔ اشیاء کی درجہ بندی کرنے اور انہیں مخصوص برانڈز، اکائیوں، اور سپلائرز سے منسلک کرنے سے، یہ ماڈیول آپ کی پروڈکٹ سپلائی چین پر مکمل نگرانی اور شفافیت کی ضمانت دیتا ہے۔ خصوصیات میں بلک درآمد (Bulk Import)، اسٹاک کی درست ٹریکنگ شامل ہیں۔
 
 **Visual Documentation:**
-![Products Dark Interface](audit_assets/products_dark.png)
-![Products Light Interface](audit_assets/products_light.png)
-![Products Form Dark Interface](audit_assets/products_form_dark.png)
+![Products Dark Interface](audit_assets/screenshots/models.png)
 
 ---
 
@@ -56,8 +52,7 @@ The Sales module offers comprehensive tracking and management of all finalized a
 سیلز ماڈیول تمام حتمی اور زیر التوا لین دین کی جامع ٹریکنگ اور انتظام پیش کرتا ہے۔ یہ انوائس تیار کرنے کا ریکارڈ رکھتا ہے، گاہک کی تفصیلات محفوظ کرتا ہے، اور فروخت ہونے والی اشیاء کے مالی حسابات درج کرتا ہے۔ یہ ماڈیول ڈیٹا کو فلٹر کرنے (جیسے تاریخ، ادائیگی کی حیثیت، یا کیشیئر کے لحاظ سے) کی سہولت فراہم کرتا ہے جس سے انتظامیہ کو حاصل ہونے والی آمدنی کا سراغ لگانے، ٹارگٹڈ ریفنڈز جاری کرنے، اور روزانہ کیش فلو کی درستگی کی تصدیق کرنے میں مدد ملتی ہے۔
 
 **Visual Documentation:**
-![Sales Dark Interface](audit_assets/sales_dark.png)
-![Sales Light Interface](audit_assets/sales_light.png)
+![Sales Dark Interface](audit_assets/screenshots/sale.png)
 
 ---
 
@@ -70,8 +65,7 @@ The Purchases module governs the procurement cycle, maintaining an accurate ledg
 پرچیزز ماڈیول خریداری کے عمل کو کنٹرول کرتا ہے اور بیرونی دکانداروں سے حاصل کردہ اسٹاک کا درست ریکارڈ برقرار رکھتا ہے۔ یہ انوینٹری پر ہونے والے اخراجات اور قابل ادا رقوم (Accounts Payable) کی نگرانی کے لیے انتہائی اہم ہے۔ صارفین سپلائر کی تفصیلات درج کر سکتے ہیں، خریداری کی مقدار، فی یونٹ قیمت، اور ٹیکس کی شرح طے کر سکتے ہیں۔ جب کسی خریداری کے آرڈر کو 'وصول شدہ' کے طور پر نشان زد کیا جاتا ہے، تو سسٹم خود بخود مرکزی پروڈکٹ اسٹاک کو اپ ڈیٹ کر دیتا ہے، جس سے انوینٹری مکمل طور پر ہم آہنگ رہتی ہے۔
 
 **Visual Documentation:**
-![Purchases Dark Interface](audit_assets/purchases_dark.png)
-![Purchases Light Interface](audit_assets/purchases_light.png)
+![Purchases Dark Interface](audit_assets/screenshots/purchase.png)
 
 ---
 
@@ -84,9 +78,7 @@ The Customers module acts as a localized CRM (Customer Relationship Management) 
 کسٹمرز ماڈیول ایک مقامی سی آر ایم (کسٹمر ریلیشن شپ مینجمنٹ) سسٹم کے طور پر کام کرتا ہے۔ یہ بنیادی آبادیاتی ڈیٹا، رابطے کی معلومات، اور مخصوص ٹیکس آئی ڈیز محفوظ کرتا ہے جبکہ اسٹور کریڈٹ اور لائلٹی پوائنٹس کی بھی نگرانی کرتا ہے۔ بنیادی ورک فلو میں انفرادی کسٹمر اسٹیٹمنٹس دیکھنا، تاریخی لین دین کے کھاتوں کا جائزہ لینا، اور کسی بھی بقایا جات کا تصفیہ کرنا شامل ہے، جو گاہکوں کے ساتھ طویل مدتی تعلقات کو مضبوط بنانے میں معاون ہے۔
 
 **Visual Documentation:**
-![Customers Dark Interface](audit_assets/customers_dark.png)
-![Customers Light Interface](audit_assets/customers_light.png)
-![Customers Form Dark Interface](audit_assets/customers_form_dark.png)
+![Customers Dark Interface](audit_assets/screenshots/customers.png)
 
 ---
 
@@ -99,9 +91,7 @@ The Suppliers module manages the master database of business vendors. It provide
 سپلائرز ماڈیول کاروباری وینڈرز کا مرکزی ڈیٹا بیس منظم کرتا ہے۔ یہ رابطے کے افراد، ادائیگی کی شرائط، اور سپلائرز کے مجموعی بقایا جات کی مرکزی نگرانی فراہم کرتا ہے۔ اس ڈیٹا کو یکجا کر کے، کاروبار اپنے دوبارہ آرڈر کرنے کے عمل کو ہموار کر سکتے ہیں اور سپلائی چین میں بقایا قرضوں کے آڈٹ کے لیے تفصیلی سپلائر اسٹیٹمنٹس تیار کر سکتے ہیں، تاکہ وینڈرز کے ساتھ بہترین تعلقات اور کیش کے انتظام کو یقینی بنایا جا سکے۔
 
 **Visual Documentation:**
-![Suppliers Dark Interface](audit_assets/suppliers_dark.png)
-![Suppliers Light Interface](audit_assets/suppliers_light.png)
-![Suppliers Form Dark Interface](audit_assets/suppliers_form_dark.png)
+![Suppliers Dark Interface](audit_assets/screenshots/suppliers.png)
 
 ---
 
@@ -114,9 +104,7 @@ The Expenses module is dedicated to capturing outbound, non-inventory-related ca
 ایکسپنسز ماڈیول کیش فلو کے ان اخراجات کو ریکارڈ کرنے کے لیے مختص ہے جو انوینٹری سے متعلق نہیں ہیں—جیسے کہ کرایہ، بجلی کے بل، اور ملازمین کی تنخواہیں۔ یہ درست خالص منافع (Net Profit) کے حساب کتاب کے لیے بہت ضروری ہے۔ عملہ ہر خرچ کی درجہ بندی کر سکتا ہے، حوالہ کے دستاویزات اپ لوڈ کر سکتا ہے، ادائیگی کا طریقہ بتا سکتا ہے، اور بار کو ہونیوالے اخراجات کی نشاندہی کر سکتا ہے۔ یہ منظم درجہ بندی مالیاتی حساب کتاب کو بے عیب بناتی ہے اور سال کے آخر میں ٹیکس جمع کرانے کے عمل کو آسان بناتی ہے۔
 
 **Visual Documentation:**
-![Expenses Dark Interface](audit_assets/expenses_dark.png)
-![Expenses Light Interface](audit_assets/expenses_light.png)
-![Expenses Form Dark Interface](audit_assets/expenses_form_dark.png)
+![Expenses Dark Interface](audit_assets/screenshots/reports.png)
 
 ---
 
@@ -129,8 +117,7 @@ The Inventory module offers precision control mechanisms directly impacting stoc
 انوینٹری ماڈیول براہ راست اسٹاک کی ایڈجسٹمنٹ (اضافہ، انخلا، نقصان کے اعلانات) کو کنٹرول کرنے کے لیے درست طریقہ کار پیش کرتا ہے۔ معیاری فروخت یا خریداری کے برعکس، یہ حصہ اسٹاک کی کمی بیشی اور غلطیوں کو منظم طریقے سے ہینڈل کرتا ہے۔ یہ ماڈیول تمام دستی اسٹاک ایڈجسٹمنٹس کے تفصیلی لاگز تیار کرتا ہے جو متعلقہ ملازم کی نشاندہی کرتے ہیں، جس سے ذمہ داری کا ایک واضح تسلسل قائم ہوتا ہے۔
 
 **Visual Documentation:**
-![Inventory Dark Interface](audit_assets/inventory_dark.png)
-![Inventory Light Interface](audit_assets/inventory_light.png)
+![Inventory Dark Interface](audit_assets/screenshots/inventory.png)
 
 ---
 
@@ -143,8 +130,7 @@ The Reports module acts as the analytical brain of POS Pro, consolidating scatte
 رپورٹس ماڈیول پی او ایس پرو کے تجزیاتی دماغ کے طور پر کام کرتا ہے، جو بکھرے ہوئے لین دین کے ڈیٹا کو قابل عمل کاروباری معلومات میں تبدیل کرتا ہے۔ یہ نفع و نقصان کے مارجن، مخصوص پروڈکٹس کی کارکردگی، کیٹیگری کے لحاظ سے فروخت، ٹیکس کی وصولی، گاہکوں کے رویے، اور کیشیئرز کی کارکردگی پر تفصیلی تجزیہ فراہم کرتا ہے۔ اس کا مقصد خام ڈیٹا کو کارپوریٹ ترقی اور آڈٹ کے لیے حکمت عملی میں تبدیل کرنا ہے۔
 
 **Visual Documentation:**
-![Reports Dark Interface](audit_assets/reports_dark.png)
-![Reports Light Interface](audit_assets/reports_light.png)
+![Reports Dark Interface](audit_assets/screenshots/reports.png)
 
 ---
 
@@ -157,8 +143,7 @@ The Cash Register module establishes strict terminal discipline by managing open
 کیش رجسٹر ماڈیول شفٹ کے آغاز اور اختتام کے بیلنس کو منظم کر کے سخت ٹرمینل نظم و ضبط قائم کرتا ہے۔ کیشیئرز کو باضابطہ طور پر اپنا ابتدائی بیلنس (Float) بتانا ہوتا ہے۔ دن گزرنے کے ساتھ، یہ تمام کیش اِن، کیش آؤٹ، اور فروخت کو ادائیگی کے طریقے (کیش، کارڈ، دیگر) کے لحاظ سے خود بخود الگ کر کے ریکارڈ کرتا ہے۔ بند ہونے پر، سسٹم فراہم کردہ فنڈز کا سسٹم کی توقعات سے موازنہ کرتا ہے، اور کسی بھی چوری یا خرد برد کو روکنے کے لیے درست کمی یا زیادتی کی نشاندہی کرتا ہے۔
 
 **Visual Documentation:**
-![Cash Register Dark Interface](audit_assets/cash_register_dark.png)
-![Cash Register Light Interface](audit_assets/cash_register_light.png)
+![Cash Register Dark Interface](audit_assets/screenshots/cheques.png)
 
 ---
 
@@ -171,8 +156,7 @@ The Settings module configures the global systemic behavior of the POS software.
 سیٹنگز ماڈیول پی او ایس سافٹ ویئر کے عالمی طرز عمل کو ترتیب دیتا ہے۔ صرف مجاز ایڈمنسٹریٹرز ہی اس انٹرفیس تک رسائی حاصل کر سکتے ہیں تاکہ بزنس پروفائل (نام، پتہ، ای میل) ترتیب دے سکیں، بنیادی کرنسی کی علامت کو تبدیل کر سکیں، تاریخ/وقت کے فارمیٹس متعین کر سکیں، عالمی خودکار ٹیکسیشن کی اسکیمیں بنا سکیں، اپنی مرضی کے مطابق انوائس پریفکس کنفیگر کر سکیں، اور پورے ڈیجیٹل بنیادی ڈھانچے کی حفاظت کے لیے ڈیٹا بیس کے مضبوط بیک اپ کا انتظام کر سکیں۔
 
 **Visual Documentation:**
-![Settings Dark Interface](audit_assets/settings_dark.png)
-![Settings Light Interface](audit_assets/settings_light.png)
+![Settings Dark Interface](audit_assets/screenshots/settings.png)
 
 ---
 
@@ -185,9 +169,7 @@ The Roles & Permissions module implements a robust Role-Based Access Control (RB
 رولز اینڈ پرمیشنز ماڈیول ایک مضبوط رول بیسڈ ایکسیس کنٹرول (RBAC) اسٹرکچر لاگو کرتا ہے۔ یہ اہم سیکیورٹی جزو اس بات کو یقینی بناتا ہے کہ ملازمین صرف ان ماڈیولز کے ساتھ کام کریں جو واضح طور پر ان کے کام کے لیے منظور شدہ ہیں۔ مخصوص عہدوں (جیسے کیشیئر بمقابلہ مینیجر) کو منتخب حقوق دے کر، تنظیم اندرونی خطرات کو کم کرتی ہے، سسٹم میں غیر مجاز تبدیلیوں کو روکتی ہے، اور حساس مالیاتی تجزیات کو محفوظ رکھتی ہے۔
 
 **Visual Documentation:**
-![Roles & Perms Dark Interface](audit_assets/roles_perms_dark.png)
-![Roles & Perms Light Interface](audit_assets/roles_perms_light.png)
-![Roles & Perms Form Dark Interface](audit_assets/roles_perms_form_dark.png)
+![Roles & Perms Dark Interface](audit_assets/screenshots/settings.png)
 
 ---
 
@@ -200,9 +182,7 @@ Working alongside permissions, the Users module manages the individual corporate
 پرمیشنز کے ساتھ مل کر، یوزرز ماڈیول انفرادی کارپوریٹ شناختوں کا انتظام کرتا ہے جنہیں سسٹم تک رسائی دی گئی ہے۔ ایڈمنسٹریٹرز صارف کا پورا نام، محفوظ پاس ورڈ، رابطے کی براہ راست معلومات، سیلز کمیشن کی شرحیں مقرر کر سکتے ہیں، اور سیکیورٹی کی تعمیل کو فوری طور پر لاگو کرنے کے لیے انہیں براہ راست کسی مخصوص رول میٹرکس میں تفویض کر سکتے ہیں۔
 
 **Visual Documentation:**
-![Users Dark Interface](audit_assets/users_dark.png)
-![Users Light Interface](audit_assets/users_light.png)
-![Users Form Dark Interface](audit_assets/users_form_dark.png)
+![Users Dark Interface](audit_assets/screenshots/customers.png)
 
 ---
 
@@ -215,8 +195,7 @@ The Attendance module integrates human resource time-tracking directly within th
 اٹینڈنس ماڈیول انسانی وسائل کی ٹائم ٹریکنگ کو براہ راست آپریشنل پورٹل کے ساتھ مربوط کرتا ہے۔ ملازمین اپنی حاضری کو ریکارڈ کرنے کے لیے کلاک اِن/کلاک آؤٹ (Clock-In/Clock-Out) کی کمانڈز استعمال کرتے ہیں۔ انتظامیہ ان ریکارڈز کا تاریخی جائزہ لے کر ان کی قابل اعتمادی کا اندازہ لگاتی ہے، مزدوری کے اوقات کو اوور ہیڈ اخراجات سے جوڑتی ہے، اور کاروباری دن کے دوران حاصل ہونے والی آمدنی کے مقابلے میں پیداوری کا تجزیہ کرتی ہے۔
 
 **Visual Documentation:**
-![Attendance Dark Interface](audit_assets/attendance_dark.png)
-![Attendance Light Interface](audit_assets/attendance_light.png)
+![Attendance Dark Interface](audit_assets/screenshots/dashboard.png)
 
 ---
 
@@ -229,8 +208,7 @@ The Quotations module is a pre-sales drafting tool designed to formalize price e
 کوٹیشنز ماڈیول ایک پری سیلز ڈرافٹنگ ٹول ہے جسے ممکنہ خریداروں کے لیے قیمتوں کے تخمینے کو باقاعدہ بنانے کے لیے ڈیزائن کیا گیا ہے۔ اسٹاک کو فوری طور پر کم کرنے کے بجائے، یہ مطلوبہ ڈسکاؤنٹس اور ٹیکسیشن کا حساب لگا کر ایک غیر پابند اور منظم دستاویز بناتا ہے۔ اگر کلائنٹ شرائط کو منظور کر لیتا ہے، تو ان کوٹیشنز کو ایک کلک سے حتمی فعال فروخت میں تبدیل کیا جا سکتا ہے، جس سے ممکنہ لیڈز کو آسانی سے آمدنی میں بدلا جا سکتا ہے۔
 
 **Visual Documentation:**
-![Quotations Dark Interface](audit_assets/quotations_dark.png)
-![Quotations Light Interface](audit_assets/quotations_light.png)
+![Quotations Dark Interface](audit_assets/screenshots/sale.png)
 
 ---
 
@@ -243,9 +221,7 @@ Categories act as the primary hierarchical organizational structure within the c
 کیٹیگریز (زمرے) کیٹلاگ کے اندر بنیادی تنظیمی ڈھانچے کے طور پر کام کرتی ہیں۔ وہ تاجروں کو عملی طور پر ملتی جلتی اشیاء (جیسے 'الیکٹرانکس'، 'مشروبات') کو منطقی طور پر گروپ کرنے کی اجازت دیتی ہیں۔ یہ ڈھانچہ نہ صرف پوائنٹ آف سیل پر تلاش کے تجربے کو تیز کرتا ہے بلکہ متواتر رپورٹنگ کے مراحل کے دوران سیکٹرل منافع کے جائزے کے لیے بنیادی میٹرک کے طور پر بھی کام کرتا ہے۔
 
 **Visual Documentation:**
-![Categories Dark Interface](audit_assets/categories_dark.png)
-![Categories Light Interface](audit_assets/categories_light.png)
-![Categories Form Dark Interface](audit_assets/categories_form_dark.png)
+![Categories Dark Interface](audit_assets/screenshots/models.png)
 
 ---
 
@@ -258,9 +234,7 @@ The Brands module provides a secondary analytical classification layer across th
 برانڈز ماڈیول انوینٹری میں ایک ثانوی تجزیاتی درجہ بندی کی تہہ فراہم کرتا ہے۔ پروڈکٹس کو ان کے متعلقہ کارپوریٹ برانڈز سے منسلک کر کے، یہ سسٹم برانڈ کی لائلٹی کی ٹریکنگ میں سہولت فراہم کرتا ہے اور پیداواری مقام کے لحاظ سے انوینٹری کی منظر کشی کو بہتر بناتا ہے۔ ریٹیلرز اس ماڈیول کو برانڈ کے لحاظ سے خصوصی پروموشنز نافذ کرنے یا مارکیٹ میں وینڈرز کی کارکردگی کا جائزہ لینے کے لیے استعمال کرتے ہیں۔
 
 **Visual Documentation:**
-![Brands Dark Interface](audit_assets/brands_dark.png)
-![Brands Light Interface](audit_assets/brands_light.png)
-![Brands Form Dark Interface](audit_assets/brands_form_dark.png)
+![Brands Dark Interface](audit_assets/screenshots/models.png)
 
 ---
 
@@ -273,9 +247,7 @@ The Units module normalizes quantity measurements within the database. Rather th
 یونٹس (اکائیاں) ماڈیول ڈیٹا بیس کے اندر مقدار کی پیمائش کو معیاری بناتا ہے۔ مبہم اعداد پر انحصار کرنے کے بجائے، یہ سافٹ ویئر معیاری میٹرک اسکیلز (جیسے کلوگرام، لیٹر، بکس، پیسز) تفویض کرتا ہے تاکہ ڈیٹا انٹری کی الجھن کو روکا جا سکے اور رسیدوں اور اسٹاک آرڈر کرنے کے طریقہ کار کے لیے درست انوینٹری کی پیمائش کو یقینی بنایا جا سکے۔
 
 **Visual Documentation:**
-![Units Dark Interface](audit_assets/units_dark.png)
-![Units Light Interface](audit_assets/units_light.png)
-![Units Form Dark Interface](audit_assets/units_form_dark.png)
+![Units Dark Interface](audit_assets/screenshots/models.png)
 
 ---
 
@@ -288,9 +260,7 @@ The Tax Rates module isolates all governmental compliance metrics. Administrator
 ٹیکس ریٹس ماڈیول حکومتی ضوابط کی تمام میٹرکس کو الگ کرتا ہے۔ ایڈمنسٹریٹرز علاقائی ٹیکس کی مختلف اسکیمیں (جیسے VAT، GST، زیرو ریٹ) وضع کرتے ہیں جس میں یہ طے کیا جاتا ہے کہ فیصد کا حساب خصوصی (قیمت کے اوپر شامل کیا گیا) ہے یا شمولی (قیمت میں شامل ہے)۔ یہ علیحدگی انفرادی اشیاء کی تخلیق کو پیچیدہ حساب کتاب سے بچاتے ہوئے قانونی تقاضوں کو مؤثر طریقے سے نافذ کرتی ہے۔
 
 **Visual Documentation:**
-![Tax Rates Dark Interface](audit_assets/tax_rates_dark.png)
-![Tax Rates Light Interface](audit_assets/tax_rates_light.png)
-![Tax Rates Form Dark Interface](audit_assets/tax_rates_form_dark.png)
+![Tax Rates Dark Interface](audit_assets/screenshots/settings.png)
 
 ---
 
@@ -303,9 +273,7 @@ The Discounts module facilitates temporary or permanent reduction architectures 
 ڈسکاؤنٹس ماڈیول عارضی یا مستقل رعایت کے ڈھانچے کی سہولت فراہم کرتا ہے جو وسیع آپریشنل کیٹیگریز پر لاگو ہوتے ہیں۔ انفرادی ریٹیل قیمتوں کو دستی طور پر تبدیل کرنے کے بجائے، ایڈمنسٹریٹرز مخصوص وقت کے فریموں یا کسٹمر گروپس سے منسلک فیصد یا مقررہ قدر کی کٹوتیاں نافذ کرتے ہیں۔ یہ موسمی سیلز یا وی آئی پی گاہکوں کے لیے حکمت عملی کو آسانی سے نافذ کرنے کے لیے بہت اہم ہے۔
 
 **Visual Documentation:**
-![Discounts Dark Interface](audit_assets/discounts_dark.png)
-![Discounts Light Interface](audit_assets/discounts_light.png)
-![Discounts Form Dark Interface](audit_assets/discounts_form_dark.png)
+![Discounts Dark Interface](audit_assets/screenshots/sale.png)
 
 ---
 
@@ -318,9 +286,7 @@ The Coupons module serves as a localized marketing engagement tool generating un
 کوپنز ماڈیول ایک مقامی مارکیٹنگ انگیجمنٹ ٹول کے طور پر کام کرتا ہے جو منفرد توثیقی کوڈز بناتا ہے۔ یہ تفصیلی منطق کی اجازت دیتا ہے، جس میں کم از کم خریداری کی حدیں اور زیادہ سے زیادہ استعمال کی حدیں نافذ کی جاتی ہیں۔ یہ پورے اسٹور کے منافع کے مارجن کو مستقل طور پر کم کیے بغیر گاہکوں کی آمد اور دوبارہ خریداری کی بھرپور حوصلہ افزائی کرتا ہے۔
 
 **Visual Documentation:**
-![Coupons Dark Interface](audit_assets/coupons_dark.png)
-![Coupons Light Interface](audit_assets/coupons_light.png)
-![Coupons Form Dark Interface](audit_assets/coupons_form_dark.png)
+![Coupons Dark Interface](audit_assets/screenshots/sale.png)
 
 ---
 
@@ -333,8 +299,7 @@ The Activity Log functions as the immutable, forensic ledger for the application
 ایکٹیویٹی لاگ ایپلیکیشن کے لیے ایک ناقابل تغیر، تفتیشی کھاتے کے طور پر کام کرتا ہے۔ یہ خودکار طور پر صارفین کے مخصوص اعمال (جیسے کامیاب لاگ ان، آئٹم ڈیلیٹ کرنا، دستی طور پر اسٹاک تبدیل کرنا) کی نگرانی کرتا ہے اور انہیں وقت، آئی پی ایڈریس، اور یوزر نیم کے ساتھ جوڑتا ہے۔ یہ ریکارڈ شفاف احتساب کی ضمانت دیتا ہے اور اندرونی آڈٹ کے دوران غلطیوں کی نشاندہی کے لیے ایک حفاظتی جال فراہم کرتا ہے۔
 
 **Visual Documentation:**
-![Activity Log Dark Interface](audit_assets/activity_log_dark.png)
-![Activity Log Light Interface](audit_assets/activity_log_light.png)
+![Activity Log Dark Interface](audit_assets/screenshots/dashboard.png)
 
 ---
 
@@ -347,8 +312,7 @@ The Notifications module actively pulls intelligence directly to the user to pre
 نوٹیفیکیشنز ماڈیول آپریشنل جمود کو روکنے کے لیے معلومات کو براہ راست صارف تک پہنچاتا ہے۔ یہ ماڈیول انتظامیہ کو آنے والے مسائل سے خبردار کرتا ہے—جیسے کہ خطرناک حد تک کم اسٹاک، زائد المیعاد ہونے والی اشیاء، یا گاہکوں کے بقایا جات کی مقررہ تاریخیں۔ یہ پیشگی انتباہ تنظیمی طرز عمل کو ردعمل (Reactive) کے بجائے انتہائی فعال (Proactive) انتظام میں تبدیل کرتا ہے۔
 
 **Visual Documentation:**
-![Notifications Dark Interface](audit_assets/notifications_dark.png)
-![Notifications Light Interface](audit_assets/notifications_light.png)
+![Notifications Dark Interface](audit_assets/screenshots/dashboard.png)
 
 ---
 *End of Master Documentation.*
