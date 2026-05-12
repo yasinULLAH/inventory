@@ -39,7 +39,39 @@ function sanitize($val)
     return htmlspecialchars(strip_tags(trim($val ?? '')), ENT_QUOTES, 'UTF-8');
 }
 
+function generate_math_captcha()
+{
+    $n1 = rand(1, 9);
+    $n2 = rand(1, 9);
+    $_SESSION['captcha_ans'] = $n1 + $n2;
+    $width = 120;
+    $height = 45;
+    $img = imagecreatetruecolor($width, $height);
+    $bg = imagecolorallocate($img, 15, 23, 42);
+    $fg = imagecolorallocate($img, 248, 250, 252);
+    $line = imagecolorallocate($img, 99, 102, 241);
+    imagefill($img, 0, 0, $bg);
+    for ($i = 0; $i < 8; $i++) {
+        imageline($img, rand(0, $width), rand(0, $height), rand(0, $width), rand(0, $height), $line);
+    }
+    for ($i = 0; $i < 80; $i++) {
+        imagesetpixel($img, rand(0, $width), rand(0, $height), $line);
+    }
+    imagestring($img, 5, 30, 15, "$n1 + $n2 = ?", $fg);
+    ob_start();
+    imagepng($img);
+    $data = ob_get_clean();
+    imagedestroy($img);
+    return 'data:image/png;base64,' . base64_encode($data);
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $user_captcha = (int) ($_POST['captcha'] ?? 0);
+    $real_captcha = (int) ($_SESSION['captcha_ans'] ?? -1);
+    if ($user_captcha !== $real_captcha) {
+        header('Location: landing.php?msg=Security Check Failed! Invalid Captcha.');
+        exit;
+    }
     if (isset($_POST['request_bike'])) {
         $name = sanitize($_POST['name']);
         $phone = sanitize($_POST['phone']);
@@ -62,6 +94,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 }
+$n1 = rand(1, 9);
+$n2 = rand(1, 9);
+$_SESSION['captcha_ans'] = $n1 + $n2;
+$captcha_q = "$n1 + $n2 = ?";
+$captcha_img_src = generate_math_captcha();
 $company_name = get_setting('company_name') ?? 'BNI Enterprises';
 $hero_title = get_setting('landing_hero_title') ?? 'The Next Generation of Electric Mobility';
 $hero_sub = get_setting('landing_hero_subtitle') ?? 'Eco-friendly, powerful, and designed for the modern world.';
@@ -338,33 +375,29 @@ $view = $_GET['view'] ?? 'home';
         }
         footer {
             position: relative;
-            background: linear-gradient(180deg, #020617 0%, #0f172a 100%);
-            padding: 80px 0 0;
+            background: linear-gradient(180deg, #0f172a 0%, #020617 100%);
+            padding: 60px 0 0;
             overflow: hidden;
-            border-top: 1px solid rgba(99, 102, 241, 0.1);
+            border-top: 1px solid rgba(99, 102, 241, 0.2);
         }
         .footer-wave-transition {
             position: absolute;
-            top: 0; left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 0;
-            pointer-events: none;
+            bottom: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 0; pointer-events: none;
+            opacity: 0.2;
         }
         .footer-wave-transition svg {
             position: absolute;
             bottom: 0; left: 0;
             width: 200%; height: 100%;
-            min-width: 1400px;
-            transform: scaleY(1.3);
-            transform-origin: bottom;
         }
-        .wave-1 { animation: waveDrift1 12s ease-in-out infinite; opacity: 0.15; }
-        .wave-2 { animation: waveDrift2 16s ease-in-out infinite; opacity: 0.12; }
-        .wave-3 { animation: waveDrift3 20s ease-in-out infinite; opacity: 0.08; }
-        @keyframes waveDrift1 { 0%,100%{transform:translateX(0)} 50%{transform:translateX(-25%)} }
-        @keyframes waveDrift2 { 0%,100%{transform:translateX(-10%)} 50%{transform:translateX(-35%)} }
-        @keyframes waveDrift3 { 0%,100%{transform:translateX(-5%)} 50%{transform:translateX(-30%)} }
+        .wave-1 { animation: waveDrift1 15s linear infinite; }
+        .wave-2 { animation: waveDrift2 20s linear infinite; }
+        .wave-3 { animation: waveDrift3 25s linear infinite; }
+        @keyframes waveDrift1 { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+        @keyframes waveDrift2 { 0% { transform: translateX(-50%); } 100% { transform: translateX(0); } }
+        @keyframes waveDrift3 { 0% { transform: translateX(-25%); } 100% { transform: translateX(-75%); } }
         .footer-glow {
             position: absolute; top: 30px; left: 50%; width: 800px; height: 300px;
             transform: translateX(-50%); border-radius: 50%;
@@ -816,32 +849,20 @@ $view = $_GET['view'] ?? 'home';
     endif; ?>
     <footer id="contact">
         <div class="footer-wave-transition">
-            <svg class="wave-1" viewBox="0 0 2880 130" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                    <linearGradient id="fw1" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stop-color="#6366f1"/>
-                        <stop offset="100%" stop-color="#ec4899"/>
-                    </linearGradient>
-                </defs>
-                <path d="M0,60 C240,120 480,0 720,60 C960,120 1200,10 1440,70 C1680,120 1920,20 2160,80 C2400,130 2640,30 2880,70 L2880,130 L0,130Z" fill="url(#fw1)"/>
+            <svg class="wave-1" viewBox="0 0 1440 320" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+                <defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#6366f1"/><stop offset="100%" stop-color="#a855f7"/></linearGradient></defs>
+                <path fill="url(#g1)" d="M0,128L80,144C160,160,320,192,480,181.3C640,171,800,117,960,112C1120,107,1280,149,1360,170.7L1440,192L1440,320L1360,320C1280,320,1120,320,960,320C800,320,640,320,480,320C320,320,160,320,80,320L0,320Z"></path>
+                <path fill="url(#g1)" transform="translate(1440, 0)" d="M0,128L80,144C160,160,320,192,480,181.3C640,171,800,117,960,112C1120,107,1280,149,1360,170.7L1440,192L1440,320L1360,320C1280,320,1120,320,960,320C800,320,640,320,480,320C320,320,160,320,80,320L0,320Z"></path>
             </svg>
-            <svg class="wave-2" viewBox="0 0 2880 130" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                    <linearGradient id="fw2" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stop-color="#a855f7"/>
-                        <stop offset="100%" stop-color="#06b6d4"/>
-                    </linearGradient>
-                </defs>
-                <path d="M0,85 C360,25 600,110 960,55 C1320,5 1560,100 1920,45 C2160,5 2520,95 2880,40 L2880,130 L0,130Z" fill="url(#fw2)"/>
+            <svg class="wave-2" viewBox="0 0 1440 320" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+                <defs><linearGradient id="g2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#a855f7"/><stop offset="100%" stop-color="#ec4899"/></linearGradient></defs>
+                <path fill="url(#g2)" d="M0,192L60,176C120,160,240,128,360,138.7C480,149,600,203,720,213.3C840,224,960,192,1080,165.3C1200,139,1320,117,1380,106.7L1440,96L1440,320L1380,320C1320,320,1200,320,1080,320C960,320,840,320,720,320C600,320,480,320,360,320C240,320,120,320,60,320L0,320Z"></path>
+                <path fill="url(#g2)" transform="translate(1440, 0)" d="M0,192L60,176C120,160,240,128,360,138.7C480,149,600,203,720,213.3C840,224,960,192,1080,165.3C1200,139,1320,117,1380,106.7L1440,96L1440,320L1380,320C1320,320,1200,320,1080,320C960,320,840,320,720,320C600,320,480,320,360,320C240,320,120,320,60,320L0,320Z"></path>
             </svg>
-            <svg class="wave-3" viewBox="0 0 2880 130" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                    <linearGradient id="fw3" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stop-color="#06b6d4"/>
-                        <stop offset="100%" stop-color="#6366f1"/>
-                    </linearGradient>
-                </defs>
-                <path d="M0,100 C480,35 720,115 1200,55 C1680,0 1920,105 2400,45 C2640,15 2760,90 2880,60 L2880,130 L0,130Z" fill="url(#fw3)"/>
+            <svg class="wave-3" viewBox="0 0 1440 320" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+                <defs><linearGradient id="g3" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#06b6d4"/><stop offset="100%" stop-color="#6366f1"/></linearGradient></defs>
+                <path fill="url(#g3)" d="M0,96L80,117.3C160,139,320,181,480,176C640,171,800,117,960,117.3C1120,117,1280,171,1360,197.3L1440,224L1440,320L1360,320C1280,320,1120,320,960,320C800,320,640,320,480,320C320,320,160,320,80,320L0,320Z"></path>
+                <path fill="url(#g3)" transform="translate(1440, 0)" d="M0,96L80,117.3C160,139,320,181,480,176C640,171,800,117,960,117.3C1120,117,1280,171,1360,197.3L1440,224L1440,320L1360,320C1280,320,1120,320,960,320C800,320,640,320,480,320C320,320,160,320,80,320L0,320Z"></path>
             </svg>
         </div>
         <div class="footer-glow"></div>
@@ -891,6 +912,11 @@ $view = $_GET['view'] ?? 'home';
                 <label>FULL NAME</label><input type="text" name="name" required placeholder="John Doe">
                 <label>WHATSAPP / PHONE</label><input type="text" name="phone" required placeholder="+92 ...">
                 <label>SPECIFICATIONS</label><textarea name="bike_details" rows="4" placeholder="Year, Color, Model, Range..."></textarea>
+                <label>SECURITY CHECK</label>
+                <div style="display:flex; gap:15px; margin-bottom:20px;">
+                    <img src="<?= $captcha_img_src ?>" alt="Captcha" style="border-radius:10px; border:1px solid var(--glass-border); height:50px;">
+                    <input type="number" name="captcha" required placeholder="Answer" style="margin-bottom:0; flex:1;">
+                </div>
                 <button type="submit" name="request_bike" class="btn btn-main" style="width:100%;">SUBMIT REQUEST</button>
             </form>
         </div>
@@ -905,6 +931,11 @@ $view = $_GET['view'] ?? 'home';
                 <label>FULL NAME</label><input type="text" name="name" required placeholder="John Doe">
                 <label>WHATSAPP #</label><input type="text" name="phone" required placeholder="+92 ...">
                 <label>REQUIREMENTS</label><textarea name="details" rows="3" placeholder="Installment details, accessories..."></textarea>
+                <label>SECURITY CHECK</label>
+                <div style="display:flex; gap:15px; margin-bottom:20px;">
+                    <img src="<?= $captcha_img_src ?>" alt="Captcha" style="border-radius:10px; border:1px solid var(--glass-border); height:50px;">
+                    <input type="number" name="captcha" required placeholder="Answer" style="margin-bottom:0; flex:1;">
+                </div>
                 <button type="submit" name="request_quote" class="btn btn-main" style="width:100%;">REQUEST QUOTE</button>
             </form>
         </div>
