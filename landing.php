@@ -1057,7 +1057,11 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                         $img = $bike['image'] ?: $bike['model_image'];
                         $bd = $badge_data[$bike['model_id']] ?? null;
                         $b_days = $bike['created_at'] ? floor((time() - strtotime($bike['created_at'])) / 86400) : 999;
-                        if ($bd && $bd['rank'] === 1 && $bd['sold_cnt'] > 0) {
+                        if ($bike['status'] !== 'in_stock') {
+                            $b_cls = 'badge-lowstock';
+                            $b_ico = 'fa-ban';
+                            $b_txt = strtoupper(str_replace('_', ' ', $bike['status']));
+                        } elseif ($bd && $bd['rank'] === 1 && $bd['sold_cnt'] > 0) {
                             $b_cls = 'badge-bestseller';
                             $b_ico = 'fa-crown';
                             $b_txt = 'BEST SELLER';
