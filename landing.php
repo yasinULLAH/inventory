@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 ini_set('session.cookie_httponly', 1);
 ini_set('session.use_only_cookies', 1);
 ini_set('session.cookie_samesite', 'Strict');
@@ -71,12 +71,12 @@ function generate_math_captcha()
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
-        die('🚫 Invalid CSRF Token');
+        die('ðŸš« Invalid CSRF Token');
     }
     $user_captcha = (int) ($_POST['captcha'] ?? 0);
     $real_captcha = (int) ($_SESSION['captcha_ans'] ?? -1);
     if ($user_captcha !== $real_captcha) {
-        header('Location: landing.php?msg=Security Check Failed! Invalid Captcha.');
+        header('Location: ' . $self_page . '?msg=Security Check Failed! Invalid Captcha.');
         exit;
     }
     if (isset($_POST['request_bike'])) {
@@ -86,7 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $st = $conn->prepare('INSERT INTO bike_requests (customer_name, customer_phone, bike_details) VALUES (?,?,?)');
         $st->bind_param('sss', $name, $phone, $details);
         $st->execute();
-        header('Location: landing.php?msg=Request Sent! Our team will contact you.');
+        header('Location: ' . $self_page . '?msg=Request Sent! Our team will contact you.');
         exit;
     }
     if (isset($_POST['request_quote'])) {
@@ -97,7 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $st = $conn->prepare('INSERT INTO quote_requests (customer_name, customer_phone, bike_id, details) VALUES (?,?,?,?)');
         $st->bind_param('ssis', $name, $phone, $bike_id, $details);
         $st->execute();
-        header('Location: landing.php?msg=Quote Requested! Check WhatsApp shortly.');
+        header('Location: ' . $self_page . '?msg=Quote Requested! Check WhatsApp shortly.');
         exit;
     }
 }
@@ -111,13 +111,84 @@ $hero_title = get_setting('landing_hero_title') ?? 'The Next Generation of Elect
 $hero_sub = get_setting('landing_hero_subtitle') ?? 'Eco-friendly, powerful, and designed for the modern world.';
 $wa_number = get_setting('company_whatsapp') ?? '';
 $view = $_GET['view'] ?? 'home';
+$self_page = $_SERVER['PHP_SELF'] ?? 'landing.php';
+
+$is_bike_detail = false;
+$bike_detail = null;
+$meta_title = sanitize($company_name) . ' | Future of Electric Mobility';
+$meta_description = 'Explore premium electric bikes and scooters with modern design, performance, and support.';
+$meta_image = 'logo.png';
+$meta_canonical = basename($self_page) . '?view=' . urlencode($view);
+
+if ($view === 'bike') {
+    $bike_id = max(0, (int) ($_GET['id'] ?? 0));
+    if ($bike_id > 0) {
+        $bd_stmt = $conn->prepare("SELECT b.id, b.model_id, b.color, b.status, b.created_at, m.model_name, m.category, m.image as model_image
+            FROM bikes b
+            JOIN models m ON m.id = b.model_id
+            WHERE b.id = ?
+            LIMIT 1");
+        $bd_stmt->bind_param('i', $bike_id);
+        $bd_stmt->execute();
+        $bd_res = $bd_stmt->get_result();
+        $bike_detail = $bd_res->fetch_assoc();
+
+        if ($bike_detail) {
+            $is_bike_detail = true;
+            $img = $bike_detail['model_image'] ?: 'logo.png';
+            $meta_title = sanitize($bike_detail['model_name']) . ' | ' . sanitize($company_name);
+            $meta_description = 'View ' . sanitize($bike_detail['model_name']) . ' details, category, color, availability and inquiry options.';
+            $meta_image = $img;
+            $meta_canonical = basename($self_page) . '?view=bike&id=' . (int) $bike_detail['id'];
+        } else {
+            http_response_code(404);
+            $meta_title = 'Bike Not Found | ' . sanitize($company_name);
+            $meta_description = 'The requested bike detail page could not be found.';
+        }
+    }
+}
+
+$scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+$host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+$base_url = $scheme . '://' . $host . rtrim(dirname($_SERVER['PHP_SELF']), '/\\');
+$canonical_url = $base_url . '/' . ltrim($meta_canonical, '/');
+$meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($base_url . '/' . ltrim($meta_image, '/'));
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= sanitize($company_name) ?> | Future of Electric Mobility</title>
+    <title><?= $meta_title ?></title>
+    <meta name="description" content="<?= sanitize($meta_description) ?>">
+    <link rel="canonical" href="<?= sanitize($canonical_url) ?>">
+    <meta property="og:type" content="<?= $is_bike_detail ? 'product' : 'website' ?>">
+    <meta property="og:title" content="<?= $meta_title ?>">
+    <meta property="og:description" content="<?= sanitize($meta_description) ?>">
+    <meta property="og:url" content="<?= sanitize($canonical_url) ?>">
+    <meta property="og:image" content="<?= sanitize($meta_image_url) ?>">
+    <meta property="og:site_name" content="<?= sanitize($company_name) ?>">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="<?= $meta_title ?>">
+    <meta name="twitter:description" content="<?= sanitize($meta_description) ?>">
+    <meta name="twitter:image" content="<?= sanitize($meta_image_url) ?>">
+    <?php if ($is_bike_detail && $bike_detail): ?>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Product",
+      "name": "<?= sanitize($bike_detail['model_name']) ?>",
+      "image": "<?= sanitize($meta_image_url) ?>",
+      "description": "<?= sanitize($meta_description) ?>",
+      "brand": {
+        "@type": "Brand",
+        "name": "<?= sanitize($company_name) ?>"
+      },
+      "category": "<?= sanitize($bike_detail['category']) ?>",
+      "url": "<?= sanitize($canonical_url) ?>"
+    }
+    </script>
+    <?php endif; ?>
     <link rel="icon" type="image/x-icon" href="favicon.ico">
     <link rel="icon" type="image/png" sizes="96x96" href="favicon-96x96.png">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -234,6 +305,14 @@ $view = $_GET['view'] ?? 'home';
         }
         .bike-img img { width: 100%; height: 100%; object-fit: cover; transition: 0.7s cubic-bezier(0.4, 0, 0.2, 1); }
         .bike-card:hover .bike-img img { transform: scale(1.1) rotate(1deg); filter: brightness(1.1); }
+        .bike-link { color: inherit; text-decoration: none; display: block; }
+        .detail-wrap { max-width: 1100px; margin: 0 auto; }
+        .detail-grid { display: grid; grid-template-columns: 1fr; gap: 25px; }
+        @media (min-width: 900px) { .detail-grid { grid-template-columns: 1.2fr 1fr; } }
+        .detail-hero-img { width: 100%; min-height: 420px; border-radius: 24px; object-fit: cover; background: #0f172a; }
+        .detail-panel { padding: 30px; }
+        .detail-kv { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0 25px; }
+        .detail-kv .feat-item { background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); border-radius: 14px; padding: 12px; }
         .bike-status {
             position: absolute; top: 15px; left: 15px; padding: 6px 16px; border-radius: 50px;
             font-size: 0.7rem; font-weight: 900; z-index: 10; box-shadow: 0 5px 15px rgba(0,0,0,0.3);
@@ -517,7 +596,7 @@ $view = $_GET['view'] ?? 'home';
 +'<circle cx="395" cy="180" r="8" fill="#06b6d4" opacity="0.3"/><circle cx="395" cy="180" r="4" fill="#06b6d4" opacity="0.5"/>'
 +'<path d="M100 210 Q115 195, 140 210" stroke="#a855f7" stroke-width="4" stroke-linecap="round" opacity="0.35"/>'
 +'<path d="M370 210 Q385 195, 405 210" stroke="#a855f7" stroke-width="4" stroke-linecap="round" opacity="0.35"/>'
-+'<text x="250" y="310" text-anchor="middle" fill="#6366f1" font-family="Outfit,sans-serif" font-size="14" font-weight="600" opacity="0.4">⚡ E-BIKE</text>'
++'<text x="250" y="310" text-anchor="middle" fill="#6366f1" font-family="Outfit,sans-serif" font-size="14" font-weight="600" opacity="0.4">âš¡ E-BIKE</text>'
 +'</svg>';
         w.appendChild(d);
     }
@@ -529,7 +608,7 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
 <meta property="og:title" content="BNI Enterprises" />
 <meta property="og:description" content="Welcome to BNI Enterprises" />
 <meta property="og:image" content="<?= $base_url ?>/logo.png" />
-<meta property="og:url" content="<?= $base_url ?>/landing.php" />
+<meta property="og:url" content="<?= sanitize($canonical_url) ?>" />
 <meta property="og:type" content="website" />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="BNI Enterprises" />
@@ -542,17 +621,17 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
     </div>
     <canvas id="bg-canvas"></canvas>
     <nav>
-        <a href="landing.php" class="logo-wrap">
+        <a href="<?= sanitize($self_page) ?>" class="logo-wrap">
             <img src="logo.png" alt="Logo" class="logo-img" onerror="this.style.display='none'">
             <span class="logo-text"><?= sanitize($company_name) ?></span>
         </a>
         <ul class="nav-links">
-            <li><a href="landing.php?view=home">Home</a></li>
-            <li><a href="landing.php?view=bikes">INVENTORY</a></li>
+            <li><a href="<?= sanitize($self_page) ?>?view=home">Home</a></li>
+            <li><a href="<?= sanitize($self_page) ?>?view=bikes">INVENTORY</a></li>
             <li><a href="#vision">VISION</a></li>
             <li><a href="#gallery">GALLERY</a></li>
         </ul>
-        <a href="landing.php?view=bikes" class="btn btn-main" style="padding: 10px 25px; font-size: 0.75rem;">EXPLORE</a>
+        <a href="<?= sanitize($self_page) ?>?view=bikes" class="btn btn-main" style="padding: 10px 25px; font-size: 0.75rem;">EXPLORE</a>
     </nav>
     <?php if ($view === 'home'): ?>
         <section class="hero container animate__animated animate__fadeIn">
@@ -561,7 +640,7 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
             </h1>
             <p class="hero-sub animate__animated animate__fadeInUp animate__delay-1s"><?= sanitize($hero_sub) ?></p>
             <div class="cta-group animate__animated animate__fadeInUp animate__delay-2s">
-                <a href="landing.php?view=bikes" class="btn btn-main">View Collection <i class="fas fa-arrow-right"></i></a>
+                <a href="<?= sanitize($self_page) ?>?view=bikes" class="btn btn-main">View Collection <i class="fas fa-arrow-right"></i></a>
                 <a href="#vision" class="btn btn-outline">Our Philosophy</a>
             </div>
             <div style="position:absolute; bottom:30px; left:50%; transform:translateX(-50%); opacity:0.5;" class="animate__animated animate__bounce animate__infinite">
@@ -594,21 +673,28 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                 <div class="glass bento-card">
                     <i class="fas fa-eye" style="font-size:3rem; color:var(--primary); margin-bottom:20px;"></i>
                     <h3 style="font-size:2rem; margin-bottom:15px;">Visionary Mobility</h3>
-                    <p style="font-size:1.1rem; color:var(--text-dim);"><?= sanitize(get_setting('vision_statement') ?? 'Leading the charge into a sustainable, electrified future.') ?></p>
+                    <p style="font-size:1.05rem; color:var(--text-dim); margin-bottom:14px;"><?= sanitize(get_setting('vision_statement') ?? 'Leading the charge into a sustainable, electrified future.') ?></p>
+                    <p style="font-size:0.95rem; color:var(--text-dim);">Our vision is to make electric mobility practical for every household by combining dependable technology, clean energy, and rider-first service.</p>
                 </div>
                 <div class="glass bento-card" style="text-align:center;">
-                    <div style="font-size:4rem; font-weight:900; opacity:0.1;">⚡</div>
+                    <div style="font-size:3.2rem; font-weight:900; opacity:0.18;"><i class="fas fa-bolt"></i></div>
                     <h4>Pure Power</h4>
-                    <p style="font-size:0.8rem; color:var(--text-dim);">Engineered for performance without compromise.</p>
+                    <p style="font-size:0.85rem; color:var(--text-dim);">Built for responsive acceleration, smooth control, and confidence on daily commutes.</p>
                 </div>
                 <div class="glass bento-card" style="text-align:center;">
-                    <div style="font-size:4rem; font-weight:900; opacity:0.1;">🌍</div>
+                    <div style="font-size:3.2rem; font-weight:900; opacity:0.18;"><i class="fas fa-earth-asia"></i></div>
                     <h4>Eco First</h4>
-                    <p style="font-size:0.8rem; color:var(--text-dim);">Zero emissions, infinite possibilities for our planet.</p>
+                    <p style="font-size:0.85rem; color:var(--text-dim);">Lower emissions and lower running cost, helping riders and cities move toward a cleaner future.</p>
                 </div>
                 <div class="glass bento-card">
                     <h3 style="font-size:1.8rem; margin-bottom:15px;">Our Daily Mission</h3>
-                    <p style="color:var(--text-dim);"><?= sanitize(get_setting('mission_statement') ?? 'Delivering excellence and innovation in every ride we offer.') ?></p>
+                    <p style="color:var(--text-dim); margin-bottom:12px;"><?= sanitize(get_setting('mission_statement') ?? 'Delivering excellence and innovation in every ride we offer.') ?></p>
+                    <p style="color:var(--text-dim); font-size:0.95rem;">We focus on honest guidance, quality products, and reliable after-sales support from first inquiry to long-term ownership.</p>
+                </div>
+                <div class="glass bento-card">
+                    <h3 style="font-size:1.8rem; margin-bottom:15px;">About Us</h3>
+                    <p style="color:var(--text-dim); margin-bottom:12px;">We are an electric mobility team dedicated to helping customers choose the right bike for their real-world needs.</p>
+                    <p style="color:var(--text-dim); font-size:0.95rem;">Our approach is simple: understand your use case, recommend the right model, and stay available with dependable support after your purchase.</p>
                 </div>
             </div>
         </section>
@@ -635,7 +721,7 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                     if ($elite_rank === 1 && $m['sales_cnt'] > 0) {
                         $badge_class = 'badge-bestseller';
                         $badge_icon = 'fa-crown';
-                        $badge_text = 'BEST SELLER · ' . $m['sales_cnt'] . ' Sold';
+                        $badge_text = 'BEST SELLER Â· ' . $m['sales_cnt'] . ' Sold';
                     } elseif ($days_since <= 30) {
                         $badge_class = 'badge-newarrival';
                         $badge_icon = 'fa-sparkles';
@@ -643,11 +729,11 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                     } elseif ($m['stock_cnt'] <= 2 && $m['stock_cnt'] > 0) {
                         $badge_class = 'badge-lowstock';
                         $badge_icon = 'fa-fire';
-                        $badge_text = 'LOW STOCK · Only ' . $m['stock_cnt'] . ' Left';
+                        $badge_text = 'LOW STOCK Â· Only ' . $m['stock_cnt'] . ' Left';
                     } elseif ($m['sales_cnt'] >= 2) {
                         $badge_class = 'badge-popular';
                         $badge_icon = 'fa-chart-line';
-                        $badge_text = 'POPULAR · ' . $m['sales_cnt'] . ' Sold';
+                        $badge_text = 'POPULAR Â· ' . $m['sales_cnt'] . ' Sold';
                     } else {
                         $badge_class = 'badge-default';
                         $badge_icon = 'fa-bolt';
@@ -656,10 +742,12 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                     ?>
                 <div class="glass bike-card" data-tilt>
                     <div class="bike-status <?= $badge_class ?>"><i class="fas <?= $badge_icon ?>"></i> <?= $badge_text ?></div>
-                    <div class="bike-img">
-                        <img src="<?= $m['image'] ?: '' ?>" alt="<?= sanitize($m['model_name']) ?>" onerror="bikePlaceholder(this)">
-                    </div>
-                    <div class="bike-title"><?= sanitize($m['model_name']) ?></div>
+                    <a class="bike-link" href="<?= sanitize($self_page) ?>?view=bike&id=<?= (int) $avail['id'] ?>">
+                        <div class="bike-img">
+                            <img src="<?= $m['image'] ?: '' ?>" alt="<?= sanitize($m['model_name']) ?>" onerror="bikePlaceholder(this)">
+                        </div>
+                        <div class="bike-title"><?= sanitize($m['model_name']) ?></div>
+                    </a>
                     <div class="bike-features">
                         <div class="feat-item"><i class="fas fa-bolt"></i> <?= sanitize($m['category']) ?></div>
                         <div class="feat-item"><i class="fas fa-palette"></i> <?= sanitize($avail['color']) ?></div>
@@ -672,7 +760,7 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                 <?php endwhile; ?>
             </div>
             <div style="text-align:center; margin-top:50px;">
-                <a href="landing.php?view=bikes" class="btn btn-outline">Explore Full Fleet <i class="fas fa-chevron-right"></i></a>
+                <a href="<?= sanitize($self_page) ?>?view=bikes" class="btn btn-outline">Explore Full Fleet <i class="fas fa-chevron-right"></i></a>
             </div>
         </section>
         <section class="container">
@@ -746,7 +834,7 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
         <section class="container" style="padding-top:120px;">
             <h2 class="sec-title" data-text="FLEET">ACTIVE INVENTORY</h2>
             <div class="glass" style="margin-bottom:40px; padding:30px;">
-                <form action="landing.php" method="GET" style="display:flex; gap:15px; flex-wrap:wrap; align-items:center;">
+                <form action="<?= sanitize($self_page) ?>" method="GET" style="display:flex; gap:15px; flex-wrap:wrap; align-items:center;">
                     <input type="hidden" name="view" value="bikes">
                     <div style="flex:1; min-width:200px;">
                         <input type="text" name="search" placeholder="Search Chassis or Model..." value="<?= sanitize($_GET['search'] ?? '') ?>" style="margin-bottom:0; width:100%;">
@@ -764,7 +852,7 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                     </div>
                     <div style="display:flex; gap:10px; flex:1; min-width:200px;">
                         <button type="submit" class="btn btn-main" style="flex:1; justify-content:center;">FILTER</button>
-                        <a href="landing.php?view=bikes" class="btn btn-outline" style="flex:1; justify-content:center;">RESET</a>
+                        <a href="<?= sanitize($self_page) ?>?view=bikes" class="btn btn-outline" style="flex:1; justify-content:center;">RESET</a>
                     </div>
                 </form>
             </div>
@@ -823,10 +911,12 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                         ?>
                 <div class="glass bike-card" data-tilt>
                     <div class="bike-status <?= $b_cls ?>"><i class="fas <?= $b_ico ?>"></i> <?= $b_txt ?></div>
-                    <div class="bike-img">
-                        <img src="<?= $img ?: '' ?>" alt="<?= sanitize($bike['model_name']) ?>" onerror="bikePlaceholder(this)">
-                    </div>
-                    <div class="bike-title"><?= sanitize($bike['model_name']) ?></div>
+                    <a class="bike-link" href="<?= sanitize($self_page) ?>?view=bike&id=<?= (int) $bike['id'] ?>">
+                        <div class="bike-img">
+                            <img src="<?= $img ?: '' ?>" alt="<?= sanitize($bike['model_name']) ?>" onerror="bikePlaceholder(this)">
+                        </div>
+                        <div class="bike-title"><?= sanitize($bike['model_name']) ?></div>
+                    </a>
                     <div class="bike-features">
                         <div class="feat-item"><i class="fas fa-fingerprint"></i> <?= sanitize($bike['chassis_number']) ?></div>
                         <div class="feat-item"><i class="fas fa-palette"></i> <?= sanitize($bike['color']) ?></div>
@@ -851,9 +941,55 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
             <?php if ($total_pages > 1): ?>
             <div style="display:flex; justify-content:center; gap:10px; margin-top:60px;">
                 <?php for ($i = 1; $i <= $total_pages; $i++): ?>
-                <a href="landing.php?view=bikes&pg=<?= $i ?>&search=<?= urlencode($_GET['search'] ?? '') ?>&category=<?= urlencode($_GET['category'] ?? '') ?>" class="btn <?= $page_num == $i ? 'btn-main' : 'btn-outline' ?>" style="padding:12px 22px;"><?= $i ?></a>
+                <a href="<?= sanitize($self_page) ?>?view=bikes&pg=<?= $i ?>&search=<?= urlencode($_GET['search'] ?? '') ?>&category=<?= urlencode($_GET['category'] ?? '') ?>" class="btn <?= $page_num == $i ? 'btn-main' : 'btn-outline' ?>" style="padding:12px 22px;"><?= $i ?></a>
                 <?php endfor; ?>
             </div>
+            <?php endif; ?>
+        </section>
+    <?php elseif ($view === 'bike'): ?>
+        <section class="container" style="padding-top:120px;">
+            <?php if ($is_bike_detail && $bike_detail): ?>
+                <div class="detail-wrap">
+                    <div style="margin-bottom:20px;">
+                        <a href="<?= sanitize($self_page) ?>?view=bikes" class="btn btn-outline" style="padding:10px 18px;"><i class="fas fa-arrow-left"></i> BACK TO INVENTORY</a>
+                    </div>
+                    <div class="detail-grid">
+                        <div class="glass" style="padding:14px;">
+                            <img class="detail-hero-img" src="<?= sanitize($bike_detail['model_image'] ?: 'logo.png') ?>" alt="<?= sanitize($bike_detail['model_name']) ?>" onerror="this.src='logo.png'">
+                        </div>
+                        <div class="glass detail-panel">
+                            <div class="bike-status badge-default" style="position:static; display:inline-flex; margin-bottom:14px;">
+                                <i class="fas fa-bolt"></i> <?= strtoupper($bike_detail['status'] === 'in_stock' ? 'AVAILABLE' : sanitize($bike_detail['status'])) ?>
+                            </div>
+                            <h1 style="font-size:2.2rem; line-height:1.1; margin-bottom:8px;"><?= sanitize($bike_detail['model_name']) ?></h1>
+                            <p style="color:var(--text-dim); margin-bottom:6px;"><?= sanitize($bike_detail['category']) ?></p>
+                            <p style="color:var(--text-dim); font-size:0.95rem;">Added: <?= $bike_detail['created_at'] ? date('d M Y', strtotime($bike_detail['created_at'])) : 'N/A' ?></p>
+
+                            <div class="detail-kv">
+                                <div class="feat-item"><i class="fas fa-palette"></i> Color: <?= sanitize($bike_detail['color'] ?: 'N/A') ?></div>
+                                <div class="feat-item"><i class="fas fa-shield-alt"></i> Warranty Included</div>
+                                <div class="feat-item"><i class="fas fa-headset"></i> 24/7 Support</div>
+                                <div class="feat-item"><i class="fas fa-image"></i> High-Quality Product Visual</div>
+                            </div>
+
+                            <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
+                                <a href="https://wa.me/<?= $wa_number ?>?text=Inquiry for <?= urlencode($bike_detail['model_name']) ?> (Bike ID: <?= (int) $bike_detail['id'] ?>)" class="wa-action" style="flex:1;">INQUIRE</a>
+                                <button class="btn btn-outline" style="flex:1; justify-content:center;" onclick="openQuoteModal(<?= (int) $bike_detail['id'] ?>, '<?= sanitize($bike_detail['model_name']) ?>')">QUOTE</button>
+                            </div>
+                            <div style="display:flex; gap:12px; flex-wrap:wrap;">
+                                <button class="btn btn-outline" style="flex:1; justify-content:center;" onclick="navigator.clipboard.writeText('<?= sanitize($canonical_url) ?>'); this.innerHTML='<i class=&quot;fas fa-check&quot;></i> LINK COPIED';">SHARE LINK</button>
+                                <a href="<?= sanitize($self_page) ?>?view=bikes" class="btn btn-main" style="flex:1; justify-content:center;">MORE BIKES</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            <?php else: ?>
+                <div class="glass bento-card" style="text-align:center; padding:100px;">
+                    <i class="fas fa-circle-exclamation" style="font-size:4rem; color:var(--text-dim); margin-bottom:25px;"></i>
+                    <h3>BIKE NOT FOUND</h3>
+                    <p style="margin-bottom:30px;">This bike detail page is unavailable or no longer public.</p>
+                    <a href="<?= sanitize($self_page) ?>?view=bikes" class="btn btn-main">GO TO INVENTORY</a>
+                </div>
             <?php endif; ?>
         </section>
     <?php endif; ?>
@@ -898,7 +1034,7 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
         <div class="footer-content-area">
             <div class="container footer-wrap">
                 <div>
-                    <a href="landing.php" class="logo-wrap" style="margin-bottom:25px;">
+                    <a href="<?= sanitize($self_page) ?>" class="logo-wrap" style="margin-bottom:25px;">
                         <img src="logo.png" alt="Logo" class="logo-img" onerror="this.style.display='none'">
                         <span class="logo-text"><?= sanitize($company_name) ?></span>
                     </a>
@@ -912,8 +1048,8 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                 <div>
                     <h4 class="footer-head">QUICK LINKS</h4>
                     <ul style="list-style:none; line-height:2.8;">
-                        <li><a href="landing.php?view=home" class="footer-link"><i class="fas fa-home"></i> Home</a></li>
-                        <li><a href="landing.php?view=bikes" class="footer-link"><i class="fas fa-motorcycle"></i> Inventory</a></li>
+                        <li><a href="<?= sanitize($self_page) ?>?view=home" class="footer-link"><i class="fas fa-home"></i> Home</a></li>
+                        <li><a href="<?= sanitize($self_page) ?>?view=bikes" class="footer-link"><i class="fas fa-motorcycle"></i> Inventory</a></li>
                         <li><a href="#vision" class="footer-link"><i class="fas fa-eye"></i> Philosophy</a></li>
                         <li><a href="#" onclick="openRequestModal(); return false;" class="footer-link"><i class="fas fa-paper-plane"></i> Request Bike</a></li>
                     </ul>
@@ -936,7 +1072,7 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
         <div class="modal-body">
             <span class="modal-close" onclick="closeModal('requestModal')">&times;</span>
             <h2 style="margin-bottom:25px; background:var(--grad); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">REQUEST A MODEL</h2>
-            <form action="landing.php" method="POST">
+            <form action="<?= sanitize($self_page) ?>" method="POST">
                 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
                 <label>FULL NAME</label><input type="text" name="name" required placeholder="John Doe">
                 <label>WHATSAPP / PHONE</label><input type="text" name="phone" required placeholder="+92 ...">
@@ -955,7 +1091,7 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
             <span class="modal-close" onclick="closeModal('quoteModal')">&times;</span>
             <h2 style="margin-bottom:5px; color:var(--primary);">GET A QUOTE</h2>
             <p id="q_name" style="color:white; font-weight:700; margin-bottom:25px; font-size:1.1rem;"></p>
-            <form action="landing.php" method="POST">
+            <form action="<?= sanitize($self_page) ?>" method="POST">
                 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
                 <input type="hidden" name="bike_id" id="q_id">
                 <label>FULL NAME</label><input type="text" name="name" required placeholder="John Doe">
@@ -983,27 +1119,128 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('bg-canvas'), alpha: true, antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
         renderer.setSize(window.innerWidth, window.innerHeight);
-        const geometry = new THREE.TorusGeometry(10, 3, 16, 100);
         const particlesGeometry = new THREE.BufferGeometry();
-        const counts = 3000;
+        const counts = 3800;
         const posArray = new Float32Array(counts * 3);
-        for(let i=0; i < counts * 3; i++) { posArray[i] = (Math.random() - 0.5) * 20; }
+        const basePos = new Float32Array(counts * 3);
+        for (let i = 0; i < counts * 3; i++) { posArray[i] = (Math.random() - 0.5) * 24; }
+        basePos.set(posArray);
         particlesGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
-        const material = new THREE.PointsMaterial({ size: 0.008, color: '#6366f1', transparent: true, opacity: 0.3 });
+        const material = new THREE.PointsMaterial({ size: 0.014, color: '#7c83ff', transparent: true, opacity: 0.5 });
         const particlesMesh = new THREE.Points(particlesGeometry, material);
         scene.add(particlesMesh);
-        camera.position.z = 5;
-        let mouseX = 0, mouseY = 0;
-        document.addEventListener('mousemove', (e) => { mouseX = e.clientX; mouseY = e.clientY; });
+        camera.position.z = 5.6;
+
+        // Mouse-reactive movement with smoothing.
+        let mouseTX = 0, mouseTY = 0, mouseX = 0, mouseY = 0;
+        let lastRawX = 0, lastRawY = 0;
+        let hasMouse = false;
+        let burst = 0.22; // Initial stronger start feel.
+        let clickPulse = 0;
+        let hueShift = 0;
+        let blastPulse = 0;
+        let gatherStrength = 0;
+        let lastMoveTs = performance.now();
+        const vel = new Float32Array(counts * 3);
+
+        function triggerBlast() {
+            blastPulse = Math.min(1, blastPulse + 0.9);
+            clickPulse = Math.max(clickPulse, 0.28);
+        }
+
+        document.addEventListener('mousemove', (e) => {
+            const moved = Math.hypot(e.clientX - lastRawX, e.clientY - lastRawY);
+            lastRawX = e.clientX;
+            lastRawY = e.clientY;
+            mouseTX = ((e.clientX / window.innerWidth) - 0.5) * 2;
+            mouseTY = ((e.clientY / window.innerHeight) - 0.5) * 2;
+            hasMouse = true;
+            if (moved > 2.2) {
+                if (gatherStrength > 0.45) triggerBlast();
+                lastMoveTs = performance.now();
+            }
+        });
+        document.addEventListener('mousedown', () => {
+            triggerBlast();
+            lastMoveTs = performance.now();
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
         const animate = () => {
             requestAnimationFrame(animate);
-            particlesMesh.rotation.y += 0.001;
-            particlesMesh.rotation.x += 0.0005;
-            if (mouseX > 0) {
-                particlesMesh.rotation.x += (mouseY * 0.00001);
-                particlesMesh.rotation.y += (mouseX * 0.00001);
+
+            // Smooth mouse interpolation.
+            mouseX += (mouseTX - mouseX) * 0.06;
+            mouseY += (mouseTY - mouseY) * 0.06;
+
+            burst *= 0.985;
+            clickPulse *= 0.9;
+            blastPulse *= 0.92;
+            const energy = burst + clickPulse;
+
+            particlesMesh.rotation.y += 0.0018 + energy * 0.016;
+            particlesMesh.rotation.x += 0.0009 + energy * 0.009;
+
+            particlesMesh.rotation.y += mouseX * 0.034;
+            particlesMesh.rotation.x += mouseY * 0.024;
+
+            particlesMesh.position.x += ((mouseX * 0.42) - particlesMesh.position.x) * 0.08;
+            particlesMesh.position.y += ((-mouseY * 0.34) - particlesMesh.position.y) * 0.08;
+
+            // Hover magnet: if mouse stays still, particles gather.
+            const now = performance.now();
+            const idleMs = now - lastMoveTs;
+            const attractTarget = (hasMouse && idleMs > 650) ? 1 : 0;
+            gatherStrength += (attractTarget - gatherStrength) * 0.06;
+
+            // Magnetic mouse field + gather and blast behavior.
+            const positions = particlesGeometry.attributes.position.array;
+            const mx = mouseX * 6.5;
+            const my = -mouseY * 5.2;
+            const t = performance.now() * 0.0016;
+            for (let i = 0; i < counts * 3; i += 3) {
+                const bx = basePos[i];
+                const by = basePos[i + 1];
+                const bz = basePos[i + 2];
+                const dx = mx - bx;
+                const dy = my - by;
+                const d2 = dx * dx + dy * dy + 0.7;
+                const force = Math.min(1.9 / d2, 0.2);
+                const attractForce = gatherStrength * Math.min(8.5 / d2, 0.9);
+                const blastForce = blastPulse * Math.min(14.0 / d2, 1.1);
+                const wobble = Math.sin((bx + by) * 0.6 + t * 2.8) * 0.06;
+
+                // Velocity-based motion: gather in, blast out, then settle.
+                vel[i] *= 0.9;
+                vel[i + 1] *= 0.9;
+                vel[i + 2] *= 0.9;
+
+                vel[i] += dx * attractForce;
+                vel[i + 1] += dy * attractForce;
+
+                vel[i] -= dx * blastForce;
+                vel[i + 1] -= dy * blastForce;
+                vel[i + 2] += (Math.random() - 0.5) * blastForce * 0.35;
+
+                positions[i] = bx + dx * force + vel[i] + wobble;
+                positions[i + 1] = by + dy * force + vel[i + 1] + wobble;
+                positions[i + 2] = bz + Math.cos((bx - by) * 0.5 + t * 3.2) * (0.04 + force * 0.22) + vel[i + 2];
             }
+            particlesGeometry.attributes.position.needsUpdate = true;
+
+            hueShift += 0.8 + Math.abs(mouseX + mouseY) * 6;
+            const hue = 228 + Math.sin(hueShift * 0.01) * 16;
+            material.color.setHSL(hue / 360, 0.88, 0.68);
+            material.opacity = 0.38 + Math.min(energy, 0.34) + Math.min(Math.abs(mouseX) + Math.abs(mouseY), 0.2) + gatherStrength * 0.1;
+            material.size = 0.012 + Math.min(energy, 0.028) + Math.min((Math.abs(mouseX) + Math.abs(mouseY)) * 0.006, 0.008) + gatherStrength * 0.006;
+
             renderer.render(scene, camera);
         };
         animate();
@@ -1067,3 +1304,4 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
     </script>
 </body>
 </html>
+
