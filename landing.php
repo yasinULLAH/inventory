@@ -71,12 +71,13 @@ function generate_math_captcha()
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
-        die('ðŸš« Invalid CSRF Token');
+        header('Location: ' . $self_page . '?err=' . urlencode('Security token expired. Please refresh the page and try again.'));
+        exit;
     }
     $user_captcha = (int) ($_POST['captcha'] ?? 0);
     $real_captcha = (int) ($_SESSION['captcha_ans'] ?? -1);
     if ($user_captcha !== $real_captcha) {
-        header('Location: ' . $self_page . '?msg=Security Check Failed! Invalid Captcha.');
+        header('Location: ' . $self_page . '?err=' . urlencode('Security Check Failed! Invalid Captcha.'));
         exit;
     }
     if (isset($_POST['request_bike'])) {
@@ -112,30 +113,27 @@ $hero_sub = get_setting('landing_hero_subtitle') ?? 'Eco-friendly, powerful, and
 $wa_number = get_setting('company_whatsapp') ?? '';
 $view = $_GET['view'] ?? 'home';
 $self_page = $_SERVER['PHP_SELF'] ?? 'landing.php';
-
 $is_bike_detail = false;
 $bike_detail = null;
 $meta_title = sanitize($company_name) . ' | Future of Electric Mobility';
 $meta_description = 'Explore premium electric bikes and scooters with modern design, performance, and support.';
 $meta_image = 'logo.png';
 $meta_canonical = basename($self_page) . '?view=' . urlencode($view);
-
 if ($view === 'bike') {
     $bike_id = max(0, (int) ($_GET['id'] ?? 0));
     if ($bike_id > 0) {
-        $bd_stmt = $conn->prepare("SELECT b.id, b.model_id, b.color, b.status, b.created_at, m.model_name, m.category, m.image as model_image
+        $bd_stmt = $conn->prepare('SELECT b.id, b.model_id, b.color, b.status, b.created_at, b.image as bike_image, m.model_name, m.category, m.image as model_image
             FROM bikes b
             JOIN models m ON m.id = b.model_id
             WHERE b.id = ?
-            LIMIT 1");
+            LIMIT 1');
         $bd_stmt->bind_param('i', $bike_id);
         $bd_stmt->execute();
         $bd_res = $bd_stmt->get_result();
         $bike_detail = $bd_res->fetch_assoc();
-
         if ($bike_detail) {
             $is_bike_detail = true;
-            $img = $bike_detail['model_image'] ?: 'logo.png';
+            $img = $bike_detail['bike_image'] ?: ($bike_detail['model_image'] ?: 'logo.png');
             $meta_title = sanitize($bike_detail['model_name']) . ' | ' . sanitize($company_name);
             $meta_description = 'View ' . sanitize($bike_detail['model_name']) . ' details, category, color, availability and inquiry options.';
             $meta_image = $img;
@@ -147,7 +145,6 @@ if ($view === 'bike') {
         }
     }
 }
-
 $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
 $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
 $base_url = $scheme . '://' . $host . rtrim(dirname($_SERVER['PHP_SELF']), '/\\');
@@ -615,6 +612,39 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
 <meta name="twitter:image" content="<?= $base_url ?>/logo.png" />
 </head>
 <body>
+    <?php if (!empty($_GET['msg']) || !empty($_GET['err'])): ?>
+    <div id="toastMsg" class="glass" style="position:fixed; top:90px; right:20px; z-index:99999; padding:16px 24px; border-left: 4px solid <?= !empty($_GET['err']) ? '#f43f5e' : '#25d366' ?>; animation: slideIn 0.5s forwards; box-shadow: 0 15px 30px rgba(0,0,0,0.5);">
+        <div style="font-weight:900; margin-bottom:5px; font-size:1.1rem; color: <?= !empty($_GET['err']) ? '#f43f5e' : '#25d366' ?>;">
+            <?= !empty($_GET['err']) ? '<i class="fas fa-exclamation-circle"></i> ERROR' : '<i class="fas fa-check-circle"></i> SUCCESS' ?>
+        </div>
+        <div style="font-size:0.95rem; color: #fff; max-width:300px; line-height:1.4;"><?= sanitize($_GET['msg'] ?? $_GET['err']) ?></div>
+        <span style="position:absolute; top:12px; right:15px; cursor:pointer; color:rgba(255,255,255,0.5); font-size:1.2rem; transition:0.3s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='rgba(255,255,255,0.5)'" onclick="this.parentElement.remove()">&times;</span>
+    </div>
+    <style>
+    @keyframes slideIn { 0% { transform: translateX(120%); opacity: 0; } 100% { transform: translateX(0); opacity: 1; } }
+    </style>
+    <script>
+        
+        setTimeout(() => { 
+            const t = document.getElementById('toastMsg'); 
+            if(t) { 
+                t.style.opacity='0'; 
+                t.style.transform='translateX(120%)'; 
+                t.style.transition='all 0.5s ease-in-out'; 
+                setTimeout(()=>t.remove(), 500); 
+            } 
+        }, 6000);
+        
+        
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('msg') || urlParams.has('err')) {
+            urlParams.delete('msg');
+            urlParams.delete('err');
+            const newUrl = window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : '');
+            window.history.replaceState(null, '', newUrl);
+        }
+    </script>
+    <?php endif; ?>
     <div id="preloader">
         <div class="loader-ring"></div>
         <div class="logo-text">LOADING EXPERIENCE</div>
@@ -955,7 +985,7 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                     </div>
                     <div class="detail-grid">
                         <div class="glass" style="padding:14px;">
-                            <img class="detail-hero-img" src="<?= sanitize($bike_detail['model_image'] ?: 'logo.png') ?>" alt="<?= sanitize($bike_detail['model_name']) ?>" onerror="this.src='logo.png'">
+                            <img class="detail-hero-img" src="<?= sanitize($bike_detail['bike_image'] ?: ($bike_detail['model_image'] ?: 'logo.png')) ?>" alt="<?= sanitize($bike_detail['model_name']) ?>" onerror="this.src='logo.png'">
                         </div>
                         <div class="glass detail-panel">
                             <div class="bike-status badge-default" style="position:static; display:inline-flex; margin-bottom:14px;">
@@ -964,14 +994,12 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                             <h1 style="font-size:2.2rem; line-height:1.1; margin-bottom:8px;"><?= sanitize($bike_detail['model_name']) ?></h1>
                             <p style="color:var(--text-dim); margin-bottom:6px;"><?= sanitize($bike_detail['category']) ?></p>
                             <p style="color:var(--text-dim); font-size:0.95rem;">Added: <?= $bike_detail['created_at'] ? date('d M Y', strtotime($bike_detail['created_at'])) : 'N/A' ?></p>
-
                             <div class="detail-kv">
                                 <div class="feat-item"><i class="fas fa-palette"></i> Color: <?= sanitize($bike_detail['color'] ?: 'N/A') ?></div>
                                 <div class="feat-item"><i class="fas fa-shield-alt"></i> Warranty Included</div>
                                 <div class="feat-item"><i class="fas fa-headset"></i> 24/7 Support</div>
                                 <div class="feat-item"><i class="fas fa-image"></i> High-Quality Product Visual</div>
                             </div>
-
                             <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
                                 <a href="https://wa.me/<?= $wa_number ?>?text=Inquiry for <?= urlencode($bike_detail['model_name']) ?> (Bike ID: <?= (int) $bike_detail['id'] ?>)" class="wa-action" style="flex:1;">INQUIRE</a>
                                 <button class="btn btn-outline" style="flex:1; justify-content:center;" onclick="openQuoteModal(<?= (int) $bike_detail['id'] ?>, '<?= sanitize($bike_detail['model_name']) ?>')">QUOTE</button>
@@ -1132,24 +1160,20 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
         const particlesMesh = new THREE.Points(particlesGeometry, material);
         scene.add(particlesMesh);
         camera.position.z = 5.6;
-
-        // Mouse-reactive movement with smoothing.
         let mouseTX = 0, mouseTY = 0, mouseX = 0, mouseY = 0;
         let lastRawX = 0, lastRawY = 0;
         let hasMouse = false;
-        let burst = 0.22; // Initial stronger start feel.
+        let burst = 0.22; 
         let clickPulse = 0;
         let hueShift = 0;
         let blastPulse = 0;
         let gatherStrength = 0;
         let lastMoveTs = performance.now();
         const vel = new Float32Array(counts * 3);
-
-        function triggerBlast() {
-            blastPulse = Math.min(1, blastPulse + 0.9);
-            clickPulse = Math.max(clickPulse, 0.28);
+        function triggerBlast(power = 1) {
+            blastPulse = Math.min(3, blastPulse + 1.5 * power);
+            clickPulse = Math.max(clickPulse, 0.5 * power);
         }
-
         document.addEventListener('mousemove', (e) => {
             const moved = Math.hypot(e.clientX - lastRawX, e.clientY - lastRawY);
             lastRawX = e.clientX;
@@ -1158,49 +1182,37 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
             mouseTY = ((e.clientY / window.innerHeight) - 0.5) * 2;
             hasMouse = true;
             if (moved > 2.2) {
-                if (gatherStrength > 0.45) triggerBlast();
+                if (gatherStrength > 0.1) triggerBlast(1 + gatherStrength * 2.5);
                 lastMoveTs = performance.now();
             }
         });
         document.addEventListener('mousedown', () => {
-            triggerBlast();
+            triggerBlast(2.5);
             lastMoveTs = performance.now();
         });
-
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
-
         const animate = () => {
             requestAnimationFrame(animate);
-
-            // Smooth mouse interpolation.
             mouseX += (mouseTX - mouseX) * 0.06;
             mouseY += (mouseTY - mouseY) * 0.06;
-
             burst *= 0.985;
             clickPulse *= 0.9;
             blastPulse *= 0.92;
             const energy = burst + clickPulse;
-
             particlesMesh.rotation.y += 0.0018 + energy * 0.016;
             particlesMesh.rotation.x += 0.0009 + energy * 0.009;
-
             particlesMesh.rotation.y += mouseX * 0.034;
             particlesMesh.rotation.x += mouseY * 0.024;
-
             particlesMesh.position.x += ((mouseX * 0.42) - particlesMesh.position.x) * 0.08;
             particlesMesh.position.y += ((-mouseY * 0.34) - particlesMesh.position.y) * 0.08;
-
-            // Hover magnet: if mouse stays still, particles gather.
             const now = performance.now();
             const idleMs = now - lastMoveTs;
-            const attractTarget = (hasMouse && idleMs > 650) ? 1 : 0;
-            gatherStrength += (attractTarget - gatherStrength) * 0.06;
-
-            // Magnetic mouse field + gather and blast behavior.
+            const attractTarget = (hasMouse && idleMs > 250) ? 1 : 0;
+            gatherStrength += (attractTarget - gatherStrength) * 0.15;
             const positions = particlesGeometry.attributes.position.array;
             const mx = mouseX * 6.5;
             const my = -mouseY * 5.2;
@@ -1211,36 +1223,29 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                 const bz = basePos[i + 2];
                 const dx = mx - bx;
                 const dy = my - by;
-                const d2 = dx * dx + dy * dy + 0.7;
+                const d2 = dx * dx + dy * dy + 0.2;
                 const force = Math.min(1.9 / d2, 0.2);
-                const attractForce = gatherStrength * Math.min(8.5 / d2, 0.9);
-                const blastForce = blastPulse * Math.min(14.0 / d2, 1.1);
+                const attractForce = gatherStrength * Math.min(25.0 / d2, 3.5);
+                const blastForce = blastPulse * Math.min(35.0 / d2, 4.5);
                 const wobble = Math.sin((bx + by) * 0.6 + t * 2.8) * 0.06;
-
-                // Velocity-based motion: gather in, blast out, then settle.
-                vel[i] *= 0.9;
-                vel[i + 1] *= 0.9;
-                vel[i + 2] *= 0.9;
-
+                vel[i] *= 0.88;
+                vel[i + 1] *= 0.88;
+                vel[i + 2] *= 0.88;
                 vel[i] += dx * attractForce;
                 vel[i + 1] += dy * attractForce;
-
                 vel[i] -= dx * blastForce;
                 vel[i + 1] -= dy * blastForce;
                 vel[i + 2] += (Math.random() - 0.5) * blastForce * 0.35;
-
                 positions[i] = bx + dx * force + vel[i] + wobble;
                 positions[i + 1] = by + dy * force + vel[i + 1] + wobble;
                 positions[i + 2] = bz + Math.cos((bx - by) * 0.5 + t * 3.2) * (0.04 + force * 0.22) + vel[i + 2];
             }
             particlesGeometry.attributes.position.needsUpdate = true;
-
             hueShift += 0.8 + Math.abs(mouseX + mouseY) * 6;
             const hue = 228 + Math.sin(hueShift * 0.01) * 16;
             material.color.setHSL(hue / 360, 0.88, 0.68);
             material.opacity = 0.38 + Math.min(energy, 0.34) + Math.min(Math.abs(mouseX) + Math.abs(mouseY), 0.2) + gatherStrength * 0.1;
             material.size = 0.012 + Math.min(energy, 0.028) + Math.min((Math.abs(mouseX) + Math.abs(mouseY)) * 0.006, 0.008) + gatherStrength * 0.006;
-
             renderer.render(scene, camera);
         };
         animate();
@@ -1304,4 +1309,3 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
     </script>
 </body>
 </html>
-

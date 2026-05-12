@@ -75,8 +75,10 @@ function db_connect($create_db = false)
 function current_user($conn)
 {
     static $user_cache = null;
-    if ($user_cache !== null) return $user_cache;
-    if (!isset($_SESSION['user_id'])) return null;
+    if ($user_cache !== null)
+        return $user_cache;
+    if (!isset($_SESSION['user_id']))
+        return null;
     $stmt = $conn->prepare('SELECT u.*, r.name as role_name FROM users u LEFT JOIN roles r ON u.role_id=r.id WHERE u.id=? LIMIT 1');
     $stmt->bind_param('i', $_SESSION['user_id']);
     $stmt->execute();
@@ -88,17 +90,20 @@ function has_permission($conn, $page, $action = 'view')
 {
     static $perm_cache = [];
     $user = current_user($conn);
-    if (!$user) return false;
-    if ($user['role_name'] === 'Administrator') return true;
-    
+    if (!$user)
+        return false;
+    if ($user['role_name'] === 'Administrator')
+        return true;
     $cache_key = $page . '_' . $action;
-    if (isset($perm_cache[$cache_key])) return $perm_cache[$cache_key];
-
+    if (isset($perm_cache[$cache_key]))
+        return $perm_cache[$cache_key];
     $col = 'can_view';
-    if ($action === 'add') $col = 'can_add';
-    if ($action === 'edit') $col = 'can_edit';
-    if ($action === 'delete') $col = 'can_delete';
-    
+    if ($action === 'add')
+        $col = 'can_add';
+    if ($action === 'edit')
+        $col = 'can_edit';
+    if ($action === 'delete')
+        $col = 'can_delete';
     $stmt = $conn->prepare("SELECT $col FROM role_permissions WHERE role_id=? AND page=? LIMIT 1");
     $stmt->bind_param('is', $user['role_id'], $page);
     $stmt->execute();
@@ -162,363 +167,364 @@ if (isset($_GET['captcha'])) {
 
 function install_database()
 {
-    return true; /* PRODUCTION OPTIMIZATION: DB Creation disabled
-    global $db_name;
-    $conn = db_connect(true);
-    if (!$conn)
-        return false;
-    $conn->query("CREATE DATABASE IF NOT EXISTS `$db_name` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-    $conn->select_db($db_name);
-    $tables = [
-        'CREATE TABLE IF NOT EXISTS `settings` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `setting_key` VARCHAR(100) UNIQUE NOT NULL,
-            `setting_value` TEXT
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
-        'CREATE TABLE IF NOT EXISTS `suppliers` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `name` VARCHAR(255) NOT NULL,
-            `contact` VARCHAR(100),
-            `address` TEXT,
-            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
-        'CREATE TABLE IF NOT EXISTS `customers` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `name` VARCHAR(255) NOT NULL,
-            `phone` VARCHAR(50),
-            `cnic` VARCHAR(20),
-            `is_filer` TINYINT(1) DEFAULT 1,
-            `address` TEXT,
-            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
-        'CREATE TABLE IF NOT EXISTS `models` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `model_code` VARCHAR(50) NOT NULL,
-            `model_name` VARCHAR(255) NOT NULL,
-            `category` VARCHAR(100),
-            `short_code` VARCHAR(20),
-            `image` VARCHAR(255) NULL,
-            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
-        'CREATE TABLE IF NOT EXISTS `accessories` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `name` VARCHAR(255) NOT NULL,
-            `sku` VARCHAR(100) UNIQUE,
-            `purchase_price` DECIMAL(15,2) DEFAULT 0.00,
-            `selling_price` DECIMAL(15,2) DEFAULT 0.00,
-            `current_stock` INT DEFAULT 0,
-            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
-        'CREATE TABLE IF NOT EXISTS `purchase_orders` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `order_date` DATE,
-            `supplier_id` INT,
-            `total_units` INT,
-            `total_amount` DECIMAL(15,2) DEFAULT 0.00,
-            `notes` TEXT,
-            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (`supplier_id`) REFERENCES `suppliers`(`id`) ON DELETE SET NULL
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
-        "CREATE TABLE IF NOT EXISTS `bikes` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `purchase_order_id` INT,
-            `order_date` DATE,
-            `inventory_date` DATE,
-            `chassis_number` VARCHAR(100) UNIQUE NOT NULL,
-            `motor_number` VARCHAR(100),
-            `model_id` INT,
-            `color` VARCHAR(50),
-            `purchase_price` DECIMAL(15,2),
-            `selling_price` DECIMAL(15,2) NULL,
-            `selling_date` DATE NULL,
-            `customer_id` INT NULL,
-            `tax_amount` DECIMAL(15,2) DEFAULT 0,
-            `margin` DECIMAL(15,2) DEFAULT 0,
-            `status` ENUM('in_stock','sold','returned','returned_to_supplier','reserved','damaged_lost') DEFAULT 'in_stock',
-            `return_date` DATE NULL,
-            `return_amount` DECIMAL(15,2) NULL,
-            `return_notes` TEXT NULL,
-            `safeguard_notes` TEXT NULL,
-            `notes` TEXT,
-            `image` VARCHAR(255) NULL,
-            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (`model_id`) REFERENCES `models`(`id`) ON DELETE SET NULL,
-            FOREIGN KEY (`customer_id`) REFERENCES `customers`(`id`) ON DELETE SET NULL,
-            FOREIGN KEY (`purchase_order_id`) REFERENCES `purchase_orders`(`id`) ON DELETE SET NULL
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-        'CREATE TABLE IF NOT EXISTS `sale_accessories` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `bike_id` INT NOT NULL,
-            `accessory_id` INT NOT NULL,
-            `quantity` INT NOT NULL,
-            `unit_price` DECIMAL(15,2) NOT NULL,
-            `discount_amount` DECIMAL(15,2) DEFAULT 0.00,
-            `final_price` DECIMAL(15,2) NOT NULL,
-            FOREIGN KEY (`bike_id`) REFERENCES `bikes`(`id`) ON DELETE CASCADE,
-            FOREIGN KEY (`accessory_id`) REFERENCES `accessories`(`id`) ON DELETE RESTRICT
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
-        "CREATE TABLE IF NOT EXISTS `payments` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `payment_date` DATE NOT NULL,
-            `payment_type` ENUM('cash','cheque','bank_transfer','online','other') NOT NULL,
-            `amount` DECIMAL(15,2) NOT NULL,
-            `cheque_number` VARCHAR(50) NULL,
-            `bank_name` VARCHAR(100) NULL,
-            `cheque_date` DATE NULL,
-            `transaction_type` ENUM('purchase','sale','installment','expense_payment','supplier_payment','customer_refund','customer_advance','supplier_refund') NOT NULL,
-            `reference_id` INT NULL,
-            `party_name` VARCHAR(255),
-            `notes` TEXT,
-            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-        "CREATE TABLE IF NOT EXISTS `installments` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `bike_id` INT NOT NULL,
-            `customer_id` INT NOT NULL,
-            `due_date` DATE NOT NULL,
-            `installment_amount` DECIMAL(15,2) NOT NULL,
-            `amount_paid` DECIMAL(15,2) DEFAULT 0.00,
-            `penalty_fee` DECIMAL(15,2) DEFAULT 0.00,
-            `status` ENUM('pending','paid','overdue','cancelled') DEFAULT 'pending',
-            `payment_id` INT NULL,
-            `notes` TEXT NULL,
-            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (`bike_id`) REFERENCES `bikes`(`id`) ON DELETE CASCADE,
-            FOREIGN KEY (`customer_id`) REFERENCES `customers`(`id`) ON DELETE CASCADE,
-            FOREIGN KEY (`payment_id`) REFERENCES `payments`(`id`) ON DELETE SET NULL
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-        "CREATE TABLE IF NOT EXISTS `ledger` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `entry_date` DATE,
-            `entry_type` ENUM('debit','credit'),
-            `amount` DECIMAL(15,2),
-            `party_type` ENUM('customer','supplier','other'),
-            `party_id` INT,
-            `description` TEXT,
-            `reference_type` VARCHAR(50),
-            `reference_id` INT,
-            `balance` DECIMAL(15,2),
-            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-        'CREATE TABLE IF NOT EXISTS `roles` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `name` VARCHAR(100) UNIQUE NOT NULL,
-            `description` TEXT,
-            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
-        'CREATE TABLE IF NOT EXISTS `role_permissions` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `role_id` INT NOT NULL,
-            `page` VARCHAR(50) NOT NULL,
-            `can_view` TINYINT(1) DEFAULT 0,
-            `can_add` TINYINT(1) DEFAULT 0,
-            `can_edit` TINYINT(1) DEFAULT 0,
-            `can_delete` TINYINT(1) DEFAULT 0,
-            UNIQUE KEY `role_page` (`role_id`,`page`),
-            FOREIGN KEY (`role_id`) REFERENCES `roles`(`id`) ON DELETE CASCADE
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
-        'CREATE TABLE IF NOT EXISTS `users` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `username` VARCHAR(50) UNIQUE NOT NULL,
-            `password_hash` VARCHAR(255) NOT NULL,
-            `full_name` VARCHAR(255),
-            `role_id` INT,
-            `is_active` TINYINT(1) DEFAULT 1,
-            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (`role_id`) REFERENCES `roles`(`id`) ON DELETE SET NULL
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
-        "CREATE TABLE IF NOT EXISTS `income_expenses` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `entry_date` DATE NOT NULL,
-            `type` ENUM('income','expense') NOT NULL,
-            `category` VARCHAR(100) NOT NULL,
-            `amount` DECIMAL(15,2) NOT NULL,
-            `payment_method` ENUM('cash','cheque','bank_transfer','online','other') DEFAULT 'cash',
-            `reference` VARCHAR(255),
-            `notes` TEXT,
-            `created_by` INT,
-            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE SET NULL
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-        "CREATE TABLE IF NOT EXISTS `quotations` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `quote_date` DATE NOT NULL,
-            `customer_id` INT,
-            `bike_id` INT,
-            `accessories_json` TEXT,
-            `quoted_price` DECIMAL(15,2) NOT NULL,
-            `valid_until` DATE,
-            `status` ENUM('pending','accepted','rejected','converted') DEFAULT 'pending',
-            `notes` TEXT,
-            `created_by` INT,
-            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (`customer_id`) REFERENCES `customers`(`id`) ON DELETE SET NULL,
-            FOREIGN KEY (`bike_id`) REFERENCES `bikes`(`id`) ON DELETE SET NULL,
-            FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE SET NULL
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
-    ];
-    foreach ($tables as $sql) {
-        if (!$conn->query($sql)) {
-            $conn->close();
-            return false;
-        }
-    }
-    $defaults = [
-        ['company_name', 'BNI Enterprises'],
-        ['branch_name', 'Dera (Ahmed Metro)'],
-        ['tax_rate', '0.1'],
-        ['currency', 'Rs.'],
-        ['tax_on', 'purchase_price'],
-        ['theme', 'dark'],
-        ['admin_password', password_hash('admin123', PASSWORD_DEFAULT)],
-        ['show_purchase_on_invoice', '0'],
-        ['session_timeout_idle', '2400'],
-        ['session_timeout_absolute', '28800'],
-    ];
-    $stmt = $conn->prepare('INSERT IGNORE INTO `settings` (`setting_key`, `setting_value`) VALUES (?, ?)');
-    foreach ($defaults as $d) {
-        $stmt->bind_param('ss', $d[0], $d[1]);
-        $stmt->execute();
-    }
-    $stmt->close();
-    $conn->query("INSERT IGNORE INTO roles (id, name, description) VALUES (1,'Administrator','Full access')");
-    $conn->query("INSERT IGNORE INTO roles (id, name, description) VALUES (2,'Manager','Limited access')");
-    $admin_hash = password_hash('admin123!', PASSWORD_DEFAULT);
-    $conn->query("INSERT IGNORE INTO users (id, username, password_hash, full_name, role_id, is_active) VALUES (1,'admin','$admin_hash','System Administrator',1,1)");
-    $pages = ['dashboard', 'inventory', 'purchase', 'sale', 'customers', 'suppliers', 'models', 'reports', 'returns', 'payments', 'settings', 'roles', 'users', 'income_expense', 'accessories', 'quotations', 'installments', 'landing_page'];
-    foreach ($pages as $p) {
-        $conn->query("INSERT IGNORE INTO role_permissions (role_id, page, can_view, can_add, can_edit, can_delete) VALUES (1,'$p',1,1,1,1)");
-    }
-    $conn->query("INSERT IGNORE INTO role_permissions (role_id, page, can_view, can_add, can_edit, can_delete) VALUES (2,'dashboard',1,0,0,0)");
-    $stmt->close();
-    $new_tables = [
-        'CREATE TABLE IF NOT EXISTS `leadership` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `name` VARCHAR(255) NOT NULL,
-            `position` VARCHAR(255),
-            `image` VARCHAR(255),
-            `message` TEXT,
-            `sort_order` INT DEFAULT 0,
-            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
-        'CREATE TABLE IF NOT EXISTS `gallery` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `title` VARCHAR(255),
-            `description` TEXT,
-            `image` VARCHAR(255),
-            `sort_order` INT DEFAULT 0,
-            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
-        "CREATE TABLE IF NOT EXISTS `bike_requests` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `customer_name` VARCHAR(255) NOT NULL,
-            `customer_phone` VARCHAR(50) NOT NULL,
-            `bike_details` TEXT,
-            `status` ENUM('pending','contacted','fulfilled','cancelled') DEFAULT 'pending',
-            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-        "CREATE TABLE IF NOT EXISTS `quote_requests` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `customer_name` VARCHAR(255) NOT NULL,
-            `customer_phone` VARCHAR(50) NOT NULL,
-            `bike_id` INT,
-            `details` TEXT,
-            `status` ENUM('pending','sent','accepted','rejected') DEFAULT 'pending',
-            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (`bike_id`) REFERENCES `bikes`(`id`) ON DELETE SET NULL
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
-    ];
-    foreach ($new_tables as $sql) {
-        $conn->query($sql);
-    }
-    $lp_defaults = [
-        ['landing_hero_title', 'Experience the Future of Mobility'],
-        ['landing_hero_subtitle', 'Premium Electric Bikes for a Greener Tomorrow'],
-        ['company_address', '123 Bike Street, Dera Ghazi Khan, Punjab, Pakistan'],
-        ['company_map_iframe', ''],
-        ['company_whatsapp', '923000000000'],
-        ['company_email', 'info@bnienterprises.com'],
-        ['social_facebook', 'https://facebook.com'],
-        ['social_instagram', 'https://instagram.com'],
-        ['social_twitter', 'https://twitter.com'],
-        ['vision_statement', 'To be the leading provider of eco-friendly transportation in the region.'],
-        ['mission_statement', 'Providing high-quality electric bikes and exceptional service to our customers.'],
-    ];
-    $stmt_lp = $conn->prepare('INSERT IGNORE INTO `settings` (`setting_key`, `setting_value`) VALUES (?, ?)');
-    foreach ($lp_defaults as $d) {
-        $stmt_lp->bind_param('ss', $d[0], $d[1]);
-        $stmt_lp->execute();
-    }
-    $stmt_lp->close();
-    $models_seed = [
-        ['LY SI', 'LY SI Electric Bike', 'Electric Bike', 'LY'],
-        ['T9 Sports', 'T9 Sports Electric Bike', 'Electric Bike', 'T9'],
-        ['T9 Sports LFP', 'T9 Sports LFP Electric Bike', 'Electric Bike', 'T9 LFP'],
-        ['T9 Eco', 'T9 Eco Electric Bike', 'Electric Bike', 'T9 Eco'],
-        ['Thrill Pro', 'Thrill Pro Electric Bike', 'Electric Bike', 'TP'],
-        ['Thrill Pro LFP', 'Thrill Pro LFP Electric Bike', 'Electric Bike', 'TP LFP'],
-        ['E8S M2', 'E8S M2 Electric Scooter', 'Electric Scooter', 'E8S'],
-        ['E8S Pro', 'E8S Pro Electric Scooter', 'Electric Scooter', 'E8S Pro'],
-        ['M6 K6', 'M6 K6 Electric Bike', 'Electric Bike', 'M6'],
-        ['M6 NP', 'M6 NP Electric Bike', 'Electric Bike', 'M6 NP'],
-        ['M6 Lithium NP', 'M6 Lithium NP Electric Bike', 'Electric Bike', 'M6 L'],
-        ['Premium', 'Premium Electric Bike', 'Electric Bike', 'Premium'],
-        ['W. Bike H2', 'W. Bike H2 Electric Bike', 'Electric Bike', 'W. Bike'],
-    ];
-    $r = $conn->query('SELECT COUNT(*) as c FROM `models`');
-    $row = $r->fetch_assoc();
-    if ($row['c'] == 0) {
-        $stmt = $conn->prepare('INSERT INTO `models` (`model_code`,`model_name`,`category`,`short_code`) VALUES (?,?,?,?)');
-        foreach ($models_seed as $m) {
-            $stmt->bind_param('ssss', $m[0], $m[1], $m[2], $m[3]);
-            $stmt->execute();
-        }
-        $stmt->close();
-    }
-    $r2 = $conn->query('SELECT COUNT(*) as c FROM `suppliers`');
-    $row2 = $r2->fetch_assoc();
-    if ($row2['c'] == 0) {
-        $conn->query("INSERT INTO `suppliers` (`name`,`contact`,`address`) VALUES ('Default Supplier','0300-0000000','Pakistan')");
-    }
-    $r3 = $conn->query('SELECT COUNT(*) as c FROM `customers`');
-    $row3 = $r3->fetch_assoc();
-    if ($row3['c'] == 0) {
-        $customers_seed = [
-            ['Ahmed Ali', '0321-1234567', '35201-1234567-1', 1, 'Dera Ghazi Khan, Punjab'],
-            ['Muhammad Usman', '0333-7654321', '35201-7654321-3', 0, 'Muzaffargarh, Punjab'],
-            ['Bilal Hussain', '0345-9876543', '35201-9876543-5', 1, 'Rajanpur, Punjab'],
-            ['Zafar Iqbal', '0312-4567890', '35201-4567890-7', 0, 'Layyah, Punjab'],
-        ];
-        $stmt = $conn->prepare('INSERT INTO `customers` (`name`,`phone`,`cnic`,`is_filer`,`address`) VALUES (?,?,?,?,?)');
-        foreach ($customers_seed as $c) {
-            $stmt->bind_param('sssis', $c[0], $c[1], $c[2], $c[3], $c[4]);
-            $stmt->execute();
-        }
-        $stmt->close();
-    }
-    $r4 = $conn->query('SELECT COUNT(*) as c FROM `accessories`');
-    $row4 = $r4->fetch_assoc();
-    if ($row4['c'] == 0) {
-        $accessories_seed = [
-            ['Helmet', 'HLM001', 500, 750, 20],
-            ['Charger 60V', 'CHR60V01', 1500, 2200, 15],
-            ['Tyre Puncture Kit', 'TPK001', 300, 500, 30],
-            ['Disc Lock', 'DLCK001', 800, 1200, 10],
-            ['Basket', 'BSKT001', 600, 900, 25],
-        ];
-        $stmt = $conn->prepare('INSERT INTO `accessories` (`name`,`sku`,`purchase_price`,`selling_price`,`current_stock`) VALUES (?,?,?,?,?)');
-        foreach ($accessories_seed as $acc) {
-            $stmt->bind_param('ssddi', $acc[0], $acc[1], $acc[2], $acc[3], $acc[4]);
-            $stmt->execute();
-        }
-        $stmt->close();
-    }
-    $conn->close();
-    return true;
-    */
+    return true;  /*
+                   * PRODUCTION OPTIMIZATION: DB Creation disabled
+                   * global $db_name;
+                   * $conn = db_connect(true);
+                   * if (!$conn)
+                   *     return false;
+                   * $conn->query("CREATE DATABASE IF NOT EXISTS `$db_name` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+                   * $conn->select_db($db_name);
+                   * $tables = [
+                   *     'CREATE TABLE IF NOT EXISTS `settings` (
+                   *         `id` INT AUTO_INCREMENT PRIMARY KEY,
+                   *         `setting_key` VARCHAR(100) UNIQUE NOT NULL,
+                   *         `setting_value` TEXT
+                   *     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
+                   *     'CREATE TABLE IF NOT EXISTS `suppliers` (
+                   *         `id` INT AUTO_INCREMENT PRIMARY KEY,
+                   *         `name` VARCHAR(255) NOT NULL,
+                   *         `contact` VARCHAR(100),
+                   *         `address` TEXT,
+                   *         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                   *     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
+                   *     'CREATE TABLE IF NOT EXISTS `customers` (
+                   *         `id` INT AUTO_INCREMENT PRIMARY KEY,
+                   *         `name` VARCHAR(255) NOT NULL,
+                   *         `phone` VARCHAR(50),
+                   *         `cnic` VARCHAR(20),
+                   *         `is_filer` TINYINT(1) DEFAULT 1,
+                   *         `address` TEXT,
+                   *         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                   *     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
+                   *     'CREATE TABLE IF NOT EXISTS `models` (
+                   *         `id` INT AUTO_INCREMENT PRIMARY KEY,
+                   *         `model_code` VARCHAR(50) NOT NULL,
+                   *         `model_name` VARCHAR(255) NOT NULL,
+                   *         `category` VARCHAR(100),
+                   *         `short_code` VARCHAR(20),
+                   *         `image` VARCHAR(255) NULL,
+                   *         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                   *     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
+                   *     'CREATE TABLE IF NOT EXISTS `accessories` (
+                   *         `id` INT AUTO_INCREMENT PRIMARY KEY,
+                   *         `name` VARCHAR(255) NOT NULL,
+                   *         `sku` VARCHAR(100) UNIQUE,
+                   *         `purchase_price` DECIMAL(15,2) DEFAULT 0.00,
+                   *         `selling_price` DECIMAL(15,2) DEFAULT 0.00,
+                   *         `current_stock` INT DEFAULT 0,
+                   *         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                   *         `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                   *     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
+                   *     'CREATE TABLE IF NOT EXISTS `purchase_orders` (
+                   *         `id` INT AUTO_INCREMENT PRIMARY KEY,
+                   *         `order_date` DATE,
+                   *         `supplier_id` INT,
+                   *         `total_units` INT,
+                   *         `total_amount` DECIMAL(15,2) DEFAULT 0.00,
+                   *         `notes` TEXT,
+                   *         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                   *         FOREIGN KEY (`supplier_id`) REFERENCES `suppliers`(`id`) ON DELETE SET NULL
+                   *     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
+                   *     "CREATE TABLE IF NOT EXISTS `bikes` (
+                   *         `id` INT AUTO_INCREMENT PRIMARY KEY,
+                   *         `purchase_order_id` INT,
+                   *         `order_date` DATE,
+                   *         `inventory_date` DATE,
+                   *         `chassis_number` VARCHAR(100) UNIQUE NOT NULL,
+                   *         `motor_number` VARCHAR(100),
+                   *         `model_id` INT,
+                   *         `color` VARCHAR(50),
+                   *         `purchase_price` DECIMAL(15,2),
+                   *         `selling_price` DECIMAL(15,2) NULL,
+                   *         `selling_date` DATE NULL,
+                   *         `customer_id` INT NULL,
+                   *         `tax_amount` DECIMAL(15,2) DEFAULT 0,
+                   *         `margin` DECIMAL(15,2) DEFAULT 0,
+                   *         `status` ENUM('in_stock','sold','returned','returned_to_supplier','reserved','damaged_lost') DEFAULT 'in_stock',
+                   *         `return_date` DATE NULL,
+                   *         `return_amount` DECIMAL(15,2) NULL,
+                   *         `return_notes` TEXT NULL,
+                   *         `safeguard_notes` TEXT NULL,
+                   *         `notes` TEXT,
+                   *         `image` VARCHAR(255) NULL,
+                   *         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                   *         `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                   *         FOREIGN KEY (`model_id`) REFERENCES `models`(`id`) ON DELETE SET NULL,
+                   *         FOREIGN KEY (`customer_id`) REFERENCES `customers`(`id`) ON DELETE SET NULL,
+                   *         FOREIGN KEY (`purchase_order_id`) REFERENCES `purchase_orders`(`id`) ON DELETE SET NULL
+                   *     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+                   *     'CREATE TABLE IF NOT EXISTS `sale_accessories` (
+                   *         `id` INT AUTO_INCREMENT PRIMARY KEY,
+                   *         `bike_id` INT NOT NULL,
+                   *         `accessory_id` INT NOT NULL,
+                   *         `quantity` INT NOT NULL,
+                   *         `unit_price` DECIMAL(15,2) NOT NULL,
+                   *         `discount_amount` DECIMAL(15,2) DEFAULT 0.00,
+                   *         `final_price` DECIMAL(15,2) NOT NULL,
+                   *         FOREIGN KEY (`bike_id`) REFERENCES `bikes`(`id`) ON DELETE CASCADE,
+                   *         FOREIGN KEY (`accessory_id`) REFERENCES `accessories`(`id`) ON DELETE RESTRICT
+                   *     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
+                   *     "CREATE TABLE IF NOT EXISTS `payments` (
+                   *         `id` INT AUTO_INCREMENT PRIMARY KEY,
+                   *         `payment_date` DATE NOT NULL,
+                   *         `payment_type` ENUM('cash','cheque','bank_transfer','online','other') NOT NULL,
+                   *         `amount` DECIMAL(15,2) NOT NULL,
+                   *         `cheque_number` VARCHAR(50) NULL,
+                   *         `bank_name` VARCHAR(100) NULL,
+                   *         `cheque_date` DATE NULL,
+                   *         `transaction_type` ENUM('purchase','sale','installment','expense_payment','supplier_payment','customer_refund','customer_advance','supplier_refund') NOT NULL,
+                   *         `reference_id` INT NULL,
+                   *         `party_name` VARCHAR(255),
+                   *         `notes` TEXT,
+                   *         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                   *     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+                   *     "CREATE TABLE IF NOT EXISTS `installments` (
+                   *         `id` INT AUTO_INCREMENT PRIMARY KEY,
+                   *         `bike_id` INT NOT NULL,
+                   *         `customer_id` INT NOT NULL,
+                   *         `due_date` DATE NOT NULL,
+                   *         `installment_amount` DECIMAL(15,2) NOT NULL,
+                   *         `amount_paid` DECIMAL(15,2) DEFAULT 0.00,
+                   *         `penalty_fee` DECIMAL(15,2) DEFAULT 0.00,
+                   *         `status` ENUM('pending','paid','overdue','cancelled') DEFAULT 'pending',
+                   *         `payment_id` INT NULL,
+                   *         `notes` TEXT NULL,
+                   *         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                   *         `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                   *         FOREIGN KEY (`bike_id`) REFERENCES `bikes`(`id`) ON DELETE CASCADE,
+                   *         FOREIGN KEY (`customer_id`) REFERENCES `customers`(`id`) ON DELETE CASCADE,
+                   *         FOREIGN KEY (`payment_id`) REFERENCES `payments`(`id`) ON DELETE SET NULL
+                   *     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+                   *     "CREATE TABLE IF NOT EXISTS `ledger` (
+                   *         `id` INT AUTO_INCREMENT PRIMARY KEY,
+                   *         `entry_date` DATE,
+                   *         `entry_type` ENUM('debit','credit'),
+                   *         `amount` DECIMAL(15,2),
+                   *         `party_type` ENUM('customer','supplier','other'),
+                   *         `party_id` INT,
+                   *         `description` TEXT,
+                   *         `reference_type` VARCHAR(50),
+                   *         `reference_id` INT,
+                   *         `balance` DECIMAL(15,2),
+                   *         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                   *     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+                   *     'CREATE TABLE IF NOT EXISTS `roles` (
+                   *         `id` INT AUTO_INCREMENT PRIMARY KEY,
+                   *         `name` VARCHAR(100) UNIQUE NOT NULL,
+                   *         `description` TEXT,
+                   *         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                   *     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
+                   *     'CREATE TABLE IF NOT EXISTS `role_permissions` (
+                   *         `id` INT AUTO_INCREMENT PRIMARY KEY,
+                   *         `role_id` INT NOT NULL,
+                   *         `page` VARCHAR(50) NOT NULL,
+                   *         `can_view` TINYINT(1) DEFAULT 0,
+                   *         `can_add` TINYINT(1) DEFAULT 0,
+                   *         `can_edit` TINYINT(1) DEFAULT 0,
+                   *         `can_delete` TINYINT(1) DEFAULT 0,
+                   *         UNIQUE KEY `role_page` (`role_id`,`page`),
+                   *         FOREIGN KEY (`role_id`) REFERENCES `roles`(`id`) ON DELETE CASCADE
+                   *     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
+                   *     'CREATE TABLE IF NOT EXISTS `users` (
+                   *         `id` INT AUTO_INCREMENT PRIMARY KEY,
+                   *         `username` VARCHAR(50) UNIQUE NOT NULL,
+                   *         `password_hash` VARCHAR(255) NOT NULL,
+                   *         `full_name` VARCHAR(255),
+                   *         `role_id` INT,
+                   *         `is_active` TINYINT(1) DEFAULT 1,
+                   *         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                   *         FOREIGN KEY (`role_id`) REFERENCES `roles`(`id`) ON DELETE SET NULL
+                   *     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
+                   *     "CREATE TABLE IF NOT EXISTS `income_expenses` (
+                   *         `id` INT AUTO_INCREMENT PRIMARY KEY,
+                   *         `entry_date` DATE NOT NULL,
+                   *         `type` ENUM('income','expense') NOT NULL,
+                   *         `category` VARCHAR(100) NOT NULL,
+                   *         `amount` DECIMAL(15,2) NOT NULL,
+                   *         `payment_method` ENUM('cash','cheque','bank_transfer','online','other') DEFAULT 'cash',
+                   *         `reference` VARCHAR(255),
+                   *         `notes` TEXT,
+                   *         `created_by` INT,
+                   *         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                   *         FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE SET NULL
+                   *     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+                   *     "CREATE TABLE IF NOT EXISTS `quotations` (
+                   *         `id` INT AUTO_INCREMENT PRIMARY KEY,
+                   *         `quote_date` DATE NOT NULL,
+                   *         `customer_id` INT,
+                   *         `bike_id` INT,
+                   *         `accessories_json` TEXT,
+                   *         `quoted_price` DECIMAL(15,2) NOT NULL,
+                   *         `valid_until` DATE,
+                   *         `status` ENUM('pending','accepted','rejected','converted') DEFAULT 'pending',
+                   *         `notes` TEXT,
+                   *         `created_by` INT,
+                   *         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                   *         FOREIGN KEY (`customer_id`) REFERENCES `customers`(`id`) ON DELETE SET NULL,
+                   *         FOREIGN KEY (`bike_id`) REFERENCES `bikes`(`id`) ON DELETE SET NULL,
+                   *         FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE SET NULL
+                   *     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+                   * ];
+                   * foreach ($tables as $sql) {
+                   *     if (!$conn->query($sql)) {
+                   *         $conn->close();
+                   *         return false;
+                   *     }
+                   * }
+                   * $defaults = [
+                   *     ['company_name', 'BNI Enterprises'],
+                   *     ['branch_name', 'Dera (Ahmed Metro)'],
+                   *     ['tax_rate', '0.1'],
+                   *     ['currency', 'Rs.'],
+                   *     ['tax_on', 'purchase_price'],
+                   *     ['theme', 'dark'],
+                   *     ['admin_password', password_hash('admin123', PASSWORD_DEFAULT)],
+                   *     ['show_purchase_on_invoice', '0'],
+                   *     ['session_timeout_idle', '2400'],
+                   *     ['session_timeout_absolute', '28800'],
+                   * ];
+                   * $stmt = $conn->prepare('INSERT IGNORE INTO `settings` (`setting_key`, `setting_value`) VALUES (?, ?)');
+                   * foreach ($defaults as $d) {
+                   *     $stmt->bind_param('ss', $d[0], $d[1]);
+                   *     $stmt->execute();
+                   * }
+                   * $stmt->close();
+                   * $conn->query("INSERT IGNORE INTO roles (id, name, description) VALUES (1,'Administrator','Full access')");
+                   * $conn->query("INSERT IGNORE INTO roles (id, name, description) VALUES (2,'Manager','Limited access')");
+                   * $admin_hash = password_hash('admin123!', PASSWORD_DEFAULT);
+                   * $conn->query("INSERT IGNORE INTO users (id, username, password_hash, full_name, role_id, is_active) VALUES (1,'admin','$admin_hash','System Administrator',1,1)");
+                   * $pages = ['dashboard', 'inventory', 'purchase', 'sale', 'customers', 'suppliers', 'models', 'reports', 'returns', 'payments', 'settings', 'roles', 'users', 'income_expense', 'accessories', 'quotations', 'installments', 'landing_page'];
+                   * foreach ($pages as $p) {
+                   *     $conn->query("INSERT IGNORE INTO role_permissions (role_id, page, can_view, can_add, can_edit, can_delete) VALUES (1,'$p',1,1,1,1)");
+                   * }
+                   * $conn->query("INSERT IGNORE INTO role_permissions (role_id, page, can_view, can_add, can_edit, can_delete) VALUES (2,'dashboard',1,0,0,0)");
+                   * $stmt->close();
+                   * $new_tables = [
+                   *     'CREATE TABLE IF NOT EXISTS `leadership` (
+                   *         `id` INT AUTO_INCREMENT PRIMARY KEY,
+                   *         `name` VARCHAR(255) NOT NULL,
+                   *         `position` VARCHAR(255),
+                   *         `image` VARCHAR(255),
+                   *         `message` TEXT,
+                   *         `sort_order` INT DEFAULT 0,
+                   *         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                   *     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
+                   *     'CREATE TABLE IF NOT EXISTS `gallery` (
+                   *         `id` INT AUTO_INCREMENT PRIMARY KEY,
+                   *         `title` VARCHAR(255),
+                   *         `description` TEXT,
+                   *         `image` VARCHAR(255),
+                   *         `sort_order` INT DEFAULT 0,
+                   *         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                   *     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
+                   *     "CREATE TABLE IF NOT EXISTS `bike_requests` (
+                   *         `id` INT AUTO_INCREMENT PRIMARY KEY,
+                   *         `customer_name` VARCHAR(255) NOT NULL,
+                   *         `customer_phone` VARCHAR(50) NOT NULL,
+                   *         `bike_details` TEXT,
+                   *         `status` ENUM('pending','contacted','fulfilled','cancelled') DEFAULT 'pending',
+                   *         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                   *     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+                   *     "CREATE TABLE IF NOT EXISTS `quote_requests` (
+                   *         `id` INT AUTO_INCREMENT PRIMARY KEY,
+                   *         `customer_name` VARCHAR(255) NOT NULL,
+                   *         `customer_phone` VARCHAR(50) NOT NULL,
+                   *         `bike_id` INT,
+                   *         `details` TEXT,
+                   *         `status` ENUM('pending','sent','accepted','rejected') DEFAULT 'pending',
+                   *         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                   *         FOREIGN KEY (`bike_id`) REFERENCES `bikes`(`id`) ON DELETE SET NULL
+                   *     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+                   * ];
+                   * foreach ($new_tables as $sql) {
+                   *     $conn->query($sql);
+                   * }
+                   * $lp_defaults = [
+                   *     ['landing_hero_title', 'Experience the Future of Mobility'],
+                   *     ['landing_hero_subtitle', 'Premium Electric Bikes for a Greener Tomorrow'],
+                   *     ['company_address', '123 Bike Street, Dera Ghazi Khan, Punjab, Pakistan'],
+                   *     ['company_map_iframe', ''],
+                   *     ['company_whatsapp', '923000000000'],
+                   *     ['company_email', 'info@bnienterprises.com'],
+                   *     ['social_facebook', 'https://facebook.com'],
+                   *     ['social_instagram', 'https://instagram.com'],
+                   *     ['social_twitter', 'https://twitter.com'],
+                   *     ['vision_statement', 'To be the leading provider of eco-friendly transportation in the region.'],
+                   *     ['mission_statement', 'Providing high-quality electric bikes and exceptional service to our customers.'],
+                   * ];
+                   * $stmt_lp = $conn->prepare('INSERT IGNORE INTO `settings` (`setting_key`, `setting_value`) VALUES (?, ?)');
+                   * foreach ($lp_defaults as $d) {
+                   *     $stmt_lp->bind_param('ss', $d[0], $d[1]);
+                   *     $stmt_lp->execute();
+                   * }
+                   * $stmt_lp->close();
+                   * $models_seed = [
+                   *     ['LY SI', 'LY SI Electric Bike', 'Electric Bike', 'LY'],
+                   *     ['T9 Sports', 'T9 Sports Electric Bike', 'Electric Bike', 'T9'],
+                   *     ['T9 Sports LFP', 'T9 Sports LFP Electric Bike', 'Electric Bike', 'T9 LFP'],
+                   *     ['T9 Eco', 'T9 Eco Electric Bike', 'Electric Bike', 'T9 Eco'],
+                   *     ['Thrill Pro', 'Thrill Pro Electric Bike', 'Electric Bike', 'TP'],
+                   *     ['Thrill Pro LFP', 'Thrill Pro LFP Electric Bike', 'Electric Bike', 'TP LFP'],
+                   *     ['E8S M2', 'E8S M2 Electric Scooter', 'Electric Scooter', 'E8S'],
+                   *     ['E8S Pro', 'E8S Pro Electric Scooter', 'Electric Scooter', 'E8S Pro'],
+                   *     ['M6 K6', 'M6 K6 Electric Bike', 'Electric Bike', 'M6'],
+                   *     ['M6 NP', 'M6 NP Electric Bike', 'Electric Bike', 'M6 NP'],
+                   *     ['M6 Lithium NP', 'M6 Lithium NP Electric Bike', 'Electric Bike', 'M6 L'],
+                   *     ['Premium', 'Premium Electric Bike', 'Electric Bike', 'Premium'],
+                   *     ['W. Bike H2', 'W. Bike H2 Electric Bike', 'Electric Bike', 'W. Bike'],
+                   * ];
+                   * $r = $conn->query('SELECT COUNT(*) as c FROM `models`');
+                   * $row = $r->fetch_assoc();
+                   * if ($row['c'] == 0) {
+                   *     $stmt = $conn->prepare('INSERT INTO `models` (`model_code`,`model_name`,`category`,`short_code`) VALUES (?,?,?,?)');
+                   *     foreach ($models_seed as $m) {
+                   *         $stmt->bind_param('ssss', $m[0], $m[1], $m[2], $m[3]);
+                   *         $stmt->execute();
+                   *     }
+                   *     $stmt->close();
+                   * }
+                   * $r2 = $conn->query('SELECT COUNT(*) as c FROM `suppliers`');
+                   * $row2 = $r2->fetch_assoc();
+                   * if ($row2['c'] == 0) {
+                   *     $conn->query("INSERT INTO `suppliers` (`name`,`contact`,`address`) VALUES ('Default Supplier','0300-0000000','Pakistan')");
+                   * }
+                   * $r3 = $conn->query('SELECT COUNT(*) as c FROM `customers`');
+                   * $row3 = $r3->fetch_assoc();
+                   * if ($row3['c'] == 0) {
+                   *     $customers_seed = [
+                   *         ['Ahmed Ali', '0321-1234567', '35201-1234567-1', 1, 'Dera Ghazi Khan, Punjab'],
+                   *         ['Muhammad Usman', '0333-7654321', '35201-7654321-3', 0, 'Muzaffargarh, Punjab'],
+                   *         ['Bilal Hussain', '0345-9876543', '35201-9876543-5', 1, 'Rajanpur, Punjab'],
+                   *         ['Zafar Iqbal', '0312-4567890', '35201-4567890-7', 0, 'Layyah, Punjab'],
+                   *     ];
+                   *     $stmt = $conn->prepare('INSERT INTO `customers` (`name`,`phone`,`cnic`,`is_filer`,`address`) VALUES (?,?,?,?,?)');
+                   *     foreach ($customers_seed as $c) {
+                   *         $stmt->bind_param('sssis', $c[0], $c[1], $c[2], $c[3], $c[4]);
+                   *         $stmt->execute();
+                   *     }
+                   *     $stmt->close();
+                   * }
+                   * $r4 = $conn->query('SELECT COUNT(*) as c FROM `accessories`');
+                   * $row4 = $r4->fetch_assoc();
+                   * if ($row4['c'] == 0) {
+                   *     $accessories_seed = [
+                   *         ['Helmet', 'HLM001', 500, 750, 20],
+                   *         ['Charger 60V', 'CHR60V01', 1500, 2200, 15],
+                   *         ['Tyre Puncture Kit', 'TPK001', 300, 500, 30],
+                   *         ['Disc Lock', 'DLCK001', 800, 1200, 10],
+                   *         ['Basket', 'BSKT001', 600, 900, 25],
+                   *     ];
+                   *     $stmt = $conn->prepare('INSERT INTO `accessories` (`name`,`sku`,`purchase_price`,`selling_price`,`current_stock`) VALUES (?,?,?,?,?)');
+                   *     foreach ($accessories_seed as $acc) {
+                   *         $stmt->bind_param('ssddi', $acc[0], $acc[1], $acc[2], $acc[3], $acc[4]);
+                   *         $stmt->execute();
+                   *     }
+                   *     $stmt->close();
+                   * }
+                   * $conn->close();
+                   * return true;
+                   */
 }
 
 function get_setting($key)
@@ -609,6 +615,55 @@ function handle_image_upload($file, $dest_dir = 'uploads/')
     return $dest;
 }
 
+function handle_bike_image_upload($file, $dest_dir = 'uploads/')
+{
+    $dest_dir = basename($dest_dir) . '/';
+    if (!isset($file['error']) || is_array($file['error']) || $file['error'] !== UPLOAD_ERR_OK)
+        return null;
+    if (!is_dir($dest_dir))
+        mkdir($dest_dir, 0777, true);
+    $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+    if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif']))
+        return null;
+    $filename = uniqid('bike_') . '.webp';
+    $dest = $dest_dir . $filename;
+    $info = getimagesize($file['tmp_name']);
+    if (!$info)
+        return null;
+    $img = null;
+    if ($info[2] == IMAGETYPE_JPEG)
+        $img = imagecreatefromjpeg($file['tmp_name']);
+    elseif ($info[2] == IMAGETYPE_PNG)
+        $img = imagecreatefrompng($file['tmp_name']);
+    elseif ($info[2] == IMAGETYPE_WEBP)
+        $img = imagecreatefromwebp($file['tmp_name']);
+    elseif ($info[2] == IMAGETYPE_GIF)
+        $img = imagecreatefromgif($file['tmp_name']);
+    if (!$img)
+        return null;
+    $orig_w = imagesx($img);
+    $orig_h = imagesy($img);
+    $target_w = 1200;
+    $target_h = 800;
+    $safe_w = 1080;
+    $safe_h = 720;
+    $scale = min($safe_w / $orig_w, $safe_h / $orig_h);
+    $new_w = ceil($scale * $orig_w);
+    $new_h = ceil($scale * $orig_h);
+    $dst_x = (int) (($target_w - $new_w) / 2);
+    $dst_y = (int) (($target_h - $new_h) / 2);
+    $canvas = imagecreatetruecolor($target_w, $target_h);
+    imagealphablending($canvas, false);
+    imagesavealpha($canvas, true);
+    $transparent = imagecolorallocatealpha($canvas, 255, 255, 255, 127);
+    imagefill($canvas, 0, 0, $transparent);
+    imagecopyresampled($canvas, $img, $dst_x, $dst_y, 0, 0, $new_w, $new_h, $orig_w, $orig_h);
+    imagewebp($canvas, $dest, 95);
+    imagedestroy($img);
+    imagedestroy($canvas);
+    return $dest;
+}
+
 function update_app_icons($file)
 {
     if (!isset($file['error']) || $file['error'] !== UPLOAD_ERR_OK)
@@ -633,10 +688,8 @@ function update_app_icons($file)
     }
     if (!$src)
         return false;
-
     imagealphablending($src, false);
     imagesavealpha($src, true);
-
     $sizes = [
         'logo.png' => [0, 0],
         'favicon-96x96.png' => [96, 96],
@@ -644,7 +697,6 @@ function update_app_icons($file)
         'web-app-manifest-192x192.png' => [192, 192],
         'web-app-manifest-512x512.png' => [512, 512],
     ];
-
     foreach ($sizes as $filename => $dim) {
         $w = $dim[0];
         $h = $dim[1];
@@ -659,7 +711,6 @@ function update_app_icons($file)
         imagepng($dst, $filename);
         imagedestroy($dst);
     }
-
     $ico_size = 32;
     $dst_ico = imagecreatetruecolor($ico_size, $ico_size);
     imagealphablending($dst_ico, false);
@@ -668,33 +719,33 @@ function update_app_icons($file)
     imagepng($dst_ico, 'favicon.ico');
     copy('favicon.ico', 'logo.ico');
     imagedestroy($dst_ico);
-
     $base64 = base64_encode(file_get_contents('favicon-96x96.png'));
     $svg_content = '<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" width="96" height="96"><image href="data:image/png;base64,' . $base64 . '" width="96" height="96"/></svg>';
     file_put_contents('favicon.svg', $svg_content);
-
     imagedestroy($src);
     return true;
 }
 
 $db_exists = true;
-/* PRODUCTION OPTIMIZATION: Removed runtime schema checks
-$conn_check = db_connect();
-if ($conn_check) {
-    $res = $conn_check->query("SHOW TABLES LIKE 'leadership'");
-    if ($res->num_rows == 0) {
-        install_database();
-    }
-    $conn_check->close();
-}
-if (isset($_POST['do_install'])) {
-    if (install_database()) {
-        $db_exists = true;
-        header('Location: index.php');
-        exit;
-    }
-}
-*/
+
+/*
+ * PRODUCTION OPTIMIZATION: Removed runtime schema checks
+ * $conn_check = db_connect();
+ * if ($conn_check) {
+ *     $res = $conn_check->query("SHOW TABLES LIKE 'leadership'");
+ *     if ($res->num_rows == 0) {
+ *         install_database();
+ *     }
+ *     $conn_check->close();
+ * }
+ * if (isset($_POST['do_install'])) {
+ *     if (install_database()) {
+ *         $db_exists = true;
+ *         header('Location: index.php');
+ *         exit;
+ *     }
+ * }
+ */
 if ($db_exists) {
     $theme = get_setting('theme') ?? 'dark';
     $idle_timeout = (int) (get_setting('session_timeout_idle') ?? 2400);
@@ -998,7 +1049,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                         'error' => $_FILES['bikes']['error'][$key]['image'],
                         'size' => $_FILES['bikes']['size'][$key]['image']
                     ];
-                    $bike_img = handle_image_upload($file_arr);
+                    $bike_img = handle_bike_image_upload($file_arr);
                 }
                 if (empty($chassis) || $model_id <= 0 || $pp <= 0) {
                     $errors_list[] = 'Bike entry requires Chassis, Model, and Purchase Price. Skipping incomplete bike.';
@@ -1157,7 +1208,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $sc = sanitize($_POST['short_code'] ?? '');
             $img_path = null;
             if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-                $img_path = handle_image_upload($_FILES['image']);
+                $img_path = handle_bike_image_upload($_FILES['image']);
             }
             if (empty($mc) || empty($mn)) {
                 $err = 'Model code and name are required.';
@@ -1177,7 +1228,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $sc = sanitize($_POST['short_code'] ?? '');
             $img_path = null;
             if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-                $img_path = handle_image_upload($_FILES['image']);
+                $img_path = handle_bike_image_upload($_FILES['image']);
             }
             if (empty($mc) || empty($mn) || $mid <= 0) {
                 $err = 'Model ID, code and name are required.';
@@ -1836,7 +1887,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $safe = sanitize($_POST['safeguard_notes'] ?? '');
             $img_path = null;
             if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-                $img_path = handle_image_upload($_FILES['image']);
+                $img_path = handle_bike_image_upload($_FILES['image']);
             }
             if ($bid <= 0 || $pp < 0 || $model_id <= 0) {
                 $err = 'Invalid bike ID, model, or purchase price.';

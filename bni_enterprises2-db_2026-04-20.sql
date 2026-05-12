@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3306
--- Generation Time: May 12, 2026 at 07:50 AM
+-- Generation Time: May 12, 2026 at 12:13 PM
 -- Server version: 8.2.0
 -- PHP Version: 8.3.0
 
@@ -86,42 +86,42 @@ CREATE TABLE `bikes` (
 INSERT INTO `bikes` (`id`, `purchase_order_id`, `order_date`, `inventory_date`, `chassis_number`, `motor_number`, `model_id`, `color`, `purchase_price`, `selling_price`, `selling_date`, `customer_id`, `tax_amount`, `margin`, `status`, `return_date`, `return_amount`, `return_notes`, `safeguard_notes`, `notes`, `image`, `created_at`, `updated_at`) VALUES
 (1, 1, '2026-02-03', '2026-02-05', 'LY05G48270002304', '*XRLY48052125D0002228*', 1, 'Black', 125225.00, 210000.00, '2026-05-06', NULL, 12522.50, 72252.50, 'sold', NULL, NULL, NULL, NULL, '', NULL, '2026-04-20 09:01:57', '2026-05-06 16:38:41'),
 (2, 1, '2026-02-03', '2026-02-05', 'LY05G48270002202', '*XRLY48052125D0002322*', 1, 'Grey', 125225.00, NULL, NULL, NULL, 125.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
-(3, 1, '2026-02-03', '2026-02-05', 'DD35G48130001177', '*48V350WA8T454708922*', 13, 'Black', 94595.00, 130000.00, '2026-04-28', 5, 9459.50, 25945.50, 'sold', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-28 09:37:06'),
-(4, 1, '2026-02-03', '2026-02-05', 'M615G72380002665', 'A9A756800994', 9, 'Silver', 220721.00, 242000.00, NULL, NULL, 221.00, 0.00, 'returned', NULL, NULL, NULL, NULL, 'Returned on 200,000 Cheque to be issued.', NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
-(5, 1, '2026-02-03', '2026-02-05', 'T910G72260006966', '*XR9S72102825N0007369*', 2, 'Red', 161261.00, 179000.00, '2026-03-05', NULL, 161.00, 17578.00, 'sold', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
-(6, 1, '2026-02-03', '2026-02-05', 'T910G72260007041', '*XR9S72102825N0007701*', 2, 'Black', 161261.00, 179000.00, NULL, NULL, 161.00, 17578.00, 'sold', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
-(7, 1, '2026-02-03', '2026-02-05', 'T910G72260006884', '*XR9S72102825N0007393*', 2, 'Grey', 161261.00, 179000.00, '2026-03-02', NULL, 161.00, 17578.00, 'sold', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(3, 1, '2026-02-03', '2026-02-05', 'DD35G48130001177', '*48V350WA8T454708922*', 13, 'Black', 94595.00, 130000.00, '2026-04-28', 5, 9459.50, 25945.50, 'sold', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_13_w_bike_h2_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
+(4, 1, '2026-02-03', '2026-02-05', 'M615G72380002665', 'A9A756800994', 9, 'Silver', 220721.00, 242000.00, NULL, NULL, 221.00, 0.00, 'returned', NULL, NULL, NULL, NULL, 'Returned on 200,000 Cheque to be issued.', 'uploads/models/model_9_m6_k6_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
+(5, 1, '2026-02-03', '2026-02-05', 'T910G72260006966', '*XR9S72102825N0007369*', 2, 'Red', 161261.00, 179000.00, '2026-03-05', NULL, 161.00, 17578.00, 'sold', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_2_t9_sports_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
+(6, 1, '2026-02-03', '2026-02-05', 'T910G72260007041', '*XR9S72102825N0007701*', 2, 'Black', 161261.00, 179000.00, NULL, NULL, 161.00, 17578.00, 'sold', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_2_t9_sports_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
+(7, 1, '2026-02-03', '2026-02-05', 'T910G72260006884', '*XR9S72102825N0007393*', 2, 'Grey', 161261.00, 179000.00, '2026-03-02', NULL, 161.00, 17578.00, 'sold', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_2_t9_sports_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
 (8, 1, '2026-02-03', '2026-02-05', 'E820G72380002293', '*PJE872203525N0002160*', 7, 'Grey', 251351.00, 279000.00, '2026-02-23', NULL, 251.00, 27398.00, 'sold', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
-(9, 1, '2026-02-03', '2026-02-05', 'TH12G72260005515', 'AIMTP721240259005364', 5, 'Grey', 179279.00, 199000.00, '2026-02-22', NULL, 179.00, 19542.00, 'sold', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
-(10, 1, '2026-02-03', '2026-02-05', 'TH12G72260006004', 'AIMTP721240259006297', 5, 'Black', 179279.00, 200000.00, '2026-05-06', NULL, 17927.90, 2793.10, 'returned', '2026-05-07', 0.00, '30000', NULL, '', NULL, '2026-04-20 09:01:57', '2026-05-06 16:57:35'),
-(11, 1, '2026-02-03', '2026-02-05', 'T910L72300000632', '*XR9S7210282500000640*', 3, 'Silver', 193694.00, NULL, NULL, NULL, 194.00, 0.00, 'damaged_lost', NULL, NULL, NULL, '', '', NULL, '2026-04-20 09:01:57', '2026-05-07 05:26:12'),
-(12, 1, '2026-02-03', '2026-02-05', 'T910L72300000916', '*XR9S7210282500000927*', 3, 'Black', 193694.00, 234000.00, '2026-03-07', NULL, 194.00, 40112.00, 'sold', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
-(13, 1, '2026-02-03', '2026-02-05', 'TH12L72300000445', 'AIMTP72124025N001005', 6, 'Black', 211712.00, NULL, NULL, NULL, 212.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
-(14, 1, '2026-02-03', '2026-02-05', 'TH12L72300000416', 'AIMTP72124025N001176', 6, 'Grey', 211712.00, 246000.00, '2026-03-18', NULL, 212.00, 34076.00, 'sold', NULL, NULL, NULL, NULL, '(2,470,276) Received', NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
-(15, 2, '2026-02-27', '2026-03-12', 'M615L72300006176', 'XRM672153025D0007536', 11, 'Unknown', 254955.00, 285000.00, '2026-03-12', NULL, 285.00, 29760.00, 'sold', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
-(16, 2, '2026-02-27', '2026-03-12', 'M615L72300006278', 'XRM672153025D0007499', 11, 'Unknown', 254955.00, 283000.00, '2026-03-12', NULL, 285.00, 27760.00, 'sold', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(9, 1, '2026-02-03', '2026-02-05', 'TH12G72260005515', 'AIMTP721240259005364', 5, 'Grey', 179279.00, 199000.00, '2026-02-22', NULL, 179.00, 19542.00, 'sold', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_5_thrill_pro_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
+(10, 1, '2026-02-03', '2026-02-05', 'TH12G72260006004', 'AIMTP721240259006297', 5, 'Black', 179279.00, 200000.00, '2026-05-06', NULL, 17927.90, 2793.10, 'returned', '2026-05-07', 0.00, '30000', NULL, '', 'uploads/models/model_5_thrill_pro_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
+(11, 1, '2026-02-03', '2026-02-05', 'T910L72300000632', '*XR9S7210282500000640*', 3, 'Silver', 193694.00, NULL, NULL, NULL, 194.00, 0.00, 'damaged_lost', NULL, NULL, NULL, '', '', 'uploads/models/model_3_t9_sports_lfp_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
+(12, 1, '2026-02-03', '2026-02-05', 'T910L72300000916', '*XR9S7210282500000927*', 3, 'Black', 193694.00, 234000.00, '2026-03-07', NULL, 194.00, 40112.00, 'sold', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_3_t9_sports_lfp_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
+(13, 1, '2026-02-03', '2026-02-05', 'TH12L72300000445', 'AIMTP72124025N001005', 6, 'Black', 211712.00, NULL, NULL, NULL, 212.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_6_thrill_pro_lfp_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
+(14, 1, '2026-02-03', '2026-02-05', 'TH12L72300000416', 'AIMTP72124025N001176', 6, 'Grey', 211712.00, 246000.00, '2026-03-18', NULL, 212.00, 34076.00, 'sold', NULL, NULL, NULL, NULL, '(2,470,276) Received', 'uploads/models/model_6_thrill_pro_lfp_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
+(15, 2, '2026-02-27', '2026-03-12', 'M615L72300006176', 'XRM672153025D0007536', 11, 'Unknown', 254955.00, 285000.00, '2026-03-12', NULL, 285.00, 29760.00, 'sold', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_11_m6_lithium_np_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
+(16, 2, '2026-02-27', '2026-03-12', 'M615L72300006278', 'XRM672153025D0007499', 11, 'Unknown', 254955.00, 283000.00, '2026-03-12', NULL, 285.00, 27760.00, 'sold', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_11_m6_lithium_np_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
 (17, 3, '2026-03-12', '2026-03-16', 'T910G72260008882', '*XR9S72102825D0007890*', 4, 'Red', 238739.00, 179000.00, NULL, NULL, 239.00, -59978.00, 'sold', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
 (18, 3, '2026-03-12', '2026-03-16', 'T910G72260008478', '*XR9S72102825D0007855*', 4, 'Black', 238739.00, NULL, NULL, NULL, 239.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
-(19, 3, '2026-03-12', '2026-03-16', 'T910G72260008679', '*XR9S72102825D0007954*', 2, 'Grey', 161261.00, 179000.00, '2026-03-18', NULL, 179.00, 17560.00, 'sold', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
-(20, 3, '2026-03-12', '2026-03-16', 'TH12G72260006279', 'AIMTP721240259006047', 5, 'Unknown', 179279.00, NULL, NULL, NULL, 179.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
-(21, 3, '2026-03-12', '2026-03-16', 'TH12G72260006236', 'AIMTP721240259006039', 5, 'Unknown', 179279.00, NULL, NULL, NULL, 179.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, '(997,297) Receiving', NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(19, 3, '2026-03-12', '2026-03-16', 'T910G72260008679', '*XR9S72102825D0007954*', 2, 'Grey', 161261.00, 179000.00, '2026-03-18', NULL, 179.00, 17560.00, 'sold', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_2_t9_sports_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
+(20, 3, '2026-03-12', '2026-03-16', 'TH12G72260006279', 'AIMTP721240259006047', 5, 'Unknown', 179279.00, NULL, NULL, NULL, 179.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_5_thrill_pro_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
+(21, 3, '2026-03-12', '2026-03-16', 'TH12G72260006236', 'AIMTP721240259006039', 5, 'Unknown', 179279.00, NULL, NULL, NULL, 179.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, '(997,297) Receiving', 'uploads/models/model_5_thrill_pro_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
 (22, 4, '2026-03-18', '2026-03-27', 'E820G72380000466', '12ZW7271327YE*CERR116670C*', 8, 'Blue', 247748.00, NULL, NULL, NULL, 247.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
-(23, 4, '2026-03-18', '2026-03-27', 'P308L72300000159', 'PHPM7208352610000422', 12, 'Unknown', 234234.00, NULL, NULL, NULL, 234.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(23, 4, '2026-03-18', '2026-03-27', 'P308L72300000159', 'PHPM7208352610000422', 12, 'Unknown', 234234.00, NULL, NULL, NULL, 234.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_12_premium_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
 (24, 4, '2026-03-18', '2026-03-27', 'E810G72380000595', '*10ZW7273316YECKTS0000107*', 7, 'Grey', 251351.00, NULL, NULL, NULL, 251.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
-(25, 4, '2026-03-18', '2026-03-27', 'T910G72260008720', '*XR9S72102825D0007987*', 3, 'Unknown', 193694.00, NULL, NULL, NULL, 194.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
-(26, 4, '2026-03-18', '2026-03-27', 'T910G72260008894', '*XR9S72102825D0008251*', 3, 'Unknown', 193694.00, NULL, NULL, NULL, 194.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, 'Diff ledger= (70,137)+ new delivery', NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
-(27, 4, '2026-03-18', '2026-03-27', 'T910G72260008737', '*XR9S72102825D0008003*', 3, 'Unknown', 193694.00, NULL, NULL, NULL, 194.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
+(25, 4, '2026-03-18', '2026-03-27', 'T910G72260008720', '*XR9S72102825D0007987*', 3, 'Unknown', 193694.00, NULL, NULL, NULL, 194.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_3_t9_sports_lfp_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
+(26, 4, '2026-03-18', '2026-03-27', 'T910G72260008894', '*XR9S72102825D0008251*', 3, 'Unknown', 193694.00, NULL, NULL, NULL, 194.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, 'Diff ledger= (70,137)+ new delivery', 'uploads/models/model_3_t9_sports_lfp_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
+(27, 4, '2026-03-18', '2026-03-27', 'T910G72260008737', '*XR9S72102825D0008003*', 3, 'Unknown', 193694.00, NULL, NULL, NULL, 194.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_3_t9_sports_lfp_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
 (28, 5, '2026-04-26', '2026-04-26', 'NW-21233', 'MT-002', 7, 'Red', 120000.00, 150000.00, '2026-04-26', 5, 120.00, 29880.00, 'returned', '2026-04-26', 190000.00, 'Said not appliable', 'must be charged 100 percent for the first time use', '', NULL, '2026-04-26 10:13:52', '2026-04-26 10:21:35'),
 (30, 7, '2026-04-27', '2026-04-27', 'NW-212331', 'MT-002', 7, 'Red', 190000.00, 240000.00, '2026-04-28', 5, 19000.00, 31000.00, 'sold', NULL, NULL, NULL, 'must be charged 100 percent for the first time use', '', NULL, '2026-04-27 10:25:19', '2026-04-28 04:50:16'),
 (32, 9, '2026-04-27', '2026-04-27', 'NW-212331a', 'MT-002', 7, 'Red', 190000.00, 230000.00, '2026-05-02', 1, 19000.00, 21000.00, 'sold', NULL, NULL, NULL, 'must be charged 100 percent for the first time use', '', NULL, '2026-04-27 10:29:45', '2026-05-01 13:22:14'),
 (33, 10, '2026-04-28', '2026-04-28', 'NW-2123353', 'MT-GT-022', 8, 'Newd', 20000.00, 60000.00, '2026-04-28', 1, 2000.00, 38000.00, 'sold', NULL, NULL, NULL, 'must be charged 100 percent for the first time use a', '', NULL, '2026-04-28 04:24:26', '2026-04-28 05:08:07'),
-(34, 11, '2026-04-28', '2026-04-28', 'NW-212331aa', 'MT-GT-02a', 11, 'Newda', 40000.00, 60000.00, '2026-04-28', 1, 4000.00, 16000.00, 'sold', NULL, NULL, NULL, 'must be charged 100 percent for the first time use aa', '', NULL, '2026-04-28 04:29:37', '2026-04-28 05:09:01'),
-(35, 12, '2026-04-28', '2026-04-28', 'NW-21233213', 'MT-002414', 10, 'Reda', 90000.00, 130000.00, '2026-04-28', 5, 9000.00, 31000.00, 'sold', NULL, NULL, NULL, 'new hai', '', NULL, '2026-04-28 04:33:26', '2026-04-28 04:43:01'),
-(36, 13, '2026-04-28', '2026-04-28', 'NW-21233132', 'MT-0021231', 2, 'Yellow', 90000.00, 220000.00, '2026-04-28', 6, 9000.00, 121000.00, 'sold', NULL, NULL, NULL, 'theek hai', '', NULL, '2026-04-28 04:36:57', '2026-04-28 10:24:33'),
+(34, 11, '2026-04-28', '2026-04-28', 'NW-212331aa', 'MT-GT-02a', 11, 'Newda', 40000.00, 60000.00, '2026-04-28', 1, 4000.00, 16000.00, 'sold', NULL, NULL, NULL, 'must be charged 100 percent for the first time use aa', '', 'uploads/models/model_11_m6_lithium_np_electric_bike.webp', '2026-04-28 04:29:37', '2026-05-12 09:47:11'),
+(35, 12, '2026-04-28', '2026-04-28', 'NW-21233213', 'MT-002414', 10, 'Reda', 90000.00, 130000.00, '2026-04-28', 5, 9000.00, 31000.00, 'sold', NULL, NULL, NULL, 'new hai', '', 'uploads/models/model_10_m6_np_electric_bike.webp', '2026-04-28 04:33:26', '2026-05-12 09:47:11'),
+(36, 13, '2026-04-28', '2026-04-28', 'NW-21233132', 'MT-0021231', 2, 'Yellow', 90000.00, 220000.00, '2026-04-28', 6, 9000.00, 121000.00, 'sold', NULL, NULL, NULL, 'theek hai', '', 'uploads/models/model_2_t9_sports_electric_bike.webp', '2026-04-28 04:36:57', '2026-05-12 09:47:11'),
 (37, 14, '2026-05-01', '2026-05-01', 'NW-212335123', 'MT-GT-02aa', 7, 'Yellow', 290000.00, 340000.00, '2026-05-01', 5, 29000.00, 21000.00, 'sold', NULL, NULL, NULL, '', '', NULL, '2026-05-01 06:59:16', '2026-05-01 07:02:42'),
 (38, 15, '2026-05-06', '2026-05-06', 'T929283007', 'TI8399uue', 2, 'Rad', 200000.00, 220000.00, '2026-05-06', NULL, 20000.00, 0.00, 'sold', NULL, NULL, NULL, '', '', 'uploads/img_69fb71525af01.jpg', '2026-05-06 16:50:26', '2026-05-06 16:51:52'),
-(39, 16, '2026-05-07', '2026-05-07', 'NW-21233123', 'MT-GT-0223', 14, 'Red', 250000.00, NULL, NULL, NULL, 25000.00, 0.00, 'in_stock', NULL, NULL, NULL, '', '', NULL, '2026-05-07 06:41:42', '2026-05-07 06:41:42'),
-(40, 16, '2026-05-07', '2026-05-07', 'qrqwer', '12341', 14, 'Yellow', 250000.00, 320000.00, '2026-05-07', 2, 25000.00, 45000.00, 'sold', NULL, NULL, NULL, '', '', NULL, '2026-05-07 06:41:42', '2026-05-07 06:50:37');
+(39, 16, '2026-05-07', '2026-05-07', 'NW-21233123', 'MT-GT-0223', 14, 'Red', 250000.00, NULL, NULL, NULL, 25000.00, 0.00, 'in_stock', NULL, NULL, NULL, '', '', 'uploads/bike_6a0308a7eb3fc.webp', '2026-05-07 06:41:42', '2026-05-12 11:02:00'),
+(40, 16, '2026-05-07', '2026-05-07', 'qrqwer', '12341', 14, 'Yellow', 250000.00, 320000.00, '2026-05-07', 2, 25000.00, 45000.00, 'sold', NULL, NULL, NULL, '', '', 'uploads/models/model_14_super_star_70.webp', '2026-05-07 06:41:42', '2026-05-12 09:47:11');
 
 -- --------------------------------------------------------
 
@@ -213,6 +213,13 @@ CREATE TABLE `gallery` (
   `sort_order` int DEFAULT '0',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Dumping data for table `gallery`
+--
+
+INSERT INTO `gallery` (`id`, `title`, `description`, `image`, `sort_order`, `created_at`) VALUES
+(1, 'Open Ceremony', 'this is awesome', 'uploads/img_6a02d9f578cdd.jpg', 0, '2026-05-12 07:42:45');
 
 -- --------------------------------------------------------
 
@@ -309,6 +316,13 @@ CREATE TABLE `leadership` (
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+--
+-- Dumping data for table `leadership`
+--
+
+INSERT INTO `leadership` (`id`, `name`, `position`, `image`, `message`, `sort_order`, `created_at`) VALUES
+(1, 'Yasin Ullah', 'CEO', 'uploads/img_6a02d8ea25491.jpg', 'This is the message from the CEO of the company deal with it', 0, '2026-05-12 07:38:18');
+
 -- --------------------------------------------------------
 
 --
@@ -390,19 +404,19 @@ CREATE TABLE `models` (
 
 INSERT INTO `models` (`id`, `model_code`, `model_name`, `category`, `short_code`, `image`, `created_at`) VALUES
 (1, 'LY SI', 'LY SI Electric Bike', 'Electric Bike', 'LY', NULL, '2026-04-20 08:56:23'),
-(2, 'T9 Sports', 'T9 Sports Electric Bike', 'Electric Bike', 'T9', NULL, '2026-04-20 08:56:23'),
-(3, 'T9 Sports LFP', 'T9 Sports LFP Electric Bike', 'Electric Bike', 'T9 LFP', NULL, '2026-04-20 08:56:23'),
+(2, 'T9 Sports', 'T9 Sports Electric Bike', 'Electric Bike', 'T9', 'uploads/models/model_2_t9_sports_electric_bike.webp', '2026-04-20 08:56:23'),
+(3, 'T9 Sports LFP', 'T9 Sports LFP Electric Bike', 'Electric Bike', 'T9 LFP', 'uploads/models/model_3_t9_sports_lfp_electric_bike.webp', '2026-04-20 08:56:23'),
 (4, 'T9 Eco', 'T9 Eco Electric Bike', 'Electric Bike', 'T9 Eco', NULL, '2026-04-20 08:56:23'),
-(5, 'Thrill Pro', 'Thrill Pro Electric Bike', 'Electric Bike', 'TP', NULL, '2026-04-20 08:56:23'),
-(6, 'Thrill Pro LFP', 'Thrill Pro LFP Electric Bike', 'Electric Bike', 'TP LFP', NULL, '2026-04-20 08:56:23'),
+(5, 'Thrill Pro', 'Thrill Pro Electric Bike', 'Electric Bike', 'TP', 'uploads/models/model_5_thrill_pro_electric_bike.webp', '2026-04-20 08:56:23'),
+(6, 'Thrill Pro LFP', 'Thrill Pro LFP Electric Bike', 'Electric Bike', 'TP LFP', 'uploads/models/model_6_thrill_pro_lfp_electric_bike.webp', '2026-04-20 08:56:23'),
 (7, 'E8S M2', 'E8S M2 Electric Scooter', 'Electric Scooter', 'E8S', NULL, '2026-04-20 08:56:23'),
 (8, 'E8S Pro', 'E8S Pro Electric Scooter', 'Electric Scooter', 'E8S Pro', NULL, '2026-04-20 08:56:23'),
-(9, 'M6 K6', 'M6 K6 Electric Bike', 'Electric Bike', 'M6', NULL, '2026-04-20 08:56:23'),
-(10, 'M6 NP', 'M6 NP Electric Bike', 'Electric Bike', 'M6 NP', NULL, '2026-04-20 08:56:23'),
-(11, 'M6 Lithium NP', 'M6 Lithium NP Electric Bike', 'Electric Bike', 'M6 L', NULL, '2026-04-20 08:56:23'),
-(12, 'Premium', 'Premium Electric Bike', 'Electric Bike', 'Premium', NULL, '2026-04-20 08:56:23'),
-(13, 'W. Bike H2', 'W. Bike H2 Electric Bike', 'Electric Bike', 'W. Bike', NULL, '2026-04-20 08:56:23'),
-(14, 'SP12', 'Super Star 70', 'Electric Bike', '123', NULL, '2026-05-07 06:34:51');
+(9, 'M6 K6', 'M6 K6 Electric Bike', 'Electric Bike', 'M6', 'uploads/models/model_9_m6_k6_electric_bike.webp', '2026-04-20 08:56:23'),
+(10, 'M6 NP', 'M6 NP Electric Bike', 'Electric Bike', 'M6 NP', 'uploads/models/model_10_m6_np_electric_bike.webp', '2026-04-20 08:56:23'),
+(11, 'M6 Lithium NP', 'M6 Lithium NP Electric Bike', 'Electric Bike', 'M6 L', 'uploads/models/model_11_m6_lithium_np_electric_bike.webp', '2026-04-20 08:56:23'),
+(12, 'Premium', 'Premium Electric Bike', 'Electric Bike', 'Premium', 'uploads/models/model_12_premium_electric_bike.webp', '2026-04-20 08:56:23'),
+(13, 'W. Bike H2', 'W. Bike H2 Electric Bike', 'Electric Bike', 'W. Bike', 'uploads/models/model_13_w_bike_h2_electric_bike.webp', '2026-04-20 08:56:23'),
+(14, 'SP12', 'Super Star 70', 'Electric Bike', '123', 'uploads/models/model_14_super_star_70.webp', '2026-05-07 06:34:51');
 
 -- --------------------------------------------------------
 
@@ -542,6 +556,14 @@ CREATE TABLE `quote_requests` (
   `status` enum('pending','sent','accepted','rejected') DEFAULT 'pending',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Dumping data for table `quote_requests`
+--
+
+INSERT INTO `quote_requests` (`id`, `customer_name`, `customer_phone`, `bike_id`, `details`, `status`, `created_at`) VALUES
+(1, 'Yasin Ullah', '03139842219', 39, 'All', 'pending', '2026-05-12 11:05:45'),
+(2, 'Yasin Ullah', '03139842219', 2, 'new', 'pending', '2026-05-12 11:09:51');
 
 -- --------------------------------------------------------
 
@@ -710,7 +732,7 @@ INSERT INTO `settings` (`id`, `setting_key`, `setting_value`) VALUES
 (19, 'landing_hero_title', 'Experience the Future of Mobility'),
 (20, 'landing_hero_subtitle', 'Premium Electric Bikes for a Greener Tomorrow'),
 (21, 'company_address', '123 Bike Street, Dera Ghazi Khan, Punjab, Pakistan'),
-(22, 'company_map_iframe', ''),
+(22, 'company_map_iframe', 'https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d10500.14144614541!2d73.07594429999999!3d33.6494707!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e1!3m2!1sen!2s!4v1778569478700!5m2!1sen!2s'),
 (23, 'company_whatsapp', '923000000000'),
 (24, 'company_email', 'info@bnienterprises.com'),
 (25, 'social_facebook', 'https://facebook.com'),
@@ -792,7 +814,10 @@ ALTER TABLE `bikes`
   ADD KEY `idx_status` (`status`),
   ADD KEY `idx_selling_date` (`selling_date`),
   ADD KEY `idx_model_id` (`model_id`),
-  ADD KEY `idx_customer_id` (`customer_id`);
+  ADD KEY `idx_customer_id` (`customer_id`),
+  ADD KEY `idx_bikes_status` (`status`),
+  ADD KEY `idx_bikes_model` (`model_id`),
+  ADD KEY `idx_bikes_customer` (`customer_id`);
 
 --
 -- Indexes for table `bike_requests`
@@ -831,10 +856,10 @@ ALTER TABLE `income_expenses`
 ALTER TABLE `installments`
   ADD PRIMARY KEY (`id`),
   ADD KEY `bike_id` (`bike_id`),
-  ADD KEY `customer_id` (`customer_id`),
   ADD KEY `payment_id` (`payment_id`),
   ADD KEY `idx_due_date` (`due_date`),
-  ADD KEY `idx_status` (`status`);
+  ADD KEY `idx_status` (`status`),
+  ADD KEY `idx_installments_customer` (`customer_id`);
 
 --
 -- Indexes for table `leadership`
@@ -846,7 +871,8 @@ ALTER TABLE `leadership`
 -- Indexes for table `ledger`
 --
 ALTER TABLE `ledger`
-  ADD PRIMARY KEY (`id`);
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_ledger_party` (`party_type`,`party_id`);
 
 --
 -- Indexes for table `models`
@@ -860,7 +886,8 @@ ALTER TABLE `models`
 ALTER TABLE `payments`
   ADD PRIMARY KEY (`id`),
   ADD KEY `idx_payment_date` (`payment_date`),
-  ADD KEY `idx_transaction_type` (`transaction_type`);
+  ADD KEY `idx_transaction_type` (`transaction_type`),
+  ADD KEY `idx_payments_ref` (`transaction_type`,`reference_id`);
 
 --
 -- Indexes for table `purchase_orders`
@@ -904,8 +931,8 @@ ALTER TABLE `role_permissions`
 --
 ALTER TABLE `sale_accessories`
   ADD PRIMARY KEY (`id`),
-  ADD KEY `bike_id` (`bike_id`),
-  ADD KEY `accessory_id` (`accessory_id`);
+  ADD KEY `accessory_id` (`accessory_id`),
+  ADD KEY `idx_sa_bike` (`bike_id`);
 
 --
 -- Indexes for table `settings`
@@ -966,7 +993,7 @@ ALTER TABLE `customers`
 -- AUTO_INCREMENT for table `gallery`
 --
 ALTER TABLE `gallery`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT for table `income_expenses`
@@ -984,7 +1011,7 @@ ALTER TABLE `installments`
 -- AUTO_INCREMENT for table `leadership`
 --
 ALTER TABLE `leadership`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT for table `ledger`
@@ -1020,7 +1047,7 @@ ALTER TABLE `quotations`
 -- AUTO_INCREMENT for table `quote_requests`
 --
 ALTER TABLE `quote_requests`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `roles`
