@@ -2,7 +2,11 @@
 ini_set('session.cookie_httponly', 1);
 ini_set('session.use_only_cookies', 1);
 ini_set('session.cookie_samesite', 'Strict');
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
+error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING & ~E_DEPRECATED);
 session_start();
+$_SESSION['csrf_token'] = $_SESSION['csrf_token'] ?? bin2hex(random_bytes(32));
 $db_host = 'localhost';
 $db_user = 'root';
 $db_pass = 'root';
@@ -66,6 +70,9 @@ function generate_math_captcha()
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+        die('🚫 Invalid CSRF Token');
+    }
     $user_captcha = (int) ($_POST['captcha'] ?? 0);
     $real_captcha = (int) ($_SESSION['captcha_ans'] ?? -1);
     if ($user_captcha !== $real_captcha) {
@@ -918,6 +925,7 @@ $view = $_GET['view'] ?? 'home';
             <span class="modal-close" onclick="closeModal('requestModal')">&times;</span>
             <h2 style="margin-bottom:25px; background:var(--grad); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">REQUEST A MODEL</h2>
             <form action="landing.php" method="POST">
+                <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
                 <label>FULL NAME</label><input type="text" name="name" required placeholder="John Doe">
                 <label>WHATSAPP / PHONE</label><input type="text" name="phone" required placeholder="+92 ...">
                 <label>SPECIFICATIONS</label><textarea name="bike_details" rows="4" placeholder="Year, Color, Model, Range..."></textarea>
@@ -936,6 +944,7 @@ $view = $_GET['view'] ?? 'home';
             <h2 style="margin-bottom:5px; color:var(--primary);">GET A QUOTE</h2>
             <p id="q_name" style="color:white; font-weight:700; margin-bottom:25px; font-size:1.1rem;"></p>
             <form action="landing.php" method="POST">
+                <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
                 <input type="hidden" name="bike_id" id="q_id">
                 <label>FULL NAME</label><input type="text" name="name" required placeholder="John Doe">
                 <label>WHATSAPP #</label><input type="text" name="phone" required placeholder="+92 ...">

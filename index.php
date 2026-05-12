@@ -21,6 +21,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING & ~E_DEPRECATED & ~E_STRICT & ~E_USER_DEPRECATED);
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
 
 function get_client_ip()
 {
@@ -72,33 +74,37 @@ function db_connect($create_db = false)
 
 function current_user($conn)
 {
-    if (!isset($_SESSION['user_id']))
-        return null;
+    static $user_cache = null;
+    if ($user_cache !== null) return $user_cache;
+    if (!isset($_SESSION['user_id'])) return null;
     $stmt = $conn->prepare('SELECT u.*, r.name as role_name FROM users u LEFT JOIN roles r ON u.role_id=r.id WHERE u.id=? LIMIT 1');
     $stmt->bind_param('i', $_SESSION['user_id']);
     $stmt->execute();
-    return $stmt->get_result()->fetch_assoc();
+    $user_cache = $stmt->get_result()->fetch_assoc();
+    return $user_cache;
 }
 
 function has_permission($conn, $page, $action = 'view')
 {
+    static $perm_cache = [];
     $user = current_user($conn);
-    if (!$user)
-        return false;
-    if ($user['role_name'] === 'Administrator')
-        return true;
+    if (!$user) return false;
+    if ($user['role_name'] === 'Administrator') return true;
+    
+    $cache_key = $page . '_' . $action;
+    if (isset($perm_cache[$cache_key])) return $perm_cache[$cache_key];
+
     $col = 'can_view';
-    if ($action === 'add')
-        $col = 'can_add';
-    if ($action === 'edit')
-        $col = 'can_edit';
-    if ($action === 'delete')
-        $col = 'can_delete';
+    if ($action === 'add') $col = 'can_add';
+    if ($action === 'edit') $col = 'can_edit';
+    if ($action === 'delete') $col = 'can_delete';
+    
     $stmt = $conn->prepare("SELECT $col FROM role_permissions WHERE role_id=? AND page=? LIMIT 1");
     $stmt->bind_param('is', $user['role_id'], $page);
     $stmt->execute();
     $res = $stmt->get_result()->fetch_assoc();
-    return $res && $res[$col] == 1;
+    $perm_cache[$cache_key] = $res && $res[$col] == 1;
+    return $perm_cache[$cache_key];
 }
 
 function require_permission($conn, $page, $action = 'view')
@@ -156,7 +162,7 @@ if (isset($_GET['captcha'])) {
 
 function install_database()
 {
-    return true;
+    return true; /* PRODUCTION OPTIMIZATION: DB Creation disabled
     global $db_name;
     $conn = db_connect(true);
     if (!$conn)
@@ -512,6 +518,7 @@ function install_database()
     }
     $conn->close();
     return true;
+    */
 }
 
 function get_setting($key)
@@ -671,6 +678,7 @@ function update_app_icons($file)
 }
 
 $db_exists = true;
+/* PRODUCTION OPTIMIZATION: Removed runtime schema checks
 $conn_check = db_connect();
 if ($conn_check) {
     $res = $conn_check->query("SHOW TABLES LIKE 'leadership'");
@@ -686,6 +694,7 @@ if (isset($_POST['do_install'])) {
         exit;
     }
 }
+*/
 if ($db_exists) {
     $theme = get_setting('theme') ?? 'dark';
     $idle_timeout = (int) (get_setting('session_timeout_idle') ?? 2400);
@@ -2671,7 +2680,7 @@ a.paginate_button.current {
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script src="https://unpkg.com/just-validate@latest/dist/just-validate.production.min.js"></script>
-<script src="chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script type="text/javascript" src="https://cdn.datatables.net/v/dt/dt-1.11.3/r-2.2.9/datatables.min.js"></script>
 <script>
 if (localStorage.getItem('sidebarCollapsed') === '1' && window.innerWidth > 600) {

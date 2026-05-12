@@ -32,7 +32,7 @@ IndexIgnore *
     # frame-src: Allows Google Maps embed
     # img-src: Allows self and data (for Three.js/Icons)
     # connect-src: Allows self (for any AJAX/API calls)
-    Header set Content-Security-Policy "default-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://code.jquery.com https://unpkg.com https://cdn.datatables.net https://fonts.googleapis.com https://fonts.gstatic.com; img-src 'self' data: blob: https://cdn.datatables.net https://via.placeholder.com; frame-src 'self' https://www.google.com https://maps.google.com; connect-src 'self';"
+    Header set Content-Security-Policy "default-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://code.jquery.com https://unpkg.com https://cdn.datatables.net https://fonts.googleapis.com https://fonts.gstatic.com; img-src 'self' data: blob: https://cdn.datatables.net https://via.placeholder.com; frame-src 'self' https://www.google.com https://maps.google.com; connect-src 'self' https://cdn.jsdelivr.net;"
 </IfModule>
 
 # 4. Prevent Execution of Scripts inside the uploads directory safely
