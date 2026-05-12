@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3306
--- Generation Time: May 12, 2026 at 07:26 AM
+-- Generation Time: May 12, 2026 at 07:50 AM
 -- Server version: 8.2.0
 -- PHP Version: 8.3.0
 
@@ -126,6 +126,21 @@ INSERT INTO `bikes` (`id`, `purchase_order_id`, `order_date`, `inventory_date`, 
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `bike_requests`
+--
+
+CREATE TABLE `bike_requests` (
+  `id` int NOT NULL,
+  `customer_name` varchar(255) NOT NULL,
+  `customer_phone` varchar(50) NOT NULL,
+  `bike_details` text,
+  `status` enum('pending','contacted','fulfilled','cancelled') DEFAULT 'pending',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `cheque_register`
 --
 
@@ -183,6 +198,21 @@ INSERT INTO `customers` (`id`, `name`, `phone`, `cnic`, `is_filer`, `address`, `
 (4, 'Zafar Iqbal', '0312-4567890', '35201-4567890-7', 1, 'Layyah, Punjab', '2026-04-20 08:56:23'),
 (5, 'Yasin Ullah', '03139842219', '11102-0356023-4', 1, 'Post Office Domel District Bannu', '2026-04-26 10:16:43'),
 (6, 'Shams Uddin', '03338870707', '11102-0356233-4', 1, 'Al-Mandoos Shoes near Qasaban Gate Mazari Mandi Bannu', '2026-04-28 04:38:53');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `gallery`
+--
+
+CREATE TABLE `gallery` (
+  `id` int NOT NULL,
+  `title` varchar(255) DEFAULT NULL,
+  `description` text,
+  `image` varchar(255) DEFAULT NULL,
+  `sort_order` int DEFAULT '0',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
 
@@ -262,6 +292,22 @@ INSERT INTO `installments` (`id`, `bike_id`, `customer_id`, `due_date`, `install
 (22, 37, 5, '2027-03-01', 26666.67, 0.00, 0.00, 'pending', NULL, 'Installment 10 for Chassis NW-212335123', '2026-05-01 07:02:42', '2026-05-01 07:02:42'),
 (23, 37, 5, '2027-04-01', 26666.67, 0.00, 0.00, 'pending', NULL, 'Installment 11 for Chassis NW-212335123', '2026-05-01 07:02:42', '2026-05-01 07:02:42'),
 (24, 37, 5, '2027-05-01', 26666.67, 0.00, 0.00, 'pending', NULL, 'Installment 12 for Chassis NW-212335123', '2026-05-01 07:02:42', '2026-05-01 07:02:42');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `leadership`
+--
+
+CREATE TABLE `leadership` (
+  `id` int NOT NULL,
+  `name` varchar(255) NOT NULL,
+  `position` varchar(255) DEFAULT NULL,
+  `image` varchar(255) DEFAULT NULL,
+  `message` text,
+  `sort_order` int DEFAULT '0',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
 
@@ -484,6 +530,22 @@ INSERT INTO `quotations` (`id`, `quote_date`, `customer_id`, `bike_id`, `accesso
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `quote_requests`
+--
+
+CREATE TABLE `quote_requests` (
+  `id` int NOT NULL,
+  `customer_name` varchar(255) NOT NULL,
+  `customer_phone` varchar(50) NOT NULL,
+  `bike_id` int DEFAULT NULL,
+  `details` text,
+  `status` enum('pending','sent','accepted','rejected') DEFAULT 'pending',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `roles`
 --
 
@@ -573,7 +635,26 @@ INSERT INTO `role_permissions` (`id`, `role_id`, `page`, `can_view`, `can_add`, 
 (62, 5, 'income_expense', 0, 0, 0, 0),
 (63, 5, 'accessories', 0, 0, 0, 0),
 (64, 5, 'quotations', 0, 0, 0, 0),
-(65, 5, 'installments', 0, 0, 0, 0);
+(65, 5, 'installments', 0, 0, 0, 0),
+(66, 1, 'dashboard', 1, 1, 1, 1),
+(67, 1, 'inventory', 1, 1, 1, 1),
+(68, 1, 'purchase', 1, 1, 1, 1),
+(69, 1, 'sale', 1, 1, 1, 1),
+(70, 1, 'customers', 1, 1, 1, 1),
+(71, 1, 'suppliers', 1, 1, 1, 1),
+(72, 1, 'models', 1, 1, 1, 1),
+(73, 1, 'reports', 1, 1, 1, 1),
+(74, 1, 'returns', 1, 1, 1, 1),
+(75, 1, 'payments', 1, 1, 1, 1),
+(76, 1, 'settings', 1, 1, 1, 1),
+(77, 1, 'roles', 1, 1, 1, 1),
+(78, 1, 'users', 1, 1, 1, 1),
+(79, 1, 'income_expense', 1, 1, 1, 1),
+(80, 1, 'accessories', 1, 1, 1, 1),
+(81, 1, 'quotations', 1, 1, 1, 1),
+(82, 1, 'installments', 1, 1, 1, 1),
+(83, 1, 'landing_page', 1, 1, 1, 1),
+(84, 2, 'dashboard', 1, 0, 0, 0);
 
 -- --------------------------------------------------------
 
@@ -623,7 +704,20 @@ INSERT INTO `settings` (`id`, `setting_key`, `setting_value`) VALUES
 (5, 'tax_on', 'purchase_price'),
 (6, 'theme', 'light'),
 (7, 'admin_password', '$2y$10$8348koW6nh9Q5tigyeHj7.P7PMnTxPbWb7hM8P1mtS.k8sfUsguU.'),
-(8, 'show_purchase_on_invoice', '0');
+(8, 'show_purchase_on_invoice', '0'),
+(17, 'session_timeout_idle', '2400'),
+(18, 'session_timeout_absolute', '28800'),
+(19, 'landing_hero_title', 'Experience the Future of Mobility'),
+(20, 'landing_hero_subtitle', 'Premium Electric Bikes for a Greener Tomorrow'),
+(21, 'company_address', '123 Bike Street, Dera Ghazi Khan, Punjab, Pakistan'),
+(22, 'company_map_iframe', ''),
+(23, 'company_whatsapp', '923000000000'),
+(24, 'company_email', 'info@bnienterprises.com'),
+(25, 'social_facebook', 'https://facebook.com'),
+(26, 'social_instagram', 'https://instagram.com'),
+(27, 'social_twitter', 'https://twitter.com'),
+(28, 'vision_statement', 'To be the leading provider of eco-friendly transportation in the region.'),
+(29, 'mission_statement', 'Providing high-quality electric bikes and exceptional service to our customers.');
 
 -- --------------------------------------------------------
 
@@ -701,6 +795,12 @@ ALTER TABLE `bikes`
   ADD KEY `idx_customer_id` (`customer_id`);
 
 --
+-- Indexes for table `bike_requests`
+--
+ALTER TABLE `bike_requests`
+  ADD PRIMARY KEY (`id`);
+
+--
 -- Indexes for table `cheque_register`
 --
 ALTER TABLE `cheque_register`
@@ -710,6 +810,12 @@ ALTER TABLE `cheque_register`
 -- Indexes for table `customers`
 --
 ALTER TABLE `customers`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `gallery`
+--
+ALTER TABLE `gallery`
   ADD PRIMARY KEY (`id`);
 
 --
@@ -729,6 +835,12 @@ ALTER TABLE `installments`
   ADD KEY `payment_id` (`payment_id`),
   ADD KEY `idx_due_date` (`due_date`),
   ADD KEY `idx_status` (`status`);
+
+--
+-- Indexes for table `leadership`
+--
+ALTER TABLE `leadership`
+  ADD PRIMARY KEY (`id`);
 
 --
 -- Indexes for table `ledger`
@@ -765,6 +877,13 @@ ALTER TABLE `quotations`
   ADD KEY `customer_id` (`customer_id`),
   ADD KEY `bike_id` (`bike_id`),
   ADD KEY `created_by` (`created_by`);
+
+--
+-- Indexes for table `quote_requests`
+--
+ALTER TABLE `quote_requests`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `bike_id` (`bike_id`);
 
 --
 -- Indexes for table `roles`
@@ -826,6 +945,12 @@ ALTER TABLE `bikes`
   MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=41;
 
 --
+-- AUTO_INCREMENT for table `bike_requests`
+--
+ALTER TABLE `bike_requests`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT for table `cheque_register`
 --
 ALTER TABLE `cheque_register`
@@ -838,6 +963,12 @@ ALTER TABLE `customers`
   MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
+-- AUTO_INCREMENT for table `gallery`
+--
+ALTER TABLE `gallery`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT for table `income_expenses`
 --
 ALTER TABLE `income_expenses`
@@ -848,6 +979,12 @@ ALTER TABLE `income_expenses`
 --
 ALTER TABLE `installments`
   MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=25;
+
+--
+-- AUTO_INCREMENT for table `leadership`
+--
+ALTER TABLE `leadership`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `ledger`
@@ -880,6 +1017,12 @@ ALTER TABLE `quotations`
   MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
+-- AUTO_INCREMENT for table `quote_requests`
+--
+ALTER TABLE `quote_requests`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT for table `roles`
 --
 ALTER TABLE `roles`
@@ -889,7 +1032,7 @@ ALTER TABLE `roles`
 -- AUTO_INCREMENT for table `role_permissions`
 --
 ALTER TABLE `role_permissions`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=66;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=86;
 
 --
 -- AUTO_INCREMENT for table `sale_accessories`
@@ -901,7 +1044,7 @@ ALTER TABLE `sale_accessories`
 -- AUTO_INCREMENT for table `settings`
 --
 ALTER TABLE `settings`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=30;
 
 --
 -- AUTO_INCREMENT for table `suppliers`
@@ -954,6 +1097,12 @@ ALTER TABLE `quotations`
   ADD CONSTRAINT `quotations_ibfk_1` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE SET NULL,
   ADD CONSTRAINT `quotations_ibfk_2` FOREIGN KEY (`bike_id`) REFERENCES `bikes` (`id`) ON DELETE SET NULL,
   ADD CONSTRAINT `quotations_ibfk_3` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL;
+
+--
+-- Constraints for table `quote_requests`
+--
+ALTER TABLE `quote_requests`
+  ADD CONSTRAINT `quote_requests_ibfk_1` FOREIGN KEY (`bike_id`) REFERENCES `bikes` (`id`) ON DELETE SET NULL;
 
 --
 -- Constraints for table `role_permissions`

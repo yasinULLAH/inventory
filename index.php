@@ -382,12 +382,74 @@ function install_database()
     $conn->query("INSERT IGNORE INTO roles (id, name, description) VALUES (2,'Manager','Limited access')");
     $admin_hash = password_hash('admin123!', PASSWORD_DEFAULT);
     $conn->query("INSERT IGNORE INTO users (id, username, password_hash, full_name, role_id, is_active) VALUES (1,'admin','$admin_hash','System Administrator',1,1)");
-    $pages = ['dashboard', 'inventory', 'purchase', 'sale', 'customers', 'suppliers', 'models', 'reports', 'returns', 'payments', 'settings', 'roles', 'users', 'income_expense', 'accessories', 'quotations', 'installments'];
+    $pages = ['dashboard', 'inventory', 'purchase', 'sale', 'customers', 'suppliers', 'models', 'reports', 'returns', 'payments', 'settings', 'roles', 'users', 'income_expense', 'accessories', 'quotations', 'installments', 'landing_page'];
     foreach ($pages as $p) {
         $conn->query("INSERT IGNORE INTO role_permissions (role_id, page, can_view, can_add, can_edit, can_delete) VALUES (1,'$p',1,1,1,1)");
     }
     $conn->query("INSERT IGNORE INTO role_permissions (role_id, page, can_view, can_add, can_edit, can_delete) VALUES (2,'dashboard',1,0,0,0)");
     $stmt->close();
+
+    // New Tables for Landing Page
+    $new_tables = [
+        "CREATE TABLE IF NOT EXISTS `leadership` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `name` VARCHAR(255) NOT NULL,
+            `position` VARCHAR(255),
+            `image` VARCHAR(255),
+            `message` TEXT,
+            `sort_order` INT DEFAULT 0,
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+        "CREATE TABLE IF NOT EXISTS `gallery` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `title` VARCHAR(255),
+            `description` TEXT,
+            `image` VARCHAR(255),
+            `sort_order` INT DEFAULT 0,
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+        "CREATE TABLE IF NOT EXISTS `bike_requests` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `customer_name` VARCHAR(255) NOT NULL,
+            `customer_phone` VARCHAR(50) NOT NULL,
+            `bike_details` TEXT,
+            `status` ENUM('pending','contacted','fulfilled','cancelled') DEFAULT 'pending',
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+        "CREATE TABLE IF NOT EXISTS `quote_requests` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `customer_name` VARCHAR(255) NOT NULL,
+            `customer_phone` VARCHAR(50) NOT NULL,
+            `bike_id` INT,
+            `details` TEXT,
+            `status` ENUM('pending','sent','accepted','rejected') DEFAULT 'pending',
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (`bike_id`) REFERENCES `bikes`(`id`) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    ];
+    foreach ($new_tables as $sql) {
+        $conn->query($sql);
+    }
+
+    $lp_defaults = [
+        ['landing_hero_title', 'Experience the Future of Mobility'],
+        ['landing_hero_subtitle', 'Premium Electric Bikes for a Greener Tomorrow'],
+        ['company_address', '123 Bike Street, Dera Ghazi Khan, Punjab, Pakistan'],
+        ['company_map_iframe', ''],
+        ['company_whatsapp', '923000000000'],
+        ['company_email', 'info@bnienterprises.com'],
+        ['social_facebook', 'https://facebook.com'],
+        ['social_instagram', 'https://instagram.com'],
+        ['social_twitter', 'https://twitter.com'],
+        ['vision_statement', 'To be the leading provider of eco-friendly transportation in the region.'],
+        ['mission_statement', 'Providing high-quality electric bikes and exceptional service to our customers.'],
+    ];
+    $stmt_lp = $conn->prepare('INSERT IGNORE INTO `settings` (`setting_key`, `setting_value`) VALUES (?, ?)');
+    foreach ($lp_defaults as $d) {
+        $stmt_lp->bind_param('ss', $d[0], $d[1]);
+        $stmt_lp->execute();
+    }
+    $stmt_lp->close();
     $models_seed = [
         ['LY SI', 'LY SI Electric Bike', 'Electric Bike', 'LY'],
         ['T9 Sports', 'T9 Sports Electric Bike', 'Electric Bike', 'T9'],
@@ -544,6 +606,14 @@ function handle_image_upload($file, $dest_dir = 'uploads/')
 }
 
 $db_exists = true;
+$conn_check = db_connect();
+if ($conn_check) {
+    $res = $conn_check->query("SHOW TABLES LIKE 'leadership'");
+    if ($res->num_rows == 0) {
+        install_database();
+    }
+    $conn_check->close();
+}
 if (isset($_POST['do_install'])) {
     if (install_database()) {
         $db_exists = true;
@@ -1982,6 +2052,97 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         header("Location: index.php?page=supplier_ledger&sup_id=$sel_sup&msg=" . urlencode($msg) . '&err=' . urlencode($err));
         exit;
     }
+    if ($page === 'landing_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        require_permission($conn, 'landing_page', 'edit');
+        if (isset($_POST['save_landing_settings'])) {
+            $lp_fields = ['landing_hero_title', 'landing_hero_subtitle', 'company_address', 'company_map_iframe', 'company_whatsapp', 'company_email', 'social_facebook', 'social_instagram', 'social_twitter', 'vision_statement', 'mission_statement'];
+            $st = $conn->prepare('UPDATE settings SET setting_value=? WHERE setting_key=?');
+            foreach ($lp_fields as $f) {
+                if (isset($_POST[$f])) {
+                    $val = $_POST[$f];
+                    if ($f === 'company_map_iframe' && preg_match('/src=["\']([^"\']+)["\']/', $val, $match)) {
+                        $val = $match[1];
+                    }
+                    $st->bind_param('ss', $val, $f);
+                    $st->execute();
+                }
+            }
+            $msg = 'Landing page settings updated.';
+        }
+        if (isset($_POST['save_leadership'])) {
+            $lid = (int) ($_POST['id'] ?? 0);
+            $name = sanitize($_POST['name'] ?? '');
+            $pos = sanitize($_POST['position'] ?? '');
+            $msg_text = sanitize($_POST['message'] ?? '');
+            $sort = (int) ($_POST['sort_order'] ?? 0);
+            $img_path = null;
+            if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+                $img_path = handle_image_upload($_FILES['image']);
+            }
+            if ($lid) {
+                if ($img_path) {
+                    $st = $conn->prepare('UPDATE leadership SET name=?, position=?, message=?, sort_order=?, image=? WHERE id=?');
+                    $st->bind_param('sssisi', $name, $pos, $msg_text, $sort, $img_path, $lid);
+                } else {
+                    $st = $conn->prepare('UPDATE leadership SET name=?, position=?, message=?, sort_order=? WHERE id=?');
+                    $st->bind_param('sssi i', $name, $pos, $msg_text, $sort, $lid);
+                }
+                $st->execute();
+                $msg = 'Leadership entry updated.';
+            } else {
+                $st = $conn->prepare('INSERT INTO leadership (name, position, message, sort_order, image) VALUES (?,?,?,?,?)');
+                $st->bind_param('sssis', $name, $pos, $msg_text, $sort, $img_path);
+                $st->execute();
+                $msg = 'Leadership entry added.';
+            }
+        }
+        if (isset($_POST['delete_leadership'])) {
+            $lid = (int) $_POST['id'];
+            $conn->query("DELETE FROM leadership WHERE id=$lid");
+            $msg = 'Leadership entry deleted.';
+        }
+        if (isset($_POST['save_gallery'])) {
+            $gid = (int) ($_POST['id'] ?? 0);
+            $title = sanitize($_POST['title'] ?? '');
+            $desc = sanitize($_POST['description'] ?? '');
+            $sort = (int) ($_POST['sort_order'] ?? 0);
+            $img_path = null;
+            if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+                $img_path = handle_image_upload($_FILES['image']);
+            }
+            if ($gid) {
+                if ($img_path) {
+                    $st = $conn->prepare('UPDATE gallery SET title=?, description=?, sort_order=?, image=? WHERE id=?');
+                    $st->bind_param('ssisi', $title, $desc, $sort, $img_path, $gid);
+                } else {
+                    $st = $conn->prepare('UPDATE gallery SET title=?, description=?, sort_order=? WHERE id=?');
+                    $st->bind_param('ssii', $title, $desc, $sort, $gid);
+                }
+                $st->execute();
+                $msg = 'Gallery item updated.';
+            } else {
+                $st = $conn->prepare('INSERT INTO gallery (title, description, sort_order, image) VALUES (?,?,?,?)');
+                $st->bind_param('ssis', $title, $desc, $sort, $img_path);
+                $st->execute();
+                $msg = 'Gallery item added.';
+            }
+        }
+        if (isset($_POST['delete_gallery'])) {
+            $gid = (int) $_POST['id'];
+            $conn->query("DELETE FROM gallery WHERE id=$gid");
+            $msg = 'Gallery item deleted.';
+        }
+        if (isset($_POST['update_request_status'])) {
+            $rid = (int) $_POST['id'];
+            $type = $_POST['type'];
+            $status = sanitize($_POST['status']);
+            $table = ($type === 'bike') ? 'bike_requests' : 'quote_requests';
+            $conn->query("UPDATE $table SET status='$status' WHERE id=$rid");
+            $msg = 'Request status updated.';
+        }
+        header('Location: index.php?page=landing_page&sub=' . ($_POST['sub'] ?? 'general') . '&msg=' . urlencode($msg));
+        exit;
+    }
     if ($page === 'inventory' && isset($_GET['export_csv']) && $_GET['export_csv'] == 1) {
         $status_f = sanitize($_GET['status_f'] ?? '');
         $model_f = (int) ($_GET['model_f'] ?? 0);
@@ -2727,6 +2888,7 @@ else:
         ['users', '👨‍💼', 'Users'],
         ['roles', '🔑', 'Roles & Permissions'],
         ['settings', '⚙', 'Settings'],
+        ['landing_page', '🌐', 'Landing Page'],
     ];
     $pages_nav = [];
     foreach ($all_nav as $nav) {
@@ -6378,6 +6540,195 @@ document.addEventListener('DOMContentLoaded', function() {
 </tbody>
 </table>
 </div>
+<?php
+    elseif ($page === 'landing_page'):
+        require_permission($conn, 'landing_page', 'view');
+        $sub = sanitize($_GET['sub'] ?? 'general');
+?>
+<div class="sub-tabs no-print animate__animated animate__fadeInDown">
+    <a href="index.php?page=landing_page&sub=general" class="sub-tab <?= $sub === 'general' ? 'active' : '' ?>">⚙️ General</a>
+    <a href="index.php?page=landing_page&sub=leadership" class="sub-tab <?= $sub === 'leadership' ? 'active' : '' ?>">👨‍💼 Leadership</a>
+    <a href="index.php?page=landing_page&sub=gallery" class="sub-tab <?= $sub === 'gallery' ? 'active' : '' ?>">🖼️ Gallery</a>
+    <a href="index.php?page=landing_page&sub=requests" class="sub-tab <?= $sub === 'requests' ? 'active' : '' ?>">📩 Requests</a>
+</div>
+
+<?php if ($sub === 'general'): ?>
+<form method="POST" class="animate__animated animate__fadeIn">
+<input type="hidden" name="save_landing_settings" value="1">
+<input type="hidden" name="sub" value="general">
+<fieldset class="fieldset"><legend>🌐 Hero Section</legend>
+<div class="form-row">
+<div class="form-group"><label>Hero Title</label><input type="text" name="landing_hero_title" value="<?= sanitize(get_setting('landing_hero_title') ?? '') ?>"></div>
+<div class="form-group"><label>Hero Subtitle</label><input type="text" name="landing_hero_subtitle" value="<?= sanitize(get_setting('landing_hero_subtitle') ?? '') ?>"></div>
+</div>
+</fieldset>
+<fieldset class="fieldset"><legend>🏢 About Us (Mission/Vision)</legend>
+<div class="form-row">
+<div class="form-group"><label>Vision Statement</label><textarea name="vision_statement" rows="2"><?= sanitize(get_setting('vision_statement') ?? '') ?></textarea></div>
+<div class="form-group"><label>Mission Statement</label><textarea name="mission_statement" rows="2"><?= sanitize(get_setting('mission_statement') ?? '') ?></textarea></div>
+</div>
+</fieldset>
+<fieldset class="fieldset"><legend>📍 Contact & Socials</legend>
+<div class="form-row">
+<div class="form-group"><label>Company Address</label><input type="text" name="company_address" value="<?= sanitize(get_setting('company_address') ?? '') ?>"></div>
+<div class="form-group"><label>Google Map Iframe (src only)</label><input type="text" name="company_map_iframe" value="<?= sanitize(get_setting('company_map_iframe') ?? '') ?>"></div>
+</div>
+<div class="form-row">
+<div class="form-group"><label>WhatsApp Number (e.g. 923000000000)</label><input type="text" name="company_whatsapp" value="<?= sanitize(get_setting('company_whatsapp') ?? '') ?>"></div>
+<div class="form-group"><label>Company Email</label><input type="email" name="company_email" value="<?= sanitize(get_setting('company_email') ?? '') ?>"></div>
+</div>
+<div class="form-row">
+<div class="form-group"><label>Facebook URL</label><input type="text" name="social_facebook" value="<?= sanitize(get_setting('social_facebook') ?? '') ?>"></div>
+<div class="form-group"><label>Instagram URL</label><input type="text" name="social_instagram" value="<?= sanitize(get_setting('social_instagram') ?? '') ?>"></div>
+<div class="form-group"><label>Twitter URL</label><input type="text" name="social_twitter" value="<?= sanitize(get_setting('social_twitter') ?? '') ?>"></div>
+</div>
+</fieldset>
+<button type="submit" class="btn btn-primary">💾 Save Landing Settings</button>
+</form>
+
+<?php elseif ($sub === 'leadership'):
+    $leadership = $conn->query('SELECT * FROM leadership ORDER BY sort_order ASC, id DESC');
+    $edit_lid = (int) ($_GET['edit_lid'] ?? 0);
+    $edit_l = null;
+    if ($edit_lid) {
+        $edit_l = $conn->query("SELECT * FROM leadership WHERE id=$edit_lid")->fetch_assoc();
+    }
+?>
+<div id="leadershipFormArea" style="display:<?= $edit_l ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
+<fieldset class="fieldset"><legend><?= $edit_l ? '✏ Edit Leadership' : '+ Add Leader' ?></legend>
+<form method="POST" enctype="multipart/form-data">
+<input type="hidden" name="save_leadership" value="1">
+<input type="hidden" name="sub" value="leadership">
+<?php if ($edit_l): ?><input type="hidden" name="id" value="<?= $edit_l['id'] ?>"><?php endif; ?>
+<div class="form-row">
+<div class="form-group"><label>Name *</label><input type="text" name="name" value="<?= sanitize($edit_l['name'] ?? '') ?>" required></div>
+<div class="form-group"><label>Position</label><input type="text" name="position" value="<?= sanitize($edit_l['position'] ?? '') ?>"></div>
+<div class="form-group"><label>Sort Order</label><input type="number" name="sort_order" value="<?= $edit_l['sort_order'] ?? '0' ?>"></div>
+</div>
+<div class="form-row">
+<div class="form-group"><label>Message</label><textarea name="message" rows="3"><?= sanitize($edit_l['message'] ?? '') ?></textarea></div>
+<div class="form-group"><label>Image (Optional)</label><input type="file" name="image" accept="image/*"></div>
+</div>
+<button type="submit" class="btn btn-primary">💾 Save</button>
+<button type="button" class="btn btn-default" onclick="document.getElementById('leadershipFormArea').style.display='none'">Cancel</button>
+</form>
+</fieldset>
+</div>
+<div style="margin-bottom:10px" class="no-print"><button class="btn btn-success" onclick="document.getElementById('leadershipFormArea').style.display='block'">+ Add Leader</button></div>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Sort</th><th>Image</th><th>Name</th><th>Position</th><th>Message</th><th class="no-sort">Actions</th></tr></thead>
+<tbody>
+<?php while ($l = $leadership->fetch_assoc()): ?>
+<tr>
+<td><?= $l['sort_order'] ?></td>
+<td><?php if($l['image']): ?><img src="<?= $l['image'] ?>" style="height:40px;width:40px;object-fit:cover;border-radius:50%"><?php else: ?>-<?php endif; ?></td>
+<td><strong><?= sanitize($l['name']) ?></strong></td>
+<td><?= sanitize($l['position']) ?></td>
+<td><small><?= sanitize(substr($l['message'], 0, 50)) ?>...</small></td>
+<td>
+<div class="actions-col">
+<a href="index.php?page=landing_page&sub=leadership&edit_lid=<?= $l['id'] ?>" class="btn btn-primary btn-sm">✏</a>
+<form method="POST" style="display:inline"><input type="hidden" name="id" value="<?= $l['id'] ?>"><input type="hidden" name="sub" value="leadership"><button name="delete_leadership" class="btn btn-danger btn-sm" onclick="return confirm('Delete this leader?')">🗑</button></form>
+</div>
+</td>
+</tr>
+<?php endwhile; ?>
+</tbody>
+</table>
+</div>
+
+<?php elseif ($sub === 'gallery'):
+    $gallery = $conn->query('SELECT * FROM gallery ORDER BY sort_order ASC, id DESC');
+    $edit_gid = (int) ($_GET['edit_gid'] ?? 0);
+    $edit_g = null;
+    if ($edit_gid) {
+        $edit_g = $conn->query("SELECT * FROM gallery WHERE id=$edit_gid")->fetch_assoc();
+    }
+?>
+<div id="galleryFormArea" style="display:<?= $edit_g ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
+<fieldset class="fieldset"><legend><?= $edit_g ? '✏ Edit Gallery Item' : '+ Add Gallery Item' ?></legend>
+<form method="POST" enctype="multipart/form-data">
+<input type="hidden" name="save_gallery" value="1">
+<input type="hidden" name="sub" value="gallery">
+<?php if ($edit_g): ?><input type="hidden" name="id" value="<?= $edit_g['id'] ?>"><?php endif; ?>
+<div class="form-row">
+<div class="form-group"><label>Title</label><input type="text" name="title" value="<?= sanitize($edit_g['title'] ?? '') ?>"></div>
+<div class="form-group"><label>Sort Order</label><input type="number" name="sort_order" value="<?= $edit_g['sort_order'] ?? '0' ?>"></div>
+</div>
+<div class="form-row">
+<div class="form-group"><label>Description</label><textarea name="description" rows="2"><?= sanitize($edit_g['description'] ?? '') ?></textarea></div>
+<div class="form-group"><label>Image *</label><input type="file" name="image" accept="image/*" <?= $edit_g ? '' : 'required' ?>></div>
+</div>
+<button type="submit" class="btn btn-primary">💾 Save</button>
+<button type="button" class="btn btn-default" onclick="document.getElementById('galleryFormArea').style.display='none'">Cancel</button>
+</form>
+</fieldset>
+</div>
+<div style="margin-bottom:10px" class="no-print"><button class="btn btn-success" onclick="document.getElementById('galleryFormArea').style.display='block'">+ Add Item</button></div>
+<div class="card-grid">
+<?php while ($g = $gallery->fetch_assoc()): ?>
+<div class="card" style="flex-direction:column;align-items:flex-start;gap:8px;padding:10px">
+<img src="<?= $g['image'] ?>" style="width:100%;height:120px;object-fit:cover;border-radius:2px">
+<div style="font-weight:700;font-size:0.85rem"><?= sanitize($g['title'] ?: 'Untitled') ?></div>
+<div style="font-size:0.75rem;color:var(--text2)"><?= sanitize(substr($g['description'], 0, 40)) ?>...</div>
+<div style="display:flex;gap:5px;margin-top:auto">
+<a href="index.php?page=landing_page&sub=gallery&edit_gid=<?= $g['id'] ?>" class="btn btn-default btn-sm">✏</a>
+<form method="POST" style="display:inline"><input type="hidden" name="id" value="<?= $g['id'] ?>"><input type="hidden" name="sub" value="gallery"><button name="delete_gallery" class="btn btn-danger btn-sm" onclick="return confirm('Delete item?')">🗑</button></form>
+</div>
+</div>
+<?php endwhile; ?>
+</div>
+
+<?php elseif ($sub === 'requests'):
+    $bike_reqs = $conn->query('SELECT * FROM bike_requests ORDER BY created_at DESC');
+    $quote_reqs = $conn->query('SELECT qr.*, b.chassis_number, m.model_name FROM quote_requests qr LEFT JOIN bikes b ON qr.bike_id=b.id LEFT JOIN models m ON b.model_id=m.id ORDER BY qr.created_at DESC');
+?>
+<fieldset class="fieldset"><legend>🚲 Bike Requests (Not in stock)</legend>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Date</th><th>Customer</th><th>Phone</th><th>Bike Details</th><th>Status</th><th>Actions</th></tr></thead>
+<tbody>
+<?php while ($r = $bike_reqs->fetch_assoc()): ?>
+<tr>
+<td><?= fmt_date($r['created_at']) ?></td>
+<td><strong><?= sanitize($r['customer_name']) ?></strong></td>
+<td><?= sanitize($r['customer_phone']) ?></td>
+<td><small><?= sanitize($r['bike_details']) ?></small></td>
+<td><span class="badge badge-<?= ($r['status'] === 'fulfilled') ? 'success' : (($r['status'] === 'cancelled') ? 'danger' : 'warning') ?>"><?= strtoupper($r['status']) ?></span></td>
+<td>
+<form method="POST" style="display:inline"><input type="hidden" name="update_request_status" value="1"><input type="hidden" name="id" value="<?= $r['id'] ?>"><input type="hidden" name="type" value="bike"><input type="hidden" name="sub" value="requests"><select name="status" onchange="this.form.submit()"><option value="pending" <?= $r['status'] === 'pending' ? 'selected' : '' ?>>Pending</option><option value="contacted" <?= $r['status'] === 'contacted' ? 'selected' : '' ?>>Contacted</option><option value="fulfilled" <?= $r['status'] === 'fulfilled' ? 'selected' : '' ?>>Fulfilled</option><option value="cancelled" <?= $r['status'] === 'cancelled' ? 'selected' : '' ?>>Cancelled</option></select></form>
+</td>
+</tr>
+<?php endwhile; ?>
+</tbody>
+</table>
+</div>
+</fieldset>
+
+<fieldset class="fieldset" style="margin-top:20px"><legend>📝 Quote Requests (From Landing Page)</legend>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Date</th><th>Customer</th><th>Phone</th><th>Bike Interested</th><th>Details</th><th>Status</th><th>Actions</th></tr></thead>
+<tbody>
+<?php while ($r = $quote_reqs->fetch_assoc()): ?>
+<tr>
+<td><?= fmt_date($r['created_at']) ?></td>
+<td><strong><?= sanitize($r['customer_name']) ?></strong></td>
+<td><?= sanitize($r['customer_phone']) ?></td>
+<td><?= $r['model_name'] ? sanitize($r['model_name'] . ' - ' . $r['chassis_number']) : 'General' ?></td>
+<td><small><?= sanitize($r['details']) ?></small></td>
+<td><span class="badge badge-<?= ($r['status'] === 'accepted') ? 'success' : (($r['status'] === 'rejected') ? 'danger' : 'warning') ?>"><?= strtoupper($r['status']) ?></span></td>
+<td>
+<form method="POST" style="display:inline"><input type="hidden" name="update_request_status" value="1"><input type="hidden" name="id" value="<?= $r['id'] ?>"><input type="hidden" name="type" value="quote"><input type="hidden" name="sub" value="requests"><select name="status" onchange="this.form.submit()"><option value="pending" <?= $r['status'] === 'pending' ? 'selected' : '' ?>>Pending</option><option value="sent" <?= $r['status'] === 'sent' ? 'selected' : '' ?>>Sent</option><option value="accepted" <?= $r['status'] === 'accepted' ? 'selected' : '' ?>>Accepted</option><option value="rejected" <?= $r['status'] === 'rejected' ? 'selected' : '' ?>>Rejected</option></select></form>
+</td>
+</tr>
+<?php endwhile; ?>
+</tbody>
+</table>
+</div>
+</fieldset>
+<?php endif; ?>
 <?php
     elseif ($page === 'settings'):
         $s_company = get_setting('company_name') ?? 'BNI Enterprises';
