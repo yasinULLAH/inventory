@@ -1,0 +1,11 @@
+Best Image Dimensions for Uploads
+
+To make the bikes look perfectly uniform and sharp on the landing page, stick to these guidelines:
+
+Ideal Resolution: 800 x 600 pixels or 1200 x 900 pixels.
+
+Aspect Ratio: 4:3 (Landscape).
+
+Format: WebP or PNG with a transparent background looks best, but a solid white/black background works too.
+
+Padding: Leave about 5-10% of empty space around the bike in the image so it doesn't touch the very edges of the frame.

@@ -1,0 +1,58 @@
+﻿[
+    {
+        "id":  2,
+        "name":  "T9 Sports Electric Bike",
+        "source":  "https://metroev.pk/metro-t9-sport/",
+        "image":  "https://metroev.pk/wp-content/uploads/2026/02/Metro-T9-Sport-Red-–-Nano-Carbon-Fiber-Electric-Bike.webp",
+        "file":  "C:\\phpserver\\www\\testingspace3\\uploads\\models\\model_2_t9_sports_electric_bike.jpg"
+    },
+    {
+        "id":  3,
+        "name":  "T9 Sports LFP Electric Bike",
+        "source":  "https://metroev.pk/metro-t9-sport-lithium/",
+        "image":  "https://metroev.pk/wp-content/uploads/2026/02/Metro-T9-Sport-Lithium-Silver-–-LiFePO4-Electric-Bike.webp",
+        "file":  "C:\\phpserver\\www\\testingspace3\\uploads\\models\\model_3_t9_sports_lfp_electric_bike.jpg"
+    },
+    {
+        "id":  5,
+        "name":  "Thrill Pro Electric Bike",
+        "source":  "https://metroev.pk/metro-thrill-pro/",
+        "image":  "https://metroev.pk/wp-content/uploads/2026/02/Metro-Thrill-Pro-Black-–-Nano-Carbon-Fiber-Electric-Bike.webp",
+        "file":  "C:\\phpserver\\www\\testingspace3\\uploads\\models\\model_5_thrill_pro_electric_bike.jpg"
+    },
+    {
+        "id":  6,
+        "name":  "Thrill Pro LFP Electric Bike",
+        "source":  "https://metroev.pk/metro-thrill-pro-lithium/",
+        "image":  "https://metroev.pk/wp-content/uploads/2026/02/Metro-Thrill-Pro-Lithium-Black-–-LiFePO4-Electric-Bike.webp",
+        "file":  "C:\\phpserver\\www\\testingspace3\\uploads\\models\\model_6_thrill_pro_lfp_electric_bike.jpg"
+    },
+    {
+        "id":  9,
+        "name":  "M6 K6 Electric Bike",
+        "source":  "https://metroev.pk/metro-m6-empower/",
+        "image":  "https://metroev.pk/wp-content/uploads/2026/02/Metro-M6-Empower-black-available-for-free-test-ride.webp",
+        "file":  "C:\\phpserver\\www\\testingspace3\\uploads\\models\\model_9_m6_k6_electric_bike.jpg"
+    },
+    {
+        "id":  10,
+        "name":  "M6 NP Electric Bike",
+        "source":  "https://metroev.pk/metro-m6-empower/",
+        "image":  "https://metroev.pk/wp-content/uploads/2026/02/Metro-M6-Empower-black-available-for-free-test-ride.webp",
+        "file":  "C:\\phpserver\\www\\testingspace3\\uploads\\models\\model_10_m6_np_electric_bike.jpg"
+    },
+    {
+        "id":  12,
+        "name":  "Premium Electric Bike",
+        "source":  "https://metroev.pk/metro-premium/",
+        "image":  "https://metroev.pk/wp-content/uploads/2026/02/Metro-Premium-Silver-–-Lithium-Iron-Phosphate-Electric-Bike.webp",
+        "file":  "C:\\phpserver\\www\\testingspace3\\uploads\\models\\model_12_premium_electric_bike.jpg"
+    },
+    {
+        "id":  13,
+        "name":  "W. Bike H2 Electric Bike",
+        "source":  "https://metroev.pk/metro-wonder-bike/",
+        "image":  "https://metroev.pk/wp-content/uploads/2026/02/Metro-Wonder-Bike-White-–-Nano-Carbon-Fiber-Electric-Bike.webp",
+        "file":  "C:\\phpserver\\www\\testingspace3\\uploads\\models\\model_13_w_bike_h2_electric_bike.jpg"
+    }
+]

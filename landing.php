@@ -522,6 +522,18 @@ $view = $_GET['view'] ?? 'home';
         w.appendChild(d);
     }
     </script>
+<?php
+$protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
+$base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['PHP_SELF']), '/\\');
+?>
+<meta property="og:title" content="BNI Enterprises" />
+<meta property="og:description" content="Welcome to BNI Enterprises" />
+<meta property="og:image" content="<?= $base_url ?>/logo.png" />
+<meta property="og:url" content="<?= $base_url ?>/landing.php" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="BNI Enterprises" />
+<meta name="twitter:image" content="<?= $base_url ?>/logo.png" />
 </head>
 <body>
     <div id="preloader">
