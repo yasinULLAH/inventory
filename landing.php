@@ -397,6 +397,25 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
         .gallery-item:hover .gallery-info { transform: translateY(0); }
         .gallery-info h4 { color: #fff; font-size: 1rem; font-weight: 700; margin-bottom: 5px; }
         .gallery-info p { font-size: 0.78rem; color: rgba(255,255,255,0.65); margin: 0; }
+        .glightbox-clean .gslide-description {
+            background: rgba(15, 23, 42, 0.85) !important;
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            border-radius: 20px !important;
+            text-align: center !important;
+            width: max-content !important;
+            height: max-content !important;
+            max-width: 90% !important;
+            margin: auto !important;
+            padding: 20px 30px !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: center !important;
+            align-items: center !important;
+        }
+        .glightbox-clean .gdesc-inner { padding: 0 !important; width: 100%; text-align: center; }
+        .glightbox-clean .gslide-title { font-family: 'Space+Grotesk', sans-serif; font-size: 1.5rem !important; font-weight: 800 !important; color: #fff !important; margin-bottom: 5px !important; }
+        .glightbox-clean .gslide-desc { font-family: 'Outfit', sans-serif; font-size: 1rem !important; color: #94a3b8 !important; margin: 0 !important; }
         .leaders-grid {
             display: flex;
             flex-wrap: wrap;
@@ -992,6 +1011,12 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                             <?php endwhile; ?>
                         </select>
                     </div>
+                    <div style="flex:1; min-width:150px;">
+                        <select name="stock_status" style="margin-bottom:0; width:100%; cursor:pointer; background-image: url('data:image/svg+xml;utf8,<svg fill=\"white\" height=\"24\" viewBox=\"0 0 24 24\" width=\"24\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M7 10l5 5 5-5z\"/></svg>'); background-repeat: no-repeat; background-position-x: 95%; background-position-y: center;">
+                            <option value="available" <?= ($_GET['stock_status'] ?? 'all') == 'available' ? 'selected' : '' ?>>Available Only</option>
+                            <option value="all" <?= ($_GET['stock_status'] ?? 'all') == 'all' ? 'selected' : '' ?>>Show Sold Also</option>
+                        </select>
+                    </div>
                     <div style="display:flex; gap:10px; flex:1; min-width:200px;">
                         <button type="submit" class="btn btn-main" style="flex:1; justify-content:center;">FILTER</button>
                         <a href="<?= sanitize($self_page) ?>?view=bikes" class="btn btn-outline" style="flex:1; justify-content:center;">RESET</a>
@@ -1000,10 +1025,13 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
             </div>
             <div class="bike-grid">
                 <?php
-                $per_page = 9;
+                $per_page = 10;
                 $page_num = max(1, (int) ($_GET['pg'] ?? 1));
                 $offset = ($page_num - 1) * $per_page;
-                $where_p = ["b.status='in_stock'"];
+                $where_p = ["1=1"];
+                if (($_GET['stock_status'] ?? 'all') === 'available') {
+                    $where_p[] = "b.status='in_stock'";
+                }
                 if (!empty($_GET['search'])) {
                     $s = mysqli_real_escape_string($conn, $_GET['search']);
                     $where_p[] = "(m.model_name LIKE '%$s%' OR b.chassis_number LIKE '%$s%')";
@@ -1014,7 +1042,7 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                 }
                 $where = implode(' AND ', $where_p);
                 $all_bikes = $conn->query("SELECT b.*, m.model_name, m.category, m.image as model_image, m.top_speed, m.max_range 
-                    FROM bikes b JOIN models m ON b.model_id = m.id WHERE $where ORDER BY b.created_at DESC LIMIT $offset, $per_page");
+                    FROM bikes b JOIN models m ON b.model_id = m.id WHERE $where ORDER BY b.status = 'in_stock' DESC, b.created_at DESC LIMIT $offset, $per_page");
                 $total_cnt = $conn->query("SELECT COUNT(*) FROM bikes b JOIN models m ON b.model_id = m.id WHERE $where")->fetch_row()[0];
                 $total_pages = ceil($total_cnt / $per_page);
                 $badge_data = [];
@@ -1068,7 +1096,11 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                     </div>
                     <div style="display:flex; gap:12px;">
                         <a href="https://wa.me/<?= $wa_number ?>?text=Inquiry for <?= urlencode($bike['model_name']) ?> (Chassis: <?= urlencode($bike['chassis_number']) ?>)" class="wa-action" style="flex:1;">INQUIRE</a>
+                        <?php if ($bike['status'] === 'in_stock'): ?>
                         <button class="btn btn-outline" onclick="openQuoteModal(<?= $bike['id'] ?>, '<?= sanitize($bike['model_name'] . ' - ' . $bike['chassis_number']) ?>')">QUOTE</button>
+                        <?php else: ?>
+                        <button class="btn btn-outline" onclick="openRequestModal('<?= sanitize($bike['model_name'] . ' - ' . $bike['chassis_number']) ?>')">REQUEST</button>
+                        <?php endif; ?>
                     </div>
                 </div>
                 <?php endwhile;
@@ -1084,7 +1116,7 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
             <?php if ($total_pages > 1): ?>
             <div style="display:flex; justify-content:center; gap:10px; margin-top:60px;">
                 <?php for ($i = 1; $i <= $total_pages; $i++): ?>
-                <a href="<?= sanitize($self_page) ?>?view=bikes&pg=<?= $i ?>&search=<?= urlencode($_GET['search'] ?? '') ?>&category=<?= urlencode($_GET['category'] ?? '') ?>" class="btn <?= $page_num == $i ? 'btn-main' : 'btn-outline' ?>" style="padding:12px 22px;"><?= $i ?></a>
+                <a href="<?= sanitize($self_page) ?>?view=bikes&pg=<?= $i ?>&search=<?= urlencode($_GET['search'] ?? '') ?>&category=<?= urlencode($_GET['category'] ?? '') ?>&stock_status=<?= urlencode($_GET['stock_status'] ?? 'all') ?>" class="btn <?= $page_num == $i ? 'btn-main' : 'btn-outline' ?>" style="padding:12px 22px;"><?= $i ?></a>
                 <?php endfor; ?>
             </div>
             <?php endif; ?>
@@ -1118,7 +1150,11 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                             </div>
                             <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
                                 <a href="https://wa.me/<?= $wa_number ?>?text=Inquiry for <?= urlencode($bike_detail['model_name']) ?> (Chassis: <?= urlencode($bike_detail['chassis_number']) ?>)" class="wa-action" style="flex:1;">INQUIRE</a>
+                                <?php if ($bike_detail['status'] === 'in_stock'): ?>
                                 <button class="btn btn-outline" style="flex:1; justify-content:center;" onclick="openQuoteModal(<?= (int) $bike_detail['id'] ?>, '<?= sanitize($bike_detail['model_name'] . ' - ' . $bike_detail['chassis_number']) ?>')">QUOTE</button>
+                                <?php else: ?>
+                                <button class="btn btn-outline" style="flex:1; justify-content:center;" onclick="openRequestModal('<?= sanitize($bike_detail['model_name'] . ' - ' . $bike_detail['chassis_number']) ?>')">REQUEST THIS BIKE</button>
+                                <?php endif; ?>
                             </div>
                             <div style="display:flex; gap:12px; flex-wrap:wrap;">
                                 <button class="btn btn-outline" style="flex:1; justify-content:center;" onclick="navigator.clipboard.writeText('<?= sanitize($canonical_url) ?>'); this.innerHTML='<i class=&quot;fas fa-check&quot;></i> LINK COPIED';">SHARE LINK</button>
@@ -1410,7 +1446,13 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
             document.getElementById('q_name').innerText = "Model: " + name;
             document.getElementById('quoteModal').style.display = 'flex';
         }
-        function openRequestModal() { document.getElementById('requestModal').style.display = 'flex'; }
+        function openRequestModal(prefill = '') { 
+            if(prefill) {
+                const ta = document.querySelector('#requestModal textarea[name="bike_details"]');
+                if(ta) ta.value = "I am interested in requesting a bike similar to: " + prefill;
+            }
+            document.getElementById('requestModal').style.display = 'flex'; 
+        }
         function closeModal(id) { document.getElementById(id).style.display = 'none'; }
         window.onclick = (e) => { if(e.target.classList.contains('modal')) e.target.style.display = 'none'; };
         (function() {
