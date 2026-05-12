@@ -814,15 +814,15 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                     <div class="stat-lab">Riders Joined</div>
                 </div>
                 <div class="stat-item">
-                    <div class="stat-val" data-target="100">0</div>
+                    <div class="stat-val" data-target="99.9">0</div>
                     <div class="stat-lab">Premium Models</div>
                 </div>
                 <div class="stat-item">
-                    <div class="stat-val" data-target="100">0</div>
+                    <div class="stat-val" data-target="99.9">0</div>
                     <div class="stat-lab">Eco-Impact %</div>
                 </div>
                 <div class="stat-item">
-                    <div class="stat-val" data-target="24">0</div>
+                    <div class="stat-val" data-target="99.9">0</div>
                     <div class="stat-lab">Support HRs</div>
                 </div>
             </div>
@@ -1000,14 +1000,25 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                     <div style="flex:1; min-width:200px;">
                         <input type="text" name="search" placeholder="Search Chassis or Model..." value="<?= sanitize($_GET['search'] ?? '') ?>" style="margin-bottom:0; width:100%;">
                     </div>
-                    <div style="flex:1; min-width:200px;">
+                    <div style="flex:1; min-width:200px; display:none;">
                         <select name="category" style="margin-bottom:0; width:100%; cursor:pointer; background-image: url('data:image/svg+xml;utf8,<svg fill=\"white\" height=\"24\" viewBox=\"0 0 24 24\" width=\"24\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M7 10l5 5 5-5z\"/></svg>'); background-repeat: no-repeat; background-position-x: 95%; background-position-y: center;">
                             <option value="">ALL CATEGORIES</option>
                             <?php
-                            $cats = $conn->query('SELECT DISTINCT category FROM models');
+                            $cats = $conn->query('SELECT DISTINCT category FROM models WHERE category IS NOT NULL AND category != ""');
                             while ($c = $cats->fetch_assoc()):
                                 ?>
                             <option value="<?= $c['category'] ?>" <?= ($_GET['category'] ?? '') == $c['category'] ? 'selected' : '' ?>><?= $c['category'] ?></option>
+                            <?php endwhile; ?>
+                        </select>
+                    </div>
+                    <div style="flex:1; min-width:200px;">
+                        <select name="model_id" style="margin-bottom:0; width:100%; cursor:pointer; background-image: url('data:image/svg+xml;utf8,<svg fill=\"white\" height=\"24\" viewBox=\"0 0 24 24\" width=\"24\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M7 10l5 5 5-5z\"/></svg>'); background-repeat: no-repeat; background-position-x: 95%; background-position-y: center;">
+                            <option value="">ALL MODELS</option>
+                            <?php
+                            $mods = $conn->query('SELECT id, model_name FROM models ORDER BY model_name ASC');
+                            while ($m = $mods->fetch_assoc()):
+                                ?>
+                            <option value="<?= $m['id'] ?>" <?= ($_GET['model_id'] ?? '') == $m['id'] ? 'selected' : '' ?>><?= sanitize($m['model_name']) ?></option>
                             <?php endwhile; ?>
                         </select>
                     </div>
@@ -1030,7 +1041,11 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                 $offset = ($page_num - 1) * $per_page;
                 $where_p = ["1=1"];
                 if (($_GET['stock_status'] ?? 'all') === 'available') {
-                    $where_p[] = "b.status='in_stock'";
+                    $where_p[] = "b.status IN ('in_stock', 'returned')";
+                }
+                if (!empty($_GET['model_id'])) {
+                    $mid = (int)$_GET['model_id'];
+                    $where_p[] = "b.model_id = $mid";
                 }
                 if (!empty($_GET['search'])) {
                     $s = mysqli_real_escape_string($conn, $_GET['search']);
@@ -1042,7 +1057,7 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                 }
                 $where = implode(' AND ', $where_p);
                 $all_bikes = $conn->query("SELECT b.*, m.model_name, m.category, m.image as model_image, m.top_speed, m.max_range 
-                    FROM bikes b JOIN models m ON b.model_id = m.id WHERE $where ORDER BY b.status = 'in_stock' DESC, b.created_at DESC LIMIT $offset, $per_page");
+                    FROM bikes b JOIN models m ON b.model_id = m.id WHERE $where ORDER BY b.status IN ('in_stock', 'returned') DESC, b.created_at DESC LIMIT $offset, $per_page");
                 $total_cnt = $conn->query("SELECT COUNT(*) FROM bikes b JOIN models m ON b.model_id = m.id WHERE $where")->fetch_row()[0];
                 $total_pages = ceil($total_cnt / $per_page);
                 $badge_data = [];
@@ -1057,7 +1072,7 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                         $img = $bike['image'] ?: $bike['model_image'];
                         $bd = $badge_data[$bike['model_id']] ?? null;
                         $b_days = $bike['created_at'] ? floor((time() - strtotime($bike['created_at'])) / 86400) : 999;
-                        if ($bike['status'] !== 'in_stock') {
+                        if (!in_array($bike['status'], ['in_stock', 'returned'])) {
                             $b_cls = 'badge-lowstock';
                             $b_ico = 'fa-ban';
                             $b_txt = strtoupper(str_replace('_', ' ', $bike['status']));
@@ -1100,7 +1115,7 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                     </div>
                     <div style="display:flex; gap:12px;">
                         <a href="https://wa.me/<?= $wa_number ?>?text=Inquiry for <?= urlencode($bike['model_name']) ?> (Chassis: <?= urlencode($bike['chassis_number']) ?>)" class="wa-action" style="flex:1;">INQUIRE</a>
-                        <?php if ($bike['status'] === 'in_stock'): ?>
+                        <?php if (in_array($bike['status'], ['in_stock', 'returned'])): ?>
                         <button class="btn btn-outline" onclick="openQuoteModal(<?= $bike['id'] ?>, '<?= sanitize($bike['model_name'] . ' - ' . $bike['chassis_number']) ?>')">QUOTE</button>
                         <?php else: ?>
                         <button class="btn btn-outline" onclick="openRequestModal('<?= sanitize($bike['model_name'] . ' - ' . $bike['chassis_number']) ?>')">REQUEST</button>
@@ -1120,7 +1135,7 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
             <?php if ($total_pages > 1): ?>
             <div style="display:flex; justify-content:center; gap:10px; margin-top:60px;">
                 <?php for ($i = 1; $i <= $total_pages; $i++): ?>
-                <a href="<?= sanitize($self_page) ?>?view=bikes&pg=<?= $i ?>&search=<?= urlencode($_GET['search'] ?? '') ?>&category=<?= urlencode($_GET['category'] ?? '') ?>&stock_status=<?= urlencode($_GET['stock_status'] ?? 'all') ?>" class="btn <?= $page_num == $i ? 'btn-main' : 'btn-outline' ?>" style="padding:12px 22px;"><?= $i ?></a>
+                <a href="<?= sanitize($self_page) ?>?view=bikes&pg=<?= $i ?>&search=<?= urlencode($_GET['search'] ?? '') ?>&category=<?= urlencode($_GET['category'] ?? '') ?>&model_id=<?= urlencode($_GET['model_id'] ?? '') ?>&stock_status=<?= urlencode($_GET['stock_status'] ?? 'all') ?>" class="btn <?= $page_num == $i ? 'btn-main' : 'btn-outline' ?>" style="padding:12px 22px;"><?= $i ?></a>
                 <?php endfor; ?>
             </div>
             <?php endif; ?>
@@ -1139,7 +1154,7 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                         </div>
                         <div class="glass detail-panel">
                             <div class="bike-status badge-default" style="position:static; display:inline-flex; margin-bottom:14px;">
-                                <i class="fas fa-bolt"></i> <?= strtoupper($bike_detail['status'] === 'in_stock' ? 'AVAILABLE' : sanitize($bike_detail['status'])) ?>
+                                <i class="fas fa-bolt"></i> <?= strtoupper(in_array($bike_detail['status'], ['in_stock', 'returned']) ? 'AVAILABLE' : sanitize($bike_detail['status'])) ?>
                             </div>
                             <h1 style="font-size:2.2rem; line-height:1.2; margin-bottom:8px;"><?= sanitize($bike_detail['model_name']) ?> <span style="display:block; font-size:1.2rem; color:var(--text-dim); font-family:'Outfit', sans-serif;"><?= sanitize($bike_detail['chassis_number']) ?></span></h1>
                             <p style="color:var(--text-dim); margin-bottom:6px;"><?= sanitize($bike_detail['category']) ?></p>
@@ -1154,7 +1169,7 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                             </div>
                             <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
                                 <a href="https://wa.me/<?= $wa_number ?>?text=Inquiry for <?= urlencode($bike_detail['model_name']) ?> (Chassis: <?= urlencode($bike_detail['chassis_number']) ?>)" class="wa-action" style="flex:1;">INQUIRE</a>
-                                <?php if ($bike_detail['status'] === 'in_stock'): ?>
+                                <?php if (in_array($bike_detail['status'], ['in_stock', 'returned'])): ?>
                                 <button class="btn btn-outline" style="flex:1; justify-content:center;" onclick="openQuoteModal(<?= (int) $bike_detail['id'] ?>, '<?= sanitize($bike_detail['model_name'] . ' - ' . $bike_detail['chassis_number']) ?>')">QUOTE</button>
                                 <?php else: ?>
                                 <button class="btn btn-outline" style="flex:1; justify-content:center;" onclick="openRequestModal('<?= sanitize($bike_detail['model_name'] . ' - ' . $bike_detail['chassis_number']) ?>')">REQUEST THIS BIKE</button>
