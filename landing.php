@@ -448,6 +448,33 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
             border-radius: 50%; object-fit: cover;
             border: 4px solid var(--darker);
             display: block;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .leader-card { cursor: pointer; transition: transform 0.3s; }
+        .leader-card:hover { transform: translateY(-5px); }
+        .leader-card:hover .leader-avatar-wrap::before {
+            animation: neonSpin 0.15s linear infinite, plasmaSpark 0.1s infinite alternate;
+            background: conic-gradient(#0ff, #fff, #a855f7, #6366f1, #0ff);
+            inset: -8px;
+            filter: brightness(2) contrast(1.5);
+        }
+        .leader-card:hover .leader-avatar-wrap::after {
+            animation: neonSpin 0.2s reverse infinite;
+            background: conic-gradient(transparent, #fff, transparent, #06b6d4);
+            filter: blur(12px) brightness(2.5);
+            inset: -12px;
+        }
+        .leader-card:hover .leader-img {
+            transform: scale(1.08);
+            border-color: #fff;
+            box-shadow: 0 0 30px 10px rgba(6, 182, 212, 0.6), inset 0 0 15px rgba(255, 255, 255, 0.8);
+            filter: brightness(1.1) contrast(1.1);
+        }
+        @keyframes plasmaSpark {
+            0% { transform: scale(1) rotate(0deg); opacity: 1; }
+            33% { transform: scale(1.05) rotate(2deg) skewX(2deg); opacity: 0.9; filter: hue-rotate(45deg); }
+            66% { transform: scale(0.95) rotate(-2deg) skewX(-2deg); opacity: 1; }
+            100% { transform: scale(1.02) rotate(1deg) skewY(2deg); opacity: 0.8; filter: hue-rotate(-20deg); }
         }
         .leader-name {
             font-size: 1.4rem; font-weight: 800;
@@ -579,7 +606,35 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
         .nav-hidden { transform: translate(-50%, -150%) !important; opacity: 0; pointer-events: none; }
         #preloader { position: fixed; inset: 0; background: var(--darker); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         .loader-ring { width: 80px; height: 80px; border: 5px solid var(--glass-border); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s infinite linear; margin-bottom: 20px; }
-        @keyframes spin { to { transform: rotate(360deg); } }
+        /* Electric Spark Link Effects */
+        a { position: relative; }
+        a::after {
+            content: ''; position: absolute; inset: -2px; border-radius: inherit;
+            opacity: 0; pointer-events: none; z-index: 10;
+            mix-blend-mode: screen; transition: opacity 0.2s;
+        }
+        a:hover::after {
+            opacity: 1;
+            box-shadow: 0 0 6px 1px #06b6d4, inset 0 0 4px #6366f1;
+            border: 1px solid rgba(255,255,255,0.4);
+            animation: sparkHover 0.15s infinite alternate;
+        }
+        a:active::after {
+            opacity: 1;
+            inset: -6px;
+            box-shadow: 0 0 30px 10px #0ff, inset 0 0 20px #fff;
+            background: rgba(255,255,255,0.2);
+            border: 2px solid #fff;
+            animation: lightningBlink 0.08s infinite alternate;
+        }
+        @keyframes sparkHover {
+            0% { transform: scale(1) translate(0.5px, -0.5px); filter: brightness(1); }
+            100% { transform: scale(1.02) translate(-0.5px, 0.5px); filter: brightness(1.4) drop-shadow(0 0 2px #fff); }
+        }
+        @keyframes lightningBlink {
+            0% { transform: scale(1.05); filter: brightness(2); }
+            100% { transform: scale(1.15); filter: brightness(3); box-shadow: 0 0 50px 15px #fff, inset 0 0 30px #0ff; }
+        }
         @media (max-width: 768px) {
             nav { padding: 10px 20px; }
             .nav-links { display: none; }
@@ -589,6 +644,27 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
         }
         .socials a {
             text-decoration: unset;
+        }
+        .leader-card.lightning-blast { z-index: 50; position: relative; }
+        .leader-card.lightning-blast .leader-avatar-wrap::before,
+        .leader-card.lightning-blast .leader-avatar-wrap::after {
+            animation: blastExpand 0.7s cubic-bezier(0.1, 0.8, 0.2, 1) forwards !important;
+            background: conic-gradient(#fff, #0ff, #fff, #a855f7, #fff) !important;
+            filter: brightness(3) !important;
+            inset: -8px !important;
+        }
+        .leader-card.lightning-blast .leader-img {
+            animation: imgPop 0.7s cubic-bezier(0.1, 0.8, 0.2, 1) forwards !important;
+        }
+        @keyframes blastExpand {
+            0% { transform: scale(1) rotate(0deg); opacity: 1; }
+            50% { transform: scale(3.5) rotate(180deg); opacity: 0.8; }
+            100% { transform: scale(7) rotate(360deg); opacity: 0; }
+        }
+        @keyframes imgPop {
+            0% { transform: scale(1.08); filter: brightness(1.1); box-shadow: 0 0 30px #06b6d4; }
+            20% { transform: scale(1.4); filter: brightness(2); box-shadow: 0 0 100px 40px #0ff, inset 0 0 40px #fff; border-color: #fff; }
+            100% { transform: scale(1); filter: brightness(1); box-shadow: 0 0 0 transparent; border-color: var(--darker); }
         }
     </style>
     <script>
@@ -1304,7 +1380,30 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                 update();
             });
         }
-        VanillaTilt.init(document.querySelectorAll("[data-tilt]"), { max: 8, speed: 500, glare: true, "max-glare": 0.15, scale: 1.02 });
+        document.querySelectorAll('.leader-card').forEach(card => {
+            card.addEventListener('click', function() {
+                this.classList.remove('lightning-blast');
+                void this.offsetWidth;
+                this.classList.add('lightning-blast');
+                
+                const imgSrc = this.querySelector('.leader-img').src;
+                const name = this.querySelector('.leader-name').innerText;
+                const position = this.querySelector('.leader-position').innerText;
+
+                setTimeout(() => {
+                    this.classList.remove('lightning-blast');
+                    const leaderLightbox = GLightbox({
+                        elements: [{
+                            href: imgSrc,
+                            type: 'image',
+                            title: name,
+                            description: position
+                        }]
+                    });
+                    leaderLightbox.open();
+                }, 700);
+            });
+        });
         const lightbox = GLightbox({ selector: '.glightbox' });
         function openQuoteModal(id, name) {
             document.getElementById('q_id').value = id;
