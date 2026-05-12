@@ -2262,12 +2262,12 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         exit;
     }
     if ($page === 'inventory' && isset($_GET['export_csv']) && $_GET['export_csv'] == 1) {
-        $status_f = sanitize($_GET['status_f'] ?? '');
-        $model_f = (int) ($_GET['model_f'] ?? 0);
-        $color_f = sanitize($_GET['color_f'] ?? '');
-        $search_f = sanitize($_GET['search_f'] ?? '');
-        $date_from = sanitize($_GET['date_from'] ?? '');
-        $date_to = sanitize($_GET['date_to'] ?? '');
+        $status_f = sanitize($_GET['status_f'] ?? $_SESSION['inv_filters']['status_f'] ?? '');
+        $model_f = (int) ($_GET['model_f'] ?? $_SESSION['inv_filters']['model_f'] ?? 0);
+        $color_f = sanitize($_GET['color_f'] ?? $_SESSION['inv_filters']['color_f'] ?? '');
+        $search_f = sanitize($_GET['search_f'] ?? $_SESSION['inv_filters']['search_f'] ?? '');
+        $date_from = sanitize($_GET['date_from'] ?? $_SESSION['inv_filters']['date_from'] ?? '');
+        $date_to = sanitize($_GET['date_to'] ?? $_SESSION['inv_filters']['date_to'] ?? '');
         $where_parts = ['1=1'];
         if ($status_f && in_array($status_f, ['in_stock', 'sold', 'returned', 'reserved']))
             $where_parts[] = "b.status='$status_f'";
@@ -3610,12 +3610,30 @@ $(document).ready(function() {
 </script>
 <?php
     elseif ($page === 'inventory'):
-        $status_f = sanitize($_GET['status_f'] ?? '');
-        $model_f = (int) ($_GET['model_f'] ?? 0);
-        $color_f = sanitize($_GET['color_f'] ?? '');
-        $search_f = sanitize($_GET['search_f'] ?? '');
-        $date_from = $_GET['date_from'] ?? '';
-        $date_to = $_GET['date_to'] ?? '';
+        if (isset($_GET['reset_filters'])) {
+            unset($_SESSION['inv_filters']);
+            header('Location: index.php?page=inventory');
+            exit;
+        }
+
+        if (isset($_GET['search_f']) || isset($_GET['status_f']) || isset($_GET['model_f']) || isset($_GET['color_f']) || isset($_GET['date_from']) || isset($_GET['date_to'])) {
+            $_SESSION['inv_filters'] = [
+                'status_f' => $_GET['status_f'] ?? '',
+                'model_f' => $_GET['model_f'] ?? 0,
+                'color_f' => $_GET['color_f'] ?? '',
+                'search_f' => $_GET['search_f'] ?? '',
+                'date_from' => $_GET['date_from'] ?? '',
+                'date_to' => $_GET['date_to'] ?? ''
+            ];
+        }
+
+        $status_f = sanitize($_SESSION['inv_filters']['status_f'] ?? '');
+        $model_f = (int) ($_SESSION['inv_filters']['model_f'] ?? 0);
+        $color_f = sanitize($_SESSION['inv_filters']['color_f'] ?? '');
+        $search_f = sanitize($_SESSION['inv_filters']['search_f'] ?? '');
+        $date_from = $_SESSION['inv_filters']['date_from'] ?? '';
+        $date_to = $_SESSION['inv_filters']['date_to'] ?? '';
+
         $where_parts = ['1=1'];
         if ($status_f && in_array($status_f, ['in_stock', 'sold', 'returned', 'returned_to_supplier', 'reserved', 'damaged_lost']))
             $where_parts[] = "b.status='$status_f'";
