@@ -336,34 +336,35 @@ $view = $_GET['view'] ?? 'home';
         .footer-map-section {
             padding: 60px 0; background: rgba(255,255,255,0.02);
         }
-        .footer-wave-transition {
-            display: block;
-            width: 100%;
-            height: 130px;
+        footer {
             position: relative;
+            background: linear-gradient(180deg, #020617 0%, #0f172a 100%);
+            padding: 80px 0 0;
             overflow: hidden;
-            margin-bottom: 0;
-            line-height: 0;
-            background: #0d1130;
+            border-top: 1px solid rgba(99, 102, 241, 0.1);
+        }
+        .footer-wave-transition {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
         }
         .footer-wave-transition svg {
             position: absolute;
             bottom: 0; left: 0;
-            width: 200%; height: 130px;
+            width: 200%; height: 100%;
             min-width: 1400px;
+            transform: scaleY(1.3);
+            transform-origin: bottom;
         }
-        .wave-1 { animation: waveDrift1  7s ease-in-out infinite; opacity: 0.6; }
-        .wave-2 { animation: waveDrift2  9s ease-in-out infinite; opacity: 0.4; }
-        .wave-3 { animation: waveDrift3 11s ease-in-out infinite; opacity: 0.25; }
+        .wave-1 { animation: waveDrift1 12s ease-in-out infinite; opacity: 0.15; }
+        .wave-2 { animation: waveDrift2 16s ease-in-out infinite; opacity: 0.12; }
+        .wave-3 { animation: waveDrift3 20s ease-in-out infinite; opacity: 0.08; }
         @keyframes waveDrift1 { 0%,100%{transform:translateX(0)} 50%{transform:translateX(-25%)} }
         @keyframes waveDrift2 { 0%,100%{transform:translateX(-10%)} 50%{transform:translateX(-35%)} }
         @keyframes waveDrift3 { 0%,100%{transform:translateX(-5%)} 50%{transform:translateX(-30%)} }
-        footer {
-            position: relative;
-            background: linear-gradient(180deg, #0d1130 0%, #100c30 40%, #080514 100%);
-            padding: 40px 0 0;
-            overflow: hidden;
-        }
         .footer-glow {
             position: absolute; top: 30px; left: 50%; width: 800px; height: 300px;
             transform: translateX(-50%); border-radius: 50%;
@@ -813,18 +814,36 @@ $view = $_GET['view'] ?? 'home';
     </section>
     <?php endif;
     endif; ?>
-    <div class="footer-wave-transition">
-        <svg class="wave-1" viewBox="0 0 2880 130" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M0,60 C240,120 480,0 720,60 C960,120 1200,10 1440,70 C1680,120 1920,20 2160,80 C2400,130 2640,30 2880,70 L2880,130 L0,130Z" fill="#6366f1"/>
-        </svg>
-        <svg class="wave-2" viewBox="0 0 2880 130" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M0,85 C360,25 600,110 960,55 C1320,5 1560,100 1920,45 C2160,5 2520,95 2880,40 L2880,130 L0,130Z" fill="#a855f7"/>
-        </svg>
-        <svg class="wave-3" viewBox="0 0 2880 130" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M0,100 C480,35 720,115 1200,55 C1680,0 1920,105 2400,45 C2640,15 2760,90 2880,60 L2880,130 L0,130Z" fill="#06b6d4"/>
-        </svg>
-    </div>
     <footer id="contact">
+        <div class="footer-wave-transition">
+            <svg class="wave-1" viewBox="0 0 2880 130" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <linearGradient id="fw1" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#6366f1"/>
+                        <stop offset="100%" stop-color="#ec4899"/>
+                    </linearGradient>
+                </defs>
+                <path d="M0,60 C240,120 480,0 720,60 C960,120 1200,10 1440,70 C1680,120 1920,20 2160,80 C2400,130 2640,30 2880,70 L2880,130 L0,130Z" fill="url(#fw1)"/>
+            </svg>
+            <svg class="wave-2" viewBox="0 0 2880 130" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <linearGradient id="fw2" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#a855f7"/>
+                        <stop offset="100%" stop-color="#06b6d4"/>
+                    </linearGradient>
+                </defs>
+                <path d="M0,85 C360,25 600,110 960,55 C1320,5 1560,100 1920,45 C2160,5 2520,95 2880,40 L2880,130 L0,130Z" fill="url(#fw2)"/>
+            </svg>
+            <svg class="wave-3" viewBox="0 0 2880 130" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <linearGradient id="fw3" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#06b6d4"/>
+                        <stop offset="100%" stop-color="#6366f1"/>
+                    </linearGradient>
+                </defs>
+                <path d="M0,100 C480,35 720,115 1200,55 C1680,0 1920,105 2400,45 C2640,15 2760,90 2880,60 L2880,130 L0,130Z" fill="url(#fw3)"/>
+            </svg>
+        </div>
         <div class="footer-glow"></div>
         <div class="footer-particles" id="footerParticles"></div>
         <div class="footer-content-area">
