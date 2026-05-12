@@ -388,10 +388,8 @@ function install_database()
     }
     $conn->query("INSERT IGNORE INTO role_permissions (role_id, page, can_view, can_add, can_edit, can_delete) VALUES (2,'dashboard',1,0,0,0)");
     $stmt->close();
-
-    // New Tables for Landing Page
     $new_tables = [
-        "CREATE TABLE IF NOT EXISTS `leadership` (
+        'CREATE TABLE IF NOT EXISTS `leadership` (
             `id` INT AUTO_INCREMENT PRIMARY KEY,
             `name` VARCHAR(255) NOT NULL,
             `position` VARCHAR(255),
@@ -399,15 +397,15 @@ function install_database()
             `message` TEXT,
             `sort_order` INT DEFAULT 0,
             `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-        "CREATE TABLE IF NOT EXISTS `gallery` (
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
+        'CREATE TABLE IF NOT EXISTS `gallery` (
             `id` INT AUTO_INCREMENT PRIMARY KEY,
             `title` VARCHAR(255),
             `description` TEXT,
             `image` VARCHAR(255),
             `sort_order` INT DEFAULT 0,
             `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
         "CREATE TABLE IF NOT EXISTS `bike_requests` (
             `id` INT AUTO_INCREMENT PRIMARY KEY,
             `customer_name` VARCHAR(255) NOT NULL,
@@ -430,7 +428,6 @@ function install_database()
     foreach ($new_tables as $sql) {
         $conn->query($sql);
     }
-
     $lp_defaults = [
         ['landing_hero_title', 'Experience the Future of Mobility'],
         ['landing_hero_subtitle', 'Premium Electric Bikes for a Greener Tomorrow'],
@@ -1290,7 +1287,6 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $cust_r = $conn->query("SELECT name FROM customers WHERE id=$cust_sql_id");
                 $cust_row = $cust_r ? $cust_r->fetch_assoc() : null;
                 $party_name = $cust_row ? $cust_row['name'] : 'Walk-in Customer';
-
                 $total_acc_price = 0;
                 if (!empty($accessories_data)) {
                     foreach ($accessories_data as $acc) {
@@ -1300,26 +1296,22 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $total_sale_amount = $selling_price + $total_acc_price;
                 $is_inst = $quote['is_installment'] == 1;
                 $dp_amount = $is_inst ? (float) $quote['down_payment'] : $total_sale_amount;
-
                 $payment_notes = ($is_inst ? 'Down Payment' : 'Full Payment') . " from Quotation #$quote_id";
                 if ($dp_amount > 0) {
                     $pay_st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, transaction_type, reference_id, party_name, notes) VALUES (?,'cash',?,'sale',?,?,?)");
                     $pay_st->bind_param('sdiss', $sale_date, $dp_amount, $bike_id, $party_name, $payment_notes);
                     $pay_st->execute();
                 }
-
                 $led_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'debit',?,'customer',?,?,'sale',?,?)");
                 $desc = 'Sale of Chassis: ' . $bike['chassis_number'] . ' from Quote #' . $quote_id;
                 $led_st->bind_param('sdisid', $sale_date, $total_sale_amount, $customer_id, $desc, $bike_id, $total_sale_amount);
                 $led_st->execute();
-
                 if ($dp_amount > 0) {
                     $led_dp_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'credit',?,'customer',?,?,'down_payment',?,?)");
                     $desc_dp = 'Payment for Quote #' . $quote_id;
                     $led_dp_st->bind_param('sdisid', $sale_date, $dp_amount, $customer_id, $desc_dp, $bike_id, $dp_amount);
                     $led_dp_st->execute();
                 }
-
                 if ($is_inst && $quote['total_installments'] > 0) {
                     $installment_per_month = ($total_sale_amount - $dp_amount) / $quote['total_installments'];
                     $current_date = new DateTime($sale_date);
@@ -1333,7 +1325,6 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                         $current_date->modify('+1 month');
                     }
                 }
-
                 $conn->query("UPDATE quotations SET status='converted' WHERE id=$quote_id");
                 $conn->commit();
                 $_SESSION['last_sale_bike_id'] = $bike_id;
@@ -1476,7 +1467,6 @@ if ($db_exists && isset($_SESSION['user_id'])) {
     }
     if ($page === 'returns' && $_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['save_return']) || isset($_POST['save_purchase_return']))) {
         require_permission($conn, 'returns', 'add');
-
         if (isset($_POST['save_purchase_return'])) {
             $bike_id = (int) ($_POST['bike_id'] ?? 0);
             $return_date = sanitize(!empty($_POST['return_date']) ? $_POST['return_date'] : date('Y-m-d'));
@@ -1486,7 +1476,6 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $bank_name = sanitize($_POST['bank_name'] ?? '');
             $cheque_date = !empty($_POST['cheque_date']) ? $_POST['cheque_date'] : null;
             $return_notes = sanitize($_POST['return_notes'] ?? '');
-
             if ($bike_id <= 0 || empty($return_date) || $return_amount < 0) {
                 $err = 'Please fill all required fields correctly.';
                 goto end_returns_post;
@@ -1511,13 +1500,11 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $pay_st->bind_param('ssdsssiss', $return_date, $refund_method, $return_amount, $cheque_number, $bank_name, $cheque_date, $bike_id, $party_name, $return_notes);
                 $pay_st->execute();
                 $pay_st->close();
-
                 $led_st1 = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'debit',?,'supplier',?,?,'purchase_reversal',?,?)");
                 $desc1 = 'Bike Returned to Supplier (Chassis: ' . $bike_info['chassis_number'] . ')';
                 $led_st1->bind_param('sdisid', $return_date, $full_reversal_amount, $bike_info['supplier_id'], $desc1, $bike_id, $full_reversal_amount);
                 $led_st1->execute();
                 $led_st1->close();
-
                 if ($return_amount > 0) {
                     $led_st2 = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'credit',?,'supplier',?,?,'supplier_refund',?,?)");
                     $desc2 = 'Refund received for Chassis: ' . $bike_info['chassis_number'];
@@ -1534,7 +1521,6 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             header('Location: index.php?page=returns&sub=purchase&msg=' . urlencode($msg) . '&err=' . urlencode($err));
             exit;
         }
-
         $bike_id = (int) ($_POST['bike_id'] ?? 0);
         $return_date = sanitize(!empty($_POST['return_date']) ? $_POST['return_date'] : date('Y-m-d'));
         $return_amount = (float) ($_POST['return_amount'] ?? 0);
@@ -1781,11 +1767,9 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $old_bike_q = $conn->query("SELECT status, chassis_number, selling_price FROM bikes WHERE id=$bid");
                 $old_bike = $old_bike_q->fetch_assoc();
                 $old_status = $old_bike['status'] ?? '';
-
-                $base_tax = ($tax_on === 'selling_price') ? (float)$old_bike['selling_price'] : $pp;
+                $base_tax = ($tax_on === 'selling_price') ? (float) $old_bike['selling_price'] : $pp;
                 $tax_amount = ($base_tax * $tax_rate);
-                $margin = (float)$old_bike['selling_price'] > 0 ? ((float)$old_bike['selling_price'] - $pp - $tax_amount) : 0;
-
+                $margin = (float) $old_bike['selling_price'] > 0 ? ((float) $old_bike['selling_price'] - $pp - $tax_amount) : 0;
                 if ($img_path) {
                     $stmt = $conn->prepare('UPDATE bikes SET model_id=?, color=?, purchase_price=?, tax_amount=?, margin=?, status=?, notes=?, safeguard_notes=?, image=? WHERE id=?');
                     $stmt->bind_param('isddsssssi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $img_path, $bid);
@@ -1794,7 +1778,6 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     $stmt->bind_param('isddssssi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $bid);
                 }
                 $stmt->execute();
-
                 if ($old_status !== 'damaged_lost' && $status === 'damaged_lost') {
                     $entry_date = date('Y-m-d');
                     $category = 'Inventory Loss';
@@ -1815,7 +1798,6 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     $upd_exp->bind_param('ds', $pp, $reference);
                     $upd_exp->execute();
                 }
-
                 $msg = 'Bike updated.';
             }
         }
@@ -1960,12 +1942,10 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $st->bind_param('ssdss', $pay_date, $pay_method, $amount, $party_name, $notes);
                 $st->execute();
                 $payment_id = $conn->insert_id;
-
                 $led = $conn->prepare("INSERT INTO ledger (entry_date, entry_type, amount, party_type, party_id, description, reference_type, reference_id) VALUES (?, 'credit', ?, 'customer', ?, ?, 'payment', ?)");
                 $desc = 'Payment Received: ' . $notes;
                 $led->bind_param('sdisi', $pay_date, $amount, $sel_cust, $desc, $payment_id);
                 $led->execute();
-
                 $rem_amount = $amount;
                 $inst_q = $conn->query("SELECT id, installment_amount, amount_paid, penalty_fee FROM installments WHERE customer_id=$sel_cust AND status IN ('pending', 'overdue') ORDER BY due_date ASC");
                 while ($inst = $inst_q->fetch_assoc()) {
@@ -2004,7 +1984,6 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $st->bind_param('ssdss', $pay_date, $pay_method, $amount, $party_name, $notes);
             $st->execute();
             $payment_id = $conn->insert_id;
-
             $led = $conn->prepare("INSERT INTO ledger (entry_date, entry_type, amount, party_type, party_id, description, reference_type, reference_id) VALUES (?, 'debit', ?, 'customer', ?, ?, 'advance_given', ?)");
             $desc = 'Advance / Loan Given: ' . $notes;
             $led->bind_param('sdisi', $pay_date, $amount, $sel_cust, $desc, $payment_id);
@@ -2404,7 +2383,6 @@ body.sidebar-collapsed .sidebar-footer form button::after { content: '🚪'; fon
 .sub-tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .sub-panel{display:none}
 .sub-panel.active{display:block}
-/* --- A4 Letterhead Style --- */
 .a4-invoice { background: #fff; color: #111; padding: 40px; font-family: 'Segoe UI', Arial, sans-serif; max-width: 800px; margin: 20px auto; border: 1px solid #ddd; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
 .a4-invoice .invoice-header { text-align: center; border-bottom: 3px solid #1a6fc4; padding-bottom: 15px; margin-bottom: 25px; }
 .a4-invoice .invoice-header h1 { font-size: 1.8rem; color: #1a6fc4; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
@@ -2417,8 +2395,6 @@ body.sidebar-collapsed .sidebar-footer form button::after { content: '🚪'; fon
 .a4-invoice .invoice-table th { background: #f8f9fa; font-weight: 700; text-align: left; }
 .a4-invoice .invoice-total { text-align: right; font-size: 1.1rem; font-weight: 800; margin-top: 10px; padding: 10px; background: #eef2f5; border: 1px solid #cdd5dc; color: #111; }
 .a4-invoice .invoice-footer { text-align: center; margin-top: 30px; border-top: 1px solid #ddd; padding-top: 15px; font-size: 0.8rem; color: #777; }
-
-/* --- Thermal Receipt Style --- */
 .thermal-receipt { background: #fff; color: #000; padding: 15px; font-family: 'Courier New', Courier, monospace; width: 80mm; margin: 0 auto; font-size: 12px; line-height: 1.4; }
 .thermal-receipt .invoice-header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 10px; margin-bottom: 10px; }
 .thermal-receipt .invoice-header h1 { font-size: 1.2rem; font-weight: bold; }
@@ -3179,7 +3155,6 @@ document.addEventListener('DOMContentLoaded', function() {
 <a href="index.php?page=inventory" class="btn btn-default">← Back to Inventory</a>
 </div>
 </form>
-
 <?php
         $last_purchase_id = $_SESSION['last_purchase_id'] ?? 0;
         unset($_SESSION['last_purchase_id']);
@@ -3190,7 +3165,6 @@ document.addEventListener('DOMContentLoaded', function() {
 <a href="index.php?page=purchase&print_po=<?= $last_purchase_id ?>&format=thermal" class="btn btn-warning" target="_blank">🧾 Print Thermal (POS)</a>
 </div>
 <?php endif; ?>
-
 <?php
         $print_po_id = (int) ($_GET['print_po'] ?? 0);
         if ($print_po_id):
@@ -3208,7 +3182,6 @@ document.addEventListener('DOMContentLoaded', function() {
         <h2><?= sanitize(get_setting('branch_name') ?? 'Dera (Ahmed Metro)') ?></h2>
         <div style="font-size:0.9rem;margin-top:4px"><strong>PURCHASE RECEIPT</strong></div>
     </div>
-    
     <div class="invoice-meta">
         <div><strong>PO #:</strong> <?= $po_no ?><br><strong>Date:</strong> <?= fmt_date($po['order_date']) ?></div>
         <div class="<?= $format === 'thermal' ? '' : 'text-right' ?>" style="<?= $format === 'thermal' ? 'margin-top:10px;' : 'text-align:right;' ?>">
@@ -3216,7 +3189,6 @@ document.addEventListener('DOMContentLoaded', function() {
             <?php if ($po['contact']): ?><strong>Contact:</strong> <?= sanitize($po['contact']) ?><br><?php endif; ?>
         </div>
     </div>
-
     <div class="invoice-section">
         <h3>Bikes Purchased</h3>
         <table class="invoice-table">
@@ -3241,7 +3213,6 @@ document.addEventListener('DOMContentLoaded', function() {
             </tbody>
         </table>
     </div>
-
     <div class="invoice-section">
         <h3>Summary</h3>
         <table class="invoice-table" style="width:<?= $format === 'thermal' ? '100%' : '50%' ?>; margin-left:<?= $format === 'thermal' ? '0' : 'auto' ?>;">
@@ -3735,9 +3706,10 @@ $(document).ready(function() {
 <input type="hidden" name="id" value="<?= $edit_bike['id'] ?>">
 <div class="form-group" style="margin-bottom:8px"><label>Model</label>
 <select name="model_id" required>
-<?php 
-$models_filter_list->data_seek(0);
-while($m = $models_filter_list->fetch_assoc()): ?>
+<?php
+                $models_filter_list->data_seek(0);
+                while ($m = $models_filter_list->fetch_assoc()):
+                    ?>
 <option value="<?= $m['id'] ?>" <?= $edit_bike['model_id'] == $m['id'] ? 'selected' : '' ?>><?= sanitize($m['model_code'] . ' - ' . $m['model_name']) ?></option>
 <?php endwhile; ?>
 </select>
@@ -3887,7 +3859,6 @@ document.getElementById('bulkExportForm').addEventListener('submit', function(){
 <a href="index.php?page=sale&print_invoice=<?= $last_sale_bike_id ?>&format=thermal" class="btn btn-warning" target="_blank">🧾 Print Thermal (POS)</a>
 </div>
 <?php endif; ?>
-
 <?php
         $print_inv_id = (int) ($_GET['print_invoice'] ?? 0);
         if ($print_inv_id):
@@ -3898,7 +3869,6 @@ document.getElementById('bulkExportForm').addEventListener('submit', function(){
             $inv_no = 'INV-' . date('Ymd') . '-' . str_pad($print_inv_id, 3, '0', STR_PAD_LEFT);
             $format = $_GET['format'] ?? 'a4';
             $container_class = $format === 'thermal' ? 'thermal-receipt' : 'a4-invoice';
-
             if ($inv):
                 $sold_acc_r = $conn->query('SELECT sa.*, a.name FROM sale_accessories sa JOIN accessories a ON sa.accessory_id=a.id WHERE sa.bike_id=' . $inv['id']);
                 $dp_amount = $conn->query("SELECT SUM(amount) FROM payments WHERE transaction_type='sale' AND reference_id=" . $inv['id'] . " AND payment_date='" . $inv['selling_date'] . "'")->fetch_row()[0] ?? 0;
@@ -3918,7 +3888,6 @@ document.getElementById('bulkExportForm').addEventListener('submit', function(){
         <h2><?= sanitize(get_setting('branch_name') ?? 'Dera (Ahmed Metro)') ?></h2>
         <div style="font-size:0.9rem;margin-top:4px"><strong>SALE RECEIPT</strong></div>
     </div>
-    
     <div class="invoice-meta">
         <div><strong>Invoice #:</strong> <?= $inv_no ?><br><strong>Date:</strong> <?= fmt_date($inv['selling_date']) ?></div>
         <div class="<?= $format === 'thermal' ? '' : 'text-right' ?>" style="<?= $format === 'thermal' ? 'margin-top:10px;' : 'text-align:right;' ?>">
@@ -3927,7 +3896,6 @@ document.getElementById('bulkExportForm').addEventListener('submit', function(){
             <?php if ($inv['cust_cnic']): ?><strong>CNIC:</strong> <?= sanitize($inv['cust_cnic']) ?> (<?= $inv['is_filer'] ? 'Filer' : 'Non-Filer' ?>)<br><?php endif; ?>
         </div>
     </div>
-
     <div class="invoice-section">
         <h3>Items Details</h3>
         <table class="invoice-table">
@@ -3959,7 +3927,6 @@ document.getElementById('bulkExportForm').addEventListener('submit', function(){
             </tbody>
         </table>
     </div>
-
     <div class="invoice-section">
         <h3>Payment Summary</h3>
         <table class="invoice-table" style="width:<?= $format === 'thermal' ? '100%' : '60%' ?>; margin-left:<?= $format === 'thermal' ? '0' : 'auto' ?>;">
@@ -3973,11 +3940,9 @@ document.getElementById('bulkExportForm').addEventListener('submit', function(){
                 <?php if ($total_penalty > 0): ?><tr><td>Total Penalty</td><td style="text-align:right">+ <?= fmt_money($total_penalty) ?></td></tr><?php endif; ?>
             </tbody>
         </table>
-        
         <div class="invoice-total">Net Total: <?= fmt_money($inv['selling_price'] + $total_installments + $total_penalty) ?></div>
         <div class="invoice-total" style="background:#fff; border-color:#000;">Amount Due: <?= fmt_money(($inv['selling_price'] + $total_installments + $total_penalty) - ($dp_amount + $total_paid_installments)) ?></div>
     </div>
-    
     <div class="invoice-footer">
         Generated by: Yasin Ullah – BSS<br>WhatsApp: 03361593533
     </div>
@@ -4175,7 +4140,6 @@ window.onload = function() {
 <a href="index.php?page=returns&sub=sale" class="sub-tab <?= $sub === 'sale' ? 'active' : '' ?>">🛒 Sales Returns</a>
 <a href="index.php?page=returns&sub=purchase" class="sub-tab <?= $sub === 'purchase' ? 'active' : '' ?>">📤 Purchase Returns</a>
 </div>
-
 <?php
         if ($sub === 'sale'):
             $sold_bikes = $conn->query("SELECT b.id, b.chassis_number, b.color, b.selling_price, b.purchase_price, m.model_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.status='sold' ORDER BY b.selling_date DESC");
@@ -4218,7 +4182,6 @@ window.onload = function() {
 <button type="submit" name="save_return" class="btn btn-warning">↩ Process Sales Return</button>
 <a href="index.php?page=inventory" class="btn btn-default">← Cancel</a>
 </form>
-
 <?php
         elseif ($sub === 'purchase'):
             $purchased_bikes = $conn->query("SELECT b.id, b.chassis_number, b.color, b.purchase_price, m.model_name, s.name AS sup_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN purchase_orders po ON b.purchase_order_id=po.id LEFT JOIN suppliers s ON po.supplier_id=s.id WHERE b.status='in_stock' ORDER BY b.inventory_date DESC");
@@ -4262,7 +4225,6 @@ window.onload = function() {
 <a href="index.php?page=inventory" class="btn btn-default">← Cancel</a>
 </form>
 <?php endif; ?>
-
 <script>
 function toggleRetCheque(v, targetId) {
     var chequeFields = document.getElementById(targetId);
@@ -5537,11 +5499,8 @@ $(document).ready(function() {
             $ea = $conn->query("SELECT * FROM accessories WHERE id=$edit_acc_id");
             $edit_acc = $ea ? $ea->fetch_assoc() : null;
         }
-
-        // Accessories Reporting Stats
         $acc_stats = $conn->query('SELECT COUNT(id) as total_items, SUM(current_stock) as total_stock, SUM(current_stock * purchase_price) as total_pp_val, SUM(current_stock * selling_price) as total_sp_val FROM accessories')->fetch_assoc();
         $sold_stats = $conn->query('SELECT SUM(sa.quantity) as total_sold_qty, SUM(sa.final_price) as total_revenue, SUM(sa.discount_amount) as total_discount, SUM(sa.final_price - (sa.quantity * a.purchase_price)) as total_profit FROM sale_accessories sa JOIN accessories a ON sa.accessory_id = a.id')->fetch_assoc();
-
         $top_sold = $conn->query('SELECT a.name, SUM(sa.quantity) as qty FROM sale_accessories sa JOIN accessories a ON sa.accessory_id = a.id GROUP BY sa.accessory_id ORDER BY qty DESC LIMIT 5');
         $ts_labels = [];
         $ts_data = [];
@@ -5583,7 +5542,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
-
 <div style="display:flex;gap:8px;margin-bottom:10px" class="no-print animate__animated animate__fadeInLeft">
 <?php if (has_permission($conn, 'accessories', 'add')): ?>
 <button class="btn btn-success" onclick="document.getElementById('addAccFormArea').style.display='block';document.getElementById('addAccFormArea').scrollIntoView()">+ Add Accessory</button>
@@ -5790,12 +5748,10 @@ document.addEventListener('DOMContentLoaded', function() {
 </tbody>
 </table>
 </div>
-
 <?php
         $print_quote_id = (int) ($_GET['print_quote'] ?? 0);
         if ($print_quote_id):
             echo '<style>.sidebar, .topbar { display: none !important; } .main-wrap { margin-left: 0 !important; } .content > *:not(#receiptArea):not(.no-print) { display: none !important; } .content { padding: 40px !important; background: #333 !important; } body { background: #333 !important; } @media print { .content, body { padding: 0 !important; background: #fff !important; } }</style>';
-
             $q_r = $conn->query("SELECT q.*, b.chassis_number, b.color, m.model_name, m.model_code, m.category, c.name as cust_name, c.phone as cust_phone, c.cnic as cust_cnic, c.address as cust_addr FROM quotations q LEFT JOIN bikes b ON q.bike_id=b.id LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON q.customer_id=c.id WHERE q.id=$print_quote_id");
             $q_data = $q_r ? $q_r->fetch_assoc() : null;
             if ($q_data):
@@ -5809,7 +5765,6 @@ document.addEventListener('DOMContentLoaded', function() {
         <h2><?= sanitize(get_setting('branch_name') ?? 'Dera (Ahmed Metro)') ?></h2>
         <div style="font-size:1.1rem;margin-top:8px;font-weight:700;letter-spacing:2px;color:#333;">OFFICIAL QUOTATION</div>
     </div>
-    
     <div class="invoice-meta">
         <div>
             <strong>Quotation #:</strong> <?= $q_no ?><br>
@@ -5825,7 +5780,6 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
         </div>
     </div>
-
     <div class="invoice-section">
         <h3>Proposed Items</h3>
         <table class="invoice-table">
@@ -5862,7 +5816,6 @@ document.addEventListener('DOMContentLoaded', function() {
             </tbody>
         </table>
     </div>
-
     <div class="invoice-section">
         <h3>Financial Summary</h3>
         <table class="invoice-table" style="width:50%; margin-left:auto;">
@@ -5875,7 +5828,6 @@ document.addEventListener('DOMContentLoaded', function() {
             </tbody>
         </table>
     </div>
-    
     <?php if ($q_data['is_installment']): ?>
     <div class="invoice-section">
         <h3>Proposed Installment Plan</h3>
@@ -5902,19 +5854,16 @@ document.addEventListener('DOMContentLoaded', function() {
         <p style="font-size:0.8rem;color:#555;margin-top:5px;">* Installment plan is subject to final verification and approval of documents at the time of sale.</p>
     </div>
     <?php endif; ?>
-    
     <?php if ($q_data['notes']): ?>
     <div class="invoice-section">
         <h3>Terms & Additional Notes</h3>
         <p style="font-size:0.9rem;border:1px solid #ddd;padding:10px;background:#f9f9f9;"><?= nl2br(sanitize($q_data['notes'])) ?></p>
     </div>
     <?php endif; ?>
-    
     <div style="margin-top:60px; display:flex; justify-content:space-between; border-top:1px solid #ddd; padding-top:50px; font-weight:bold; color:#444;">
         <div style="text-align:center; width:250px; border-top:2px solid #333; padding-top:5px;">Authorized Signature</div>
         <div style="text-align:center; width:250px; border-top:2px solid #333; padding-top:5px;">Customer Signature (Acceptance)</div>
     </div>
-    
     <div class="invoice-footer">
         This is a system generated quotation. Valid until <?= fmt_date($q_data['valid_until']) ?>.<br>
         Generated by: Yasin Ullah – BSS | WhatsApp: 03361593533
@@ -5926,7 +5875,6 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 <?php endif;
         endif; ?>
-
 <script>
 var quoteAccessoriesCount = <?= $q_acc_count ?? 0 ?>;
 var allAvailableAccessories = <?= json_encode($conn->query('SELECT id, name, selling_price, current_stock FROM accessories WHERE current_stock > 0 ORDER BY name')->fetch_all(MYSQLI_ASSOC)) ?>;
@@ -5981,12 +5929,10 @@ function calculateQuoteAccessoryPrice(index) {
     document.querySelector(`#quoteAccessoryRow_${index} input[name="accessories[${index}][final_price]"]`).value = finalPrice.toFixed(2);
     calcQuoteInstallment();
 }
-
 function toggleQuoteInstallments() {
     document.getElementById('quoteInstallmentFields').style.display = document.getElementById('quoteIsInstallment').checked ? 'flex' : 'none';
     calcQuoteInstallment();
 }
-
 function calcQuoteInstallment() {
     var quotedPrice = parseFloat(document.getElementById('quotePrice').value) || 0;
     var accTotal = 0;
@@ -6357,7 +6303,6 @@ function showQuoteBikeDetails(sel) {
             $where .= " AND entry_date >= '$filter_from'";
         elseif ($filter_to)
             $where .= " AND entry_date <= '$filter_to'";
-
         if ($filter_type)
             $where .= " AND type='$filter_type'";
         if ($filter_cat)
@@ -6378,7 +6323,6 @@ function showQuoteBikeDetails(sel) {
                 $cnt_expense = $t['cnt'];
             }
         }
-
         $cat_stats = $conn->query("SELECT type, category, SUM(amount) as total FROM income_expenses $where GROUP BY type, category ORDER BY total DESC");
         $inc_cats = [];
         $exp_cats = [];
@@ -6395,7 +6339,6 @@ function showQuoteBikeDetails(sel) {
                     $top_exp_cat = ['name' => $cs['category'], 'amount' => $cs['total']];
             }
         }
-
         $trend_stats = $conn->query("SELECT entry_date, type, SUM(amount) as total FROM income_expenses $where GROUP BY entry_date, type ORDER BY entry_date ASC");
         $trend_labels = [];
         $trend_inc = [];
@@ -6447,18 +6390,15 @@ function showQuoteBikeDetails(sel) {
     <div class="card success"><div class="card-icon">📈</div><div class="card-body"><div class="card-label">Top Income Cat.</div><div class="card-value" style="font-size:1.1rem"><?= sanitize($top_inc_cat['name']) ?></div><div class="card-sub"><?= fmt_money($top_inc_cat['amount']) ?></div></div></div>
     <div class="card danger"><div class="card-icon">📉</div><div class="card-body"><div class="card-label">Top Expense Cat.</div><div class="card-value" style="font-size:1.1rem"><?= sanitize($top_exp_cat['name']) ?></div><div class="card-sub"><?= fmt_money($top_exp_cat['amount']) ?></div></div></div>
 </div>
-
 <div class="split-grid-3 animate__animated animate__fadeInUp" style="margin-bottom:16px;">
     <fieldset class="fieldset" style="margin-bottom:0"><legend>💰 Income by Category</legend><div style="position:relative;height:200px;width:100%"><canvas id="incCatChart"></canvas></div></fieldset>
     <fieldset class="fieldset" style="margin-bottom:0"><legend>💸 Expense by Category</legend><div style="position:relative;height:200px;width:100%"><canvas id="expCatChart"></canvas></div></fieldset>
     <fieldset class="fieldset" style="margin-bottom:0"><legend>📈 Daily Trend</legend><div style="position:relative;height:200px;width:100%"><canvas id="ieTrendChart"></canvas></div></fieldset>
 </div>
-
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     if(typeof Chart !== 'undefined') {
         const commonPieOpts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: 'var(--text)' } } } };
-        
         <?php if (!empty($inc_cats)): ?>
         new Chart(document.getElementById('incCatChart'), {
             type: 'doughnut',
@@ -6466,7 +6406,6 @@ document.addEventListener('DOMContentLoaded', function() {
             options: commonPieOpts
         });
         <?php endif; ?>
-
         <?php if (!empty($exp_cats)): ?>
         new Chart(document.getElementById('expCatChart'), {
             type: 'doughnut',
@@ -6474,7 +6413,6 @@ document.addEventListener('DOMContentLoaded', function() {
             options: commonPieOpts
         });
         <?php endif; ?>
-
         <?php if (!empty($trend_labels)): ?>
         new Chart(document.getElementById('ieTrendChart'), {
             type: 'line',
@@ -6551,7 +6489,6 @@ document.addEventListener('DOMContentLoaded', function() {
     <a href="index.php?page=landing_page&sub=gallery" class="sub-tab <?= $sub === 'gallery' ? 'active' : '' ?>">🖼️ Gallery</a>
     <a href="index.php?page=landing_page&sub=requests" class="sub-tab <?= $sub === 'requests' ? 'active' : '' ?>">📩 Requests</a>
 </div>
-
 <?php if ($sub === 'general'): ?>
 <form method="POST" class="animate__animated animate__fadeIn">
 <input type="hidden" name="save_landing_settings" value="1">
@@ -6585,14 +6522,14 @@ document.addEventListener('DOMContentLoaded', function() {
 </fieldset>
 <button type="submit" class="btn btn-primary">💾 Save Landing Settings</button>
 </form>
-
-<?php elseif ($sub === 'leadership'):
-    $leadership = $conn->query('SELECT * FROM leadership ORDER BY sort_order ASC, id DESC');
-    $edit_lid = (int) ($_GET['edit_lid'] ?? 0);
-    $edit_l = null;
-    if ($edit_lid) {
-        $edit_l = $conn->query("SELECT * FROM leadership WHERE id=$edit_lid")->fetch_assoc();
-    }
+<?php
+        elseif ($sub === 'leadership'):
+            $leadership = $conn->query('SELECT * FROM leadership ORDER BY sort_order ASC, id DESC');
+            $edit_lid = (int) ($_GET['edit_lid'] ?? 0);
+            $edit_l = null;
+            if ($edit_lid) {
+                $edit_l = $conn->query("SELECT * FROM leadership WHERE id=$edit_lid")->fetch_assoc();
+            }
 ?>
 <div id="leadershipFormArea" style="display:<?= $edit_l ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
 <fieldset class="fieldset"><legend><?= $edit_l ? '✏ Edit Leadership' : '+ Add Leader' ?></legend>
@@ -6622,7 +6559,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <?php while ($l = $leadership->fetch_assoc()): ?>
 <tr>
 <td><?= $l['sort_order'] ?></td>
-<td><?php if($l['image']): ?><img src="<?= $l['image'] ?>" style="height:40px;width:40px;object-fit:cover;border-radius:50%"><?php else: ?>-<?php endif; ?></td>
+<td><?php if ($l['image']): ?><img src="<?= $l['image'] ?>" style="height:40px;width:40px;object-fit:cover;border-radius:50%"><?php else: ?>-<?php endif; ?></td>
 <td><strong><?= sanitize($l['name']) ?></strong></td>
 <td><?= sanitize($l['position']) ?></td>
 <td><small><?= sanitize(substr($l['message'], 0, 50)) ?>...</small></td>
@@ -6637,14 +6574,14 @@ document.addEventListener('DOMContentLoaded', function() {
 </tbody>
 </table>
 </div>
-
-<?php elseif ($sub === 'gallery'):
-    $gallery = $conn->query('SELECT * FROM gallery ORDER BY sort_order ASC, id DESC');
-    $edit_gid = (int) ($_GET['edit_gid'] ?? 0);
-    $edit_g = null;
-    if ($edit_gid) {
-        $edit_g = $conn->query("SELECT * FROM gallery WHERE id=$edit_gid")->fetch_assoc();
-    }
+<?php
+        elseif ($sub === 'gallery'):
+            $gallery = $conn->query('SELECT * FROM gallery ORDER BY sort_order ASC, id DESC');
+            $edit_gid = (int) ($_GET['edit_gid'] ?? 0);
+            $edit_g = null;
+            if ($edit_gid) {
+                $edit_g = $conn->query("SELECT * FROM gallery WHERE id=$edit_gid")->fetch_assoc();
+            }
 ?>
 <div id="galleryFormArea" style="display:<?= $edit_g ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
 <fieldset class="fieldset"><legend><?= $edit_g ? '✏ Edit Gallery Item' : '+ Add Gallery Item' ?></legend>
@@ -6679,10 +6616,10 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 <?php endwhile; ?>
 </div>
-
-<?php elseif ($sub === 'requests'):
-    $bike_reqs = $conn->query('SELECT * FROM bike_requests ORDER BY created_at DESC');
-    $quote_reqs = $conn->query('SELECT qr.*, b.chassis_number, m.model_name FROM quote_requests qr LEFT JOIN bikes b ON qr.bike_id=b.id LEFT JOIN models m ON b.model_id=m.id ORDER BY qr.created_at DESC');
+<?php
+        elseif ($sub === 'requests'):
+            $bike_reqs = $conn->query('SELECT * FROM bike_requests ORDER BY created_at DESC');
+            $quote_reqs = $conn->query('SELECT qr.*, b.chassis_number, m.model_name FROM quote_requests qr LEFT JOIN bikes b ON qr.bike_id=b.id LEFT JOIN models m ON b.model_id=m.id ORDER BY qr.created_at DESC');
 ?>
 <fieldset class="fieldset"><legend>🚲 Bike Requests (Not in stock)</legend>
 <div class="data-table-wrap">
@@ -6705,7 +6642,6 @@ document.addEventListener('DOMContentLoaded', function() {
 </table>
 </div>
 </fieldset>
-
 <fieldset class="fieldset" style="margin-top:20px"><legend>📝 Quote Requests (From Landing Page)</legend>
 <div class="data-table-wrap">
 <table class="data-table">
