@@ -232,7 +232,7 @@ $view = $_GET['view'] ?? 'home';
             width: 100%; height: 260px; border-radius: 20px; overflow: hidden; position: relative; background: #0f172a;
             display: flex; align-items: center; justify-content: center; margin-bottom: 20px;
         }
-        .bike-img img { width: 100%; height: 100%; object-fit: cover; transition: 0.7s cubic-bezier(0.4, 0, 0.2, 1); }
+        .bike-img img { width: 100%; height: 100%; object-fit: contain; transition: 0.7s cubic-bezier(0.4, 0, 0.2, 1); }
         .bike-card:hover .bike-img img { transform: scale(1.1) rotate(1deg); filter: brightness(1.1); }
         .bike-status {
             position: absolute; top: 15px; left: 15px; padding: 6px 16px; border-radius: 50px;
