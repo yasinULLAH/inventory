@@ -1206,6 +1206,8 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $mn = sanitize($_POST['model_name'] ?? '');
             $cat = sanitize($_POST['category'] ?? '');
             $sc = sanitize($_POST['short_code'] ?? '');
+            $top_speed = sanitize($_POST['top_speed'] ?? '');
+            $max_range = sanitize($_POST['max_range'] ?? '');
             $img_path = null;
             if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
                 $img_path = handle_bike_image_upload($_FILES['image']);
@@ -1213,8 +1215,8 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             if (empty($mc) || empty($mn)) {
                 $err = 'Model code and name are required.';
             } else {
-                $st = $conn->prepare('INSERT INTO models (model_code,model_name,category,short_code,image) VALUES (?,?,?,?,?)');
-                $st->bind_param('sssss', $mc, $mn, $cat, $sc, $img_path);
+                $st = $conn->prepare('INSERT INTO models (model_code,model_name,category,short_code,image,top_speed,max_range) VALUES (?,?,?,?,?,?,?)');
+                $st->bind_param('sssssss', $mc, $mn, $cat, $sc, $img_path, $top_speed, $max_range);
                 $st->execute();
                 $st->close();
                 $msg = 'Model added.';
@@ -1226,6 +1228,8 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $mn = sanitize($_POST['model_name'] ?? '');
             $cat = sanitize($_POST['category'] ?? '');
             $sc = sanitize($_POST['short_code'] ?? '');
+            $top_speed = sanitize($_POST['top_speed'] ?? '');
+            $max_range = sanitize($_POST['max_range'] ?? '');
             $img_path = null;
             if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
                 $img_path = handle_bike_image_upload($_FILES['image']);
@@ -1234,11 +1238,11 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $err = 'Model ID, code and name are required.';
             } else {
                 if ($img_path) {
-                    $st = $conn->prepare('UPDATE models SET model_code=?,model_name=?,category=?,short_code=?,image=? WHERE id=?');
-                    $st->bind_param('sssssi', $mc, $mn, $cat, $sc, $img_path, $mid);
+                    $st = $conn->prepare('UPDATE models SET model_code=?,model_name=?,category=?,short_code=?,image=?,top_speed=?,max_range=? WHERE id=?');
+                    $st->bind_param('sssssssi', $mc, $mn, $cat, $sc, $img_path, $top_speed, $max_range, $mid);
                 } else {
-                    $st = $conn->prepare('UPDATE models SET model_code=?,model_name=?,category=?,short_code=? WHERE id=?');
-                    $st->bind_param('ssssi', $mc, $mn, $cat, $sc, $mid);
+                    $st = $conn->prepare('UPDATE models SET model_code=?,model_name=?,category=?,short_code=?,top_speed=?,max_range=? WHERE id=?');
+                    $st->bind_param('ssssssi', $mc, $mn, $cat, $sc, $top_speed, $max_range, $mid);
                 }
                 $st->execute();
                 $st->close();
@@ -5584,6 +5588,10 @@ $(document).ready(function() {
 <div class="form-group"><label>Model Name <span class="req">*</span></label><input type="text" name="model_name" value="<?= sanitize($edit_model['model_name'] ?? '') ?>" required></div>
 <div class="form-group"><label>Category</label><input type="text" name="category" value="<?= sanitize($edit_model['category'] ?? 'Electric Bike') ?>"></div>
 <div class="form-group"><label>Short Code</label><input type="text" name="short_code" value="<?= sanitize($edit_model['short_code'] ?? '') ?>"></div>
+</div>
+<div class="form-row">
+<div class="form-group"><label>Top Speed (km/h)</label><input type="text" name="top_speed" value="<?= sanitize($edit_model['top_speed'] ?? '') ?>" placeholder="e.g. 100km/h"></div>
+<div class="form-group"><label>Max Range (km)</label><input type="text" name="max_range" value="<?= sanitize($edit_model['max_range'] ?? '') ?>" placeholder="e.g. 80km Range"></div>
 <div class="form-group"><label>Image</label><input type="file" name="image" accept="image/*" style="padding:4px"></div>
 </div>
 <button type="submit" class="btn btn-primary">💾 Save</button>

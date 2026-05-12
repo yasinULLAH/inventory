@@ -43,6 +43,26 @@ function sanitize($val)
     return htmlspecialchars(strip_tags(trim($val ?? '')), ENT_QUOTES, 'UTF-8');
 }
 
+function format_speed($val)
+{
+    $v = trim($val ?? '');
+    if ($v === '')
+        return '100km/h';
+    if (is_numeric($v))
+        return $v . 'km/h';
+    return $v;
+}
+
+function format_range($val)
+{
+    $v = trim($val ?? '');
+    if ($v === '')
+        return '80km Range';
+    if (is_numeric($v))
+        return $v . 'km Range';
+    return $v;
+}
+
 function generate_math_captcha()
 {
     $n1 = rand(1, 9);
@@ -122,7 +142,7 @@ $meta_canonical = basename($self_page) . '?view=' . urlencode($view);
 if ($view === 'bike') {
     $bike_id = max(0, (int) ($_GET['id'] ?? 0));
     if ($bike_id > 0) {
-        $bd_stmt = $conn->prepare('SELECT b.id, b.model_id, b.color, b.status, b.created_at, b.image as bike_image, m.model_name, m.category, m.image as model_image
+        $bd_stmt = $conn->prepare('SELECT b.id, b.model_id, b.color, b.status, b.created_at, b.image as bike_image, m.model_name, m.category, m.image as model_image, m.top_speed, m.max_range
             FROM bikes b
             JOIN models m ON m.id = b.model_id
             WHERE b.id = ?
@@ -567,6 +587,9 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
             section { padding: 60px 0; }
             .sec-title::before { font-size: 3rem; }
         }
+        .socials a {
+            text-decoration: unset;
+        }
     </style>
     <script>
     function bikePlaceholder(img){
@@ -593,7 +616,7 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
 +'<circle cx="395" cy="180" r="8" fill="#06b6d4" opacity="0.3"/><circle cx="395" cy="180" r="4" fill="#06b6d4" opacity="0.5"/>'
 +'<path d="M100 210 Q115 195, 140 210" stroke="#a855f7" stroke-width="4" stroke-linecap="round" opacity="0.35"/>'
 +'<path d="M370 210 Q385 195, 405 210" stroke="#a855f7" stroke-width="4" stroke-linecap="round" opacity="0.35"/>'
-+'<text x="250" y="310" text-anchor="middle" fill="#6366f1" font-family="Outfit,sans-serif" font-size="14" font-weight="600" opacity="0.4">âš¡ E-BIKE</text>'
++'<text x="250" y="310" text-anchor="middle" fill="#6366f1" font-family="Outfit,sans-serif" font-size="14" font-weight="600" opacity="0.4"> E-BIKE</text>'
 +'</svg>';
         w.appendChild(d);
     }
@@ -622,9 +645,11 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
     </div>
     <style>
     @keyframes slideIn { 0% { transform: translateX(120%); opacity: 0; } 100% { transform: translateX(0); opacity: 1; } }
+    .socials a {
+        text-decoration: unset;
+    }
     </style>
     <script>
-        
         setTimeout(() => { 
             const t = document.getElementById('toastMsg'); 
             if(t) { 
@@ -634,8 +659,6 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                 setTimeout(()=>t.remove(), 500); 
             } 
         }, 6000);
-        
-        
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.has('msg') || urlParams.has('err')) {
             urlParams.delete('msg');
@@ -751,7 +774,7 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                     if ($elite_rank === 1 && $m['sales_cnt'] > 0) {
                         $badge_class = 'badge-bestseller';
                         $badge_icon = 'fa-crown';
-                        $badge_text = 'BEST SELLER Â· ' . $m['sales_cnt'] . ' Sold';
+                        $badge_text = 'BEST SELLER · ' . $m['sales_cnt'] . ' Sold';
                     } elseif ($days_since <= 30) {
                         $badge_class = 'badge-newarrival';
                         $badge_icon = 'fa-sparkles';
@@ -759,11 +782,11 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                     } elseif ($m['stock_cnt'] <= 2 && $m['stock_cnt'] > 0) {
                         $badge_class = 'badge-lowstock';
                         $badge_icon = 'fa-fire';
-                        $badge_text = 'LOW STOCK Â· Only ' . $m['stock_cnt'] . ' Left';
+                        $badge_text = 'LOW STOCK · Only ' . $m['stock_cnt'] . ' Left';
                     } elseif ($m['sales_cnt'] >= 2) {
                         $badge_class = 'badge-popular';
                         $badge_icon = 'fa-chart-line';
-                        $badge_text = 'POPULAR Â· ' . $m['sales_cnt'] . ' Sold';
+                        $badge_text = 'POPULAR · ' . $m['sales_cnt'] . ' Sold';
                     } else {
                         $badge_class = 'badge-default';
                         $badge_icon = 'fa-bolt';
@@ -781,8 +804,8 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                     <div class="bike-features">
                         <div class="feat-item"><i class="fas fa-bolt"></i> <?= sanitize($m['category']) ?></div>
                         <div class="feat-item"><i class="fas fa-palette"></i> <?= sanitize($avail['color']) ?></div>
-                        <div class="feat-item"><i class="fas fa-tachometer-alt"></i> 100km/h</div>
-                        <div class="feat-item"><i class="fas fa-battery-full"></i> 80km Range</div>
+                        <div class="feat-item"><i class="fas fa-tachometer-alt"></i> <?= sanitize(format_speed($m['top_speed'])) ?></div>
+                        <div class="feat-item"><i class="fas fa-battery-full"></i> <?= sanitize(format_range($m['max_range'])) ?></div>
                     </div>
                     <div class="price-request"><i class="fab fa-whatsapp"></i> PRICE ON REQUEST</div>
                     <a href="https://wa.me/<?= $wa_number ?>?text=I'm interested in the <?= urlencode($m['model_name']) ?>" class="wa-action">INQUIRE ON WHATSAPP</a>
@@ -901,7 +924,7 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                     $where_p[] = "m.category = '$c'";
                 }
                 $where = implode(' AND ', $where_p);
-                $all_bikes = $conn->query("SELECT b.*, m.model_name, m.category, m.image as model_image 
+                $all_bikes = $conn->query("SELECT b.*, m.model_name, m.category, m.image as model_image, m.top_speed, m.max_range 
                     FROM bikes b JOIN models m ON b.model_id = m.id WHERE $where ORDER BY b.created_at DESC LIMIT $offset, $per_page");
                 $total_cnt = $conn->query("SELECT COUNT(*) FROM bikes b JOIN models m ON b.model_id = m.id WHERE $where")->fetch_row()[0];
                 $total_pages = ceil($total_cnt / $per_page);
@@ -950,8 +973,8 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                     <div class="bike-features">
                         <div class="feat-item"><i class="fas fa-fingerprint"></i> <?= sanitize($bike['chassis_number']) ?></div>
                         <div class="feat-item"><i class="fas fa-palette"></i> <?= sanitize($bike['color']) ?></div>
-                        <div class="feat-item"><i class="fas fa-shield-alt"></i> Warranty Inc.</div>
-                        <div class="feat-item"><i class="fas fa-headset"></i> 24/7 Support</div>
+                        <div class="feat-item"><i class="fas fa-tachometer-alt"></i> <?= sanitize(format_speed($bike['top_speed'])) ?></div>
+                        <div class="feat-item"><i class="fas fa-battery-full"></i> <?= sanitize(format_range($bike['max_range'])) ?></div>
                     </div>
                     <div style="display:flex; gap:12px;">
                         <a href="https://wa.me/<?= $wa_number ?>?text=Inquiry for <?= urlencode($bike['model_name']) ?> (<?= urlencode($bike['chassis_number']) ?>)" class="wa-action" style="flex:1;">INQUIRE</a>
@@ -996,9 +1019,11 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                             <p style="color:var(--text-dim); font-size:0.95rem;">Added: <?= $bike_detail['created_at'] ? date('d M Y', strtotime($bike_detail['created_at'])) : 'N/A' ?></p>
                             <div class="detail-kv">
                                 <div class="feat-item"><i class="fas fa-palette"></i> Color: <?= sanitize($bike_detail['color'] ?: 'N/A') ?></div>
+                                <div class="feat-item"><i class="fas fa-tachometer-alt"></i> Speed: <?= sanitize(format_speed($bike_detail['top_speed'])) ?></div>
+                                <div class="feat-item"><i class="fas fa-battery-full"></i> Range: <?= sanitize(format_range($bike_detail['max_range'])) ?></div>
                                 <div class="feat-item"><i class="fas fa-shield-alt"></i> Warranty Included</div>
                                 <div class="feat-item"><i class="fas fa-headset"></i> 24/7 Support</div>
-                                <div class="feat-item"><i class="fas fa-image"></i> High-Quality Product Visual</div>
+                                <div class="feat-item"><i class="fas fa-image"></i> Product Visual</div>
                             </div>
                             <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
                                 <a href="https://wa.me/<?= $wa_number ?>?text=Inquiry for <?= urlencode($bike_detail['model_name']) ?> (Bike ID: <?= (int) $bike_detail['id'] ?>)" class="wa-action" style="flex:1;">INQUIRE</a>
