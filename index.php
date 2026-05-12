@@ -602,6 +602,74 @@ function handle_image_upload($file, $dest_dir = 'uploads/')
     return $dest;
 }
 
+function update_app_icons($file)
+{
+    if (!isset($file['error']) || $file['error'] !== UPLOAD_ERR_OK)
+        return false;
+    $info = getimagesize($file['tmp_name']);
+    if (!$info)
+        return false;
+    $src = null;
+    switch ($info[2]) {
+        case IMAGETYPE_JPEG:
+            $src = imagecreatefromjpeg($file['tmp_name']);
+            break;
+        case IMAGETYPE_PNG:
+            $src = imagecreatefrompng($file['tmp_name']);
+            break;
+        case IMAGETYPE_WEBP:
+            $src = imagecreatefromwebp($file['tmp_name']);
+            break;
+        case IMAGETYPE_GIF:
+            $src = imagecreatefromgif($file['tmp_name']);
+            break;
+    }
+    if (!$src)
+        return false;
+
+    imagealphablending($src, false);
+    imagesavealpha($src, true);
+
+    $sizes = [
+        'logo.png' => [0, 0],
+        'favicon-96x96.png' => [96, 96],
+        'apple-touch-icon.png' => [180, 180],
+        'web-app-manifest-192x192.png' => [192, 192],
+        'web-app-manifest-512x512.png' => [512, 512],
+    ];
+
+    foreach ($sizes as $filename => $dim) {
+        $w = $dim[0];
+        $h = $dim[1];
+        if ($w == 0) {
+            $w = imagesx($src);
+            $h = imagesy($src);
+        }
+        $dst = imagecreatetruecolor($w, $h);
+        imagealphablending($dst, false);
+        imagesavealpha($dst, true);
+        imagecopyresampled($dst, $src, 0, 0, 0, 0, $w, $h, imagesx($src), imagesy($src));
+        imagepng($dst, $filename);
+        imagedestroy($dst);
+    }
+
+    $ico_size = 32;
+    $dst_ico = imagecreatetruecolor($ico_size, $ico_size);
+    imagealphablending($dst_ico, false);
+    imagesavealpha($dst_ico, true);
+    imagecopyresampled($dst_ico, $src, 0, 0, 0, 0, $ico_size, $ico_size, imagesx($src), imagesy($src));
+    imagepng($dst_ico, 'favicon.ico');
+    copy('favicon.ico', 'logo.ico');
+    imagedestroy($dst_ico);
+
+    $base64 = base64_encode(file_get_contents('favicon-96x96.png'));
+    $svg_content = '<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" width="96" height="96"><image href="data:image/png;base64,' . $base64 . '" width="96" height="96"/></svg>';
+    file_put_contents('favicon.svg', $svg_content);
+
+    imagedestroy($src);
+    return true;
+}
+
 $db_exists = true;
 $conn_check = db_connect();
 if ($conn_check) {
@@ -1864,6 +1932,13 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $val = sanitize($_POST[$f]);
                 $st->bind_param('ss', $val, $f);
                 $st->execute();
+            }
+        }
+        if (isset($_FILES['app_logo']) && $_FILES['app_logo']['error'] === UPLOAD_ERR_OK) {
+            if (update_app_icons($_FILES['app_logo'])) {
+                $msg .= ' Logo and icons updated.';
+            } else {
+                $err .= ' Failed to process logo upload.';
             }
         }
         if (!empty($_POST['new_password'])) {
@@ -6682,6 +6757,16 @@ document.addEventListener('DOMContentLoaded', function() {
 <div class="form-row">
 <div class="form-group"><label>Company Name</label><input type="text" name="company_name" value="<?= sanitize($s_company) ?>"></div>
 <div class="form-group"><label>Branch Name</label><input type="text" name="branch_name" value="<?= sanitize($s_branch) ?>"></div>
+</div>
+<div class="form-row">
+<div class="form-group" style="flex:2">
+    <label>Application Logo (Replaces all icons & logos)</label>
+    <div style="display:flex;align-items:center;gap:10px;background:var(--bg2);padding:10px;border:1px solid var(--border);border-radius:2px">
+        <img src="logo.png?v=<?= time() ?>" style="height:50px;width:50px;object-fit:contain;background:#fff;padding:2px;border-radius:2px">
+        <input type="file" name="app_logo" accept="image/png,image/jpeg,image/webp" style="font-size:0.8rem">
+    </div>
+    <small style="color:var(--text3);margin-top:4px">Recommended: Square PNG with transparency. This will automatically update all app icons, favicons, and manifest files.</small>
+</div>
 </div>
 <div class="form-row">
 <div class="form-group"><label>Currency Symbol</label><input type="text" name="currency" value="<?= sanitize($s_curr) ?>" style="max-width:80px"></div>

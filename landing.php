@@ -466,11 +466,14 @@ $view = $_GET['view'] ?? 'home';
             width: 100%; max-width: 550px; position: relative; box-shadow: 0 0 100px var(--primary-glow);
         }
         .modal-close { position: absolute; top: 25px; right: 30px; font-size: 2rem; cursor: pointer; color: var(--text-dim); }
-        input, textarea {
+        input, textarea, select {
             width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border);
             padding: 16px 20px; border-radius: 18px; color: white; margin-bottom: 20px; font-size: 1rem; outline: none; transition: 0.3s;
+            appearance: none; -webkit-appearance: none; font-family: 'Outfit', sans-serif;
         }
-        input:focus { border-color: var(--primary); background: rgba(255,255,255,0.08); }
+        input:focus, textarea:focus, select:focus { border-color: var(--primary); background: rgba(255,255,255,0.08); }
+        select option { background: var(--darker); color: var(--text); }
+        .nav-hidden { transform: translate(-50%, -150%) !important; opacity: 0; pointer-events: none; }
         #preloader { position: fixed; inset: 0; background: var(--darker); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         .loader-ring { width: 80px; height: 80px; border: 5px solid var(--glass-border); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s infinite linear; margin-bottom: 20px; }
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -525,7 +528,7 @@ $view = $_GET['view'] ?? 'home';
             <span class="logo-text"><?= sanitize($company_name) ?></span>
         </a>
         <ul class="nav-links">
-            <li><a href="landing.php?view=home">SURFACE</a></li>
+            <li><a href="landing.php?view=home">Home</a></li>
             <li><a href="landing.php?view=bikes">INVENTORY</a></li>
             <li><a href="#vision">VISION</a></li>
             <li><a href="#gallery">GALLERY</a></li>
@@ -724,20 +727,26 @@ $view = $_GET['view'] ?? 'home';
         <section class="container" style="padding-top:120px;">
             <h2 class="sec-title" data-text="FLEET">ACTIVE INVENTORY</h2>
             <div class="glass" style="margin-bottom:40px; padding:30px;">
-                <form action="landing.php" method="GET" style="display:flex; gap:20px; flex-wrap:wrap;">
+                <form action="landing.php" method="GET" style="display:flex; gap:15px; flex-wrap:wrap; align-items:center;">
                     <input type="hidden" name="view" value="bikes">
-                    <input type="text" name="search" placeholder="Search Chassis or Model..." value="<?= sanitize($_GET['search'] ?? '') ?>" style="flex:1; margin-bottom:0;">
-                    <select name="category" style="width:250px; background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); color:white; border-radius:18px; padding:0 15px;">
-                        <option value="">ALL CATEGORIES</option>
-                        <?php
-                        $cats = $conn->query('SELECT DISTINCT category FROM models');
-                        while ($c = $cats->fetch_assoc()):
-                            ?>
-                        <option value="<?= $c['category'] ?>" <?= ($_GET['category'] ?? '') == $c['category'] ? 'selected' : '' ?>><?= $c['category'] ?></option>
-                        <?php endwhile; ?>
-                    </select>
-                    <button type="submit" class="btn btn-main">FILTER</button>
-                    <a href="landing.php?view=bikes" class="btn btn-outline">RESET</a>
+                    <div style="flex:1; min-width:200px;">
+                        <input type="text" name="search" placeholder="Search Chassis or Model..." value="<?= sanitize($_GET['search'] ?? '') ?>" style="margin-bottom:0; width:100%;">
+                    </div>
+                    <div style="flex:1; min-width:200px;">
+                        <select name="category" style="margin-bottom:0; width:100%; cursor:pointer; background-image: url('data:image/svg+xml;utf8,<svg fill=\"white\" height=\"24\" viewBox=\"0 0 24 24\" width=\"24\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M7 10l5 5 5-5z\"/></svg>'); background-repeat: no-repeat; background-position-x: 95%; background-position-y: center;">
+                            <option value="">ALL CATEGORIES</option>
+                            <?php
+                            $cats = $conn->query('SELECT DISTINCT category FROM models');
+                            while ($c = $cats->fetch_assoc()):
+                                ?>
+                            <option value="<?= $c['category'] ?>" <?= ($_GET['category'] ?? '') == $c['category'] ? 'selected' : '' ?>><?= $c['category'] ?></option>
+                            <?php endwhile; ?>
+                        </select>
+                    </div>
+                    <div style="display:flex; gap:10px; flex:1; min-width:200px;">
+                        <button type="submit" class="btn btn-main" style="flex:1; justify-content:center;">FILTER</button>
+                        <a href="landing.php?view=bikes" class="btn btn-outline" style="flex:1; justify-content:center;">RESET</a>
+                    </div>
                 </form>
             </div>
             <div class="bike-grid">
@@ -884,7 +893,7 @@ $view = $_GET['view'] ?? 'home';
                 <div>
                     <h4 class="footer-head">QUICK LINKS</h4>
                     <ul style="list-style:none; line-height:2.8;">
-                        <li><a href="landing.php?view=home" class="footer-link"><i class="fas fa-home"></i> Surface</a></li>
+                        <li><a href="landing.php?view=home" class="footer-link"><i class="fas fa-home"></i> Home</a></li>
                         <li><a href="landing.php?view=bikes" class="footer-link"><i class="fas fa-motorcycle"></i> Inventory</a></li>
                         <li><a href="#vision" class="footer-link"><i class="fas fa-eye"></i> Philosophy</a></li>
                         <li><a href="#" onclick="openRequestModal(); return false;" class="footer-link"><i class="fas fa-paper-plane"></i> Request Bike</a></li>
@@ -1024,6 +1033,16 @@ $view = $_GET['view'] ?? 'home';
             });
         }, { threshold: 0.1 });
         document.querySelectorAll('section').forEach(s => observer.observe(s));
+        let lastScrollY = window.scrollY;
+        const navBar = document.querySelector('nav');
+        window.addEventListener('scroll', () => {
+            if (window.scrollY > lastScrollY && window.scrollY > 100) {
+                navBar.classList.add('nav-hidden');
+            } else {
+                navBar.classList.remove('nav-hidden');
+            }
+            lastScrollY = window.scrollY;
+        });
     </script>
 </body>
 </html>
