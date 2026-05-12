@@ -3612,7 +3612,8 @@ $(document).ready(function() {
     elseif ($page === 'inventory'):
         if (isset($_GET['reset_filters'])) {
             unset($_SESSION['inv_filters']);
-            header('Location: index.php?page=inventory');
+            setcookie('inv_filters', '', time() - 3600, '/');
+            echo '<script>window.location.href="index.php?page=inventory";</script>';
             exit;
         }
 
@@ -3625,6 +3626,12 @@ $(document).ready(function() {
                 'date_from' => $_GET['date_from'] ?? '',
                 'date_to' => $_GET['date_to'] ?? ''
             ];
+            setcookie('inv_filters', json_encode($_SESSION['inv_filters']), time() + (86400 * 30), '/');
+        } elseif (!isset($_SESSION['inv_filters']) && isset($_COOKIE['inv_filters'])) {
+            $cookie_filters = json_decode($_COOKIE['inv_filters'], true);
+            if (is_array($cookie_filters)) {
+                $_SESSION['inv_filters'] = $cookie_filters;
+            }
         }
 
         $status_f = sanitize($_SESSION['inv_filters']['status_f'] ?? '');
@@ -3720,7 +3727,12 @@ $(document).ready(function() {
 </ul>
 </fieldset>
 <?php else: ?>
-<form method="POST" id="bulkForm" action="index.php?page=inventory&action=bulk_delete">
+<?php if ($status_f || $model_f || $color_f || $search_f || $date_from || $date_to): ?>
+<div style="background:var(--bg3); border-left:4px solid var(--warning); padding:10px 14px; border-radius:2px; margin-bottom:12px; font-size:0.85rem; display:flex; justify-content:space-between; align-items:center;" class="no-print animate__animated animate__fadeIn">
+    <span style="color:var(--text)"><strong>ℹ️ Active Filters Applied:</strong> You are currently viewing a filtered list of inventory.</span>
+    <a href="index.php?page=inventory&reset_filters=1" class="btn btn-sm btn-danger" style="text-decoration:none;">✖ Remove Filters</a>
+</div>
+<?php endif; ?>
 <div class="filter-bar no-print">
 <form method="GET" id="filterForm" action="index.php" style="display:contents">
 <input type="hidden" name="page" value="inventory">
@@ -3750,11 +3762,12 @@ $(document).ready(function() {
 <div class="form-group"><label>To</label><input type="date" name="date_to" value="<?= $date_to ?>"></div>
 <div class="filter-actions">
 <button type="submit" class="btn btn-primary btn-sm">🔍 Apply Filters</button>
-<a href="index.php?page=inventory" class="btn btn-default btn-sm">Reset</a>
+<a href="index.php?page=inventory&reset_filters=1" class="btn btn-default btn-sm">Reset</a>
 <a href="index.php?page=inventory&export_csv=1&status_f=<?= urlencode($status_f) ?>&model_f=<?= $model_f ?>&color_f=<?= urlencode($color_f) ?>&search_f=<?= urlencode($search_f) ?>&date_from=<?= urlencode($date_from) ?>&date_to=<?= urlencode($date_to) ?>" class="btn btn-default btn-sm">⬇ CSV</a>
 </div>
 </form>
 </div>
+<form method="POST" id="bulkForm" action="index.php?page=inventory&action=bulk_delete">
 <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center" class="no-print animate__animated animate__fadeInLeft">
 <span style="font-size:0.8rem;color:var(--text2)">Total: <?= $bikes_result->num_rows ?> record(s)</span>
 <?php if (has_permission($conn, 'purchase', 'add')): ?><a href="index.php?page=purchase" class="btn btn-success btn-sm">+ New Purchase</a><?php endif; ?>

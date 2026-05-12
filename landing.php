@@ -142,7 +142,7 @@ $meta_canonical = basename($self_page) . '?view=' . urlencode($view);
 if ($view === 'bike') {
     $bike_id = max(0, (int) ($_GET['id'] ?? 0));
     if ($bike_id > 0) {
-        $bd_stmt = $conn->prepare('SELECT b.id, b.model_id, b.color, b.status, b.created_at, b.image as bike_image, m.model_name, m.category, m.image as model_image, m.top_speed, m.max_range
+        $bd_stmt = $conn->prepare('SELECT b.id, b.chassis_number, b.model_id, b.color, b.status, b.created_at, b.image as bike_image, m.model_name, m.category, m.image as model_image, m.top_speed, m.max_range
             FROM bikes b
             JOIN models m ON m.id = b.model_id
             WHERE b.id = ?
@@ -592,9 +592,21 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
         }
     </style>
     <script>
+    function imageFallback(img, modelImg) {
+        if (modelImg && !img.dataset.triedModel && img.getAttribute('src') !== modelImg) {
+            img.dataset.triedModel = 'true';
+            img.src = modelImg;
+        } else {
+            bikePlaceholder(img);
+        }
+    }
     function bikePlaceholder(img){
-        var w=img.parentNode; img.remove();
-        var d=document.createElement('div'); d.className='bike-img-placeholder';
+        var w=img.parentNode; 
+        var cls = img.className || '';
+        img.remove();
+        var d=document.createElement('div'); 
+        d.className='bike-img-placeholder ' + cls;
+        if(cls.includes('detail-hero-img')) { d.style.minHeight = '420px'; d.style.borderRadius = '24px'; }
         d.innerHTML='<svg viewBox="0 0 500 350" fill="none" xmlns="http://www.w3.org/2000/svg">'
 +'<defs><linearGradient id="eg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#6366f1"/><stop offset="100%" stop-color="#a855f7"/></linearGradient>'
 +'<linearGradient id="eg2" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#06b6d4"/><stop offset="100%" stop-color="#6366f1"/></linearGradient></defs>'
@@ -797,9 +809,10 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                     <div class="bike-status <?= $badge_class ?>"><i class="fas <?= $badge_icon ?>"></i> <?= $badge_text ?></div>
                     <a class="bike-link" href="<?= sanitize($self_page) ?>?view=bike&id=<?= (int) $avail['id'] ?>">
                         <div class="bike-img">
-                            <img src="<?= $m['image'] ?: '' ?>" alt="<?= sanitize($m['model_name']) ?>" onerror="bikePlaceholder(this)">
+                            <?php $primary_img = $avail['image'] ?: $m['image']; ?>
+                            <img src="<?= sanitize($primary_img ?: 'x') ?>" alt="<?= sanitize($m['model_name']) ?>" onerror="imageFallback(this, '<?= sanitize($m['image']) ?>')">
                         </div>
-                        <div class="bike-title"><?= sanitize($m['model_name']) ?></div>
+                        <div class="bike-title" style="line-height:1.2; padding-bottom:5px;"><?= sanitize($m['model_name']) ?> <span style="display:block; font-size:1rem; color:var(--text-dim); font-weight:600; margin-top:4px;"><?= sanitize($avail['chassis_number']) ?></span></div>
                     </a>
                     <div class="bike-features">
                         <div class="feat-item"><i class="fas fa-bolt"></i> <?= sanitize($m['category']) ?></div>
@@ -808,7 +821,7 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                         <div class="feat-item"><i class="fas fa-battery-full"></i> <?= sanitize(format_range($m['max_range'])) ?></div>
                     </div>
                     <div class="price-request"><i class="fab fa-whatsapp"></i> PRICE ON REQUEST</div>
-                    <a href="https://wa.me/<?= $wa_number ?>?text=I'm interested in the <?= urlencode($m['model_name']) ?>" class="wa-action">INQUIRE ON WHATSAPP</a>
+                    <a href="https://wa.me/<?= $wa_number ?>?text=I'm interested in the <?= urlencode($m['model_name']) ?> (Chassis: <?= urlencode($avail['chassis_number']) ?>)" class="wa-action">INQUIRE ON WHATSAPP</a>
                 </div>
                 <?php endwhile; ?>
             </div>
@@ -965,10 +978,11 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                 <div class="glass bike-card" data-tilt>
                     <div class="bike-status <?= $b_cls ?>"><i class="fas <?= $b_ico ?>"></i> <?= $b_txt ?></div>
                     <a class="bike-link" href="<?= sanitize($self_page) ?>?view=bike&id=<?= (int) $bike['id'] ?>">
+                        <?php $primary_img = $bike['image'] ?: $bike['model_image']; ?>
                         <div class="bike-img">
-                            <img src="<?= $img ?: '' ?>" alt="<?= sanitize($bike['model_name']) ?>" onerror="bikePlaceholder(this)">
+                            <img src="<?= sanitize($primary_img ?: 'x') ?>" alt="<?= sanitize($bike['model_name']) ?>" onerror="imageFallback(this, '<?= sanitize($bike['model_image']) ?>')">
                         </div>
-                        <div class="bike-title"><?= sanitize($bike['model_name']) ?></div>
+                        <div class="bike-title" style="line-height:1.2; padding-bottom:5px;"><?= sanitize($bike['model_name']) ?> <span style="display:block; font-size:1rem; color:var(--text-dim); font-weight:600; margin-top:4px;"><?= sanitize($bike['chassis_number']) ?></span></div>
                     </a>
                     <div class="bike-features">
                         <div class="feat-item"><i class="fas fa-fingerprint"></i> <?= sanitize($bike['chassis_number']) ?></div>
@@ -977,8 +991,8 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                         <div class="feat-item"><i class="fas fa-battery-full"></i> <?= sanitize(format_range($bike['max_range'])) ?></div>
                     </div>
                     <div style="display:flex; gap:12px;">
-                        <a href="https://wa.me/<?= $wa_number ?>?text=Inquiry for <?= urlencode($bike['model_name']) ?> (<?= urlencode($bike['chassis_number']) ?>)" class="wa-action" style="flex:1;">INQUIRE</a>
-                        <button class="btn btn-outline" onclick="openQuoteModal(<?= $bike['id'] ?>, '<?= sanitize($bike['model_name']) ?>')">QUOTE</button>
+                        <a href="https://wa.me/<?= $wa_number ?>?text=Inquiry for <?= urlencode($bike['model_name']) ?> (Chassis: <?= urlencode($bike['chassis_number']) ?>)" class="wa-action" style="flex:1;">INQUIRE</a>
+                        <button class="btn btn-outline" onclick="openQuoteModal(<?= $bike['id'] ?>, '<?= sanitize($bike['model_name'] . ' - ' . $bike['chassis_number']) ?>')">QUOTE</button>
                     </div>
                 </div>
                 <?php endwhile;
@@ -1008,26 +1022,27 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                     </div>
                     <div class="detail-grid">
                         <div class="glass" style="padding:14px;">
-                            <img class="detail-hero-img" src="<?= sanitize($bike_detail['bike_image'] ?: ($bike_detail['model_image'] ?: 'logo.png')) ?>" alt="<?= sanitize($bike_detail['model_name']) ?>" onerror="this.src='logo.png'">
+                            <?php $primary_img = $bike_detail['bike_image'] ?: $bike_detail['model_image']; ?>
+                            <img class="detail-hero-img" src="<?= sanitize($primary_img ?: 'x') ?>" alt="<?= sanitize($bike_detail['model_name']) ?>" onerror="imageFallback(this, '<?= sanitize($bike_detail['model_image']) ?>')">
                         </div>
                         <div class="glass detail-panel">
                             <div class="bike-status badge-default" style="position:static; display:inline-flex; margin-bottom:14px;">
                                 <i class="fas fa-bolt"></i> <?= strtoupper($bike_detail['status'] === 'in_stock' ? 'AVAILABLE' : sanitize($bike_detail['status'])) ?>
                             </div>
-                            <h1 style="font-size:2.2rem; line-height:1.1; margin-bottom:8px;"><?= sanitize($bike_detail['model_name']) ?></h1>
+                            <h1 style="font-size:2.2rem; line-height:1.2; margin-bottom:8px;"><?= sanitize($bike_detail['model_name']) ?> <span style="display:block; font-size:1.2rem; color:var(--text-dim); font-family:'Outfit', sans-serif;"><?= sanitize($bike_detail['chassis_number']) ?></span></h1>
                             <p style="color:var(--text-dim); margin-bottom:6px;"><?= sanitize($bike_detail['category']) ?></p>
                             <p style="color:var(--text-dim); font-size:0.95rem;">Added: <?= $bike_detail['created_at'] ? date('d M Y', strtotime($bike_detail['created_at'])) : 'N/A' ?></p>
                             <div class="detail-kv">
+                                <div class="feat-item"><i class="fas fa-fingerprint"></i> Chassis: <?= sanitize($bike_detail['chassis_number']) ?></div>
                                 <div class="feat-item"><i class="fas fa-palette"></i> Color: <?= sanitize($bike_detail['color'] ?: 'N/A') ?></div>
                                 <div class="feat-item"><i class="fas fa-tachometer-alt"></i> Speed: <?= sanitize(format_speed($bike_detail['top_speed'])) ?></div>
                                 <div class="feat-item"><i class="fas fa-battery-full"></i> Range: <?= sanitize(format_range($bike_detail['max_range'])) ?></div>
                                 <div class="feat-item"><i class="fas fa-shield-alt"></i> Warranty Included</div>
                                 <div class="feat-item"><i class="fas fa-headset"></i> 24/7 Support</div>
-                                <div class="feat-item"><i class="fas fa-image"></i> Product Visual</div>
                             </div>
                             <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
-                                <a href="https://wa.me/<?= $wa_number ?>?text=Inquiry for <?= urlencode($bike_detail['model_name']) ?> (Bike ID: <?= (int) $bike_detail['id'] ?>)" class="wa-action" style="flex:1;">INQUIRE</a>
-                                <button class="btn btn-outline" style="flex:1; justify-content:center;" onclick="openQuoteModal(<?= (int) $bike_detail['id'] ?>, '<?= sanitize($bike_detail['model_name']) ?>')">QUOTE</button>
+                                <a href="https://wa.me/<?= $wa_number ?>?text=Inquiry for <?= urlencode($bike_detail['model_name']) ?> (Chassis: <?= urlencode($bike_detail['chassis_number']) ?>)" class="wa-action" style="flex:1;">INQUIRE</a>
+                                <button class="btn btn-outline" style="flex:1; justify-content:center;" onclick="openQuoteModal(<?= (int) $bike_detail['id'] ?>, '<?= sanitize($bike_detail['model_name'] . ' - ' . $bike_detail['chassis_number']) ?>')">QUOTE</button>
                             </div>
                             <div style="display:flex; gap:12px; flex-wrap:wrap;">
                                 <button class="btn btn-outline" style="flex:1; justify-content:center;" onclick="navigator.clipboard.writeText('<?= sanitize($canonical_url) ?>'); this.innerHTML='<i class=&quot;fas fa-check&quot;></i> LINK COPIED';">SHARE LINK</button>
