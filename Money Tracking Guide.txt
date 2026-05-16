@@ -1,0 +1,82 @@
+=====================================================
+    MONEY DESTINATION TRACKING - Quick Guide
+    BNI Enterprises - Bike Dealer Management System
+=====================================================
+
+WHAT IS IT?
+-----------
+After selling a bike, you can now track WHERE that sale money went:
+- Bank (HBL, MCB, UBL, etc.)
+- Person (owner, partner, manager)
+- Wallet (JazzCash, Easypaisa, Cash Drawer)
+
+This is OPTIONAL. You can sell bikes without tracking money.
+
+
+WHERE TO FIND IT?
+-----------------
+1. SIDEBAR MENU:
+   - "Money Destinations" (manage banks/persons/wallets)
+   - "Money Tracking" (allocate sale money)
+
+2. DURING A SALE:
+   - At the bottom of the Sale form, expand "Track Money Destination"
+   - Add rows: pick destination + amount
+   - Saved with the sale automatically
+
+3. INVENTORY PAGE:
+   - Sold bikes show a cash icon button in actions column
+   - Click it to go to Money Tracking for that bike
+
+4. BIKE DETAIL VIEW:
+   - View any sold bike's detail page
+   - Scroll to "Money Destination Tracking" section
+   - See cards: Sale Total, Allocated, Remaining
+   - See table of all allocations
+   - Click "Manage Allocations" button
+
+5. REPORTS:
+   - Go to Reports page
+   - 4 new tabs at the end:
+     * Money by Destination: totals per bank/person/wallet
+     * Money by Sale: per-sale allocation breakdown
+     * Untracked Sales: sales with missing allocations
+     * Money Flow: monthly summary by destination type
+
+
+HOW TO USE IT?
+--------------
+STEP 1: Set up destinations
+   - Go to "Money Destinations" in sidebar
+   - 9 defaults are already there (3 banks, 3 persons, 3 wallets)
+   - Add/edit/delete as needed
+
+STEP 2: Track money (Option A - During Sale)
+   - When recording a new sale, expand "Track Money Destination"
+   - Click "Add Destination Row"
+   - Pick destination, enter amount
+   - Add more rows if money goes to multiple places
+   - Submit sale as usual
+
+STEP 2: Track money (Option B - After Sale)
+   - Go to "Money Tracking" in sidebar
+   - Click "Add Allocation"
+   - Select the sold bike, destination, amount, date
+   - Save
+
+STEP 3: Review
+   - Check "Untracked Sales" in Reports to find sales you haven't tracked
+   - Use "Money Flow" report for monthly analysis
+
+
+KEY POINTS:
+-----------
+- One sale can split money to multiple destinations
+- You can add/edit/delete allocations anytime after sale
+- Deleting a sale automatically removes its allocations
+- Remaining amount = Sale Total - Allocated (shown in yellow if > 0)
+- Everything is permission-controlled (ask admin for access)
+
+=====================================================
+  Developed by Yasin Ullah - BNI Enterprises
+=====================================================

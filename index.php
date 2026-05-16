@@ -2,6 +2,7 @@
 ini_set('session.cookie_httponly', 1);
 ini_set('session.use_only_cookies', 1);
 ini_set('session.cookie_samesite', 'Strict');
+// ini_set('session.cookie_secure', 1); // UNCOMMENT WHEN HTTPS IS LIVE
 session_start();
 $db_host = 'localhost';
 $db_user = 'root';
@@ -529,17 +530,21 @@ function install_database()
 
 function get_setting($key)
 {
-    $conn = db_connect();
-    if (!$conn)
-        return null;
-    $stmt = $conn->prepare('SELECT setting_value FROM settings WHERE setting_key = ?');
-    $stmt->bind_param('s', $key);
-    $stmt->execute();
-    $r = $stmt->get_result();
-    $row = $r->fetch_assoc();
-    $stmt->close();
-    $conn->close();
-    return $row ? $row['setting_value'] : null;
+    static $settings_cache = null;
+    if ($settings_cache === null) {
+        $conn = db_connect();
+        if (!$conn)
+            return null;
+        $r = $conn->query('SELECT setting_key, setting_value FROM settings');
+        $settings_cache = [];
+        if ($r) {
+            while ($row = $r->fetch_assoc()) {
+                $settings_cache[$row['setting_key']] = $row['setting_value'];
+            }
+        }
+        $conn->close();
+    }
+    return $settings_cache[$key] ?? null;
 }
 
 function fmt_money($val)
@@ -571,7 +576,7 @@ function handle_image_upload($file, $dest_dir = 'uploads/')
     if (!isset($file['error']) || is_array($file['error']) || $file['error'] !== UPLOAD_ERR_OK)
         return null;
     if (!is_dir($dest_dir))
-        mkdir($dest_dir, 0777, true);
+        mkdir($dest_dir, 0755, true);
     $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
     if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif']))
         return null;
@@ -621,7 +626,7 @@ function handle_bike_image_upload($file, $dest_dir = 'uploads/')
     if (!isset($file['error']) || is_array($file['error']) || $file['error'] !== UPLOAD_ERR_OK)
         return null;
     if (!is_dir($dest_dir))
-        mkdir($dest_dir, 0777, true);
+        mkdir($dest_dir, 0755, true);
     $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
     if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif']))
         return null;
@@ -2115,7 +2120,11 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $err = 'New password must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, one number, and one special character.';
             } else {
                 $np = password_hash($new_password, PASSWORD_DEFAULT);
-                $conn->query("UPDATE users SET password_hash='" . mysqli_real_escape_string($conn, $np) . "' WHERE id=" . (int) $_SESSION['user_id']);
+                $pw_stmt = $conn->prepare('UPDATE users SET password_hash=? WHERE id=?');
+                $uid = (int) $_SESSION['user_id'];
+                $pw_stmt->bind_param('si', $np, $uid);
+                $pw_stmt->execute();
+                $pw_stmt->close();
                 $msg .= ' Password updated.';
             }
         }
@@ -2126,7 +2135,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
     }
     if ($page === 'settings' && isset($_GET['action']) && $_GET['action'] === 'backup') {
         require_permission($conn, 'settings', 'view');
-        $tables_list = ['settings', 'suppliers', 'customers', 'models', 'accessories', 'purchase_orders', 'bikes', 'sale_accessories', 'payments', 'installments', 'ledger', 'roles', 'role_permissions', 'users', 'income_expenses', 'quotations'];
+        $tables_list = ['settings', 'suppliers', 'customers', 'models', 'accessories', 'purchase_orders', 'bikes', 'sale_accessories', 'payments', 'installments', 'ledger', 'roles', 'role_permissions', 'users', 'income_expenses', 'quotations', 'money_destinations', 'sale_money_allocations'];
         $sql_dump = "-- BNI Enterprises Database Backup\n-- Generated: " . date('Y-m-d H:i:s') . "\n-- Author: $author\n\n";
         $sql_dump .= "SET FOREIGN_KEY_CHECKS=0;\n\n";
         foreach ($tables_list as $tbl) {
@@ -2152,7 +2161,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
     if ($page === 'settings' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['restore_db']) && isset($_FILES['backup_file'])) {
         require_permission($conn, 'settings', 'edit');
         $file = $_FILES['backup_file'];
-        if ($file['error'] === UPLOAD_ERR_OK && pathinfo($file['name'], PATHINFO_EXTENSION) === 'sql') {
+        if ($file['error'] === UPLOAD_ERR_OK && pathinfo($file['name'], PATHINFO_EXTENSION) === 'sql' && $file['size'] <= 10485760) {
             $sql_content = file_get_contents($file['tmp_name']);
             $conn->query('SET FOREIGN_KEY_CHECKS=0;');
             if ($conn->multi_query($sql_content)) {
@@ -2358,8 +2367,14 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $rid = (int) $_POST['id'];
             $type = $_POST['type'];
             $status = sanitize($_POST['status']);
-            $table = ($type === 'bike') ? 'bike_requests' : 'quote_requests';
-            $conn->query("UPDATE $table SET status='$status' WHERE id=$rid");
+            $allowed_tables = ['bike' => 'bike_requests', 'quote' => 'quote_requests'];
+            $table = $allowed_tables[$type] ?? null;
+            if ($table) {
+                $rq_stmt = $conn->prepare("UPDATE $table SET status=? WHERE id=?");
+                $rq_stmt->bind_param('si', $status, $rid);
+                $rq_stmt->execute();
+                $rq_stmt->close();
+            }
             $msg = 'Request status updated.';
         }
         header('Location: index.php?page=landing_page&sub=' . ($_POST['sub'] ?? 'general') . '&msg=' . urlencode($msg));
@@ -5226,8 +5241,8 @@ $(document).ready(function() {
 <?php
     elseif ($page === 'reports'):
         $sub = sanitize($_GET['sub'] ?? 'stock');
-        $rep_from = !empty($_GET['rep_from']) ? $_GET['rep_from'] : date('Y-01-01');
-        $rep_to = !empty($_GET['rep_to']) ? $_GET['rep_to'] : date('Y-12-31');
+        $rep_from = (!empty($_GET['rep_from']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['rep_from'])) ? $_GET['rep_from'] : date('Y-01-01');
+        $rep_to = (!empty($_GET['rep_to']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['rep_to'])) ? $_GET['rep_to'] : date('Y-12-31');
         $rep_year = !empty($_GET['rep_year']) ? (int) $_GET['rep_year'] : (int) date('Y');
         $rep_month = !empty($_GET['rep_month']) ? (int) $_GET['rep_month'] : (int) date('n');
 ?>
