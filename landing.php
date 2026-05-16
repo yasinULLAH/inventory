@@ -472,16 +472,16 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
         .leader-card { cursor: pointer; transition: transform 0.3s; }
         .leader-card:hover { transform: translateY(-5px); }
         .leader-card:hover .leader-avatar-wrap::before {
-            animation: neonSpin 0.15s linear infinite, plasmaSpark 0.1s infinite alternate;
+            animation: neonSpin var(--spin-speed, 0.15s) linear infinite, plasmaSpark var(--spark-speed, 0.1s) infinite alternate;
             background: conic-gradient(#0ff, #fff, #a855f7, #6366f1, #0ff);
-            inset: -8px;
-            filter: brightness(2) contrast(1.5);
+            inset: calc(-8px * var(--audio-scale, 1));
+            filter: brightness(calc(2 * var(--audio-scale, 1))) contrast(1.5);
         }
         .leader-card:hover .leader-avatar-wrap::after {
-            animation: neonSpin 0.2s reverse infinite;
+            animation: neonSpin var(--spin-speed, 0.2s) reverse infinite;
             background: conic-gradient(transparent, #fff, transparent, #06b6d4);
-            filter: blur(12px) brightness(2.5);
-            inset: -12px;
+            filter: blur(calc(12px * var(--audio-scale, 1))) brightness(calc(2.5 * var(--audio-scale, 1)));
+            inset: calc(-12px * var(--audio-scale, 1));
         }
         .leader-card:hover .leader-img {
             transform: scale(1.08);
@@ -625,7 +625,6 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
         .nav-hidden { transform: translate(-50%, -150%) !important; opacity: 0; pointer-events: none; }
         #preloader { position: fixed; inset: 0; background: var(--darker); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         .loader-ring { width: 80px; height: 80px; border: 5px solid var(--glass-border); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s infinite linear; margin-bottom: 20px; }
-        /* Electric Spark Link Effects */
         a { position: relative; }
         a::after {
             content: ''; position: absolute; inset: -2px; border-radius: inherit;
@@ -1438,27 +1437,83 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
         const wooshSound = new Audio('woosh3.wav');
         wooshSound.volume = 0.5;
         wooshSound.loop = true;
-
+        let audioCtx, analyser, source, dataArray;
+        let isAudioSetup = false;
+        let activeCard = null;
+        let animationId;
+        let lastAudioTime = 0;
+        function setupAudio() {
+            if (isAudioSetup) return;
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            analyser = audioCtx.createAnalyser();
+            source = audioCtx.createMediaElementSource(wooshSound);
+            source.connect(analyser);
+            analyser.connect(audioCtx.destination);
+            analyser.fftSize = 64;
+            dataArray = new Uint8Array(analyser.frequencyBinCount);
+            isAudioSetup = true;
+        }
+        function updateGlow() {
+            if (!activeCard || !isAudioSetup) return;
+            analyser.getByteFrequencyData(dataArray);
+            let sum = 0;
+            for(let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+            let avg = sum / dataArray.length; 
+            let progress = wooshSound.duration ? (wooshSound.currentTime / wooshSound.duration) : 0;
+            if (wooshSound.currentTime < lastAudioTime && lastAudioTime > 0.1) {
+                triggerBlast(6.0); 
+                if (activeCard) {
+                    activeCard.classList.remove('lightning-blast');
+                    void activeCard.offsetWidth; 
+                    activeCard.classList.add('lightning-blast');
+                    setTimeout(() => {
+                        if (activeCard) activeCard.classList.remove('lightning-blast');
+                    }, 700);
+                }
+            }
+            lastAudioTime = wooshSound.currentTime;
+            let rawVolume = avg / 255;
+            let intensity = Math.pow(rawVolume, 1.2) * (1 + (progress * 3)); 
+            activeCard.style.setProperty('--audio-scale', 1 + (intensity * 12)); 
+            activeCard.style.setProperty('--spin-speed', Math.max(0.002, 0.25 - (intensity * 0.2)) + 's');
+            activeCard.style.setProperty('--spark-speed', Math.max(0.002, 0.15 - (intensity * 0.12)) + 's');
+            animationId = requestAnimationFrame(updateGlow);
+        }
         document.querySelectorAll('.leader-card').forEach(card => {
-            card.addEventListener('mouseenter', () => {
+            const startEffect = () => {
+                if (activeCard === card) return; 
+                setupAudio();
+                if(audioCtx.state === 'suspended') audioCtx.resume();
+                activeCard = card;
                 wooshSound.currentTime = 0;
+                lastAudioTime = 0;
                 wooshSound.play().catch(() => {});
-            });
-
-            card.addEventListener('mouseleave', () => {
+                updateGlow();
+            };
+            const stopEffect = () => {
+                if(activeCard) {
+                    activeCard.style.removeProperty('--audio-scale');
+                    activeCard.style.removeProperty('--spin-speed');
+                    activeCard.style.removeProperty('--spark-speed');
+                }
+                activeCard = null;
+                cancelAnimationFrame(animationId);
                 wooshSound.pause();
                 wooshSound.currentTime = 0;
-            });
-
+            };
+            card.addEventListener('mouseenter', startEffect);
+            card.addEventListener('mouseleave', stopEffect);
+            card.addEventListener('touchstart', startEffect, { passive: true });
+            card.addEventListener('touchend', stopEffect);
+            card.addEventListener('touchcancel', stopEffect);
+            card.addEventListener('contextmenu', (e) => e.preventDefault());
             card.addEventListener('click', function() {
                 this.classList.remove('lightning-blast');
                 void this.offsetWidth;
                 this.classList.add('lightning-blast');
-                
                 const imgSrc = this.querySelector('.leader-img').src;
                 const name = this.querySelector('.leader-name').innerText;
                 const position = this.querySelector('.leader-position').innerText;
-
                 setTimeout(() => {
                     this.classList.remove('lightning-blast');
                     const leaderLightbox = GLightbox({
