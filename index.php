@@ -3831,6 +3831,53 @@ $(document).ready(function() {
 <li><div class="timeline-dot" style="background:#e74c3c"></div><div class="timeline-content"><div class="timeline-date"><?= fmt_date($view_bike['return_date']) ?></div><div class="timeline-text">↩ <strong>Returned by Customer</strong> — Refund: <?= fmt_money($view_bike['return_amount']) ?> | Notes: <?= sanitize($view_bike['return_notes'] ?? '-') ?></div></div></li>
 <?php endif; ?>
 </ul>
+<?php if ($view_bike['status'] === 'sold' && has_permission($conn, 'money_tracking', 'view')):
+    $alloc_result = $conn->query("SELECT sma.*, md.name as dest_name, md.type as dest_type, md.details as dest_details, u.full_name as created_by_name FROM sale_money_allocations sma JOIN money_destinations md ON sma.destination_id=md.id LEFT JOIN users u ON sma.created_by=u.id WHERE sma.bike_id=$view_bike_id ORDER BY sma.allocation_date");
+    $acc_total_q = $conn->query("SELECT COALESCE(SUM(sa.final_price),0) as t FROM sale_accessories sa WHERE sa.bike_id=$view_bike_id");
+    $acc_total_row = $acc_total_q ? $acc_total_q->fetch_assoc() : ['t'=>0];
+    $sale_total = $view_bike['selling_price'] + $acc_total_row['t'];
+    $alloc_total = 0;
+    $alloc_rows = [];
+    if ($alloc_result) { while ($ar = $alloc_result->fetch_assoc()) { $alloc_rows[] = $ar; $alloc_total += $ar['amount']; } }
+    $remaining = $sale_total - $alloc_total;
+?>
+<hr style="border-color:var(--border);margin:14px 0">
+<h4 style="font-size:0.82rem;color:var(--accent);text-transform:uppercase;margin-bottom:10px">💸 Money Destination Tracking</h4>
+<div class="stats-cards" style="margin-bottom:12px">
+<div class="stat-card"><div class="stat-value"><?= fmt_money($sale_total) ?></div><div class="stat-label">Sale Total</div></div>
+<div class="stat-card" style="border-left:3px solid var(--success)"><div class="stat-value" style="color:var(--success)"><?= fmt_money($alloc_total) ?></div><div class="stat-label">Allocated</div></div>
+<div class="stat-card" style="border-left:3px solid <?= $remaining > 0 ? 'var(--warning)' : 'var(--success)' ?>"><div class="stat-value" style="color:<?= $remaining > 0 ? 'var(--warning)' : 'var(--success)' ?>"><?= fmt_money($remaining) ?></div><div class="stat-label">Remaining</div></div>
+</div>
+<?php if (count($alloc_rows) > 0): ?>
+<div class="data-table-wrap">
+<table class="data-table" style="font-size:0.82rem">
+<thead><tr><th>Sr#</th><th>Type</th><th>Destination</th><th>Amount</th><th>Date</th><th>Notes</th><th>By</th></tr></thead>
+<tbody>
+<?php $sr=1; foreach ($alloc_rows as $ar):
+    $dti = ['bank'=>'🏦','person'=>'👤','wallet'=>'💳'][$ar['dest_type']] ?? '📌';
+?>
+<tr>
+<td><?= $sr++ ?></td>
+<td><span class="badge badge-<?= $ar['dest_type'] === 'bank' ? 'info' : ($ar['dest_type'] === 'person' ? 'success' : 'warning') ?>"><?= $dti ?> <?= strtoupper($ar['dest_type']) ?></span></td>
+<td><strong><?= sanitize($ar['dest_name']) ?></strong><br><small style="color:var(--text3)"><?= sanitize($ar['dest_details'] ?: '') ?></small></td>
+<td><strong><?= fmt_money($ar['amount']) ?></strong></td>
+<td><?= fmt_date($ar['allocation_date']) ?></td>
+<td><?= sanitize($ar['notes'] ?: '-') ?></td>
+<td style="font-size:0.75rem;color:var(--text3)"><?= sanitize($ar['created_by_name'] ?? '-') ?></td>
+</tr>
+<?php endforeach; ?>
+</tbody>
+</table>
+</div>
+<?php else: ?>
+<div style="background:var(--bg3);padding:12px;border-radius:2px;text-align:center;color:var(--text3);font-size:0.85rem">
+⚠️ No money allocations recorded for this sale yet.
+</div>
+<?php endif; ?>
+<div class="no-print" style="margin-top:10px">
+<a href="index.php?page=money_tracking&filter_bike=<?= $view_bike_id ?>" class="btn btn-primary btn-sm">💸 Manage Allocations</a>
+</div>
+<?php endif; ?>
 </fieldset>
 <?php else: ?>
 <?php if ($status_f || $model_f || $color_f || $search_f || $date_from || $date_to): ?>
@@ -3938,6 +3985,9 @@ $(document).ready(function() {
 <?php if ($bike['status'] === 'sold' && has_permission($conn, 'sale', 'view')): ?>
 <a href="index.php?page=sale&print_invoice=<?= $bike['id'] ?>&format=a4" class="btn btn-primary btn-sm" title="A4 Invoice" target="_blank">📄</a>
 <a href="index.php?page=sale&print_invoice=<?= $bike['id'] ?>&format=thermal" class="btn btn-warning btn-sm" title="Thermal POS" target="_blank">🧾</a>
+<?php endif; ?>
+<?php if ($bike['status'] === 'sold' && has_permission($conn, 'money_tracking', 'view')): ?>
+<a href="index.php?page=money_tracking&filter_bike=<?= $bike['id'] ?>" class="btn btn-default btn-sm" title="Track Money Destination" style="background:var(--bg3)">💸</a>
 <?php endif; ?>
 <?php if ($bike['purchase_order_id'] && has_permission($conn, 'purchase', 'view')): ?>
 <a href="index.php?page=purchase&print_po=<?= $bike['purchase_order_id'] ?>&format=a4" class="btn btn-primary btn-sm" title="A4 Purchase Receipt" target="_blank">📄</a>
