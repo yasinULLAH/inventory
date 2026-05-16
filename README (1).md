@@ -68,6 +68,8 @@ The main sidebar provides the following modules:
 - Models. [file:1]
 - Customers. [file:1]
 - Suppliers. [file:1]
+- Money Destinations. [file:1]
+- Money Tracking. [file:1]
 - Settings. [file:1]
 
 The topbar also provides current date/time display and theme toggle functionality. [file:1]
@@ -326,6 +328,12 @@ Available report sections include:
 - Monthly Summary. [file:1]
 - Daily Ledger. [file:1]
 - Purchase vs Sales. [file:1]
+- Accessory Stock. [file:1]
+- Installments Summary. [file:1]
+- Money by Destination. [file:1]
+- Money by Sale. [file:1]
+- Untracked Sales. [file:1]
+- Money Flow. [file:1]
 
 Most reports support date filters, and some use year or day-specific selection inputs. [file:1]
 
@@ -586,6 +594,8 @@ BNI Enterprises Bike Dealer Management System ایک مکمل کاروباری �
 - Models. [file:1]
 - Customers. [file:1]
 - Suppliers. [file:1]
+- Money Destinations. [file:1]
+- Money Tracking. [file:1]
 - Settings. [file:1]
 
 اوپر والی بار میں تاریخ/وقت اور theme toggle بھی موجود ہے۔ [file:1]
@@ -791,6 +801,12 @@ Reports ماڈیول میں کئی analytical رپورٹس موجود ہیں:
 - Monthly Summary. [file:1]
 - Daily Ledger. [file:1]
 - Purchase vs Sales. [file:1]
+- Accessory Stock. [file:1]
+- Installments Summary. [file:1]
+- Money by Destination. [file:1]
+- Money by Sale. [file:1]
+- Untracked Sales. [file:1]
+- Money Flow. [file:1]
 
 ان رپورٹس کے ذریعے stock, sales, tax, profit, cheque performance, monthly trend, daily activity، اور model-wise performance دیکھی جا سکتی ہے۔ [file:1]
 

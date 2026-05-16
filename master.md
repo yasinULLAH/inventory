@@ -19,6 +19,7 @@ This is the exhaustive, complete, and definitive master documentation for the **
     - [Returns Management](#f-returns-management)
     - [Financial Ecosystem: Cheques & Ledgers](#g-financial-ecosystem-cheques--ledgers)
     - [Customers & Suppliers (CRM)](#h-customers--suppliers-crm)
+    - [Money Destination Tracking](#j-money-destination-tracking)
     - [System Settings & Calibration](#i-system-settings--calibration)
 6. [Business Logic, Math & Tax Formulas](#6-business-logic-math--tax-formulas)
 7. [Bilingual User Manual (Urdu / اردو)](#7-bilingual-user-manual-urdu--اردو)
@@ -62,6 +63,8 @@ The system operates on 16 highly normalized, relational tables.
 14. `users`: System operators linked to roles.
 15. `income_expenses`: Operational accounting for daily showroom expenses or external income.
 16. `quotations`: Pre-sales documents with validity dates, converting to live sales.
+17. `money_destinations`: Master list of money destinations (type: bank/person/wallet, name, details, active status).
+18. `sale_money_allocations`: Per-sale money tracking linking bikes to destinations with amounts, dates, and audit info.
 
 ---
 
@@ -147,6 +150,17 @@ The system uses a strict RBAC engine.
 - **Maintenance:** 1-Click Database Backup (.sql export) and Database Restore facility. Theme toggling (Dark/Light). Password updating.
 - **Visual Evidence:**
 ![Settings Full Capture](audit_assets/screenshots/settings.png)
+
+### J. Money Destination Tracking
+**Purpose:** Track where sale money ends up — banks, persons, or wallets — with full CRUD and comprehensive reporting.
+- **Money Destinations (CRUDable):** Manage a master list of banks, persons, and wallets with name, details, and active status. 9 default destinations pre-seeded.
+- **Money Tracking:** Allocate sale proceeds to one or more destinations per sale. Supports adding/editing/deleting allocations at any time after the sale.
+- **Sale Form Integration:** Optional collapsible section during sale entry to track money destinations inline.
+- **Reports (4 Sub-tabs):**
+  - Money by Destination: Per-destination totals with date filtering.
+  - Money by Sale: Per-sale breakdown showing destination allocation chips.
+  - Untracked Sales: Sales with missing or partial money allocation (with direct “Track” link).
+  - Money Flow: Monthly summary of money flow per destination type.
 
 ---
 

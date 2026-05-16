@@ -817,7 +817,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
     $currency = get_setting('currency') ?? 'Rs.';
     $tax_rate = (float) (get_setting('tax_rate') ?? 0.1);
     $tax_on = get_setting('tax_on') ?? 'purchase_price';
-    $protected_pages = ['purchase', 'inventory', 'sale', 'returns', 'payments', 'customers', 'suppliers', 'models', 'reports', 'customer_ledger', 'supplier_ledger', 'settings', 'roles', 'users', 'income_expense', 'accessories', 'quotations', 'installments'];
+    $protected_pages = ['purchase', 'inventory', 'sale', 'returns', 'payments', 'customers', 'suppliers', 'models', 'reports', 'customer_ledger', 'supplier_ledger', 'settings', 'roles', 'users', 'income_expense', 'accessories', 'quotations', 'installments', 'money_destinations', 'money_tracking'];
     if (in_array($page, $protected_pages)) {
         require_permission($conn, $page, 'view');
     }
@@ -845,7 +845,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $id = $conn->insert_id;
             }
             $conn->query("DELETE FROM role_permissions WHERE role_id=$id");
-            $all_pages_perm = ['dashboard', 'inventory', 'purchase', 'sale', 'customers', 'suppliers', 'models', 'reports', 'returns', 'payments', 'settings', 'roles', 'users', 'income_expense', 'accessories', 'quotations', 'installments'];
+            $all_pages_perm = ['dashboard', 'inventory', 'purchase', 'sale', 'customers', 'suppliers', 'models', 'reports', 'returns', 'payments', 'settings', 'roles', 'users', 'income_expense', 'accessories', 'quotations', 'installments', 'money_destinations', 'money_tracking'];
             $stmtp = $conn->prepare('INSERT INTO role_permissions (role_id, page, can_view, can_add, can_edit, can_delete) VALUES (?,?,?,?,?,?)');
             foreach ($all_pages_perm as $p) {
                 $v = isset($_POST['perm'][$p]['view']) ? 1 : 0;
@@ -1584,6 +1584,23 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     }
                     $msg .= ' Installment plan created.';
                 }
+                $sale_allocations = $_POST['money_alloc'] ?? [];
+                if (!empty($sale_allocations)) {
+                    $user = current_user($conn);
+                    $alloc_created_by = $user ? $user['id'] : null;
+                    $alloc_stmt = $conn->prepare('INSERT INTO sale_money_allocations (bike_id, destination_id, amount, allocation_date, notes, created_by) VALUES (?,?,?,?,?,?)');
+                    foreach ($sale_allocations as $alloc) {
+                        $alloc_dest_id = (int) ($alloc['destination_id'] ?? 0);
+                        $alloc_amount = (float) ($alloc['amount'] ?? 0);
+                        $alloc_date = $selling_date;
+                        $alloc_note = sanitize($alloc['notes'] ?? '');
+                        if ($alloc_dest_id > 0 && $alloc_amount > 0) {
+                            $alloc_stmt->bind_param('iidssi', $bike_id, $alloc_dest_id, $alloc_amount, $alloc_date, $alloc_note, $alloc_created_by);
+                            $alloc_stmt->execute();
+                        }
+                    }
+                    $msg .= ' Money allocation tracked.';
+                }
                 $conn->commit();
                 $_SESSION['last_sale_bike_id'] = $bike_id;
                 $msg = 'Sale recorded successfully. Margin: ' . fmt_money($margin) . '. ' . $msg;
@@ -1862,6 +1879,93 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             exit;
         }
         end_installments_post:;
+    }
+    if ($page === 'money_destinations' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        if (isset($_POST['save_destination'])) {
+            require_permission($conn, 'money_destinations', isset($_POST['id']) && (int) $_POST['id'] > 0 ? 'edit' : 'add');
+            $id = (int) ($_POST['id'] ?? 0);
+            $type = sanitize($_POST['type'] ?? 'bank');
+            $name = sanitize($_POST['name'] ?? '');
+            $details = sanitize($_POST['details'] ?? '');
+            $is_active = isset($_POST['is_active']) ? 1 : 0;
+            if (empty($name) || empty($type)) {
+                $err = 'Name and Type are required.';
+                goto end_money_dest_post;
+            }
+            if ($id) {
+                $stmt = $conn->prepare('UPDATE money_destinations SET type=?, name=?, details=?, is_active=? WHERE id=?');
+                $stmt->bind_param('sssii', $type, $name, $details, $is_active, $id);
+                $stmt->execute();
+                $msg = 'Destination updated successfully.';
+            } else {
+                $stmt = $conn->prepare('INSERT INTO money_destinations (type, name, details, is_active) VALUES (?,?,?,?)');
+                $stmt->bind_param('sssi', $type, $name, $details, $is_active);
+                $stmt->execute();
+                $msg = 'Destination added successfully.';
+            }
+            header('Location: index.php?page=money_destinations&msg=' . urlencode($msg));
+            exit;
+        }
+        if (isset($_POST['delete_destination'])) {
+            require_permission($conn, 'money_destinations', 'delete');
+            $id = (int) $_POST['id'];
+            $chk = $conn->prepare('SELECT COUNT(*) FROM sale_money_allocations WHERE destination_id = ?');
+            $chk->bind_param('i', $id);
+            $chk->execute();
+            $alloc_count = $chk->get_result()->fetch_row()[0];
+            if ($alloc_count > 0) {
+                $err = 'Cannot delete: This destination has ' . $alloc_count . ' allocation(s) linked to it.';
+            } else {
+                $stmt = $conn->prepare('DELETE FROM money_destinations WHERE id=?');
+                $stmt->bind_param('i', $id);
+                $stmt->execute();
+                $msg = 'Destination deleted successfully.';
+            }
+            header('Location: index.php?page=money_destinations&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+            exit;
+        }
+        end_money_dest_post:;
+    }
+    if ($page === 'money_tracking' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        if (isset($_POST['save_allocation'])) {
+            require_permission($conn, 'money_tracking', isset($_POST['id']) && (int) $_POST['id'] > 0 ? 'edit' : 'add');
+            $id = (int) ($_POST['id'] ?? 0);
+            $bike_id = (int) ($_POST['bike_id'] ?? 0);
+            $destination_id = (int) ($_POST['destination_id'] ?? 0);
+            $amount = (float) ($_POST['amount'] ?? 0);
+            $allocation_date = sanitize($_POST['allocation_date'] ?? date('Y-m-d'));
+            $alloc_notes = sanitize($_POST['alloc_notes'] ?? '');
+            $user = current_user($conn);
+            $created_by = $user ? $user['id'] : null;
+            if ($bike_id <= 0 || $destination_id <= 0 || $amount <= 0 || empty($allocation_date)) {
+                $err = 'All fields are required and amount must be greater than 0.';
+                goto end_money_track_post;
+            }
+            if ($id) {
+                $stmt = $conn->prepare('UPDATE sale_money_allocations SET bike_id=?, destination_id=?, amount=?, allocation_date=?, notes=? WHERE id=?');
+                $stmt->bind_param('iidssi', $bike_id, $destination_id, $amount, $allocation_date, $alloc_notes, $id);
+                $stmt->execute();
+                $msg = 'Allocation updated successfully.';
+            } else {
+                $stmt = $conn->prepare('INSERT INTO sale_money_allocations (bike_id, destination_id, amount, allocation_date, notes, created_by) VALUES (?,?,?,?,?,?)');
+                $stmt->bind_param('iidssi', $bike_id, $destination_id, $amount, $allocation_date, $alloc_notes, $created_by);
+                $stmt->execute();
+                $msg = 'Allocation recorded successfully.';
+            }
+            header('Location: index.php?page=money_tracking&msg=' . urlencode($msg));
+            exit;
+        }
+        if (isset($_POST['delete_allocation'])) {
+            require_permission($conn, 'money_tracking', 'delete');
+            $id = (int) $_POST['id'];
+            $stmt = $conn->prepare('DELETE FROM sale_money_allocations WHERE id=?');
+            $stmt->bind_param('i', $id);
+            $stmt->execute();
+            $msg = 'Allocation deleted successfully.';
+            header('Location: index.php?page=money_tracking&msg=' . urlencode($msg));
+            exit;
+        }
+        end_money_track_post:;
     }
     if ($page === 'inventory' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'delete') {
@@ -2991,6 +3095,8 @@ else:
         ['returns', '↩', 'Returns'],
         ['payments', '💳', 'Payments Register'],
         ['installments', '🗓️', 'Installments'],
+        ['money_destinations', '🏦', 'Money Destinations'],
+        ['money_tracking', '💸', 'Money Tracking'],
         ['quotations', '📝', 'Quotations'],
         ['income_expense', '💰', 'Income/Expense'],
         ['customer_ledger', '👤', 'Customer Ledger'],
@@ -4018,6 +4124,40 @@ document.getElementById('bulkExportForm').addEventListener('submit', function(){
 <div class="form-row">
     <div class="form-group"><label>Sale Notes</label><textarea name="sale_notes" rows="2" placeholder="Any notes..."></textarea></div>
 </div>
+<?php
+    $dest_list_sale = $conn->query("SELECT id, type, name FROM money_destinations WHERE is_active=1 ORDER BY type, name");
+    $dest_options_sale = [];
+    if ($dest_list_sale) { while ($dd = $dest_list_sale->fetch_assoc()) $dest_options_sale[] = $dd; }
+?>
+<fieldset class="fieldset" style="border-color:var(--accent);background:var(--surface)">
+<legend style="cursor:pointer" onclick="document.getElementById('moneyAllocArea').style.display=document.getElementById('moneyAllocArea').style.display==='none'?'block':'none'">💸 Track Money Destination <small style="color:var(--text3)">(Optional — click to expand)</small></legend>
+<div id="moneyAllocArea" style="display:none">
+    <div id="moneyAllocRows"></div>
+    <button type="button" class="btn btn-default btn-sm" onclick="addMoneyAllocRow()" style="margin-top:6px">+ Add Destination</button>
+</div>
+</fieldset>
+<script>
+var moneyDestOptions = <?= json_encode($dest_options_sale) ?>;
+var moneyAllocIdx = 0;
+function addMoneyAllocRow() {
+    var container = document.getElementById('moneyAllocRows');
+    var idx = moneyAllocIdx++;
+    var typeIcons = {bank:'🏦',person:'👤',wallet:'💳'};
+    var opts = '<option value="">-- Select Destination --</option>';
+    moneyDestOptions.forEach(function(d) {
+        opts += '<option value="'+d.id+'">'+(typeIcons[d.type]||'')+' '+d.name+' ('+d.type+')</option>';
+    });
+    var row = document.createElement('div');
+    row.className = 'form-row';
+    row.style.alignItems = 'flex-end';
+    row.id = 'moneyAllocRow_'+idx;
+    row.innerHTML = '<div class="form-group"><label>Destination</label><select name="money_alloc['+idx+'][destination_id]">'+opts+'</select></div>'
+        + '<div class="form-group"><label>Amount (<?= $currency ?>)</label><input type="number" name="money_alloc['+idx+'][amount]" step="0.01" min="0" placeholder="0.00"></div>'
+        + '<div class="form-group"><label>Notes</label><input type="text" name="money_alloc['+idx+'][notes]" placeholder="Optional note"></div>'
+        + '<div class="form-group"><button type="button" class="btn btn-danger btn-sm" onclick="document.getElementById(\'moneyAllocRow_'+idx+'\').remove()">✕</button></div>';
+    container.appendChild(row);
+}
+</script>
 <div style="display:flex;gap:8px;flex-wrap:wrap">
 <button type="submit" name="save_sale" class="btn btn-success">💾 Record Sale</button>
 <a href="index.php?page=inventory" class="btn btn-default">← Back to Inventory</a>
@@ -5055,6 +5195,10 @@ $(document).ready(function() {
             ['purchase_vs_sales', '🔄 Purchase vs Sales'],
             ['accessory_stock', '🛠️ Accessory Stock'],
             ['installments_summary', '🗓️ Installments Summary'],
+            ['money_by_destination', '🏦 Money by Destination'],
+            ['money_by_sale', '🧾 Money by Sale'],
+            ['money_untracked', '⚠️ Untracked Sales'],
+            ['money_flow', '📊 Money Flow'],
         ];
         foreach ($sub_items as $si):
             ?>
@@ -5591,6 +5735,171 @@ $(document).ready(function() {
 <td><strong><?= $overall_totals['overdue_cnt'] ?></strong></td>
 </tr>
 </tfoot>
+</table>
+</div>
+</fieldset>
+<?php
+        elseif ($sub === 'money_by_destination'):
+            $mbd_result = $conn->query("SELECT md.id, md.name, md.type, md.details,
+                COUNT(sma.id) as alloc_count,
+                COALESCE(SUM(sma.amount),0) as total_allocated
+                FROM money_destinations md
+                LEFT JOIN sale_money_allocations sma ON md.id=sma.destination_id AND sma.allocation_date BETWEEN '" . mysqli_real_escape_string($conn, $rep_from) . "' AND '" . mysqli_real_escape_string($conn, $rep_to) . "'
+                GROUP BY md.id ORDER BY total_allocated DESC");
+            $mbd_grand = 0;
+?>
+<fieldset class="fieldset animate__animated animate__fadeInUp"><legend>🏦 Money by Destination (<?= fmt_date($rep_from) ?> - <?= fmt_date($rep_to) ?>)</legend>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Sr#</th><th>Type</th><th>Destination</th><th>Details</th><th>Allocations</th><th>Total Amount</th></tr></thead>
+<tbody>
+<?php $sr = 1; while ($mbd = $mbd_result->fetch_assoc()):
+    $mbd_grand += $mbd['total_allocated'];
+    $ti = ['bank'=>'🏦','person'=>'👤','wallet'=>'💳'][$mbd['type']] ?? '📌';
+?>
+<tr>
+<td><?= $sr++ ?></td>
+<td><span class="badge badge-<?= $mbd['type'] === 'bank' ? 'info' : ($mbd['type'] === 'person' ? 'success' : 'warning') ?>"><?= $ti ?> <?= strtoupper($mbd['type']) ?></span></td>
+<td><strong><?= sanitize($mbd['name']) ?></strong></td>
+<td><?= sanitize($mbd['details'] ?: '-') ?></td>
+<td><?= $mbd['alloc_count'] ?></td>
+<td><strong><?= fmt_money($mbd['total_allocated']) ?></strong></td>
+</tr>
+<?php endwhile; ?>
+</tbody>
+<tfoot><tr><td colspan="4"><strong>GRAND TOTAL</strong></td><td></td><td><strong><?= fmt_money($mbd_grand) ?></strong></td></tr></tfoot>
+</table>
+</div>
+</fieldset>
+<?php
+        elseif ($sub === 'money_by_sale'):
+            $mbs_result = $conn->query("SELECT b.id as bike_id, b.chassis_number, b.selling_price, b.selling_date,
+                m.model_name, c.name as cust_name,
+                COALESCE((SELECT SUM(sa2.final_price) FROM sale_accessories sa2 WHERE sa2.bike_id=b.id),0) as acc_total,
+                COALESCE((SELECT SUM(sma.amount) FROM sale_money_allocations sma WHERE sma.bike_id=b.id),0) as total_allocated
+                FROM bikes b
+                LEFT JOIN models m ON b.model_id=m.id
+                LEFT JOIN customers c ON b.customer_id=c.id
+                WHERE b.status='sold' AND b.selling_date BETWEEN '" . mysqli_real_escape_string($conn, $rep_from) . "' AND '" . mysqli_real_escape_string($conn, $rep_to) . "'
+                ORDER BY b.selling_date DESC");
+?>
+<fieldset class="fieldset animate__animated animate__fadeInUp"><legend>🧾 Money by Sale (<?= fmt_date($rep_from) ?> - <?= fmt_date($rep_to) ?>)</legend>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Sr#</th><th>Chassis</th><th>Model</th><th>Customer</th><th>Sale Date</th><th>Sale Total</th><th>Allocated</th><th>Remaining</th><th>Destinations</th></tr></thead>
+<tbody>
+<?php $sr = 1; $mbs_total_sale = 0; $mbs_total_alloc = 0;
+    while ($mbs = $mbs_result->fetch_assoc()):
+    $sale_total = $mbs['selling_price'] + $mbs['acc_total'];
+    $remaining = $sale_total - $mbs['total_allocated'];
+    $mbs_total_sale += $sale_total;
+    $mbs_total_alloc += $mbs['total_allocated'];
+    $dest_details = $conn->query("SELECT md.name, md.type, sma.amount FROM sale_money_allocations sma JOIN money_destinations md ON sma.destination_id=md.id WHERE sma.bike_id=" . $mbs['bike_id']);
+    $dest_chips = '';
+    if ($dest_details) { while ($dd = $dest_details->fetch_assoc()) {
+        $dti = ['bank'=>'🏦','person'=>'👤','wallet'=>'💳'][$dd['type']] ?? '';
+        $dest_chips .= '<span class="badge badge-' . ($dd['type'] === 'bank' ? 'info' : ($dd['type'] === 'person' ? 'success' : 'warning')) . '" style="margin:1px">' . $dti . ' ' . sanitize($dd['name']) . ': ' . fmt_money($dd['amount']) . '</span> ';
+    }}
+?>
+<tr>
+<td><?= $sr++ ?></td>
+<td style="font-family:Consolas,monospace"><?= sanitize($mbs['chassis_number']) ?></td>
+<td><?= sanitize($mbs['model_name']) ?></td>
+<td><?= sanitize($mbs['cust_name'] ?? 'Walk-in') ?></td>
+<td><?= fmt_date($mbs['selling_date']) ?></td>
+<td><?= fmt_money($sale_total) ?></td>
+<td><?= fmt_money($mbs['total_allocated']) ?></td>
+<td style="color:<?= $remaining > 0 ? 'var(--warning)' : 'var(--success)' ?>;font-weight:700"><?= fmt_money($remaining) ?></td>
+<td><?= $dest_chips ?: '<span style="color:var(--text3)">None</span>' ?></td>
+</tr>
+<?php endwhile; ?>
+</tbody>
+<tfoot><tr><td colspan="5"><strong>TOTAL</strong></td><td><strong><?= fmt_money($mbs_total_sale) ?></strong></td><td><strong><?= fmt_money($mbs_total_alloc) ?></strong></td><td style="color:<?= ($mbs_total_sale - $mbs_total_alloc) > 0 ? 'var(--warning)' : 'var(--success)' ?>"><strong><?= fmt_money($mbs_total_sale - $mbs_total_alloc) ?></strong></td><td></td></tr></tfoot>
+</table>
+</div>
+</fieldset>
+<?php
+        elseif ($sub === 'money_untracked'):
+            $mu_result = $conn->query("SELECT b.id, b.chassis_number, b.selling_price, b.selling_date,
+                m.model_name, c.name as cust_name,
+                COALESCE((SELECT SUM(sa2.final_price) FROM sale_accessories sa2 WHERE sa2.bike_id=b.id),0) as acc_total,
+                COALESCE((SELECT SUM(sma.amount) FROM sale_money_allocations sma WHERE sma.bike_id=b.id),0) as total_allocated
+                FROM bikes b
+                LEFT JOIN models m ON b.model_id=m.id
+                LEFT JOIN customers c ON b.customer_id=c.id
+                WHERE b.status='sold'
+                HAVING (b.selling_price + acc_total) > total_allocated
+                ORDER BY (b.selling_price + acc_total - total_allocated) DESC");
+            $mu_total_gap = 0;
+?>
+<fieldset class="fieldset animate__animated animate__fadeInUp"><legend>⚠️ Untracked / Partially Tracked Sales</legend>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Sr#</th><th>Chassis</th><th>Model</th><th>Customer</th><th>Sale Date</th><th>Sale Total</th><th>Allocated</th><th>Untracked Amount</th><th class="no-sort">Action</th></tr></thead>
+<tbody>
+<?php $sr = 1; while ($mu = $mu_result->fetch_assoc()):
+    $sale_total = $mu['selling_price'] + $mu['acc_total'];
+    $gap = $sale_total - $mu['total_allocated'];
+    $mu_total_gap += $gap;
+?>
+<tr>
+<td><?= $sr++ ?></td>
+<td style="font-family:Consolas,monospace"><?= sanitize($mu['chassis_number']) ?></td>
+<td><?= sanitize($mu['model_name']) ?></td>
+<td><?= sanitize($mu['cust_name'] ?? 'Walk-in') ?></td>
+<td><?= fmt_date($mu['selling_date']) ?></td>
+<td><?= fmt_money($sale_total) ?></td>
+<td><?= fmt_money($mu['total_allocated']) ?></td>
+<td style="color:var(--danger);font-weight:700"><?= fmt_money($gap) ?></td>
+<td class="no-print"><a href="index.php?page=money_tracking&filter_bike=<?= $mu['id'] ?>" class="btn btn-primary btn-sm">💸 Track</a></td>
+</tr>
+<?php endwhile; ?>
+</tbody>
+<tfoot><tr><td colspan="7"><strong>TOTAL UNTRACKED</strong></td><td style="color:var(--danger)"><strong><?= fmt_money($mu_total_gap) ?></strong></td><td></td></tr></tfoot>
+</table>
+</div>
+</fieldset>
+<?php
+        elseif ($sub === 'money_flow'):
+            $mf_result = $conn->query("SELECT DATE_FORMAT(sma.allocation_date,'%Y-%m') as ym, md.type,
+                COUNT(sma.id) as alloc_count, SUM(sma.amount) as total_amount
+                FROM sale_money_allocations sma
+                JOIN money_destinations md ON sma.destination_id=md.id
+                WHERE YEAR(sma.allocation_date)=$rep_year
+                GROUP BY ym, md.type ORDER BY ym, md.type");
+            $mf_data = [];
+            $mf_months = [];
+            while ($mf = $mf_result->fetch_assoc()) {
+                $mf_data[$mf['ym']][$mf['type']] = ['count' => $mf['alloc_count'], 'amount' => $mf['total_amount']];
+                $mf_months[$mf['ym']] = true;
+            }
+            ksort($mf_months);
+?>
+<fieldset class="fieldset animate__animated animate__fadeInUp"><legend>📊 Monthly Money Flow — <?= $rep_year ?></legend>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Month</th><th>🏦 Bank</th><th>👤 Person</th><th>💳 Wallet</th><th>Total</th></tr></thead>
+<tbody>
+<?php $mf_totals = ['bank' => 0, 'person' => 0, 'wallet' => 0];
+    foreach ($mf_months as $ym => $_v):
+    $bank_amt = $mf_data[$ym]['bank']['amount'] ?? 0;
+    $person_amt = $mf_data[$ym]['person']['amount'] ?? 0;
+    $wallet_amt = $mf_data[$ym]['wallet']['amount'] ?? 0;
+    $month_total = $bank_amt + $person_amt + $wallet_amt;
+    $mf_totals['bank'] += $bank_amt;
+    $mf_totals['person'] += $person_amt;
+    $mf_totals['wallet'] += $wallet_amt;
+?>
+<tr>
+<td><?= date('F Y', strtotime($ym . '-01')) ?></td>
+<td><?= fmt_money($bank_amt) ?></td>
+<td><?= fmt_money($person_amt) ?></td>
+<td><?= fmt_money($wallet_amt) ?></td>
+<td><strong><?= fmt_money($month_total) ?></strong></td>
+</tr>
+<?php endforeach; ?>
+</tbody>
+<tfoot><tr><td><strong>TOTAL</strong></td><td><strong><?= fmt_money($mf_totals['bank']) ?></strong></td><td><strong><?= fmt_money($mf_totals['person']) ?></strong></td><td><strong><?= fmt_money($mf_totals['wallet']) ?></strong></td><td><strong><?= fmt_money($mf_totals['bank'] + $mf_totals['person'] + $mf_totals['wallet']) ?></strong></td></tr></tfoot>
 </table>
 </div>
 </fieldset>
@@ -6839,6 +7148,233 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 </fieldset>
 <?php endif; ?>
+<?php
+    elseif ($page === 'money_destinations'):
+        $dest_result = $conn->query('SELECT * FROM money_destinations ORDER BY type, name');
+        $edit_dest_id = (int) ($_GET['edit_id'] ?? 0);
+        $edit_dest = null;
+        if ($edit_dest_id) {
+            $ed = $conn->query("SELECT * FROM money_destinations WHERE id=$edit_dest_id");
+            $edit_dest = $ed ? $ed->fetch_assoc() : null;
+        }
+        $dest_stats = $conn->query('SELECT type, COUNT(*) as cnt FROM money_destinations GROUP BY type');
+        $type_counts = ['bank' => 0, 'person' => 0, 'wallet' => 0];
+        while ($ds = $dest_stats->fetch_assoc()) { $type_counts[$ds['type']] = $ds['cnt']; }
+?>
+<div class="card-grid animate__animated animate__fadeInDown">
+    <div class="card accent"><div class="card-icon">🏦</div><div class="card-body"><div class="card-label">Banks</div><div class="card-value"><?= $type_counts['bank'] ?></div></div></div>
+    <div class="card success"><div class="card-icon">👤</div><div class="card-body"><div class="card-label">Persons</div><div class="card-value"><?= $type_counts['person'] ?></div></div></div>
+    <div class="card warning"><div class="card-icon">💳</div><div class="card-body"><div class="card-label">Wallets</div><div class="card-value"><?= $type_counts['wallet'] ?></div></div></div>
+</div>
+<div style="display:flex;gap:8px;margin-bottom:10px" class="no-print animate__animated animate__fadeInLeft">
+<?php if (has_permission($conn, 'money_destinations', 'add')): ?>
+<button class="btn btn-success" onclick="document.getElementById('addDestFormArea').style.display='block';document.getElementById('addDestFormArea').scrollIntoView()">+ Add Destination</button>
+<?php endif; ?>
+</div>
+<div id="addDestFormArea" style="display:<?= $edit_dest ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
+<fieldset class="fieldset"><legend><?= $edit_dest ? '✏ Edit Destination' : '+ Add New Destination' ?></legend>
+<form method="POST" action="index.php?page=money_destinations">
+<?php if ($edit_dest): ?><input type="hidden" name="id" value="<?= $edit_dest['id'] ?>"><?php endif; ?>
+<div class="form-row">
+<div class="form-group"><label>Type <span class="req">*</span></label>
+<select name="type" required>
+<option value="bank" <?= ($edit_dest['type'] ?? '') === 'bank' ? 'selected' : '' ?>>🏦 Bank</option>
+<option value="person" <?= ($edit_dest['type'] ?? '') === 'person' ? 'selected' : '' ?>>👤 Person</option>
+<option value="wallet" <?= ($edit_dest['type'] ?? '') === 'wallet' ? 'selected' : '' ?>>💳 Wallet</option>
+</select>
+</div>
+<div class="form-group"><label>Name <span class="req">*</span></label><input type="text" name="name" value="<?= sanitize($edit_dest['name'] ?? '') ?>" required placeholder="e.g. HBL Main Branch"></div>
+<div class="form-group"><label>Details</label><input type="text" name="details" value="<?= sanitize($edit_dest['details'] ?? '') ?>" placeholder="Account #, phone, etc."></div>
+<div class="form-group"><label>Active</label><label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" name="is_active" <?= ($edit_dest['is_active'] ?? 1) ? 'checked' : '' ?>> Active</label></div>
+</div>
+<button type="submit" name="save_destination" class="btn btn-primary">💾 Save</button>
+<button type="button" class="btn btn-default" onclick="document.getElementById('addDestFormArea').style.display='none'">Cancel</button>
+</form>
+</fieldset>
+</div>
+<div class="data-table-wrap animate__animated animate__fadeInUp">
+<table class="data-table">
+<thead><tr><th>Sr#</th><th>Type</th><th>Name</th><th>Details</th><th>Status</th><th>Total Allocated</th><th class="no-sort">Actions</th></tr></thead>
+<tbody>
+<?php $sr = 1; while ($dest = $dest_result->fetch_assoc()):
+    $alloc_total = $conn->query("SELECT COALESCE(SUM(amount),0) FROM sale_money_allocations WHERE destination_id=" . $dest['id'])->fetch_row()[0];
+    $type_icon = ['bank' => '🏦', 'person' => '👤', 'wallet' => '💳'][$dest['type']] ?? '📌';
+?>
+<tr>
+<td><?= $sr++ ?></td>
+<td><span class="badge badge-<?= $dest['type'] === 'bank' ? 'info' : ($dest['type'] === 'person' ? 'success' : 'warning') ?>"><?= $type_icon ?> <?= strtoupper($dest['type']) ?></span></td>
+<td><strong><?= sanitize($dest['name']) ?></strong></td>
+<td><?= sanitize($dest['details'] ?: '-') ?></td>
+<td><span class="badge badge-<?= $dest['is_active'] ? 'success' : 'danger' ?>"><?= $dest['is_active'] ? 'Active' : 'Inactive' ?></span></td>
+<td><?= fmt_money($alloc_total) ?></td>
+<td class="no-print">
+<div class="actions-col">
+<?php if (has_permission($conn, 'money_destinations', 'edit')): ?><a href="index.php?page=money_destinations&edit_id=<?= $dest['id'] ?>" class="btn btn-primary btn-sm">✏</a><?php endif; ?>
+<?php if (has_permission($conn, 'money_destinations', 'delete')): ?>
+<form method="POST" style="display:inline"><input type="hidden" name="id" value="<?= $dest['id'] ?>">
+<button name="delete_destination" class="btn btn-danger btn-sm" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete this destination?', text: 'Only possible if no allocations are linked.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button>
+</form>
+<?php endif; ?>
+</div>
+</td>
+</tr>
+<?php endwhile; ?>
+</tbody>
+</table>
+</div>
+<?php
+    elseif ($page === 'money_tracking'):
+        $sold_bikes = $conn->query("SELECT b.id, b.chassis_number, b.selling_price, b.selling_date, m.model_name, c.name as cust_name,
+            COALESCE((SELECT SUM(amount) FROM sale_money_allocations WHERE bike_id=b.id),0) as allocated,
+            COALESCE((SELECT SUM(sa2.final_price) FROM sale_accessories sa2 WHERE sa2.bike_id=b.id),0) as acc_total
+            FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id
+            WHERE b.status='sold' ORDER BY b.selling_date DESC");
+        $sold_bikes_arr = [];
+        while ($sb = $sold_bikes->fetch_assoc()) $sold_bikes_arr[] = $sb;
+        $active_dests = $conn->query("SELECT id, type, name FROM money_destinations WHERE is_active=1 ORDER BY type, name");
+        $active_dests_arr = [];
+        while ($ad = $active_dests->fetch_assoc()) $active_dests_arr[] = $ad;
+        $edit_alloc_id = (int) ($_GET['edit_id'] ?? 0);
+        $edit_alloc = null;
+        if ($edit_alloc_id) {
+            $ea = $conn->query("SELECT * FROM sale_money_allocations WHERE id=$edit_alloc_id");
+            $edit_alloc = $ea ? $ea->fetch_assoc() : null;
+        }
+        $filter_bike = (int) ($_GET['filter_bike'] ?? 0);
+        $filter_dest = (int) ($_GET['filter_dest'] ?? 0);
+        $alloc_where = '1=1';
+        if ($filter_bike) $alloc_where .= " AND sma.bike_id=$filter_bike";
+        if ($filter_dest) $alloc_where .= " AND sma.destination_id=$filter_dest";
+        $alloc_result = $conn->query("SELECT sma.*, md.name as dest_name, md.type as dest_type, b.chassis_number, b.selling_price, m.model_name,
+            COALESCE((SELECT SUM(sa2.final_price) FROM sale_accessories sa2 WHERE sa2.bike_id=b.id),0) as acc_total,
+            u.full_name as created_by_name
+            FROM sale_money_allocations sma
+            LEFT JOIN money_destinations md ON sma.destination_id=md.id
+            LEFT JOIN bikes b ON sma.bike_id=b.id
+            LEFT JOIN models m ON b.model_id=m.id
+            LEFT JOIN users u ON sma.created_by=u.id
+            WHERE $alloc_where ORDER BY sma.allocation_date DESC, sma.id DESC");
+        $total_allocated_all = $conn->query("SELECT COALESCE(SUM(amount),0) FROM sale_money_allocations")->fetch_row()[0];
+        $total_sold_value = $conn->query("SELECT COALESCE(SUM(b.selling_price + COALESCE((SELECT SUM(sa2.final_price) FROM sale_accessories sa2 WHERE sa2.bike_id=b.id),0)),0) FROM bikes b WHERE b.status='sold'")->fetch_row()[0];
+        $untracked = $total_sold_value - $total_allocated_all;
+?>
+<div class="card-grid animate__animated animate__fadeInDown">
+    <div class="card success"><div class="card-icon">💰</div><div class="card-body"><div class="card-label">Total Sales Value</div><div class="card-value" style="font-size:1rem"><?= fmt_money($total_sold_value) ?></div></div></div>
+    <div class="card accent"><div class="card-icon">✅</div><div class="card-body"><div class="card-label">Total Allocated</div><div class="card-value" style="font-size:1rem"><?= fmt_money($total_allocated_all) ?></div></div></div>
+    <div class="card <?= $untracked > 0 ? 'warning' : 'success' ?>"><div class="card-icon"><?= $untracked > 0 ? '⚠️' : '✅' ?></div><div class="card-body"><div class="card-label">Untracked</div><div class="card-value" style="font-size:1rem"><?= fmt_money($untracked) ?></div></div></div>
+</div>
+<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap" class="no-print animate__animated animate__fadeInLeft">
+<?php if (has_permission($conn, 'money_tracking', 'add')): ?>
+<button class="btn btn-success" onclick="document.getElementById('addAllocFormArea').style.display='block';document.getElementById('addAllocFormArea').scrollIntoView()">+ Add Allocation</button>
+<?php endif; ?>
+</div>
+<div class="filter-bar no-print animate__animated animate__fadeInLeft" style="margin-bottom:10px">
+<form method="GET" action="index.php" style="display:contents">
+<input type="hidden" name="page" value="money_tracking">
+<div class="form-group"><label>Filter by Sale</label>
+<select name="filter_bike"><option value="0">-- All Sales --</option>
+<?php foreach ($sold_bikes_arr as $sb): ?>
+<option value="<?= $sb['id'] ?>" <?= $filter_bike == $sb['id'] ? 'selected' : '' ?>><?= sanitize($sb['chassis_number']) ?> | <?= sanitize($sb['model_name']) ?></option>
+<?php endforeach; ?>
+</select></div>
+<div class="form-group"><label>Filter by Destination</label>
+<select name="filter_dest"><option value="0">-- All Destinations --</option>
+<?php foreach ($active_dests_arr as $ad): ?>
+<option value="<?= $ad['id'] ?>" <?= $filter_dest == $ad['id'] ? 'selected' : '' ?>><?= sanitize($ad['name']) ?> (<?= $ad['type'] ?>)</option>
+<?php endforeach; ?>
+</select></div>
+<button type="submit" class="btn btn-primary btn-sm" style="align-self:flex-end">🔍 Filter</button>
+<a href="index.php?page=money_tracking" class="btn btn-default btn-sm" style="align-self:flex-end">Clear</a>
+</form>
+</div>
+<div id="addAllocFormArea" style="display:<?= $edit_alloc ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
+<fieldset class="fieldset"><legend><?= $edit_alloc ? '✏ Edit Allocation' : '+ Add New Allocation' ?></legend>
+<form method="POST" action="index.php?page=money_tracking">
+<?php if ($edit_alloc): ?><input type="hidden" name="id" value="<?= $edit_alloc['id'] ?>"><?php endif; ?>
+<div class="form-row">
+<div class="form-group" style="flex:2"><label>Sold Bike <span class="req">*</span></label>
+<select name="bike_id" id="allocBikeSelect" required onchange="updateAllocRemaining()">
+<option value="">-- Select Sold Bike --</option>
+<?php foreach ($sold_bikes_arr as $sb):
+    $sb_total_sale = $sb['selling_price'] + $sb['acc_total'];
+    $sb_remaining = $sb_total_sale - $sb['allocated'];
+?>
+<option value="<?= $sb['id'] ?>" data-total="<?= $sb_total_sale ?>" data-allocated="<?= $sb['allocated'] ?>" data-remaining="<?= $sb_remaining ?>" <?= ($edit_alloc && $edit_alloc['bike_id'] == $sb['id']) ? 'selected' : '' ?>>
+<?= sanitize($sb['chassis_number']) ?> | <?= sanitize($sb['model_name']) ?> | <?= fmt_money($sb_total_sale) ?> (Remaining: <?= fmt_money($sb_remaining) ?>)
+</option>
+<?php endforeach; ?>
+</select>
+</div>
+<div class="form-group"><label>Destination <span class="req">*</span></label>
+<select name="destination_id" required>
+<option value="">-- Select --</option>
+<?php foreach ($active_dests_arr as $ad):
+    $ti = ['bank'=>'🏦','person'=>'👤','wallet'=>'💳'][$ad['type']] ?? '';
+?>
+<option value="<?= $ad['id'] ?>" <?= ($edit_alloc && $edit_alloc['destination_id'] == $ad['id']) ? 'selected' : '' ?>><?= $ti ?> <?= sanitize($ad['name']) ?> (<?= $ad['type'] ?>)</option>
+<?php endforeach; ?>
+</select>
+</div>
+</div>
+<div class="form-row">
+<div class="form-group"><label>Amount (<?= $currency ?>) <span class="req">*</span></label><input type="number" name="amount" step="0.01" min="0.01" required value="<?= $edit_alloc ? $edit_alloc['amount'] : '' ?>" placeholder="0.00"></div>
+<div class="form-group"><label>Date <span class="req">*</span></label><input type="date" name="allocation_date" required value="<?= $edit_alloc ? $edit_alloc['allocation_date'] : date('Y-m-d') ?>"></div>
+<div class="form-group"><label>Notes</label><input type="text" name="alloc_notes" value="<?= sanitize($edit_alloc['notes'] ?? '') ?>" placeholder="Optional note"></div>
+</div>
+<div id="allocRemainingInfo" style="margin-bottom:8px;font-size:0.82rem;color:var(--text2)"></div>
+<button type="submit" name="save_allocation" class="btn btn-primary">💾 Save Allocation</button>
+<button type="button" class="btn btn-default" onclick="document.getElementById('addAllocFormArea').style.display='none'">Cancel</button>
+</form>
+</fieldset>
+</div>
+<script>
+function updateAllocRemaining() {
+    var sel = document.getElementById('allocBikeSelect');
+    var opt = sel.options[sel.selectedIndex];
+    var info = document.getElementById('allocRemainingInfo');
+    if (opt && opt.value) {
+        var total = parseFloat(opt.dataset.total||0);
+        var allocated = parseFloat(opt.dataset.allocated||0);
+        var remaining = parseFloat(opt.dataset.remaining||0);
+        info.innerHTML = '<strong>Sale Total:</strong> <?= $currency ?> '+total.toLocaleString()+' | <strong>Already Allocated:</strong> <?= $currency ?> '+allocated.toLocaleString()+' | <strong style="color:'+(remaining>0?'var(--warning)':'var(--success)')+'">Remaining:</strong> <?= $currency ?> '+remaining.toLocaleString();
+    } else {
+        info.innerHTML = '';
+    }
+}
+updateAllocRemaining();
+</script>
+<div class="data-table-wrap animate__animated animate__fadeInUp">
+<table class="data-table">
+<thead><tr><th>Sr#</th><th>Chassis / Model</th><th>Destination</th><th>Amount</th><th>Date</th><th>Notes</th><th>By</th><th class="no-sort">Actions</th></tr></thead>
+<tbody>
+<?php $sr = 1; $page_alloc_total = 0; while ($al = $alloc_result->fetch_assoc()):
+    $page_alloc_total += $al['amount'];
+    $ti = ['bank'=>'🏦','person'=>'👤','wallet'=>'💳'][$al['dest_type']] ?? '📌';
+?>
+<tr>
+<td><?= $sr++ ?></td>
+<td><strong style="font-family:Consolas,monospace;font-size:0.8rem"><?= sanitize($al['chassis_number']) ?></strong><br><small><?= sanitize($al['model_name']) ?></small></td>
+<td><span class="badge badge-<?= $al['dest_type'] === 'bank' ? 'info' : ($al['dest_type'] === 'person' ? 'success' : 'warning') ?>"><?= $ti ?> <?= sanitize($al['dest_name']) ?></span></td>
+<td><strong><?= fmt_money($al['amount']) ?></strong></td>
+<td><?= fmt_date($al['allocation_date']) ?></td>
+<td><?= sanitize($al['notes'] ?: '-') ?></td>
+<td><small><?= sanitize($al['created_by_name'] ?? '-') ?></small></td>
+<td class="no-print">
+<div class="actions-col">
+<?php if (has_permission($conn, 'money_tracking', 'edit')): ?><a href="index.php?page=money_tracking&edit_id=<?= $al['id'] ?>" class="btn btn-primary btn-sm">✏</a><?php endif; ?>
+<?php if (has_permission($conn, 'money_tracking', 'delete')): ?>
+<form method="POST" style="display:inline"><input type="hidden" name="id" value="<?= $al['id'] ?>">
+<button name="delete_allocation" class="btn btn-danger btn-sm" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete this allocation?', text: 'This will remove the money tracking record.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button>
+</form>
+<?php endif; ?>
+</div>
+</td>
+</tr>
+<?php endwhile; ?>
+</tbody>
+<tfoot><tr><td colspan="3"><strong>TOTAL</strong></td><td><strong><?= fmt_money($page_alloc_total) ?></strong></td><td colspan="4"></td></tr></tfoot>
+</table>
+</div>
 <?php
     elseif ($page === 'settings'):
         $s_company = get_setting('company_name') ?? 'BNI Enterprises';

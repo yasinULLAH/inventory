@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3306
--- Generation Time: May 12, 2026 at 12:13 PM
+-- Generation Time: May 16, 2026 at 01:10 PM
 -- Server version: 8.2.0
 -- PHP Version: 8.3.0
 
@@ -395,28 +395,61 @@ CREATE TABLE `models` (
   `category` varchar(100) DEFAULT NULL,
   `short_code` varchar(20) DEFAULT NULL,
   `image` varchar(255) DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `top_speed` varchar(50) DEFAULT NULL,
+  `max_range` varchar(50) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 --
 -- Dumping data for table `models`
 --
 
-INSERT INTO `models` (`id`, `model_code`, `model_name`, `category`, `short_code`, `image`, `created_at`) VALUES
-(1, 'LY SI', 'LY SI Electric Bike', 'Electric Bike', 'LY', NULL, '2026-04-20 08:56:23'),
-(2, 'T9 Sports', 'T9 Sports Electric Bike', 'Electric Bike', 'T9', 'uploads/models/model_2_t9_sports_electric_bike.webp', '2026-04-20 08:56:23'),
-(3, 'T9 Sports LFP', 'T9 Sports LFP Electric Bike', 'Electric Bike', 'T9 LFP', 'uploads/models/model_3_t9_sports_lfp_electric_bike.webp', '2026-04-20 08:56:23'),
-(4, 'T9 Eco', 'T9 Eco Electric Bike', 'Electric Bike', 'T9 Eco', NULL, '2026-04-20 08:56:23'),
-(5, 'Thrill Pro', 'Thrill Pro Electric Bike', 'Electric Bike', 'TP', 'uploads/models/model_5_thrill_pro_electric_bike.webp', '2026-04-20 08:56:23'),
-(6, 'Thrill Pro LFP', 'Thrill Pro LFP Electric Bike', 'Electric Bike', 'TP LFP', 'uploads/models/model_6_thrill_pro_lfp_electric_bike.webp', '2026-04-20 08:56:23'),
-(7, 'E8S M2', 'E8S M2 Electric Scooter', 'Electric Scooter', 'E8S', NULL, '2026-04-20 08:56:23'),
-(8, 'E8S Pro', 'E8S Pro Electric Scooter', 'Electric Scooter', 'E8S Pro', NULL, '2026-04-20 08:56:23'),
-(9, 'M6 K6', 'M6 K6 Electric Bike', 'Electric Bike', 'M6', 'uploads/models/model_9_m6_k6_electric_bike.webp', '2026-04-20 08:56:23'),
-(10, 'M6 NP', 'M6 NP Electric Bike', 'Electric Bike', 'M6 NP', 'uploads/models/model_10_m6_np_electric_bike.webp', '2026-04-20 08:56:23'),
-(11, 'M6 Lithium NP', 'M6 Lithium NP Electric Bike', 'Electric Bike', 'M6 L', 'uploads/models/model_11_m6_lithium_np_electric_bike.webp', '2026-04-20 08:56:23'),
-(12, 'Premium', 'Premium Electric Bike', 'Electric Bike', 'Premium', 'uploads/models/model_12_premium_electric_bike.webp', '2026-04-20 08:56:23'),
-(13, 'W. Bike H2', 'W. Bike H2 Electric Bike', 'Electric Bike', 'W. Bike', 'uploads/models/model_13_w_bike_h2_electric_bike.webp', '2026-04-20 08:56:23'),
-(14, 'SP12', 'Super Star 70', 'Electric Bike', '123', 'uploads/models/model_14_super_star_70.webp', '2026-05-07 06:34:51');
+INSERT INTO `models` (`id`, `model_code`, `model_name`, `category`, `short_code`, `image`, `created_at`, `top_speed`, `max_range`) VALUES
+(1, 'LY SI', 'LY SI Electric Bike', 'Electric Bike', 'LY', NULL, '2026-04-20 08:56:23', NULL, NULL),
+(2, 'T9 Sports', 'T9 Sports Electric Bike', 'Electric Bike', 'T9', 'uploads/models/model_2_t9_sports_electric_bike.webp', '2026-04-20 08:56:23', NULL, NULL),
+(3, 'T9 Sports LFP', 'T9 Sports LFP Electric Bike', 'Electric Bike', 'T9 LFP', 'uploads/models/model_3_t9_sports_lfp_electric_bike.webp', '2026-04-20 08:56:23', NULL, NULL),
+(4, 'T9 Eco', 'T9 Eco Electric Bike', 'Electric Bike', 'T9 Eco', NULL, '2026-04-20 08:56:23', NULL, NULL),
+(5, 'Thrill Pro', 'Thrill Pro Electric Bike', 'Electric Bike', 'TP', 'uploads/models/model_5_thrill_pro_electric_bike.webp', '2026-04-20 08:56:23', NULL, NULL),
+(6, 'Thrill Pro LFP', 'Thrill Pro LFP Electric Bike', 'Electric Bike', 'TP LFP', 'uploads/models/model_6_thrill_pro_lfp_electric_bike.webp', '2026-04-20 08:56:23', NULL, NULL),
+(7, 'E8S M2', 'E8S M2 Electric Scooter', 'Electric Scooter', 'E8S', NULL, '2026-04-20 08:56:23', NULL, NULL),
+(8, 'E8S Pro', 'E8S Pro Electric Scooter', 'Electric Scooter', 'E8S Pro', NULL, '2026-04-20 08:56:23', NULL, NULL),
+(9, 'M6 K6', 'M6 K6 Electric Bike', 'Electric Bike', 'M6', 'uploads/models/model_9_m6_k6_electric_bike.webp', '2026-04-20 08:56:23', NULL, NULL),
+(10, 'M6 NP', 'M6 NP Electric Bike', 'Electric Bike', 'M6 NP', 'uploads/models/model_10_m6_np_electric_bike.webp', '2026-04-20 08:56:23', NULL, NULL),
+(11, 'M6 Lithium NP', 'M6 Lithium NP Electric Bike', 'Electric Bike', 'M6 L', 'uploads/models/model_11_m6_lithium_np_electric_bike.webp', '2026-04-20 08:56:23', NULL, NULL),
+(12, 'Premium', 'Premium Electric Bike', 'Electric Bike', 'Premium', 'uploads/models/model_12_premium_electric_bike.webp', '2026-04-20 08:56:23', NULL, NULL),
+(13, 'W. Bike H2', 'W. Bike H2 Electric Bike', 'Electric Bike', 'W. Bike', 'uploads/models/model_13_w_bike_h2_electric_bike.webp', '2026-04-20 08:56:23', NULL, NULL),
+(14, 'SP12', 'Super Star 70', 'Electric Bike', '123', 'uploads/bike_6a0310a76dc22.webp', '2026-05-07 06:34:51', '200', '120');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `money_destinations`
+--
+
+CREATE TABLE `money_destinations` (
+  `id` int NOT NULL,
+  `type` enum('bank','person','wallet') NOT NULL,
+  `name` varchar(255) NOT NULL,
+  `details` text,
+  `is_active` tinyint(1) DEFAULT '1',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Dumping data for table `money_destinations`
+--
+
+INSERT INTO `money_destinations` (`id`, `type`, `name`, `details`, `is_active`, `created_at`, `updated_at`) VALUES
+(1, 'bank', 'HBL - Habib Bank', 'Main Branch Account', 1, '2026-05-16 12:10:44', '2026-05-16 12:10:44'),
+(2, 'bank', 'MCB - Muslim Commercial Bank', 'Business Account', 1, '2026-05-16 12:10:44', '2026-05-16 12:10:44'),
+(3, 'bank', 'UBL - United Bank', 'Savings Account', 1, '2026-05-16 12:10:44', '2026-05-16 12:10:44'),
+(4, 'person', 'Owner / Proprietor', 'Main business owner', 1, '2026-05-16 12:10:44', '2026-05-16 12:10:44'),
+(5, 'person', 'Partner', 'Business partner', 1, '2026-05-16 12:10:44', '2026-05-16 12:10:44'),
+(6, 'person', 'Manager', 'Shop manager', 1, '2026-05-16 12:10:44', '2026-05-16 12:10:44'),
+(7, 'wallet', 'JazzCash', 'Mobile wallet', 1, '2026-05-16 12:10:44', '2026-05-16 12:10:44'),
+(8, 'wallet', 'Easypaisa', 'Mobile wallet', 1, '2026-05-16 12:10:44', '2026-05-16 12:10:44'),
+(9, 'wallet', 'Cash Drawer', 'Shop cash register', 1, '2026-05-16 12:10:44', '2026-05-16 12:10:44');
 
 -- --------------------------------------------------------
 
@@ -563,7 +596,7 @@ CREATE TABLE `quote_requests` (
 
 INSERT INTO `quote_requests` (`id`, `customer_name`, `customer_phone`, `bike_id`, `details`, `status`, `created_at`) VALUES
 (1, 'Yasin Ullah', '03139842219', 39, 'All', 'pending', '2026-05-12 11:05:45'),
-(2, 'Yasin Ullah', '03139842219', 2, 'new', 'pending', '2026-05-12 11:09:51');
+(2, 'Yasin Ullah', '03139842219', 2, 'new', 'sent', '2026-05-12 11:09:51');
 
 -- --------------------------------------------------------
 
@@ -676,7 +709,9 @@ INSERT INTO `role_permissions` (`id`, `role_id`, `page`, `can_view`, `can_add`, 
 (81, 1, 'quotations', 1, 1, 1, 1),
 (82, 1, 'installments', 1, 1, 1, 1),
 (83, 1, 'landing_page', 1, 1, 1, 1),
-(84, 2, 'dashboard', 1, 0, 0, 0);
+(84, 2, 'dashboard', 1, 0, 0, 0),
+(86, 1, 'money_destinations', 1, 1, 1, 1),
+(87, 1, 'money_tracking', 1, 1, 1, 1);
 
 -- --------------------------------------------------------
 
@@ -701,6 +736,24 @@ CREATE TABLE `sale_accessories` (
 INSERT INTO `sale_accessories` (`id`, `bike_id`, `accessory_id`, `quantity`, `unit_price`, `discount_amount`, `final_price`) VALUES
 (1, 37, 1, 1, 0.00, 0.00, 0.00),
 (2, 40, 3, 1, 1200.00, 1200.00, 0.00);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `sale_money_allocations`
+--
+
+CREATE TABLE `sale_money_allocations` (
+  `id` int NOT NULL,
+  `bike_id` int NOT NULL,
+  `destination_id` int NOT NULL,
+  `amount` decimal(15,2) NOT NULL,
+  `allocation_date` date NOT NULL,
+  `notes` text,
+  `created_by` int DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
 
@@ -881,6 +934,12 @@ ALTER TABLE `models`
   ADD PRIMARY KEY (`id`);
 
 --
+-- Indexes for table `money_destinations`
+--
+ALTER TABLE `money_destinations`
+  ADD PRIMARY KEY (`id`);
+
+--
 -- Indexes for table `payments`
 --
 ALTER TABLE `payments`
@@ -933,6 +992,15 @@ ALTER TABLE `sale_accessories`
   ADD PRIMARY KEY (`id`),
   ADD KEY `accessory_id` (`accessory_id`),
   ADD KEY `idx_sa_bike` (`bike_id`);
+
+--
+-- Indexes for table `sale_money_allocations`
+--
+ALTER TABLE `sale_money_allocations`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `bike_id` (`bike_id`),
+  ADD KEY `destination_id` (`destination_id`),
+  ADD KEY `created_by` (`created_by`);
 
 --
 -- Indexes for table `settings`
@@ -1026,6 +1094,12 @@ ALTER TABLE `models`
   MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
 
 --
+-- AUTO_INCREMENT for table `money_destinations`
+--
+ALTER TABLE `money_destinations`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+
+--
 -- AUTO_INCREMENT for table `payments`
 --
 ALTER TABLE `payments`
@@ -1059,13 +1133,19 @@ ALTER TABLE `roles`
 -- AUTO_INCREMENT for table `role_permissions`
 --
 ALTER TABLE `role_permissions`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=86;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=88;
 
 --
 -- AUTO_INCREMENT for table `sale_accessories`
 --
 ALTER TABLE `sale_accessories`
   MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+
+--
+-- AUTO_INCREMENT for table `sale_money_allocations`
+--
+ALTER TABLE `sale_money_allocations`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `settings`
@@ -1143,6 +1223,14 @@ ALTER TABLE `role_permissions`
 ALTER TABLE `sale_accessories`
   ADD CONSTRAINT `sale_accessories_ibfk_1` FOREIGN KEY (`bike_id`) REFERENCES `bikes` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `sale_accessories_ibfk_2` FOREIGN KEY (`accessory_id`) REFERENCES `accessories` (`id`) ON DELETE RESTRICT;
+
+--
+-- Constraints for table `sale_money_allocations`
+--
+ALTER TABLE `sale_money_allocations`
+  ADD CONSTRAINT `sale_money_allocations_ibfk_1` FOREIGN KEY (`bike_id`) REFERENCES `bikes` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `sale_money_allocations_ibfk_2` FOREIGN KEY (`destination_id`) REFERENCES `money_destinations` (`id`) ON DELETE RESTRICT,
+  ADD CONSTRAINT `sale_money_allocations_ibfk_3` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL;
 
 --
 -- Constraints for table `users`

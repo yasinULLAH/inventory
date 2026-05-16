@@ -74,11 +74,13 @@ The **BNI Enterprises BDMS** is an enterprise-grade inventory and financial mana
 - **Dynamic Tax Logic:** Calculates tax based on system settings (Percentage of Purchase vs Selling Price).
 - **Smart Invoicing:** Generates professional, printable invoices including company branding, customer CNIC, and bike technical specs.
 - **Payment Diversity:** Support for Cash, Cheque, Bank Transfer, and Online payments.
+- **Money Destination Tracking:** Optionally track where sale money goes — to a bank, person, or wallet — with full CRUD and reporting.
 
 **اردو:**
 - **منافع کی حفاظت:** سیلز کے وقت قیمتِ خرید دکھانا تاکہ منافع یقینی بنایا جا سکے۔
 - **ٹیکس سسٹم:** سیٹنگز کے مطابق خودکار ٹیکس کا حساب (خریداری یا فروخت کی قیمت پر)۔
 - **انوائس:** پروفیشنل اور پرنٹ ایبل رسید جس میں کمپنی کا نام، گاہک کا شناختی کارڈ اور بائیک کی تفصیلات شامل ہوتی ہیں۔
+- **رقم کی ٹریکنگ:** فروخت کے بعد رقم کہاں گئی (بینک، شخص، یا والٹ) — اختیاری ٹریکنگ اور رپورٹنگ۔
 
 ### **E. Financial Ecosystem (Cheques & Ledgers) / چیک رجسٹر اور لیجرز**
 **English:**
@@ -109,7 +111,7 @@ Administrators can choose where tax is applied in the Settings:
 
 ## 📂 4. Relational Database Architecture / ڈیٹا بیس کی ساخت
 
-The system operates on 9 highly optimized tables:
+The system operates on 18+ highly optimized tables, including:
 1.  **`settings`**: Configuration, branding, and security.
 2.  **`suppliers`**: Supplier directory and contact info.
 3.  **`customers`**: Customer database (CNIC/Phone/Address).
@@ -119,6 +121,8 @@ The system operates on 9 highly optimized tables:
 7.  **`cheque_register`**: Financial tracking of all bank instruments.
 8.  **`payments`**: Transaction log for cash/online flows.
 9.  **`ledger`**: Double-entry accounting for financial transparency.
+10. **`money_destinations`**: Master list of banks, persons, and wallets for money tracking.
+11. **`sale_money_allocations`**: Links sold bikes to money destinations with allocation amounts and dates.
 
 ---
 
@@ -138,6 +142,7 @@ The system operates on 9 highly optimized tables:
 3.  **فروخت:** 'Sales Entry' میں بائیک منتخب کریں، گاہک کی تفصیل لکھیں اور 'Record Sale' پر کلک کریں۔
 4.  **رسید:** سیلز کے بعد 'Print Invoice' پر کلک کر کے گاہک کو رسید دیں۔
 5.  **رپورٹس:** 'Dashboard' پر جا کر کل منافع اور اسٹاک کی صورتحال مانیٹر کریں۔
+6.  **رقم کی منزل (Money Destinations):** 'Money Destinations' میں بینک، شخص، یا والٹ شامل کریں — پھر 'Money Tracking' میں ہر سیل کی رقم کہاں گئی ٹریک کریں۔
 
 ---
 
