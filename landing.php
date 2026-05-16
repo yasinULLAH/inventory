@@ -1039,12 +1039,12 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                 $per_page = 10;
                 $page_num = max(1, (int) ($_GET['pg'] ?? 1));
                 $offset = ($page_num - 1) * $per_page;
-                $where_p = ["1=1"];
+                $where_p = ['1=1'];
                 if (($_GET['stock_status'] ?? 'all') === 'available') {
                     $where_p[] = "b.status IN ('in_stock', 'returned')";
                 }
                 if (!empty($_GET['model_id'])) {
-                    $mid = (int)$_GET['model_id'];
+                    $mid = (int) $_GET['model_id'];
                     $where_p[] = "b.model_id = $mid";
                 }
                 if (!empty($_GET['search'])) {
@@ -1435,7 +1435,21 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                 update();
             });
         }
+        const wooshSound = new Audio('woosh3.wav');
+        wooshSound.volume = 0.5;
+        wooshSound.loop = true;
+
         document.querySelectorAll('.leader-card').forEach(card => {
+            card.addEventListener('mouseenter', () => {
+                wooshSound.currentTime = 0;
+                wooshSound.play().catch(() => {});
+            });
+
+            card.addEventListener('mouseleave', () => {
+                wooshSound.pause();
+                wooshSound.currentTime = 0;
+            });
+
             card.addEventListener('click', function() {
                 this.classList.remove('lightning-blast');
                 void this.offsetWidth;
