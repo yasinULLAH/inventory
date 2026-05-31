@@ -2497,12 +2497,13 @@ button{cursor:pointer}
 table{border-collapse:collapse;width:100%}
 img{display:block;max-width:100%}
 .layout{display:flex;min-height:100vh;flex-direction:row}
-.sidebar{width:var(--sidebar-w);background:var(--bg2);border-right:2px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;z-index:100;overflow-y:auto;transition:width 0.2s, transform 0.2s}
-.sidebar::-webkit-scrollbar { width: 6px; }
-.sidebar::-webkit-scrollbar-track { background: transparent; }
-.sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-.sidebar::-webkit-scrollbar-thumb:hover { background: var(--text3); }
-.sidebar-header{padding:12px 10px;border-bottom:2px solid var(--border);display:flex;align-items:center;justify-content:center;gap:10px;text-align:left}
+.sidebar{width:var(--sidebar-w);background:var(--bg2);border-right:2px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100%;height:100dvh;z-index:100;overflow:hidden;transition:width 0.2s, transform 0.2s}
+.sidebar nav { flex: 1; overflow-y: auto; padding-bottom: 15px; }
+.sidebar nav::-webkit-scrollbar { width: 6px; }
+.sidebar nav::-webkit-scrollbar-track { background: transparent; }
+.sidebar nav::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+.sidebar nav::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+.sidebar-header{padding:12px 10px;border-bottom:2px solid var(--border);display:flex;align-items:center;justify-content:center;gap:10px;text-align:left;flex-shrink:0}
 .sidebar-header .logo{width:35px;height:35px;object-fit:contain;flex-shrink:0}
 .sidebar-header .company{font-size:0.85rem;font-weight:700;color:var(--accent);line-height:1.3}
 .sidebar-header .branch{font-size:0.72rem;color:var(--text2);margin-top:2px}
@@ -2511,7 +2512,7 @@ img{display:block;max-width:100%}
 .sidebar nav ul li a:hover{background:var(--surface);text-decoration:none}
 .sidebar nav ul li a.active{background:var(--accent);color:#fff}
 .sidebar nav ul li a .icon{font-size:1rem;min-width:18px;text-align:center}
-.sidebar-footer{margin-top:auto;padding:10px;border-top:2px solid var(--border)}
+.sidebar-footer{flex-shrink:0;padding:15px 10px calc(15px + env(safe-area-inset-bottom));border-top:2px solid var(--border);background:var(--bg2)}
 .sidebar-footer form{display:inline}
 .sidebar-footer button{background:var(--danger);color:#fff;border:1px solid var(--danger-h);padding:6px 14px;font-size:0.8rem;border-radius:2px;width:100%}
 .main-wrap{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-height:100vh;transition:margin-left 0.2s;min-width:0}
@@ -2612,7 +2613,7 @@ body.sidebar-collapsed .sidebar-footer form button::after { content: '🚪'; fon
 .filter-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .filter-bar .form-group label{font-size:0.72rem}
 .filter-bar .form-group input,.filter-bar .form-group select{font-size:0.82rem;padding:5px 7px}
-.modal-overlay{display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center;}
+.modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;height:100dvh;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center;}
 .modal-overlay.open{display:flex}
 .modal{background:var(--bg2);border:2px solid var(--border);padding:18px;width:90%;max-width:500px;max-height:85vh;overflow-y:auto;border-radius:2px;position:relative;animation: animate__zoomIn 0.3s;}
 .modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;border-bottom:1px solid var(--border);padding-bottom:8px}
@@ -2897,14 +2898,36 @@ document.addEventListener('DOMContentLoaded', function() {
         theme: 'default'
     });
     var csrfToken = "<?= $_SESSION['csrf_token'] ?? '' ?>";
-    $('form[method="POST"]').append('<input type="hidden" name="csrf_token" value="' + csrfToken + '">');
+    const originalSubmit = HTMLFormElement.prototype.submit;
+    HTMLFormElement.prototype.submit = function() {
+        if (this.method && this.method.toUpperCase() === 'POST' && !this.querySelector('input[name="csrf_token"]')) {
+            const c = document.createElement('input'); c.type = 'hidden'; c.name = 'csrf_token'; c.value = typeof csrfToken !== 'undefined' ? csrfToken : ''; this.appendChild(c);
+        }
+        originalSubmit.call(this);
+    };
+    function injectCsrf(container) {
+        $(container || document).find('form[method="POST"]').each(function() {
+            if ($(this).find('input[name="csrf_token"]').length === 0) {
+                $(this).append('<input type="hidden" name="csrf_token" value="' + csrfToken + '">');
+            }
+        });
+    }
+    injectCsrf();
+    ['click', 'change'].forEach(evt => {
+        document.addEventListener(evt, function(e) {
+            let form = e.target.closest ? e.target.closest('form') : null;
+            if (form && form.method && form.method.toUpperCase() === 'POST') {
+                if (!form.querySelector('input[name="csrf_token"]')) {
+                    let c = document.createElement('input'); c.type = 'hidden'; c.name = 'csrf_token'; c.value = typeof csrfToken !== 'undefined' ? csrfToken : ''; form.appendChild(c);
+                }
+            }
+        }, true);
+    });
+    $(document).on('draw.dt responsive-display.dt', function() { injectCsrf(); });
     $(document).on('DOMNodeInserted', function(e) {
         if (e.target && e.target.nodeType === 1) {
             $(e.target).find('select:not([name$="_length"]):not(.swal2-select)').select2({
-                minimumResultsForSearch: 10,
-                placeholder: '-- Select --',
-                allowClear: false,
-                theme: 'default'
+                minimumResultsForSearch: 10, placeholder: '-- Select --', allowClear: false, theme: 'default'
             });
         }
     });
@@ -2962,6 +2985,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     hidden.value = btn.value || '1';
                     form.appendChild(hidden);
                 }
+                if (!form.querySelector('input[name="csrf_token"]')) {
+                    const csrfInput = document.createElement('input');
+                    csrfInput.type = 'hidden';
+                    csrfInput.name = 'csrf_token';
+                    csrfInput.value = csrfToken;
+                    form.appendChild(csrfInput);
+                }
                 if (form.classList.contains('ajax-form')) {
                     const enteredNameInput = form.querySelector('[name="name"]') || form.querySelector('[name="model_name"]');
                     const enteredName = enteredNameInput ? enteredNameInput.value : null;
@@ -3014,6 +3044,13 @@ document.addEventListener('DOMContentLoaded', function() {
                             hidden.value = button.value || '1';
                             form.appendChild(hidden);
                         }
+                        if (!form.querySelector('input[name="csrf_token"]')) {
+                            let csrfInput = document.createElement('input');
+                            csrfInput.type = 'hidden';
+                            csrfInput.name = 'csrf_token';
+                            csrfInput.value = csrfToken;
+                            form.appendChild(csrfInput);
+                        }
                         form.submit();
                     } else if (button.tagName === 'A') {
                         window.location.href = button.href;
@@ -3048,6 +3085,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         hidden.name = submitter.name;
                         hidden.value = submitter.value || '1';
                         this.appendChild(hidden);
+                    }
+                    if (!this.querySelector('input[name="csrf_token"]')) {
+                        let csrfInput = document.createElement('input');
+                        csrfInput.type = 'hidden';
+                        csrfInput.name = 'csrf_token';
+                        csrfInput.value = csrfToken;
+                        this.appendChild(csrfInput);
                     }
                     this.submit();
                 }
@@ -7222,7 +7266,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <td><?= fmt_date($r['created_at']) ?></td>
 <td><strong><?= sanitize($r['customer_name']) ?></strong></td>
 <td><?= sanitize($r['customer_phone']) ?></td>
-<td><small><?= sanitize($r['bike_details']) ?></small></td>
+<td><small><?= str_replace(['http://', 'https://'], ['h_tp://', 'h_tps://'], sanitize($r['bike_details'])) ?></small></td>
 <td><span class="badge badge-<?= ($r['status'] === 'fulfilled') ? 'success' : (($r['status'] === 'cancelled') ? 'danger' : 'warning') ?>"><?= strtoupper($r['status']) ?></span></td>
 <td>
 <form method="POST" style="display:inline"><input type="hidden" name="update_request_status" value="1"><input type="hidden" name="id" value="<?= $r['id'] ?>"><input type="hidden" name="type" value="bike"><input type="hidden" name="sub" value="requests"><select name="status" onchange="this.form.submit()"><option value="pending" <?= $r['status'] === 'pending' ? 'selected' : '' ?>>Pending</option><option value="contacted" <?= $r['status'] === 'contacted' ? 'selected' : '' ?>>Contacted</option><option value="fulfilled" <?= $r['status'] === 'fulfilled' ? 'selected' : '' ?>>Fulfilled</option><option value="cancelled" <?= $r['status'] === 'cancelled' ? 'selected' : '' ?>>Cancelled</option></select></form>
@@ -7244,7 +7288,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <td><strong><?= sanitize($r['customer_name']) ?></strong></td>
 <td><?= sanitize($r['customer_phone']) ?></td>
 <td><?= $r['model_name'] ? sanitize($r['model_name'] . ' - ' . $r['chassis_number']) : 'General' ?></td>
-<td><small><?= sanitize($r['details']) ?></small></td>
+<td><small><?= str_replace(['http://', 'https://'], ['h_tp://', 'h_tps://'], sanitize($r['details'])) ?></small></td>
 <td><span class="badge badge-<?= ($r['status'] === 'accepted') ? 'success' : (($r['status'] === 'rejected') ? 'danger' : 'warning') ?>"><?= strtoupper($r['status']) ?></span></td>
 <td>
 <form method="POST" style="display:inline"><input type="hidden" name="update_request_status" value="1"><input type="hidden" name="id" value="<?= $r['id'] ?>"><input type="hidden" name="type" value="quote"><input type="hidden" name="sub" value="requests"><select name="status" onchange="this.form.submit()"><option value="pending" <?= $r['status'] === 'pending' ? 'selected' : '' ?>>Pending</option><option value="sent" <?= $r['status'] === 'sent' ? 'selected' : '' ?>>Sent</option><option value="accepted" <?= $r['status'] === 'accepted' ? 'selected' : '' ?>>Accepted</option><option value="rejected" <?= $r['status'] === 'rejected' ? 'selected' : '' ?>>Rejected</option></select></form>
