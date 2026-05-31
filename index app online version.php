@@ -2,12 +2,12 @@
 ini_set('session.cookie_httponly', 1);
 ini_set('session.use_only_cookies', 1);
 ini_set('session.cookie_samesite', 'Strict');
-// ini_set('session.cookie_secure', 1); // UNCOMMENT WHEN HTTPS IS LIVE
+ini_set('session.cookie_secure', 1); // UNCOMMENT WHEN HTTPS IS LIVE
 session_start();
-$db_host = 'localhost';
-$db_user = 'root';
-$db_pass = 'root';
-$db_name = 'bni_enterprises2';
+$db_host = 'localhost:3306';
+$db_user = 'gobuykar_yasin';
+$db_pass = 'yasin@1234';
+$db_name = 'gobuykar_bni';
 $app_version = '2.0.0';
 $author = 'Yasin Ullah';
 $_SESSION['captcha_lifetime'] = $_SESSION['captcha_lifetime'] ?? time() + 300;
