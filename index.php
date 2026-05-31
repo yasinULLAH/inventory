@@ -2526,15 +2526,33 @@ img{display:block;max-width:100%}
 .main-wrap{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-height:100vh;transition:margin-left 0.2s;min-width:0}
 .topbar{height:var(--topbar-h);background:var(--bg2);border-bottom:2px solid var(--border);display:flex;align-items:center;padding:0 16px;position:sticky;top:0;z-index:50;gap:10px}
 .topbar .hamburger{display:flex;background:none;border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:2px;font-size:1.1rem;cursor:pointer}
+.sidebar-toggle{display:none;align-items:center;justify-content:center;width:100%;padding:8px 0;border:none;background:var(--surface);color:var(--text);font-size:1rem;cursor:pointer;border-bottom:2px solid var(--border);transition:background 0.15s;flex-shrink:0}
+.sidebar-toggle:hover{background:var(--bg3)}
 @media (min-width: 601px) {
+.sidebar-toggle{display:flex}
 body.sidebar-collapsed { --sidebar-w: 60px; }
-body.sidebar-collapsed .sidebar { overflow-x: hidden; white-space: nowrap; }
+body.sidebar-collapsed .sidebar { overflow: hidden; }
 body.sidebar-collapsed .sidebar-header .header-text { display: none; }
-body.sidebar-collapsed .sidebar-header { padding: 15px 0; }
-body.sidebar-collapsed nav ul li a { font-size: 0; justify-content: center; padding: 12px 0; }
-body.sidebar-collapsed nav ul li a .icon { font-size: 1.2rem; margin: 0; }
+body.sidebar-collapsed .sidebar-header { padding: 15px 0; justify-content: center; }
+body.sidebar-collapsed .sidebar-toggle .toggle-label { display: none; }
+body.sidebar-collapsed .sidebar-toggle { padding: 10px 0; }
+body.sidebar-collapsed nav ul li a { font-size: 0; justify-content: center; padding: 12px 0; gap: 0; }
+body.sidebar-collapsed nav ul li a .icon { font-size: 1.2rem; margin: 0; min-width: auto; }
+body.sidebar-collapsed nav ul li a .nav-label { display: none; }
+body.sidebar-collapsed .sidebar-footer p { display: none; }
 body.sidebar-collapsed .sidebar-footer form button { font-size: 0; padding: 10px 0; }
 body.sidebar-collapsed .sidebar-footer form button::after { content: '🚪'; font-size: 1.1rem; }
+body.sidebar-collapsed nav { overflow-y: auto; overflow-x: hidden; }
+body.sidebar-collapsed nav::-webkit-scrollbar { width: 4px; }
+body.sidebar-collapsed nav::-webkit-scrollbar-track { background: transparent; }
+body.sidebar-collapsed nav::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+body.sidebar-collapsed nav::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+}
+@media(max-width:600px){
+.sidebar,.sidebar-overlay{display:none!important}
+.sidebar-toggle{display:none!important}
+.bottom-nav{display:flex!important}
+.hamburger{display:none!important}
 }
 .topbar .page-title{font-size:0.95rem;font-weight:700;color:var(--text);flex:1}
 .topbar .topbar-actions{display:flex;gap:8px;align-items:center}
@@ -2817,10 +2835,10 @@ body{background:#fff!important;color:#111!important}
 @media(max-width:600px){
 .page-title .title-text{display:none}
 .card-grid, .split-grid, .split-grid-3{grid-template-columns:1fr}
-.sidebar{transform:translateX(-100%)}
+.sidebar{transform:translateX(-100%);z-index:200}
 .sidebar.open{transform:translateX(0)}
 .sidebar-overlay.open{display:block}
-.main-wrap{margin-left:0}
+.main-wrap{margin-left:0;padding-bottom:60px}
 .form-row{flex-direction:column}
 .form-group{min-width:0}
 .filter-bar{flex-direction:column;align-items:stretch}
@@ -2849,8 +2867,23 @@ body{background:#fff!important;color:#111!important}
     flex-wrap: wrap;
 }
 }
+.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-top:2px solid var(--border);z-index:150;padding:4px 0 calc(4px + env(safe-area-inset-bottom));transform:translateY(0);transition:transform 0.25s ease}
+.bottom-nav.hide{transform:translateY(100%)}
+.bottom-nav-scroll{display:flex;overflow-x:auto;gap:2px;padding:0 4px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.bottom-nav-scroll::-webkit-scrollbar{display:none}
+.bottom-nav-scroll a{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:54px;min-height:48px;padding:4px 6px;color:var(--text2);text-decoration:none;font-size:0.6rem;text-align:center;border-radius:4px;flex-shrink:0;transition:background 0.15s,color 0.15s;gap:2px}
+.bottom-nav-scroll a:active{background:var(--surface)}
+.bottom-nav-scroll a.active{color:var(--accent);font-weight:700}
+.bottom-nav-scroll a .bnav-icon{font-size:1.3rem;line-height:1}
+.bottom-nav-scroll a .bnav-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:58px;line-height:1.2}
+@media print{
+.bottom-nav{display:none!important}
+}
 a.paginate_button.current {
     background: #322727 !important;
+}
+button#sidebarToggle {
+    display: none !important;
 }
 </style>
 <link rel="icon" type="image/png" href="favicon-96x96.png" sizes="96x96" />
@@ -2870,6 +2903,11 @@ if (localStorage.getItem('sidebarCollapsed') === '1' && window.innerWidth > 600)
     document.body.classList.add('sidebar-collapsed');
 }
 document.addEventListener('DOMContentLoaded', function() {
+    if (document.body.classList.contains('sidebar-collapsed')) {
+        document.querySelectorAll('#sidebarToggle .toggle-label').forEach(function(el) { el.style.display = 'none'; });
+    } else {
+        document.querySelectorAll('#sidebarToggle .toggle-label').forEach(function(el) { el.style.display = ''; });
+    }
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('msg')) Swal.fire({ title: 'Success!', text: urlParams.get('msg'), icon: 'success', timer: 3000, showConfirmButton: false });
     if (urlParams.get('err')) Swal.fire({ title: 'Error!', text: urlParams.get('err'), icon: 'error', confirmButtonColor: '#d33' });
@@ -3219,10 +3257,11 @@ else:
 <div class="branch"><?= sanitize($branch_name) ?></div>
 </div>
 </div>
+<button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()" title="Toggle sidebar"><span class="toggle-label">◀</span> ☰ <span class="toggle-label">Collapse</span></button>
 <nav>
 <ul>
 <?php foreach ($pages_nav as $pn): ?>
-<li><a href="index.php?page=<?= $pn[0] ?>" class="<?= $page === $pn[0] ? 'active' : '' ?> animate__animated animate__fadeInLeft"><span class="icon"><?= $pn[1] ?></span><?= $pn[2] ?></a></li>
+<li><a href="index.php?page=<?= $pn[0] ?>" class="<?= $page === $pn[0] ? 'active' : '' ?> animate__animated animate__fadeInLeft"><span class="icon"><?= $pn[1] ?></span><span class="nav-label"><?= $pn[2] ?></span></a></li>
 <?php endforeach; ?>
 </ul>
 </nav>
@@ -3231,9 +3270,16 @@ else:
 <form method="GET" action="index.php"><input type="hidden" name="logout" value="1"><button type="submit">🚪 Logout</button></form>
 </div>
 </div>
+<nav class="bottom-nav" id="bottomNav">
+<div class="bottom-nav-scroll">
+<?php foreach ($pages_nav as $pn): ?>
+<a href="index.php?page=<?= $pn[0] ?>" class="<?= $page === $pn[0] ? 'active' : '' ?>"><span class="bnav-icon"><?= $pn[1] ?></span><span class="bnav-label"><?= $pn[2] ?></span></a>
+<?php endforeach; ?>
+</div>
+</nav>
 <div class="main-wrap">
 <div class="topbar">
-<button class="hamburger" onclick="toggleSidebar()">☰</button>
+<button class="hamburger" id="hamburgerBtn" onclick="toggleSidebar()">☰</button>
 <div class="page-title">
 <?php foreach ($pages_nav as $pn) { if ($pn[0] === $page) echo $pn[1] . ' <span class="title-text">' . $pn[2] . '</span>'; } ?>
 </div>
@@ -7642,6 +7688,12 @@ function toggleSidebar() {
     } else {
         document.body.classList.toggle('sidebar-collapsed');
         localStorage.setItem('sidebarCollapsed', document.body.classList.contains('sidebar-collapsed') ? '1' : '0');
+        var toggleBtn = document.getElementById('sidebarToggle');
+        if (toggleBtn) {
+            var labels = toggleBtn.querySelectorAll('.toggle-label');
+            var isCollapsed = document.body.classList.contains('sidebar-collapsed');
+            labels.forEach(function(el) { el.style.display = isCollapsed ? 'none' : ''; });
+        }
     }
 }
 function closeSidebar() {
@@ -7656,6 +7708,58 @@ if (toastWrap) {
         setTimeout(function(){ toastWrap.remove(); }, 500);
     }, 3500);
 }
+(function() {
+    var bottomNav = document.getElementById('bottomNav');
+    if (!bottomNav) return;
+    var lastY = 0;
+    var ticking = false;
+    var hideThreshold = 10;
+    var scrollContainer = document.querySelector('.content') || window;
+    function onScroll() {
+        var curY = window.pageYOffset || document.documentElement.scrollTop;
+        if (curY < 0) curY = 0;
+        var diff = curY - lastY;
+        if (Math.abs(diff) < hideThreshold) return;
+        if (diff > 0 && curY > 60) {
+            bottomNav.classList.add('hide');
+        } else {
+            bottomNav.classList.remove('hide');
+        }
+        lastY = curY;
+    }
+    window.addEventListener('scroll', function() {
+        if (!ticking) {
+            window.requestAnimationFrame(function() {
+                onScroll();
+                ticking = false;
+            });
+            ticking = true;
+        }
+    }, { passive: true });
+})();
+(function() {
+    function scrollActiveIntoView(container) {
+        if (!container) return;
+        var active = container.querySelector('a.active');
+        if (!active) return;
+        var cr = container.getBoundingClientRect();
+        var ar = active.getBoundingClientRect();
+        var vOverflow = ar.top < cr.top || ar.bottom > cr.bottom;
+        var hOverflow = ar.left < cr.left || ar.right > cr.right;
+        if (vOverflow || hOverflow) {
+            active.scrollIntoView({ block: 'nearest', inline: 'center' });
+        }
+    }
+    function run() {
+        scrollActiveIntoView(document.querySelector('.sidebar nav'));
+        scrollActiveIntoView(document.querySelector('.bottom-nav-scroll'));
+    }
+    if (document.readyState === 'complete') {
+        run();
+    } else {
+        window.addEventListener('load', run);
+    }
+})();
 setInterval(function() {
 }, 60000); 
 </script>
