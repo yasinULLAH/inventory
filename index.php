@@ -570,6 +570,14 @@ function sanitize($val)
     return htmlspecialchars(strip_tags(trim($val)), ENT_QUOTES, 'UTF-8');
 }
 
+function defang_spam($val)
+{
+    $val = sanitize($val);
+    $val = str_ireplace(['http://', 'https://', 'www.'], ['hxxp://', 'hxxps://', 'www[.]'], $val);
+    $val = preg_replace('/([a-zA-Z0-9])\.([a-zA-Z]{2,6})\b/', '$1[.]$2', $val);
+    return $val;
+}
+
 function handle_image_upload($file, $dest_dir = 'uploads/')
 {
     $dest_dir = basename($dest_dir) . '/';
@@ -7264,9 +7272,9 @@ document.addEventListener('DOMContentLoaded', function() {
 <?php while ($r = $bike_reqs->fetch_assoc()): ?>
 <tr>
 <td><?= fmt_date($r['created_at']) ?></td>
-<td><strong><?= sanitize($r['customer_name']) ?></strong></td>
-<td><?= sanitize($r['customer_phone']) ?></td>
-<td><small><?= str_replace(['http://', 'https://'], ['h_tp://', 'h_tps://'], sanitize($r['bike_details'])) ?></small></td>
+<td><strong><?= defang_spam($r['customer_name']) ?></strong></td>
+<td><?= defang_spam($r['customer_phone']) ?></td>
+<td><small><?= defang_spam($r['bike_details']) ?></small></td>
 <td><span class="badge badge-<?= ($r['status'] === 'fulfilled') ? 'success' : (($r['status'] === 'cancelled') ? 'danger' : 'warning') ?>"><?= strtoupper($r['status']) ?></span></td>
 <td>
 <form method="POST" style="display:inline"><input type="hidden" name="update_request_status" value="1"><input type="hidden" name="id" value="<?= $r['id'] ?>"><input type="hidden" name="type" value="bike"><input type="hidden" name="sub" value="requests"><select name="status" onchange="this.form.submit()"><option value="pending" <?= $r['status'] === 'pending' ? 'selected' : '' ?>>Pending</option><option value="contacted" <?= $r['status'] === 'contacted' ? 'selected' : '' ?>>Contacted</option><option value="fulfilled" <?= $r['status'] === 'fulfilled' ? 'selected' : '' ?>>Fulfilled</option><option value="cancelled" <?= $r['status'] === 'cancelled' ? 'selected' : '' ?>>Cancelled</option></select></form>
@@ -7285,10 +7293,10 @@ document.addEventListener('DOMContentLoaded', function() {
 <?php while ($r = $quote_reqs->fetch_assoc()): ?>
 <tr>
 <td><?= fmt_date($r['created_at']) ?></td>
-<td><strong><?= sanitize($r['customer_name']) ?></strong></td>
-<td><?= sanitize($r['customer_phone']) ?></td>
-<td><?= $r['model_name'] ? sanitize($r['model_name'] . ' - ' . $r['chassis_number']) : 'General' ?></td>
-<td><small><?= str_replace(['http://', 'https://'], ['h_tp://', 'h_tps://'], sanitize($r['details'])) ?></small></td>
+<td><strong><?= defang_spam($r['customer_name']) ?></strong></td>
+<td><?= defang_spam($r['customer_phone']) ?></td>
+<td><?= $r['model_name'] ? defang_spam($r['model_name'] . ' - ' . $r['chassis_number']) : 'General' ?></td>
+<td><small><?= defang_spam($r['details']) ?></small></td>
 <td><span class="badge badge-<?= ($r['status'] === 'accepted') ? 'success' : (($r['status'] === 'rejected') ? 'danger' : 'warning') ?>"><?= strtoupper($r['status']) ?></span></td>
 <td>
 <form method="POST" style="display:inline"><input type="hidden" name="update_request_status" value="1"><input type="hidden" name="id" value="<?= $r['id'] ?>"><input type="hidden" name="type" value="quote"><input type="hidden" name="sub" value="requests"><select name="status" onchange="this.form.submit()"><option value="pending" <?= $r['status'] === 'pending' ? 'selected' : '' ?>>Pending</option><option value="sent" <?= $r['status'] === 'sent' ? 'selected' : '' ?>>Sent</option><option value="accepted" <?= $r['status'] === 'accepted' ? 'selected' : '' ?>>Accepted</option><option value="rejected" <?= $r['status'] === 'rejected' ? 'selected' : '' ?>>Rejected</option></select></form>
