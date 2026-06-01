@@ -887,7 +887,7 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                     if ($elite_rank === 1 && $m['sales_cnt'] > 0) {
                         $badge_class = 'badge-bestseller';
                         $badge_icon = 'fa-crown';
-                        $badge_text = 'BEST SELLER 路 ' . $m['sales_cnt'] . ' Sold';
+                        $badge_text = 'BEST SELLER • ' . $m['sales_cnt'] . ' Sold';
                     } elseif ($days_since <= 30) {
                         $badge_class = 'badge-newarrival';
                         $badge_icon = 'fa-sparkles';
@@ -895,11 +895,11 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                     } elseif ($m['stock_cnt'] <= 2 && $m['stock_cnt'] > 0) {
                         $badge_class = 'badge-lowstock';
                         $badge_icon = 'fa-fire';
-                        $badge_text = 'LOW STOCK 路 Only ' . $m['stock_cnt'] . ' Left';
+                        $badge_text = 'LOW STOCK • Only ' . $m['stock_cnt'] . ' Left';
                     } elseif ($m['sales_cnt'] >= 2) {
                         $badge_class = 'badge-popular';
                         $badge_icon = 'fa-chart-line';
-                        $badge_text = 'POPULAR 路 ' . $m['sales_cnt'] . ' Sold';
+                        $badge_text = 'POPULAR • ' . $m['sales_cnt'] . ' Sold';
                     } else {
                         $badge_class = 'badge-default';
                         $badge_icon = 'fa-bolt';
