@@ -26,6 +26,16 @@ $conn = db_connect();
 if (!$conn) {
     die('System Maintenance. Please check back later.');
 }
+$app_url = '';
+
+function app_img($path)
+{
+    if (empty($path))
+        return '';
+    if (strpos($path, 'http') === 0 || strpos($path, 'data:') === 0)
+        return $path;
+    return 'serve_img.php?p=' . urlencode(ltrim($path, '/'));
+}
 
 function get_setting($key)
 {
@@ -169,7 +179,7 @@ $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' :
 $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
 $base_url = $scheme . '://' . $host . rtrim(dirname($_SERVER['PHP_SELF']), '/\\');
 $canonical_url = $base_url . '/' . ltrim($meta_canonical, '/');
-$meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($base_url . '/' . ltrim($meta_image, '/'));
+$meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($meta_image === 'logo.png' ? $base_url . '/' . ltrim($meta_image, '/') : $base_url . '/' . ltrim(app_img($meta_image), '/'));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -880,7 +890,7 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                     if ($elite_rank === 1 && $m['sales_cnt'] > 0) {
                         $badge_class = 'badge-bestseller';
                         $badge_icon = 'fa-crown';
-                        $badge_text = 'BEST SELLER · ' . $m['sales_cnt'] . ' Sold';
+                        $badge_text = 'BEST SELLER';
                     } elseif ($days_since <= 30) {
                         $badge_class = 'badge-newarrival';
                         $badge_icon = 'fa-sparkles';
@@ -888,11 +898,11 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                     } elseif ($m['stock_cnt'] <= 2 && $m['stock_cnt'] > 0) {
                         $badge_class = 'badge-lowstock';
                         $badge_icon = 'fa-fire';
-                        $badge_text = 'LOW STOCK · Only ' . $m['stock_cnt'] . ' Left';
+                        $badge_text = 'LOW STOCK';
                     } elseif ($m['sales_cnt'] >= 2) {
                         $badge_class = 'badge-popular';
                         $badge_icon = 'fa-chart-line';
-                        $badge_text = 'POPULAR · ' . $m['sales_cnt'] . ' Sold';
+                        $badge_text = 'POPULAR';
                     } else {
                         $badge_class = 'badge-default';
                         $badge_icon = 'fa-bolt';
@@ -903,10 +913,10 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                     <div class="bike-status <?= $badge_class ?>"><i class="fas <?= $badge_icon ?>"></i> <?= $badge_text ?></div>
                     <a class="bike-link" href="<?= sanitize($self_page) ?>?view=bike&id=<?= (int) $avail['id'] ?>">
                         <div class="bike-img">
-                            <?php $primary_img = $avail['image'] ?: $m['image']; ?>
-                            <img src="<?= sanitize($primary_img ?: 'x') ?>" alt="<?= sanitize($m['model_name']) ?>" onerror="imageFallback(this, '<?= sanitize($m['image']) ?>')">
+                            <?php $primary_img = app_img($avail['image'] ?: $m['image']); ?>
+                            <img src="<?= sanitize($primary_img ?: 'x') ?>" alt="<?= sanitize($m['model_name']) ?>" onerror="imageFallback(this, '<?= sanitize(app_img($m['image'])) ?>')">
                         </div>
-                        <div class="bike-title" style="line-height:1.2; padding-bottom:5px;"><?= sanitize($m['model_name']) ?> <span style="display:block; font-size:1rem; color:var(--text-dim); font-weight:600; margin-top:4px;"><?= sanitize($avail['chassis_number']) ?></span></div>
+                        <div class="bike-title" style="line-height:1.2; padding-bottom:5px;"><?= sanitize($m['model_name']) ?> </div>
                     </a>
                     <div class="bike-features">
                         <div class="feat-item"><i class="fas fa-bolt"></i> <?= sanitize($m['category']) ?></div>
@@ -915,7 +925,7 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                         <div class="feat-item"><i class="fas fa-battery-full"></i> <?= sanitize(format_range($m['max_range'])) ?></div>
                     </div>
                     <div class="price-request"><i class="fab fa-whatsapp"></i> PRICE ON REQUEST</div>
-                    <a href="https://wa.me/<?= $wa_number ?>?text=I'm interested in the <?= urlencode($m['model_name']) ?> (Chassis: <?= urlencode($avail['chassis_number']) ?>)" class="wa-action">INQUIRE ON WHATSAPP</a>
+                    <a href="https://wa.me/<?= $wa_number ?>?text=I'm interested in the <?= urlencode($m['model_name']) ?> " class="wa-action">INQUIRE ON WHATSAPP</a>
                 </div>
                 <?php endwhile; ?>
             </div>
@@ -959,10 +969,10 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                 $gallery = $conn->query('SELECT * FROM gallery ORDER BY sort_order ASC');
                 while ($g = $gallery->fetch_assoc()):
                     ?>
-                <a href="<?= $g['image'] ?>" class="glightbox gallery-item"
+                <a href="<?= app_img($g['image']) ?>" class="glightbox gallery-item"
                    data-title="<?= sanitize($g['title']) ?>"
                    data-description="<?= sanitize($g['description']) ?>">
-                    <img src="<?= $g['image'] ?>" alt="<?= sanitize($g['title']) ?>" onerror="this.closest('a').remove();">
+                    <img src="<?= app_img($g['image']) ?>" alt="<?= sanitize($g['title']) ?>" onerror="this.closest('a').remove();">
                     <div class="gallery-info">
                         <h4><?= sanitize($g['title']) ?></h4>
                         <p><?= sanitize($g['description']) ?></p>
@@ -980,7 +990,7 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                     ?>
                 <div class="glass leader-card">
                     <div class="leader-avatar-wrap">
-                        <img src="<?= $l['image'] ?: 'https://ui-avatars.com/api/?name=' . urlencode($l['name']) . '&background=6366f1&color=fff&size=200' ?>" class="leader-img" alt="<?= sanitize($l['name']) ?>">
+                        <img src="<?= $l['image'] ? app_img($l['image']) : 'https://ui-avatars.com/api/?name=' . urlencode($l['name']) . '&background=6366f1&color=fff&size=200' ?>" class="leader-img" alt="<?= sanitize($l['name']) ?>">
                     </div>
                     <div class="leader-name"><?= sanitize($l['name']) ?></div>
                     <div class="leader-position"><?= strtoupper(sanitize($l['position'])) ?></div>
@@ -997,7 +1007,7 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                 <form action="<?= sanitize($self_page) ?>" method="GET" style="display:flex; gap:15px; flex-wrap:wrap; align-items:center;">
                     <input type="hidden" name="view" value="bikes">
                     <div style="flex:1; min-width:200px;">
-                        <input type="text" name="search" placeholder="Search Chassis or Model..." value="<?= sanitize($_GET['search'] ?? '') ?>" style="margin-bottom:0; width:100%;">
+                        <input type="text" name="search" placeholder="Search Model..." value="<?= sanitize($_GET['search'] ?? '') ?>" style="margin-bottom:0; width:100%;">
                     </div>
                     <div style="flex:1; min-width:200px; display:none;">
                         <select name="category" style="margin-bottom:0; width:100%; cursor:pointer; background-image: url('data:image/svg+xml;utf8,<svg fill=\"white\" height=\"24\" viewBox=\"0 0 24 24\" width=\"24\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M7 10l5 5 5-5z\"/></svg>'); background-repeat: no-repeat; background-position-x: 95%; background-position-y: center;">
@@ -1033,6 +1043,9 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                     </div>
                 </form>
             </div>
+            <div style="font-size: 0.85rem; color: var(--text-dim); text-align: center; margin-bottom: 25px; padding: 12px; background: rgba(255,255,255,0.02); border-radius: 12px; border: 1px solid var(--glass-border);">
+                <i class="fas fa-info-circle"></i> <strong>Disclaimer:</strong> Specifications and features shown may vary slightly and might not be 100% exact. For highly accurate details, please <a href="https://wa.me/<?= $wa_number ?>" style="color: var(--primary); text-decoration: none; font-weight: 600;">contact us via WhatsApp</a> or visit our shop via the map below.
+            </div>
             <div class="bike-grid">
                 <?php
                 $per_page = 10;
@@ -1053,11 +1066,12 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                 if (!empty($_GET['category'])) {
                     $c = mysqli_real_escape_string($conn, $_GET['category']);
                     $where_p[] = "m.category = '$c'";
-                }
+                }                
+                $where_p[] = "b.id IN (SELECT MIN(id) FROM bikes GROUP BY model_id, status, color, image)";
                 $where = implode(' AND ', $where_p);
                 $all_bikes = $conn->query("SELECT b.*, m.model_name, m.category, m.image as model_image, m.top_speed, m.max_range 
                     FROM bikes b JOIN models m ON b.model_id = m.id WHERE $where ORDER BY b.status IN ('in_stock', 'returned') DESC, b.created_at DESC LIMIT $offset, $per_page");
-                $total_cnt = $conn->query("SELECT COUNT(*) FROM bikes b JOIN models m ON b.model_id = m.id WHERE $where")->fetch_row()[0];
+                $total_cnt = $conn->query("SELECT COUNT(DISTINCT b.id) FROM bikes b JOIN models m ON b.model_id = m.id WHERE $where")->fetch_row()[0];
                 $total_pages = ceil($total_cnt / $per_page);
                 $badge_data = [];
                 $bd_q = $conn->query("SELECT m.id, COUNT(CASE WHEN b.status='sold' THEN 1 END) as sold_cnt, COUNT(CASE WHEN b.status='in_stock' THEN 1 END) as stk_cnt, MAX(b.created_at) as newest FROM models m LEFT JOIN bikes b ON m.id=b.model_id GROUP BY m.id ORDER BY sold_cnt DESC");
@@ -1100,24 +1114,23 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                 <div class="glass bike-card" data-tilt>
                     <div class="bike-status <?= $b_cls ?>"><i class="fas <?= $b_ico ?>"></i> <?= $b_txt ?></div>
                     <a class="bike-link" href="<?= sanitize($self_page) ?>?view=bike&id=<?= (int) $bike['id'] ?>">
-                        <?php $primary_img = $bike['image'] ?: $bike['model_image']; ?>
+                        <?php $primary_img = app_img($bike['image'] ?: $bike['model_image']); ?>
                         <div class="bike-img">
-                            <img src="<?= sanitize($primary_img ?: 'x') ?>" alt="<?= sanitize($bike['model_name']) ?>" onerror="imageFallback(this, '<?= sanitize($bike['model_image']) ?>')">
+                            <img src="<?= sanitize($primary_img ?: 'x') ?>" alt="<?= sanitize($bike['model_name']) ?>" onerror="imageFallback(this, '<?= sanitize(app_img($bike['model_image'])) ?>')">
                         </div>
-                        <div class="bike-title" style="line-height:1.2; padding-bottom:5px;"><?= sanitize($bike['model_name']) ?> <span style="display:block; font-size:1rem; color:var(--text-dim); font-weight:600; margin-top:4px;"><?= sanitize($bike['chassis_number']) ?></span></div>
+                        <div class="bike-title" style="line-height:1.2; padding-bottom:5px;"><?= sanitize($bike['model_name']) ?> </div>
                     </a>
                     <div class="bike-features">
-                        <div class="feat-item"><i class="fas fa-fingerprint"></i> <?= sanitize($bike['chassis_number']) ?></div>
                         <div class="feat-item"><i class="fas fa-palette"></i> <?= sanitize($bike['color']) ?></div>
                         <div class="feat-item"><i class="fas fa-tachometer-alt"></i> <?= sanitize(format_speed($bike['top_speed'])) ?></div>
                         <div class="feat-item"><i class="fas fa-battery-full"></i> <?= sanitize(format_range($bike['max_range'])) ?></div>
                     </div>
                     <div style="display:flex; gap:12px;">
-                        <a href="https://wa.me/<?= $wa_number ?>?text=Inquiry for <?= urlencode($bike['model_name']) ?> (Chassis: <?= urlencode($bike['chassis_number']) ?>)" class="wa-action" style="flex:1;">INQUIRE</a>
+                        <a href="https://wa.me/<?= $wa_number ?>?text=Inquiry for <?= urlencode($bike['model_name']) ?> " class="wa-action" style="flex:1;">INQUIRE</a>
                         <?php if (in_array($bike['status'], ['in_stock', 'returned'])): ?>
-                        <button class="btn btn-outline" onclick="openQuoteModal(<?= $bike['id'] ?>, '<?= sanitize($bike['model_name'] . ' - ' . $bike['chassis_number']) ?>')">QUOTE</button>
+                        <button class="btn btn-outline" onclick="openQuoteModal(<?= $bike['id'] ?>, '<?= sanitize($bike['model_name']) ?>')">QUOTE</button>
                         <?php else: ?>
-                        <button class="btn btn-outline" onclick="openRequestModal('<?= sanitize($bike['model_name'] . ' - ' . $bike['chassis_number']) ?>')">REQUEST</button>
+                        <button class="btn btn-outline" onclick="openRequestModal('<?= sanitize($bike['model_name']) ?>')">REQUEST</button>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -1148,18 +1161,17 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                     </div>
                     <div class="detail-grid">
                         <div class="glass" style="padding:14px;">
-                            <?php $primary_img = $bike_detail['bike_image'] ?: $bike_detail['model_image']; ?>
-                            <img class="detail-hero-img" src="<?= sanitize($primary_img ?: 'x') ?>" alt="<?= sanitize($bike_detail['model_name']) ?>" onerror="imageFallback(this, '<?= sanitize($bike_detail['model_image']) ?>')">
+                            <?php $primary_img = app_img($bike_detail['bike_image'] ?: $bike_detail['model_image']); ?>
+                            <img class="detail-hero-img" src="<?= sanitize($primary_img ?: 'x') ?>" alt="<?= sanitize($bike_detail['model_name']) ?>" onerror="imageFallback(this, '<?= sanitize(app_img($bike_detail['model_image'])) ?>')">
                         </div>
                         <div class="glass detail-panel">
                             <div class="bike-status badge-default" style="position:static; display:inline-flex; margin-bottom:14px;">
                                 <i class="fas fa-bolt"></i> <?= strtoupper(in_array($bike_detail['status'], ['in_stock', 'returned']) ? 'AVAILABLE' : sanitize($bike_detail['status'])) ?>
                             </div>
-                            <h1 style="font-size:2.2rem; line-height:1.2; margin-bottom:8px;"><?= sanitize($bike_detail['model_name']) ?> <span style="display:block; font-size:1.2rem; color:var(--text-dim); font-family:'Outfit', sans-serif;"><?= sanitize($bike_detail['chassis_number']) ?></span></h1>
+                            <h1 style="font-size:2.2rem; line-height:1.2; margin-bottom:8px;"><?= sanitize($bike_detail['model_name']) ?> </h1>
                             <p style="color:var(--text-dim); margin-bottom:6px;"><?= sanitize($bike_detail['category']) ?></p>
                             <p style="color:var(--text-dim); font-size:0.95rem;">Added: <?= $bike_detail['created_at'] ? date('d M Y', strtotime($bike_detail['created_at'])) : 'N/A' ?></p>
                             <div class="detail-kv">
-                                <div class="feat-item"><i class="fas fa-fingerprint"></i> Chassis: <?= sanitize($bike_detail['chassis_number']) ?></div>
                                 <div class="feat-item"><i class="fas fa-palette"></i> Color: <?= sanitize($bike_detail['color'] ?: 'N/A') ?></div>
                                 <div class="feat-item"><i class="fas fa-tachometer-alt"></i> Speed: <?= sanitize(format_speed($bike_detail['top_speed'])) ?></div>
                                 <div class="feat-item"><i class="fas fa-battery-full"></i> Range: <?= sanitize(format_range($bike_detail['max_range'])) ?></div>
@@ -1167,11 +1179,11 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                                 <div class="feat-item"><i class="fas fa-headset"></i> 24/7 Support</div>
                             </div>
                             <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
-                                <a href="https://wa.me/<?= $wa_number ?>?text=Inquiry for <?= urlencode($bike_detail['model_name']) ?> (Chassis: <?= urlencode($bike_detail['chassis_number']) ?>)" class="wa-action" style="flex:1;">INQUIRE</a>
+                                <a href="https://wa.me/<?= $wa_number ?>?text=Inquiry for <?= urlencode($bike_detail['model_name']) ?> " class="wa-action" style="flex:1;">INQUIRE</a>
                                 <?php if (in_array($bike_detail['status'], ['in_stock', 'returned'])): ?>
-                                <button class="btn btn-outline" style="flex:1; justify-content:center;" onclick="openQuoteModal(<?= (int) $bike_detail['id'] ?>, '<?= sanitize($bike_detail['model_name'] . ' - ' . $bike_detail['chassis_number']) ?>')">QUOTE</button>
+                                <button class="btn btn-outline" style="flex:1; justify-content:center;" onclick="openQuoteModal(<?= (int) $bike_detail['id'] ?>, '<?= sanitize($bike_detail['model_name']) ?>')">QUOTE</button>
                                 <?php else: ?>
-                                <button class="btn btn-outline" style="flex:1; justify-content:center;" onclick="openRequestModal('<?= sanitize($bike_detail['model_name'] . ' - ' . $bike_detail['chassis_number']) ?>')">REQUEST THIS BIKE</button>
+                                <button class="btn btn-outline" style="flex:1; justify-content:center;" onclick="openRequestModal('<?= sanitize($bike_detail['model_name']) ?>')">REQUEST THIS BIKE</button>
                                 <?php endif; ?>
                             </div>
                             <div style="display:flex; gap:12px; flex-wrap:wrap;">
