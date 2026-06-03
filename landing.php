@@ -199,6 +199,17 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
     <meta name="twitter:title" content="<?= $meta_title ?>">
     <meta name="twitter:description" content="<?= sanitize($meta_description) ?>">
     <meta name="twitter:image" content="<?= sanitize($meta_image_url) ?>">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "AutoDealer",
+      "name": "<?= sanitize($company_name) ?>",
+      "url": "<?= sanitize($canonical_url) ?>",
+      "logo": "<?= sanitize($base_url) ?>/logo.png",
+      "description": "<?= sanitize($meta_description) ?>",
+      "telephone": "<?= sanitize($wa_number) ?>"
+    }
+    </script>
     <?php if ($is_bike_detail && $bike_detail): ?>
     <script type="application/ld+json">
     {
@@ -212,7 +223,12 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
         "name": "<?= sanitize($company_name) ?>"
       },
       "category": "<?= sanitize($bike_detail['category']) ?>",
-      "url": "<?= sanitize($canonical_url) ?>"
+      "url": "<?= sanitize($canonical_url) ?>",
+      "offers": {
+        "@type": "Offer",
+        "availability": "<?= in_array($bike_detail['status'], ['in_stock', 'returned']) ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock' ?>",
+        "url": "<?= sanitize($canonical_url) ?>"
+      }
     }
     </script>
     <?php endif; ?>
@@ -737,18 +753,6 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
         w.appendChild(d);
     }
     </script>
-<?php
-$protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
-$base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['PHP_SELF']), '/\\');
-?>
-<meta property="og:title" content="BNI Enterprises" />
-<meta property="og:description" content="Welcome to BNI Enterprises" />
-<meta property="og:image" content="<?= $base_url ?>/logo.png" />
-<meta property="og:url" content="<?= sanitize($canonical_url) ?>" />
-<meta property="og:type" content="website" />
-<meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="BNI Enterprises" />
-<meta name="twitter:image" content="<?= $base_url ?>/logo.png" />
 </head>
 <body>
     <?php if (!empty($_GET['msg']) || !empty($_GET['err'])): ?>
@@ -1177,6 +1181,9 @@ $base_url = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['
                                 <div class="feat-item"><i class="fas fa-battery-full"></i> Range: <?= sanitize(format_range($bike_detail['max_range'])) ?></div>
                                 <div class="feat-item"><i class="fas fa-shield-alt"></i> Warranty Included</div>
                                 <div class="feat-item"><i class="fas fa-headset"></i> 24/7 Support</div>
+                            </div>
+                            <div style="font-size: 0.85rem; color: var(--text-dim); margin-bottom: 20px; padding: 12px; background: rgba(255,255,255,0.02); border-radius: 12px; border: 1px solid var(--glass-border);">
+                                <i class="fas fa-info-circle"></i> <strong>Disclaimer:</strong> Specifications and features shown may vary slightly and might not be 100% exact. For highly accurate details, please <a href="https://wa.me/<?= $wa_number ?>" style="color: var(--primary); text-decoration: none; font-weight: 600;">contact us via WhatsApp</a> or visit our shop.
                             </div>
                             <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
                                 <a href="https://wa.me/<?= $wa_number ?>?text=Inquiry for <?= urlencode($bike_detail['model_name']) ?> " class="wa-action" style="flex:1;">INQUIRE</a>
