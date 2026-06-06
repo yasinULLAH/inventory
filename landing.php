@@ -140,7 +140,9 @@ $captcha_img_src = generate_math_captcha();
 $company_name = get_setting('company_name') ?? 'BNI Enterprises';
 $hero_title = get_setting('landing_hero_title') ?? 'The Next Generation of Electric Mobility';
 $hero_sub = get_setting('landing_hero_subtitle') ?? 'Eco-friendly, powerful, and designed for the modern world.';
-$wa_number = get_setting('company_whatsapp') ?? '';
+$raw_wa = get_setting('company_whatsapp') ?? '';
+$wa_numbers = array_filter(array_map('trim', explode(',', $raw_wa)));
+$wa_number = $wa_numbers[0] ?? '';
 $view = $_GET['view'] ?? 'home';
 $self_page = $_SERVER['PHP_SELF'] ?? 'landing.php';
 $is_bike_detail = false;
@@ -1276,7 +1278,9 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
                     <ul style="list-style:none; line-height:2.8;">
                         <li><a href="#" class="footer-link"><i class="fas fa-map-marker-alt"></i> <?= sanitize(get_setting('company_address') ?? 'Dera Ghazi Khan, Punjab') ?></a></li>
                         <li><a href="mailto:<?= sanitize(get_setting('company_email') ?? '') ?>" class="footer-link"><i class="fas fa-envelope"></i> <?= sanitize(get_setting('company_email') ?? 'contact@bss.com') ?></a></li>
-                        <li><a href="https://wa.me/<?= sanitize(get_setting('company_whatsapp') ?? '') ?>" class="footer-link"><i class="fab fa-whatsapp"></i> +<?= sanitize(get_setting('company_whatsapp') ?? '92000000000') ?></a></li>
+                        <?php foreach ($wa_numbers as $wn): ?>
+                        <li><a href="https://wa.me/<?= sanitize($wn) ?>" class="footer-link"><i class="fab fa-whatsapp"></i> +<?= sanitize($wn) ?></a></li>
+                        <?php endforeach; ?>
                     </ul>
                 </div>
             </div>

@@ -3565,6 +3565,13 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="invoice-header">
         <h1>⚡ <?= sanitize(get_setting('company_name') ?? 'BNI Enterprises') ?></h1>
         <h2><?= sanitize(get_setting('branch_name') ?? 'Dera (Ahmed Metro)') ?></h2>
+        <?php 
+        $raw_wa = get_setting('company_whatsapp') ?? '';
+        $wa_numbers = array_filter(array_map('trim', explode(',', $raw_wa)));
+        if (!empty($wa_numbers)): 
+        ?>
+        <div style="font-size:0.85rem;margin-top:2px;font-weight:normal;">WhatsApp: <?= sanitize(implode(', ', $wa_numbers)) ?></div>
+        <?php endif; ?>
         <div style="font-size:0.9rem;margin-top:4px"><strong>PURCHASE RECEIPT</strong></div>
     </div>
     <div class="invoice-meta">
@@ -4394,6 +4401,13 @@ function addMoneyAllocRow() {
     <div class="invoice-header">
         <h1>⚡ <?= sanitize(get_setting('company_name') ?? 'BNI Enterprises') ?></h1>
         <h2><?= sanitize(get_setting('branch_name') ?? 'Dera (Ahmed Metro)') ?></h2>
+        <?php 
+        $raw_wa = get_setting('company_whatsapp') ?? '';
+        $wa_numbers = array_filter(array_map('trim', explode(',', $raw_wa)));
+        if (!empty($wa_numbers)): 
+        ?>
+        <div style="font-size:0.85rem;margin-top:2px;font-weight:normal;">WhatsApp: <?= sanitize(implode(', ', $wa_numbers)) ?></div>
+        <?php endif; ?>
         <div style="font-size:0.9rem;margin-top:4px"><strong>SALE RECEIPT</strong></div>
     </div>
     <div class="invoice-meta">
@@ -6454,6 +6468,13 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="invoice-header">
         <h1>⚡ <?= sanitize(get_setting('company_name') ?? 'BNI Enterprises') ?></h1>
         <h2><?= sanitize(get_setting('branch_name') ?? 'Dera (Ahmed Metro)') ?></h2>
+        <?php 
+        $raw_wa = get_setting('company_whatsapp') ?? '';
+        $wa_numbers = array_filter(array_map('trim', explode(',', $raw_wa)));
+        if (!empty($wa_numbers)): 
+        ?>
+        <div style="font-size:0.85rem;margin-top:2px;font-weight:normal;">WhatsApp: <?= sanitize(implode(', ', $wa_numbers)) ?></div>
+        <?php endif; ?>
         <div style="font-size:1.1rem;margin-top:8px;font-weight:700;letter-spacing:2px;color:#333;">OFFICIAL QUOTATION</div>
     </div>
     <div class="invoice-meta">
@@ -7202,7 +7223,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <div class="form-group"><label>Google Map Iframe (src only)</label><input type="text" name="company_map_iframe" value="<?= sanitize(get_setting('company_map_iframe') ?? '') ?>"></div>
 </div>
 <div class="form-row">
-<div class="form-group"><label>WhatsApp Number (e.g. 923000000000)</label><input type="text" name="company_whatsapp" value="<?= sanitize(get_setting('company_whatsapp') ?? '') ?>"></div>
+<div class="form-group"><label>WhatsApp Numbers (comma separated)</label><input type="text" name="company_whatsapp" value="<?= sanitize(get_setting('company_whatsapp') ?? '') ?>" placeholder="923000000000, 923111111111"></div>
 <div class="form-group"><label>Company Email</label><input type="email" name="company_email" value="<?= sanitize(get_setting('company_email') ?? '') ?>"></div>
 </div>
 <div class="form-row">
