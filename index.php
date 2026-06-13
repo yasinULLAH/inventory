@@ -34,7 +34,8 @@ $ip_address = get_client_ip();
 $ban_file = sys_get_temp_dir() . '/bni_bans.json';
 $bans = file_exists($ban_file) ? json_decode(file_get_contents($ban_file), true) : [];
 if (isset($bans[$ip_address]['ban_until']) && $bans[$ip_address]['ban_until'] > time()) {
-    die('<div style="padding:40px;text-align:center;font-family:sans-serif"><h2>🚫 Access Denied</h2><p>Too many failed login attempts. Your IP has been temporarily banned.</p></div>');
+    $ban_until_time = date('d/m/Y H:i:s', $bans[$ip_address]['ban_until']);
+    die('<div style="padding:40px;text-align:center;font-family:sans-serif"><h2>🚫 Access Denied</h2><p>Too many failed login attempts. Your IP has been temporarily banned until ' . $ban_until_time . '.</p></div>');
 }
 
 function record_failed_attempt()
