@@ -3278,6 +3278,7 @@ else:
 <?php foreach ($pages_nav as $pn): ?>
 <a href="index.php?page=<?= $pn[0] ?>" class="<?= $page === $pn[0] ? 'active' : '' ?>"><span class="bnav-icon"><?= $pn[1] ?></span><span class="bnav-label"><?= $pn[2] ?></span></a>
 <?php endforeach; ?>
+<a href="index.php?logout=1"><span class="bnav-icon">🚪</span><span class="bnav-label">Logout</span></a>
 </div>
 </nav>
 <div class="main-wrap">
