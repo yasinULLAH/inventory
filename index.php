@@ -639,7 +639,7 @@ function handle_bike_image_upload($file, $dest_dir = 'uploads/')
     $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
     if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif']))
         return null;
-    $filename = uniqid('bike_') . '.webp';
+    $filename = uniqid('bike_') . '.jpg';
     $dest = $dest_dir . $filename;
     $info = getimagesize($file['tmp_name']);
     if (!$info)
@@ -667,12 +667,10 @@ function handle_bike_image_upload($file, $dest_dir = 'uploads/')
     $dst_x = (int) (($target_w - $new_w) / 2);
     $dst_y = (int) (($target_h - $new_h) / 2);
     $canvas = imagecreatetruecolor($target_w, $target_h);
-    imagealphablending($canvas, false);
-    imagesavealpha($canvas, true);
-    $transparent = imagecolorallocatealpha($canvas, 255, 255, 255, 127);
-    imagefill($canvas, 0, 0, $transparent);
+    $white = imagecolorallocate($canvas, 255, 255, 255);
+    imagefill($canvas, 0, 0, $white);
     imagecopyresampled($canvas, $img, $dst_x, $dst_y, 0, 0, $new_w, $new_h, $orig_w, $orig_h);
-    imagewebp($canvas, $dest, 95);
+    imagejpeg($canvas, $dest, 90);
     imagedestroy($img);
     imagedestroy($canvas);
     return $dest;
@@ -2008,8 +2006,14 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $notes = sanitize($_POST['notes'] ?? '');
             $safe = sanitize($_POST['safeguard_notes'] ?? '');
             $img_path = null;
-            if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-                $img_path = handle_bike_image_upload($_FILES['image']);
+            $img_err = '';
+            if (isset($_FILES['image']) && !empty($_FILES['image']['name'])) {
+                if ($_FILES['image']['error'] === UPLOAD_ERR_OK) {
+                    $img_path = handle_bike_image_upload($_FILES['image']);
+                    if (!$img_path) $img_err = 'Image processing failed. ';
+                } else {
+                    $img_err = 'Upload failed (max size ' . ini_get('upload_max_filesize') . ' exceeded). ';
+                }
             }
             if ($bid <= 0 || $pp < 0 || $model_id <= 0) {
                 $err = 'Invalid bike ID, model, or purchase price.';
@@ -2048,7 +2052,8 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     $upd_exp->bind_param('ds', $pp, $reference);
                     $upd_exp->execute();
                 }
-                $msg = 'Bike updated.';
+                $msg = 'Bike updated. ' . $img_err;
+                if ($img_err) $err = trim($img_err);
             }
         }
         if ($action === 'bulk_delete') {
