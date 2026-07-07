@@ -1782,8 +1782,17 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $led_st2->execute();
                 $led_st2->close();
             }
+            $conn->query("UPDATE installments SET status='cancelled', notes=CONCAT(IFNULL(notes,''),' | Auto-cancelled on return') WHERE bike_id=$bike_id AND status IN ('pending','overdue')");
+            $acc_restore = $conn->query("SELECT accessory_id, quantity FROM sale_accessories WHERE bike_id=$bike_id");
+            if ($acc_restore) {
+                while ($ar = $acc_restore->fetch_assoc()) {
+                    $conn->query("UPDATE accessories SET current_stock = current_stock + {$ar['quantity']} WHERE id={$ar['accessory_id']}");
+                }
+            }
+            $conn->query("DELETE FROM deposit_allocations WHERE bike_id=$bike_id");
+            $conn->query("DELETE FROM sale_money_allocations WHERE bike_id=$bike_id");
             $conn->commit();
-            $msg = 'Return processed successfully.';
+            $msg = 'Return processed successfully. Installments cancelled, accessory stock restored, allocations cleared.';
         } catch (Exception $e) {
             $conn->rollback();
             $err = 'Return transaction failed: ' . $e->getMessage();
@@ -5439,7 +5448,10 @@ $(document).ready(function() {
                 $purchase_total_sum += $order['bikes_total'];
             while ($payment = $supplier_payments->fetch_assoc()) {
                 if ($payment['transaction_type'] === 'supplier_refund') {
-                    $purchase_total_sum += $payment['amount'];
+                    if ($payment['reference_id'] > 0) {
+                        $purchase_total_sum -= $payment['amount'];
+                    }
+                    $payment_total_sum -= $payment['amount'];
                 } else {
                     $payment_total_sum += $payment['amount'];
                 }
@@ -5488,7 +5500,7 @@ $(document).ready(function() {
 </div>
 <div class="data-table-wrap">
 <table class="data-table">
-<thead><tr><th>Sr#</th><th>Date</th><th>Description</th><th>Debit (Purchased Value)</th><th>Credit (Payments)</th><th>Balance</th></tr></thead>
+<thead><tr><th>Sr#</th><th>Date</th><th>Description</th><th>Debit (Dr)</th><th>Credit (Cr)</th><th>Balance</th></tr></thead>
 <tbody>
 <?php
             $sr = 1;
@@ -5507,13 +5519,24 @@ $(document).ready(function() {
             }
             $supplier_payments->data_seek(0);
             while ($payment = $supplier_payments->fetch_assoc()) {
-                $transactions[] = [
-                    'date' => $payment['payment_date'],
-                    'type' => $payment['transaction_type'] === 'supplier_refund' ? 'refund' : 'payment',
-                    'amount' => $payment['amount'],
-                    'description' => ($payment['transaction_type'] === 'supplier_refund' ? 'Refund Received #' : 'Payment #') . "{$payment['id']} ({$payment['payment_type']} - " . ($payment['cheque_number'] ?? '-') . ')',
-                    'id' => $payment['id']
-                ];
+                if ($payment['transaction_type'] === 'supplier_refund') {
+                    if ($payment['reference_id'] > 0) continue;
+                    $transactions[] = [
+                        'date' => $payment['payment_date'],
+                        'type' => 'refund',
+                        'amount' => $payment['amount'],
+                        'description' => "Refund Received #{$payment['id']} ({$payment['payment_type']} - " . ($payment['cheque_number'] ?? '-') . ')',
+                        'id' => $payment['id']
+                    ];
+                } else {
+                    $transactions[] = [
+                        'date' => $payment['payment_date'],
+                        'type' => 'payment',
+                        'amount' => $payment['amount'],
+                        'description' => "Payment #{$payment['id']} ({$payment['payment_type']} - " . ($payment['cheque_number'] ?? '-') . ')',
+                        'id' => $payment['id']
+                    ];
+                }
             }
             usort($transactions, function ($a, $b) {
                 if ($a['date'] == $b['date']) {
@@ -5524,7 +5547,11 @@ $(document).ready(function() {
             foreach ($transactions as $trans):
                 $debit = 0;
                 $credit = 0;
-                if ($trans['type'] === 'purchase' || $trans['type'] === 'refund') {
+                if ($trans['type'] === 'purchase') {
+                    $debit = $trans['amount'];
+                    $running_bal -= $debit;
+                    $purchase_total += $debit;
+                } elseif ($trans['type'] === 'refund') {
                     $debit = $trans['amount'];
                     $running_bal -= $debit;
                     $purchase_total += $debit;
