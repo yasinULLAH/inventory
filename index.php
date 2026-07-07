@@ -74,6 +74,197 @@ function db_connect($create_db = false)
     return $conn;
 }
 
+function ensure_secure_backup_storage()
+{
+    $root_dir = __DIR__ . DIRECTORY_SEPARATOR . 'secure_storage';
+    $backup_dir = $root_dir . DIRECTORY_SEPARATOR . 'auto_backups';
+    $deny_rules = "Options -Indexes\n<IfModule mod_authz_core.c>\n    Require all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\n    Order allow,deny\n    Deny from all\n</IfModule>\n";
+    foreach ([$root_dir, $backup_dir] as $dir) {
+        if (!is_dir($dir) && !mkdir($dir, 0700, true) && !is_dir($dir)) {
+            throw new Exception('Unable to create secure backup directory.');
+        }
+        $htaccess_path = $dir . DIRECTORY_SEPARATOR . '.htaccess';
+        if (!file_exists($htaccess_path) || file_get_contents($htaccess_path) !== $deny_rules) {
+            if (file_put_contents($htaccess_path, $deny_rules, LOCK_EX) === false) {
+                throw new Exception('Unable to secure backup directory with .htaccess rules.');
+            }
+        }
+    }
+    return [
+        'root_dir' => $root_dir,
+        'backup_dir' => $backup_dir,
+        'state_file' => $backup_dir . DIRECTORY_SEPARATOR . 'backup_state.json',
+    ];
+}
+
+function get_secure_backup_paths()
+{
+    $root_dir = __DIR__ . DIRECTORY_SEPARATOR . 'secure_storage';
+    $backup_dir = $root_dir . DIRECTORY_SEPARATOR . 'auto_backups';
+    $state_file = $backup_dir . DIRECTORY_SEPARATOR . 'backup_state.json';
+    if (!is_dir($root_dir) || !is_dir($backup_dir)) {
+        throw new Exception('Secure backup storage directory is missing.');
+    }
+    if (!is_file($state_file)) {
+        throw new Exception('Backup state file is missing.');
+    }
+    return [
+        'root_dir' => $root_dir,
+        'backup_dir' => $backup_dir,
+        'state_file' => $state_file,
+    ];
+}
+
+function get_database_table_list($conn)
+{
+    $tables = [];
+    $res = $conn->query('SHOW TABLES');
+    if (!$res) {
+        throw new Exception('Unable to read database table list.');
+    }
+    while ($row = $res->fetch_row()) {
+        if (!empty($row[0])) {
+            $tables[] = $row[0];
+        }
+    }
+    return $tables;
+}
+
+function build_full_database_dump($conn, $author)
+{
+    $tables = get_database_table_list($conn);
+    $sql_dump = "-- BNI Enterprises Full Database Backup\n";
+    $sql_dump .= '-- Generated: ' . date('Y-m-d H:i:s') . "\n";
+    $sql_dump .= '-- Author: ' . $author . "\n\n";
+    $sql_dump .= "SET SQL_MODE = \"NO_AUTO_VALUE_ON_ZERO\";\n";
+    $sql_dump .= "SET FOREIGN_KEY_CHECKS=0;\n";
+    $sql_dump .= "SET AUTOCOMMIT=0;\n";
+    $sql_dump .= "START TRANSACTION;\n\n";
+    foreach ($tables as $table_name) {
+        $safe_table = str_replace('`', '``', $table_name);
+        $create_row = $conn->query("SHOW CREATE TABLE `$safe_table`");
+        if (!$create_row) {
+            throw new Exception('Unable to read schema for table: ' . $table_name);
+        }
+        $create_data = $create_row->fetch_row();
+        $create_sql = $create_data[1] ?? '';
+        if ($create_sql === '') {
+            throw new Exception('Schema export failed for table: ' . $table_name);
+        }
+        $sql_dump .= "-- --------------------------------------------\n";
+        $sql_dump .= "-- Table: `$safe_table`\n";
+        $sql_dump .= "-- --------------------------------------------\n";
+        $sql_dump .= "DROP TABLE IF EXISTS `$safe_table`;\n";
+        $sql_dump .= $create_sql . ";\n\n";
+        $rows = $conn->query("SELECT * FROM `$safe_table`");
+        if ($rows && $rows->num_rows > 0) {
+            while ($row = $rows->fetch_assoc()) {
+                $vals = array_map(function ($v) use ($conn) {
+                    return $v === null ? 'NULL' : "'" . mysqli_real_escape_string($conn, (string) $v) . "'";
+                }, array_values($row));
+                $cols = '`' . implode('`,`', array_keys($row)) . '`';
+                $sql_dump .= "INSERT INTO `$safe_table` ($cols) VALUES (" . implode(',', $vals) . ");\n";
+            }
+            $sql_dump .= "\n";
+        }
+    }
+    $sql_dump .= "COMMIT;\n";
+    $sql_dump .= "SET FOREIGN_KEY_CHECKS=1;\n";
+    return $sql_dump;
+}
+
+function run_auto_database_backup($conn, $author)
+{
+    $interval_days = 4;
+    $max_backups = 20;
+    $interval_seconds = $interval_days * 86400;
+    $paths = get_secure_backup_paths();
+    $lock_handle = fopen($paths['state_file'], 'r+');
+    if (!$lock_handle) {
+        throw new Exception('Unable to open backup state file.');
+    }
+    if (!flock($lock_handle, LOCK_EX | LOCK_NB)) {
+        fclose($lock_handle);
+        return false;
+    }
+
+    $now = time();
+    $state = [];
+    try {
+        rewind($lock_handle);
+        $raw_state = stream_get_contents($lock_handle);
+        if (!empty($raw_state)) {
+            $decoded = json_decode($raw_state, true);
+            if (is_array($decoded)) {
+                $state = $decoded;
+            }
+        }
+
+        $last_backup_at = (int) ($state['last_backup_at'] ?? 0);
+        if ($last_backup_at > 0 && ($now - $last_backup_at) < $interval_seconds) {
+            $state['next_backup_due_at'] = $last_backup_at + $interval_seconds;
+            $state['last_checked_at'] = $now;
+            ftruncate($lock_handle, 0);
+            rewind($lock_handle);
+            fwrite($lock_handle, json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+            fflush($lock_handle);
+            flock($lock_handle, LOCK_UN);
+            fclose($lock_handle);
+            return false;
+        }
+
+        $filename = 'bni_auto_backup_' . date('Ymd_His', $now) . '.sql';
+        $tmp_path = $paths['backup_dir'] . DIRECTORY_SEPARATOR . $filename . '.tmp';
+        $final_path = $paths['backup_dir'] . DIRECTORY_SEPARATOR . $filename;
+        $sql_dump = build_full_database_dump($conn, $author);
+        if (file_put_contents($tmp_path, $sql_dump, LOCK_EX) === false) {
+            throw new Exception('Unable to write temporary backup file.');
+        }
+        if (!rename($tmp_path, $final_path)) {
+            @unlink($tmp_path);
+            throw new Exception('Unable to finalize backup file.');
+        }
+
+        $backup_files = glob($paths['backup_dir'] . DIRECTORY_SEPARATOR . 'bni_auto_backup_*.sql') ?: [];
+        sort($backup_files, SORT_STRING);
+        while (count($backup_files) > $max_backups) {
+            $old_file = array_shift($backup_files);
+            if (is_file($old_file)) {
+                @unlink($old_file);
+            }
+        }
+
+        $state = [
+            'last_backup_at' => $now,
+            'last_backup_file' => basename($final_path),
+            'last_checked_at' => $now,
+            'next_backup_due_at' => $now + $interval_seconds,
+            'interval_days' => $interval_days,
+            'max_backups' => $max_backups,
+            'backup_count' => count($backup_files),
+            'storage_dir' => str_replace(__DIR__ . DIRECTORY_SEPARATOR, '', $paths['backup_dir']),
+            'last_error' => null,
+        ];
+        ftruncate($lock_handle, 0);
+        rewind($lock_handle);
+        fwrite($lock_handle, json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        fflush($lock_handle);
+        flock($lock_handle, LOCK_UN);
+        fclose($lock_handle);
+        return true;
+    } catch (Exception $e) {
+        $state['last_checked_at'] = $now;
+        $state['last_error'] = $e->getMessage();
+        ftruncate($lock_handle, 0);
+        rewind($lock_handle);
+        fwrite($lock_handle, json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        fflush($lock_handle);
+        flock($lock_handle, LOCK_UN);
+        fclose($lock_handle);
+        throw $e;
+    }
+}
+
 function get_sale_total_for_bike($conn, $bike_id)
 {
     $stmt = $conn->prepare("SELECT b.selling_price, COALESCE(SUM(sa.final_price),0) AS acc_total
@@ -1104,6 +1295,11 @@ $msg = $_GET['msg'] ?? '';
 $err = $_GET['err'] ?? '';
 if ($db_exists && isset($_SESSION['user_id'])) {
     $conn = db_connect();
+    try {
+        run_auto_database_backup($conn, $author);
+    } catch (Exception $e) {
+        error_log('Auto backup error: ' . $e->getMessage());
+    }
     $currency = get_setting('currency') ?? 'Rs.';
     $tax_rate = (float) (get_setting('tax_rate') ?? 0.1);
     $tax_on = get_setting('tax_on') ?? 'purchase_price';
@@ -2532,24 +2728,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
     }
     if ($page === 'settings' && isset($_GET['action']) && $_GET['action'] === 'backup') {
         require_permission($conn, 'settings', 'view');
-        $tables_list = ['settings', 'suppliers', 'customers', 'models', 'accessories', 'purchase_orders', 'bikes', 'sale_accessories', 'payments', 'installments', 'ledger', 'roles', 'role_permissions', 'users', 'income_expenses', 'quotations', 'money_destinations', 'sale_money_allocations', 'bank_deposits', 'deposit_allocations'];
-        $sql_dump = "-- BNI Enterprises Database Backup\n-- Generated: " . date('Y-m-d H:i:s') . "\n-- Author: $author\n\n";
-        $sql_dump .= "SET FOREIGN_KEY_CHECKS=0;\n\n";
-        foreach ($tables_list as $tbl) {
-            $sql_dump .= "TRUNCATE TABLE `$tbl`;\n";
-            $r = $conn->query("SELECT * FROM `$tbl`");
-            if ($r && $r->num_rows > 0) {
-                while ($row = $r->fetch_assoc()) {
-                    $vals = array_map(function ($v) use ($conn) {
-                        return $v === null ? 'NULL' : "'" . mysqli_real_escape_string($conn, $v) . "'";
-                    }, array_values($row));
-                    $cols = '`' . implode('`,`', array_keys($row)) . '`';
-                    $sql_dump .= "INSERT INTO `$tbl` ($cols) VALUES (" . implode(',', $vals) . ");\n";
-                }
-            }
-            $sql_dump .= "\n";
-        }
-        $sql_dump .= "SET FOREIGN_KEY_CHECKS=1;\n";
+        $sql_dump = build_full_database_dump($conn, $author);
         header('Content-Type: application/sql');
         header('Content-Disposition: attachment; filename="bni_backup_' . date('Ymd_His') . '.sql"');
         echo $sql_dump;

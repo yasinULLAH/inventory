@@ -37,6 +37,12 @@ IndexIgnore *
     RewriteRule (^|/)\. - [F,L]
 </IfModule>
 
+# 2d. Block direct access to protected storage vaults (auto backups, state files, internal data)
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^secure_storage/ - [F,L,NC]
+</IfModule>
+
 # 3. Force HTTPS
 <IfModule mod_rewrite.c>
     RewriteEngine On

@@ -1,0 +1,11 @@
+{
+    "last_backup_at": 0,
+    "last_backup_file": null,
+    "last_checked_at": null,
+    "next_backup_due_at": null,
+    "interval_days": 4,
+    "max_backups": 20,
+    "backup_count": 0,
+    "storage_dir": "secure_storage/auto_backups",
+    "last_error": null
+}
