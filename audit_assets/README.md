@@ -1,6 +1,6 @@
 # BNI Enterprises: Bike Dealer Management System
 ## Official Comprehensive Documentation | آفیشل سسٹم دستاویزات اور یوزر مینول
-**Version 2026.3 | ورژن 2026.3**
+**Version 2.0.0 | ورژن 2.0.0**
 
 Welcome to the full functional guide for the **BNI Enterprises Bike Dealer Management System**. This document is designed for both management and clients to understand every single feature, module, and operational flow within the application.
 
@@ -15,9 +15,17 @@ Welcome to the full functional guide for the **BNI Enterprises Bike Dealer Manag
 4. [Inventory Control | اسٹاک کنٹرول](#4-inventory-control--اسٹاک-کنٹرول)
 5. [Sales & Invoicing | سیلز اور انوائسنگ](#5-sales--invoicing--سیلز-اور-انوائسنگ)
 6. [Returns & Refunds | واپسی اور ریفنڈ](#6-returns--refunds--واپسی-اور-ریفنڈ)
-7. [Accounting & Ledgers | اکاؤنٹنگ اور کھاتہ جات](#7-accounting--ledgers--اکاؤنٹنگ-اور-کھاتہ-جات)
-8. [Advanced Reporting | ایڈوانس رپورٹنگ](#8-advanced-reporting--ایڈوانس-رپورٹنگ)
-9. [System Settings & Security | سسٹم کی ترتیبات اور سیکیورٹی](#9-system-settings--security--سسٹم-کی-ترتیبات-اور-سیکیورٹی)
+7. [Installments | اقساط](#7-installments--اقساط)
+8. [Accounting & Ledgers | اکاؤنٹنگ اور کھاتہ جات](#8-accounting--ledgers--اکاؤنٹنگ-اور-کھاتہ-جات)
+9. [Advanced Reporting | ایڈوانس رپورٹنگ](#9-advanced-reporting--ایڈوانس-رپورٹنگ)
+10. [Money Destinations & Tracking | رقم کی منزلیں اور ٹریکنگ](#10-money-destinations--tracking--رقم-کی-منزلیں-اور-ٹریکنگ)
+11. [Bank Deposits | بینک ڈپازٹ](#11-bank-deposits--بینک-ڈپازٹ)
+12. [Accessories Management | ایکسیسریز کا انتظام](#12-accessories-management--ایکسیسریز-کا-انتظام)
+13. [Quotations | کوٹیشنز](#13-quotations--کوٹیشنز)
+14. [Income & Expense | آمدنی اور اخراجات](#14-income--expense--آمدنی-اور-اخراجات)
+15. [Users & Roles | صارفین اور رولز](#15-users--roles--صارفین-اور-رولز)
+16. [Landing Page | عوامی ویب سائٹ](#16-landing-page--عوامی-ویب-سائٹ)
+17. [System Settings & Security | سسٹم کی ترتیبات اور سیکیورٹی](#17-system-settings--security--سسٹم-کی-ترتیبات-اور-سیکیورٹی)
 
 ---
 
@@ -109,7 +117,22 @@ Management of cancellations and product returns.
 
 ---
 
-## 7. Accounting & Ledgers | اکاؤنٹنگ اور کھاتہ جات
+## 7. Installments | اقساط
+Management of monthly payment plans for bike sales.
+بائیک فروخت پر ماہانہ قسطوں کا انتظام۔
+
+**Features / خصوصیات:**
+- **Auto-Generation:** When a bike is sold with down payment less than total, monthly installments are auto-created.
+- **Payment Recording:** Record payments with optional penalty fees and cheque details.
+- **Overdue Detection:** Past-due installments are automatically highlighted.
+- **Auto-Distribution:** Payments auto-allocate to oldest pending installments first.
+- **Cancellation:** All pending installments auto-cancelled on sale return.
+
+**اردو:** جب بائیک ڈاؤن پیمنٹ پر فروخت ہو تو ماہانہ قسطیں خودکار بن جاتی ہیں۔ ادائیگی جرمانے اور چیک کی تفصیلات کے ساتھ ریکارڈ کریں۔ مقررہ تاریخ گزرنے پر قسط سرخ نشان زد ہو جاتی ہے۔ ادائیگی پہلے پرانی قسطوں پر لگتی ہے۔ واپسی پر تمام قسطیں خودکار منسوخ۔
+
+---
+
+## 8. Accounting & Ledgers | اکاؤنٹنگ اور کھاتہ جات
 Complete visibility into your cash flow and liabilities.
 آپ کے کیش فلو اور واجبات کی مکمل تفصیلات۔
 
@@ -133,6 +156,11 @@ Data-driven insights for business growth.
 - **Monthly Summary:** High-level overview of monthly growth.
 - **Daily Ledger:** Detailed "Day Book" for daily operations.
 - **Purchase vs Sales:** Visual and tabular comparison of money spent vs money earned.
+- **Model-wise Report:** Per-model inventory, sold, available, returned, damaged totals with purchase/sales/margin.
+- **Bank/Cheque Report:** Cheque transactions by bank and transaction type.
+- **Accessory Stock Report:** Current accessory inventory valuation.
+- **Installments Summary:** Per-customer installment totals with overdue tracking.
+- **Money Reports:** Money by Destination, Money by Sale, Untracked Sales, Money Flow.
 
 **اردو:** ٹیکس فائلنگ کی تعمیل کے لیے ٹیکس رپورٹ۔ منافع کا تجزیہ کرنے کے لیے پرافٹ/مارجن رپورٹ۔ ماہانہ ترقی کا جائزہ۔ روزانہ کے آپریشنز کے لیے تفصیلی "ڈے بک"۔ خرچ کی گئی رقم بمقابلہ کمائی گئی رقم کا موازنہ۔
 
@@ -140,7 +168,121 @@ Data-driven insights for business growth.
 
 ---
 
-## 9. System Settings & Security | سسٹم کی ترتیبات اور سیکیورٹی
+## 10. Money Destinations & Tracking | رقم کی منزلیں اور ٹریکنگ
+Track where sale money ends up — banks, persons, or wallets.
+سیل کی رقم کہاں گئی — بینک، شخص، یا والٹ — اس کا مکمل ٹریک۔
+
+**Money Destinations / رقم کی منزلیں:**
+- Manage banks (with account title, number, branch, opening balance), persons, and wallets.
+- 9 default destinations pre-seeded.
+
+**Money Tracking / رقم کی ٹریکنگ:**
+- Allocate sale proceeds to one or more destinations per sale.
+- Full CRUD on allocations. Filter by sale or destination.
+- Deposit status: deposited, partial, pending.
+- Audit trail with created_by tracking.
+- Reports: Money by Destination, Money by Sale, Untracked Sales, Money Flow.
+
+**اردو:** بینک، شخص، والٹ کو بطور منزل شامل کریں۔ اکاؤنٹ ٹائٹل، نمبر، برانچ، اوپننگ بیلنس کے ساتھ۔ فروخت کی رقم کو ایک یا زیادہ منزلوں میں تقسیم کریں۔ ڈپازٹ اسٹیٹس: ڈپازٹ شدہ، جزوی، زیر التواء۔
+
+![Reports Module](screenshots/reports.png)
+
+---
+
+## 11. Bank Deposits | بینک ڈپازٹ
+Record actual bank deposits and link them to sale allocations.
+بینک میں رقم جمع کروانے کا ریکارڈ اور فروخت سے لنک۔
+
+**Features / خصوصیات:**
+- Deposit date, amount, type (cash/cheque/transfer/online), reference number.
+- Receipt image upload (auto-compressed to max 200KB).
+- Link deposits to specific bike sale allocations.
+- Dashboard widget for pending undeposited total.
+- Bank Deposit report with date filtering.
+
+**اردو:** بینک ڈپازٹ کی تاریخ، رقم، قسم، حوالہ نمبر۔ رسید کی تصویر اپ لوڈ۔ بتائیں کہ کون سی بائیک کی رقم ڈپازٹ میں شامل ہے۔ ڈیش بورڈ پر زیر التواء ڈپازٹ کا ویجٹ۔
+
+---
+
+## 12. Accessories Management | ایکسیسریز کا انتظام
+Full accessory inventory control.
+ایکسیسریز کے اسٹاک کا مکمل انتظام۔
+
+**Features / خصوصیات:**
+- CRUD: name, SKU, purchase/selling price, stock.
+- Analytics: total items, stock value, sold quantity, revenue, profit, discounts.
+- Charts: top 5 sold accessories.
+- Auto stock deduction on sale, auto-restore on return.
+- Custom accessory entry during sale.
+
+**اردو:** ہیلمٹ، چارجر، لاک وغیرہ کا اسٹاک رکھیں۔ فروخت پر خودکار کمی، واپسی پر بحالی۔ ٹاپ 5 ایکسیسریز کے چارٹ۔
+
+---
+
+## 13. Quotations | کوٹیشنز
+Pre-sales quoting with one-click conversion to sale.
+فروخت سے پہلے کوٹیشن اور ایک کلک میں فروخت میں تبدیلی۔
+
+**Features / خصوصیات:**
+- Create with customer, bike, accessories, quoted price, validity date.
+- One-click conversion to full sale entry.
+- Status: pending, accepted, rejected, converted.
+- Full CRUD with permission checks.
+
+**اردو:** کسٹمر، بائیک، ایکسیسریز، قیمت اور میعاد کے ساتھ کوٹیشن بنائیں۔ ایک کلک میں مکمل فروخت میں تبدیل کریں۔
+
+---
+
+## 14. Income & Expense | آمدنی اور اخراجات
+Non-bike financial tracking.
+بائیک سے غیر متعلق آمدنی اور اخراجات کا اندراج۔
+
+**Features / خصوصیات:**
+- Date, type, category (autocomplete), amount, payment method, reference, notes.
+- Summary cards: total income, expense, net balance, avg, top categories.
+- Charts: category breakdown (doughnut), daily trend (line).
+- Auto-creates "Inventory Loss" on bike damage.
+
+**اردو:** زمرہ وار آمدنی اور اخراجات کا اندراج۔ کارڈز اور چارٹس کے ساتھ۔ بائیک کو ڈیمیجڈ کرنے پر خودکار اخراجات۔
+
+---
+
+## 15. Users & Roles | صارفین اور رولز
+Multi-user access control with granular permissions.
+متعدد صارفین کے لیے الگ الگ اجازتوں کا نظام۔
+
+**Roles / رولز:**
+- Create custom roles with descriptions.
+- Granular permissions per page: view/add/edit/delete for 20+ pages.
+- Administrator role protected.
+
+**Users / صارفین:**
+- Full CRUD: username, full name, role, password (strong enforcement), active/inactive.
+- Cannot delete self or admin account.
+
+**اردو:** نئے رول بنائیں، ہر پیج کے لیے چار اجازتیں (دیکھیں/شامل کریں/ترمیم کریں/حذف کریں)۔ ایڈمن رول محفوظ ہے۔ صارفین کا مکمل انتظام۔
+
+---
+
+## 16. Landing Page | عوامی ویب سائٹ
+Public-facing landing page managed from admin.
+عوام کے لیے کمپنی کی ویب سائٹ جو ایڈمن سے منظم کی جاتی ہے۔
+
+**Features / خصوصیات:**
+- Hero section with dynamic title/subtitle from admin settings.
+- Leadership team (name, position, image, message).
+- Image gallery with sort order.
+- Bike request form (public submissions).
+- Quote request form (public submissions).
+- Social media links (Facebook, Instagram, Twitter, WhatsApp).
+- Google Maps embed.
+- Vision/Mission statements.
+
+**اردو:** ہیرو سیکشن، لیڈرشپ ٹیم، گیلری، بائیک/کوٹیشن کی درخواستیں، سوشل میڈیا، گوگل میپس، وژن/مشن سب ایڈمن سے منظم کریں۔
+
+---
+
+## 17. System Settings & Security | سسٹم کی ترتیبات اور سیکیورٹی
 The backbone of the application.
 ایپلی کیشن کی بنیاد۔
 

@@ -433,12 +433,33 @@ Password behavior in settings:
 - The password is hashed before storage. [file:1]
 
 The settings page also provides:
-- Full SQL database backup download. [file:1]
+- Full SQL database backup download (all 23+ tables). [file:1]
 - SQL database restore upload. [file:1]
+- App logo upload (auto-generates favicon, apple-touch, PWA manifest icons). [file:1]
+- System info: version, author, PHP/MySQL versions, database name, server time. [file:1]
 
-The backup includes data from settings, suppliers, customers, models, purchaseorders, bikes, chequeregister, payments, and ledger. The restore function accepts `.sql` files and executes the SQL via multi-query. [file:1]
+### 21. Quotations Module
+The Quotations page creates pre-sales quotes with customer, bike, accessories, and quoted price. Supports one-click conversion to sale — auto-creates sale entry, payment, ledger, installments. Status tracking: pending, accepted, rejected, converted. Full CRUD with permission checks. [file:1]
 
-### 21. Export, Print, and File Utilities
+### 22. Income/Expense Module
+Separate module for non-bike income and expenses. Category-based tracking with summary cards (total income, expense, net balance, avg, top categories) and charts (category breakdown, daily trend). Auto-creates "Inventory Loss" entry when bike marked as Damaged/Lost. Category autocomplete. [file:1]
+
+### 23. Installments Module
+Auto-generated monthly installment plans on sale with down payment less than total. Each installment has due date, amount, amount paid, penalty, status (pending/paid/overdue/cancelled). Payment recording with penalty and cheque details. Auto-distribute to oldest pending first. Auto-cancel on sale return. [file:1]
+
+### 24. Accessories Module
+Full accessory inventory management. CRUD with name, SKU, purchase/selling price, stock. Analytics: total items, stock value, sold qty, revenue, profit. Charts: top 5 sold accessories. Auto stock deduction on sale, auto-restore on return. Custom accessory entry during sale. [file:1]
+
+### 25. Users & Roles Modules
+Multi-user RBAC system. Create custom roles with granular page-level permissions (view/add/edit/delete) for 20+ pages. Administrator role protected. Users: username, full name, role, strong password (8+ chars, uppercase, lowercase, digit, special), active/inactive. Self-protection: cannot delete own account or admin. [file:1]
+
+### 26. Bank Deposits Module
+Record actual bank deposits with date, amount, type (cash/cheque/transfer/online), reference, receipt image upload. Link deposits to specific bike sale allocations. Deposit status per allocation. Dashboard widget for pending undeposited total. Bank Deposit report with date filtering. [file:1]
+
+### 27. Landing Page Management
+Admin manages public `landing.php` website: hero title/subtitle, leadership team (name, position, image, message), image gallery, bike request submissions, quote request submissions, company info, social media, Google Maps, vision/mission. [file:1]
+
+### 28. Export, Print, and File Utilities
 The app includes several output and portability tools:
 - Inventory CSV export for filtered list. [file:1]
 - Bulk selected inventory export to CSV. [file:1]

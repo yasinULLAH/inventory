@@ -18,3 +18,6 @@ To ensure maximum stability and allow for human review, the audit must always be
     - "Select" boxes -> "Standardized categorization dropdown."
     - "Date" fields -> "Chronological tracking for historical reporting."
 - **Visuals**: Use Hex `#2E74B5` (Corporate Blue) for all headers and structural borders. Ensure a 1920x1080 capture resolution.
+
+## 4. Database Schema Coverage
+The system manages 23+ normalized relational tables: settings, suppliers, customers, models, accessories, purchase_orders, bikes, sale_accessories, payments, installments, ledger, roles, role_permissions, users, income_expenses, quotations, money_destinations, sale_money_allocations, bank_deposits, deposit_allocations, cheque_register, leadership, gallery, bike_requests, quote_requests.

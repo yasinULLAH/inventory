@@ -1,26 +1,34 @@
 
 
-
 Here is the exact checklist of files and folders you need to copy from your local computer to the `public_html` (or `htdocs`/root) folder on your live online server.
 
 ### 1. Core Files (Must Upload)
 *   **`index.php`** (This is your entire application)
-*   **`.htaccess`** (The security file we just created. *Note: Ensure your FTP/File Manager is set to "Show Hidden Files" so you don't miss this one.*)
+*   **`landing.php`** (Your public-facing company website)
+*   **`serve_img.php`** (Secure image proxy)
+*   **`.htaccess`** (The security file. *Note: Ensure your FTP/File Manager is set to "Show Hidden Files" so you don't miss this one.*)
 
 ### 2. Assets & Scripts (Must Upload)
 *   **`logo.png`** (Your sidebar and invoice logo)
-*   **`chart.js`** (The local script file powering your dashboard charts)
 *   **Favicon files:**
     *   `favicon.ico`
     *   `favicon.svg`
     *   `favicon-96x96.png`
     *   `apple-touch-icon.png`
+    *   `web-app-manifest-192x192.png`
+    *   `web-app-manifest-512x512.png`
+*   **`site.webmanifest`** (PWA manifest)
 
 ### 3. Directories
 *   **`uploads/`** 
     *   *If you want to keep your local bike/model images:* Upload the folder and all its contents.
     *   *If you are starting fresh:* Create an empty folder named `uploads` on the live server.
-    *   **Crucial Step:** Once uploaded, right-click the `uploads` folder in your hosting File Manager and set its **permissions to `755`** (Read & Execute for public, Write for owner). This allows PHP to save new images but stops hackers from modifying the folder.
+    *   **Crucial Step:** Once uploaded, right-click the `uploads` folder in your hosting File Manager and set its **permissions to `755`**.
+*   **`receipts/`** (For bank deposit receipt images)
+    *   Create this folder and set permissions to `755`.
+
+### 4. Sound Files (Optional)
+*   `woosh.wav`, `woosh2.wav`, `woosh3.wav` — UI sound effects.
 
 ---
 

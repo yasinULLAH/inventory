@@ -20,14 +20,31 @@ From concept to deployment, I've built a **cutting-edge showroom management syst
 ️ **Lightbox Gallery** with smooth animations  
 
 ### **Backend Power:**
-🔐 **Enterprise-Grade Security** (CSRF protection, bcrypt hashing)  
-📊 **Complete Inventory Management**  
-👥 **Customer & Supplier Database**  
-💰 **Sales & Purchase Tracking**  
-📈 **Advanced Reporting & Analytics**  
-🔑 **Role-Based Access Control**  
-💾 **Automated Database Backups**  
-📱 **Admin Panel** with real-time statistics  
+🔐 **Enterprise-Grade Security** (CSRF protection, bcrypt hashing, IP banning, CAPTCHA)  
+📊 **Complete Inventory Management** with 6 status states  
+👥 **Customer & Supplier Database** with filer tracking  
+💰 **Sales & Purchase Tracking** with installment plans  
+📈 **Advanced Reporting & Analytics** (15 report types)  
+🔑 **Role-Based Access Control** with granular permissions  
+💾 **Automated Database Backups** (23+ tables)  
+🏦 **Money Destination & Bank Deposit Tracking**  
+📄 **Quotations with 1-Click Sale Conversion**  
+🛠️ **Accessories Inventory with Auto Stock Control**  
+📱 **Admin Panel** with real-time statistics and charts  
+🌐 **Public Landing Page** with leadership/gallery management  
+
+## 💡 **Key Features:**
+- ✅ Dynamic product catalog with real-time availability
+- ✅ Automated inquiry routing to WhatsApp
+- ✅ Professional quotation system
+- ✅ Customer journey tracking (4-step process)
+- ✅ Leadership team showcase
+- ✅ Vision/Mission sections
+- ✅ Contact management with map integration
+- ✅ Full money flow tracking (sale → allocation → bank deposit)
+- ✅ Installment management with penalty tracking
+- ✅ Income/Expense tracking with auto-expense generation
+- ✅ Multi-user access with role-based permissions  
 
 ## 💡 **Key Features:**
 - ✅ Dynamic product catalog with real-time availability
@@ -40,10 +57,11 @@ From concept to deployment, I've built a **cutting-edge showroom management syst
 
 ## 🛠️ **Tech Stack:**
 - **Frontend:** HTML5, CSS3, JavaScript, Three.js, Vanilla Tilt, GLightbox
-- **Backend:** PHP 8.x, MySQL/MariaDB
-- **Security:** Session hardening, IP banning, Math CAPTCHA
-- **Design:** Modern glassmorphism with gradient aesthetics
-- **Database:** Normalized relational schema with 15+ tables
+- **Backend:** PHP 8.x, MySQL/MariaDB (23+ tables)
+- **Security:** Session hardening, IP banning, Math CAPTCHA, CSRF tokens, bcrypt hashing, prepared statements
+- **JS Libraries:** jQuery 3.6, SweetAlert2, Select2, JustValidate, Chart.js, DataTables, Animate.css
+- **Design:** Modern glassmorphism with gradient aesthetics, dark/light theme
+- **Database:** Normalized relational schema with 23+ tables
 
 ---
 
