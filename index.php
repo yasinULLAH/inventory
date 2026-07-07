@@ -74,6 +74,230 @@ function db_connect($create_db = false)
     return $conn;
 }
 
+function get_sale_total_for_bike($conn, $bike_id)
+{
+    $stmt = $conn->prepare("SELECT b.selling_price, COALESCE(SUM(sa.final_price),0) AS acc_total
+        FROM bikes b
+        LEFT JOIN sale_accessories sa ON sa.bike_id=b.id
+        WHERE b.id=?
+        GROUP BY b.id
+        LIMIT 1");
+    $stmt->bind_param('i', $bike_id);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    return $row ? ((float) $row['selling_price'] + (float) $row['acc_total']) : 0.0;
+}
+
+function get_allocated_total_for_bike($conn, $bike_id, $exclude_allocation_id = 0)
+{
+    if ($exclude_allocation_id > 0) {
+        $stmt = $conn->prepare('SELECT COALESCE(SUM(amount),0) AS total FROM sale_money_allocations WHERE bike_id=? AND id!=?');
+        $stmt->bind_param('ii', $bike_id, $exclude_allocation_id);
+    } else {
+        $stmt = $conn->prepare('SELECT COALESCE(SUM(amount),0) AS total FROM sale_money_allocations WHERE bike_id=?');
+        $stmt->bind_param('i', $bike_id);
+    }
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    return (float) ($row['total'] ?? 0);
+}
+
+function assert_allocation_within_sale_total($conn, $bike_id, $amount, $exclude_allocation_id = 0)
+{
+    $bike_stmt = $conn->prepare("SELECT status FROM bikes WHERE id=? LIMIT 1");
+    $bike_stmt->bind_param('i', $bike_id);
+    $bike_stmt->execute();
+    $bike = $bike_stmt->get_result()->fetch_assoc();
+    if (!$bike || $bike['status'] !== 'sold') {
+        throw new Exception('Allocations can only be added to sold bikes.');
+    }
+    $sale_total = get_sale_total_for_bike($conn, $bike_id);
+    $already_allocated = get_allocated_total_for_bike($conn, $bike_id, $exclude_allocation_id);
+    if (($already_allocated + $amount) - $sale_total > 0.0001) {
+        throw new Exception('Allocation exceeds the remaining sale value for this bike.');
+    }
+}
+
+function lock_in_stock_bike($conn, $bike_id)
+{
+    $stmt = $conn->prepare("SELECT * FROM bikes WHERE id=? AND status='in_stock' LIMIT 1 FOR UPDATE");
+    $stmt->bind_param('i', $bike_id);
+    $stmt->execute();
+    $bike = $stmt->get_result()->fetch_assoc();
+    if (!$bike) {
+        throw new Exception('Bike not found or already sold.');
+    }
+    return $bike;
+}
+
+function attach_sale_accessories($conn, $bike_id, $selected_accessories)
+{
+    $total_acc_price = 0.0;
+    if (empty($selected_accessories)) {
+        return $total_acc_price;
+    }
+    $sa_stmt = $conn->prepare('INSERT INTO sale_accessories (bike_id, accessory_id, quantity, unit_price, discount_amount, final_price) VALUES (?,?,?,?,?,?)');
+    $stock_stmt = $conn->prepare('SELECT name, current_stock FROM accessories WHERE id=? LIMIT 1 FOR UPDATE');
+    $decrement_stmt = $conn->prepare('UPDATE accessories SET current_stock=current_stock-? WHERE id=? AND current_stock>=?');
+    foreach ($selected_accessories as $data) {
+        $acc_input = $data['id'] ?? '';
+        $qty = (int) ($data['quantity'] ?? 0);
+        $unit_price = (float) ($data['unit_price'] ?? 0);
+        $discount = (float) ($data['discount'] ?? 0);
+        $final_price = (float) ($data['final_price'] ?? 0);
+        if (empty($acc_input) || $qty <= 0) {
+            continue;
+        }
+        if (!is_numeric($acc_input)) {
+            $new_name = sanitize($acc_input);
+            $dummy_sku = 'CST-' . time() . '-' . rand(10, 99);
+            $ins = $conn->prepare('INSERT INTO accessories (name, sku, current_stock) VALUES (?, ?, 0)');
+            $ins->bind_param('ss', $new_name, $dummy_sku);
+            $ins->execute();
+            $acc_id = $conn->insert_id;
+        } else {
+            $acc_id = (int) $acc_input;
+            $stock_stmt->bind_param('i', $acc_id);
+            $stock_stmt->execute();
+            $stock_row = $stock_stmt->get_result()->fetch_assoc();
+            if (!$stock_row) {
+                throw new Exception('Selected accessory was not found.');
+            }
+            if ((int) $stock_row['current_stock'] < $qty) {
+                throw new Exception('Accessory "' . $stock_row['name'] . '" does not have enough stock.');
+            }
+            $decrement_stmt->bind_param('iii', $qty, $acc_id, $qty);
+            $decrement_stmt->execute();
+            if ($decrement_stmt->affected_rows !== 1) {
+                throw new Exception('Accessory stock changed during sale. Please review stock and try again.');
+            }
+        }
+        $sa_stmt->bind_param('iiiddd', $bike_id, $acc_id, $qty, $unit_price, $discount, $final_price);
+        $sa_stmt->execute();
+        $total_acc_price += $final_price;
+    }
+    return $total_acc_price;
+}
+
+function get_total_linked_deposit_amount($conn, $deposit_id)
+{
+    $stmt = $conn->prepare('SELECT COALESCE(SUM(amount),0) AS total FROM deposit_allocations WHERE deposit_id=?');
+    $stmt->bind_param('i', $deposit_id);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    return (float) ($row['total'] ?? 0);
+}
+
+function sync_customer_payment_names($conn, $customer_id, $old_name, $new_name)
+{
+    if ($customer_id <= 0 || $old_name === $new_name) {
+        return;
+    }
+    $sale_stmt = $conn->prepare("UPDATE payments p
+        JOIN bikes b ON b.id=p.reference_id
+        SET p.party_name=?
+        WHERE p.transaction_type IN ('sale','customer_refund') AND b.customer_id=?");
+    $sale_stmt->bind_param('si', $new_name, $customer_id);
+    $sale_stmt->execute();
+
+    $inst_stmt = $conn->prepare("UPDATE payments p
+        JOIN installments i ON i.id=p.reference_id
+        SET p.party_name=?
+        WHERE p.transaction_type='installment' AND i.customer_id=?");
+    $inst_stmt->bind_param('si', $new_name, $customer_id);
+    $inst_stmt->execute();
+
+    $adv_stmt = $conn->prepare("UPDATE payments
+        SET party_name=?
+        WHERE transaction_type IN ('customer_advance','sale') AND (reference_id IS NULL OR reference_id=0) AND party_name=?");
+    $adv_stmt->bind_param('ss', $new_name, $old_name);
+    $adv_stmt->execute();
+}
+
+function sync_supplier_payment_names($conn, $supplier_id, $old_name, $new_name)
+{
+    if ($supplier_id <= 0 || $old_name === $new_name) {
+        return;
+    }
+    $purchase_stmt = $conn->prepare("UPDATE payments p
+        JOIN purchase_orders po ON po.id=p.reference_id
+        SET p.party_name=?
+        WHERE p.transaction_type='supplier_payment' AND po.supplier_id=?");
+    $purchase_stmt->bind_param('si', $new_name, $supplier_id);
+    $purchase_stmt->execute();
+
+    $refund_stmt = $conn->prepare("UPDATE payments p
+        JOIN bikes b ON b.id=p.reference_id
+        JOIN purchase_orders po ON po.id=b.purchase_order_id
+        SET p.party_name=?
+        WHERE p.transaction_type='supplier_refund' AND po.supplier_id=?");
+    $refund_stmt->bind_param('si', $new_name, $supplier_id);
+    $refund_stmt->execute();
+
+    $standalone_stmt = $conn->prepare("UPDATE payments
+        SET party_name=?
+        WHERE transaction_type IN ('supplier_payment','supplier_refund') AND reference_id=0 AND party_name=?");
+    $standalone_stmt->bind_param('ss', $new_name, $old_name);
+    $standalone_stmt->execute();
+}
+
+function replace_deposit_links($conn, $deposit_id, $destination_id, $bike_links)
+{
+    $delete_stmt = $conn->prepare('DELETE FROM deposit_allocations WHERE deposit_id=?');
+    $delete_stmt->bind_param('i', $deposit_id);
+    $delete_stmt->execute();
+    if (empty($bike_links)) {
+        return;
+    }
+    $allocations_stmt = $conn->prepare("SELECT sma.id,
+            sma.amount,
+            COALESCE(SUM(da.amount),0) AS deposited_amount
+        FROM sale_money_allocations sma
+        LEFT JOIN deposit_allocations da ON da.allocation_id=sma.id AND da.deposit_id!=?
+        WHERE sma.bike_id=? AND sma.destination_id=?
+        GROUP BY sma.id, sma.amount
+        ORDER BY sma.allocation_date ASC, sma.id ASC");
+    $insert_stmt = $conn->prepare('INSERT INTO deposit_allocations (deposit_id, allocation_id, bike_id, amount) VALUES (?,?,?,?)');
+    foreach ($bike_links as $link) {
+        $bike_id = (int) ($link['bike_id'] ?? 0);
+        $amount = (float) ($link['amount'] ?? 0);
+        if ($bike_id <= 0 || $amount <= 0) {
+            continue;
+        }
+        $bike_stmt = $conn->prepare("SELECT status FROM bikes WHERE id=? LIMIT 1");
+        $bike_stmt->bind_param('i', $bike_id);
+        $bike_stmt->execute();
+        $bike = $bike_stmt->get_result()->fetch_assoc();
+        if (!$bike || $bike['status'] !== 'sold') {
+            throw new Exception('Only sold bikes can be linked to a bank deposit.');
+        }
+        $allocations_stmt->bind_param('iii', $deposit_id, $bike_id, $destination_id);
+        $allocations_stmt->execute();
+        $allocations = $allocations_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        if (empty($allocations)) {
+            throw new Exception('A linked bike must first be allocated to the selected bank destination.');
+        }
+        $remaining_to_assign = $amount;
+        foreach ($allocations as $allocation) {
+            $allocation_remaining = (float) $allocation['amount'] - (float) $allocation['deposited_amount'];
+            if ($allocation_remaining <= 0) {
+                continue;
+            }
+            $slice = min($remaining_to_assign, $allocation_remaining);
+            $allocation_id = (int) $allocation['id'];
+            $insert_stmt->bind_param('iiid', $deposit_id, $allocation_id, $bike_id, $slice);
+            $insert_stmt->execute();
+            $remaining_to_assign -= $slice;
+            if ($remaining_to_assign <= 0.0001) {
+                break;
+            }
+        }
+        if ($remaining_to_assign > 0.0001) {
+            throw new Exception('Deposit link amount exceeds the remaining allocation for one of the selected bikes.');
+        }
+    }
+}
+
 function current_user($conn)
 {
     static $user_cache = null;
@@ -1083,13 +1307,10 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $err = 'Purchase order requires date, supplier and at least one bike.';
             goto end_purchase_post;
         }
-        $total_units = count($bikes_data);
-        $po_total_amount = 0;
-        foreach ($bikes_data as $b) {
-            $po_total_amount += (float) ($b['purchase_price'] ?? 0);
-        }
         $conn->begin_transaction();
         try {
+            $total_units = 0;
+            $po_total_amount = 0.0;
             $po_stmt = $conn->prepare('INSERT INTO purchase_orders (order_date,supplier_id,total_units,total_amount,notes) VALUES (?,?,?,?,?)');
             $po_stmt->bind_param('sidss', $order_date, $supplier_id, $total_units, $po_total_amount, $po_notes);
             $po_stmt->execute();
@@ -1097,6 +1318,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $po_stmt->close();
             $bike_stmt = $conn->prepare("INSERT INTO bikes (purchase_order_id,order_date,inventory_date,chassis_number,motor_number,model_id,color,purchase_price,tax_amount,status,safeguard_notes,notes,image) VALUES (?,?,?,?,?,?,?,?,?,'in_stock',?,?,?)");
             $saved_count = 0;
+            $saved_total_amount = 0.0;
             $errors_list = [];
             foreach ($bikes_data as $key => $b) {
                 $chassis = sanitize($b['chassis'] ?? '');
@@ -1127,9 +1349,17 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     $errors_list[] = "Chassis $chassis: Could not be saved (duplicate or database constraint error).";
                 } else {
                     $saved_count++;
+                    $saved_total_amount += $pp;
                 }
             }
             $bike_stmt->close();
+            if ($saved_count <= 0) {
+                throw new Exception('No bikes were saved. Purchase order was not created.');
+            }
+            $upd_po_stmt = $conn->prepare('UPDATE purchase_orders SET total_units=?, total_amount=? WHERE id=?');
+            $upd_po_stmt->bind_param('idi', $saved_count, $saved_total_amount, $po_id);
+            $upd_po_stmt->execute();
+            $upd_po_stmt->close();
             foreach ($payments_data as $p) {
                 $pay_type = sanitize($p['payment_type'] ?? 'cash');
                 $pay_amount = (float) ($p['amount'] ?? 0);
@@ -1185,10 +1415,16 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             if (empty($name) || $sid <= 0) {
                 $err = 'Supplier ID and name are required.';
             } else {
+                $old_stmt = $conn->prepare('SELECT name FROM suppliers WHERE id=? LIMIT 1');
+                $old_stmt->bind_param('i', $sid);
+                $old_stmt->execute();
+                $old_row = $old_stmt->get_result()->fetch_assoc();
+                $old_name = $old_row['name'] ?? '';
                 $st = $conn->prepare('UPDATE suppliers SET name=?,contact=?,address=? WHERE id=?');
                 $st->bind_param('sssi', $name, $contact, $address, $sid);
                 $st->execute();
                 $st->close();
+                sync_supplier_payment_names($conn, $sid, $old_name, $name);
                 $msg = 'Supplier updated successfully.';
             }
         } elseif ($action === 'delete') {
@@ -1239,10 +1475,16 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             if (empty($name) || $cid <= 0) {
                 $err = 'Customer ID and name are required.';
             } else {
+                $old_stmt = $conn->prepare('SELECT name FROM customers WHERE id=? LIMIT 1');
+                $old_stmt->bind_param('i', $cid);
+                $old_stmt->execute();
+                $old_row = $old_stmt->get_result()->fetch_assoc();
+                $old_name = $old_row['name'] ?? '';
                 $st = $conn->prepare('UPDATE customers SET name=?,phone=?,cnic=?,is_filer=?,address=? WHERE id=?');
                 $st->bind_param('ssiisi', $name, $phone, $cnic, $is_filer, $address, $cid);
                 $st->execute();
                 $st->close();
+                sync_customer_payment_names($conn, $cid, $old_name, $name);
                 $msg = 'Customer updated.';
             }
         } elseif ($action === 'delete') {
@@ -1430,67 +1672,32 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $err = 'Invalid quotation ID.';
                 goto end_quotations_post;
             }
-            $quote_r = $conn->query("SELECT * FROM quotations WHERE id=$quote_id AND status='pending'");
-            $quote = $quote_r ? $quote_r->fetch_assoc() : null;
-            if (!$quote) {
-                $err = 'Quotation not found or already converted/cancelled.';
-                goto end_quotations_post;
-            }
-            $bike_id = $quote['bike_id'];
-            $selling_price = $quote['quoted_price'];
-            $customer_id = $quote['customer_id'];
-            $accessories_data = json_decode($quote['accessories_json'], true);
-            $sale_date = date('Y-m-d');
             $conn->begin_transaction();
             try {
-                $br = $conn->query("SELECT * FROM bikes WHERE id=$bike_id AND status='in_stock'");
-                $bike = $br ? $br->fetch_assoc() : null;
-                if (!$bike) {
-                    throw new Exception('Bike not found or already sold.');
+                $quote_stmt = $conn->prepare("SELECT * FROM quotations WHERE id=? AND status='pending' LIMIT 1 FOR UPDATE");
+                $quote_stmt->bind_param('i', $quote_id);
+                $quote_stmt->execute();
+                $quote = $quote_stmt->get_result()->fetch_assoc();
+                if (!$quote) {
+                    throw new Exception('Quotation not found or already converted/cancelled.');
                 }
+                $bike_id = (int) $quote['bike_id'];
+                $selling_price = (float) $quote['quoted_price'];
+                $customer_id = (int) $quote['customer_id'];
+                $accessories_data = json_decode($quote['accessories_json'], true) ?: [];
+                $sale_date = date('Y-m-d');
+                $bike = lock_in_stock_bike($conn, $bike_id);
                 $base = ($tax_on === 'selling_price') ? $selling_price : $bike['purchase_price'];
                 $tax_amount = ($base * $tax_rate);
                 $margin = $selling_price - $bike['purchase_price'] - $tax_amount;
                 $st = $conn->prepare("UPDATE bikes SET selling_price=?,selling_date=?,customer_id=?,tax_amount=?,margin=?,status='sold' WHERE id=?");
                 $st->bind_param('dsiddi', $selling_price, $sale_date, $customer_id, $tax_amount, $margin, $bike_id);
                 $st->execute();
-                if (!empty($accessories_data)) {
-                    $sa_stmt = $conn->prepare('INSERT INTO sale_accessories (bike_id, accessory_id, quantity, unit_price, discount_amount, final_price) VALUES (?,?,?,?,?,?)');
-                    foreach ($accessories_data as $acc) {
-                        $acc_input = $acc['id'] ?? '';
-                        $qty = (int) ($acc['quantity'] ?? 0);
-                        $unit_p = (float) ($acc['unit_price'] ?? 0);
-                        $disc = (float) ($acc['discount'] ?? 0);
-                        $final_p = (float) ($acc['final_price'] ?? 0);
-                        if (!empty($acc_input) && $qty > 0) {
-                            if (!is_numeric($acc_input)) {
-                                $new_name = sanitize($acc_input);
-                                $dummy_sku = 'CST-' . time() . '-' . rand(10, 99);
-                                $ins = $conn->prepare('INSERT INTO accessories (name, sku, current_stock) VALUES (?, ?, 0)');
-                                $ins->bind_param('ss', $new_name, $dummy_sku);
-                                $ins->execute();
-                                $acc_id = $conn->insert_id;
-                            } else {
-                                $acc_id = (int) $acc_input;
-                            }
-                            if ($acc_id > 0) {
-                                $sa_stmt->bind_param('iiiddd', $bike_id, $acc_id, $qty, $unit_p, $disc, $final_p);
-                                $sa_stmt->execute();
-                                $conn->query("UPDATE accessories SET current_stock = GREATEST(0, current_stock - $qty) WHERE id = $acc_id");
-                            }
-                        }
-                    }
-                }
+                $total_acc_price = attach_sale_accessories($conn, $bike_id, $accessories_data);
                 $cust_sql_id = (int) $customer_id;
                 $cust_r = $conn->query("SELECT name FROM customers WHERE id=$cust_sql_id");
                 $cust_row = $cust_r ? $cust_r->fetch_assoc() : null;
                 $party_name = $cust_row ? $cust_row['name'] : 'Walk-in Customer';
-                $total_acc_price = 0;
-                if (!empty($accessories_data)) {
-                    foreach ($accessories_data as $acc) {
-                        $total_acc_price += (float) ($acc['final_price'] ?? 0);
-                    }
-                }
                 $total_sale_amount = $selling_price + $total_acc_price;
                 $is_inst = $quote['is_installment'] == 1;
                 $dp_amount = $is_inst ? (float) $quote['down_payment'] : $total_sale_amount;
@@ -1565,11 +1772,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         if ($bike_id && $selling_price > 0 && $selling_date && $down_payment >= 0) {
             $conn->begin_transaction();
             try {
-                $br = $conn->query("SELECT * FROM bikes WHERE id=$bike_id AND status='in_stock'");
-                $bike = $br ? $br->fetch_assoc() : null;
-                if (!$bike) {
-                    throw new Exception('Bike not found or already sold.');
-                }
+                $bike = lock_in_stock_bike($conn, $bike_id);
                 $base = ($tax_on === 'selling_price') ? $selling_price : $bike['purchase_price'];
                 $tax_amount = ($base * $tax_rate);
                 $margin = $selling_price - $bike['purchase_price'] - $tax_amount;
@@ -1577,48 +1780,17 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $st->bind_param('dsiddsi', $selling_price, $selling_date, $customer_id, $tax_amount, $margin, $sale_notes, $bike_id);
                 $st->execute();
                 $st->close();
-                if (!empty($selected_accessories)) {
-                    $sa_stmt = $conn->prepare('INSERT INTO sale_accessories (bike_id, accessory_id, quantity, unit_price, discount_amount, final_price) VALUES (?,?,?,?,?,?)');
-                    foreach ($selected_accessories as $key => $data) {
-                        $acc_input = $data['id'] ?? '';
-                        $qty = (int) ($data['quantity'] ?? 0);
-                        $unit_price = (float) ($data['unit_price'] ?? 0);
-                        $discount = (float) ($data['discount'] ?? 0);
-                        $final_price = (float) ($data['final_price'] ?? 0);
-                        if (!empty($acc_input) && $qty > 0) {
-                            if (!is_numeric($acc_input)) {
-                                $new_name = sanitize($acc_input);
-                                $dummy_sku = 'CST-' . time() . '-' . rand(10, 99);
-                                $ins = $conn->prepare('INSERT INTO accessories (name, sku, current_stock) VALUES (?, ?, 0)');
-                                $ins->bind_param('ss', $new_name, $dummy_sku);
-                                $ins->execute();
-                                $acc_id = $conn->insert_id;
-                            } else {
-                                $acc_id = (int) $acc_input;
-                            }
-                            if ($acc_id > 0) {
-                                $sa_stmt->bind_param('iiiddd', $bike_id, $acc_id, $qty, $unit_price, $discount, $final_price);
-                                $sa_stmt->execute();
-                                $conn->query("UPDATE accessories SET current_stock = GREATEST(0, current_stock - $qty) WHERE id = $acc_id");
-                            }
-                        }
-                    }
-                }
+                $total_acc_price = attach_sale_accessories($conn, $bike_id, $selected_accessories);
                 $cust_sql_id = (int) $customer_id;
                 $cust_r = $conn->query("SELECT name FROM customers WHERE id=$cust_sql_id");
                 $cust_row = $cust_r ? $cust_r->fetch_assoc() : null;
                 $party_name = $cust_row ? $cust_row['name'] : 'Walk-in Customer';
                 $payment_notes = 'Down Payment for Chassis: ' . $bike['chassis_number'];
-                $pay_st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, cheque_number, bank_name, cheque_date, transaction_type, reference_id, party_name, notes) VALUES (?,?,?,?,?,?,'sale',?,?,?)");
-                $pay_st->bind_param('ssdsssiss', $selling_date, $payment_method_dp, $down_payment, $cheque_number_dp, $bank_name_dp, $cheque_date_dp, $bike_id, $party_name, $payment_notes);
-                $pay_st->execute();
-                $dp_payment_id = $conn->insert_id;
-                $pay_st->close();
-                $total_acc_price = 0;
-                if (!empty($selected_accessories)) {
-                    foreach ($selected_accessories as $key => $data) {
-                        $total_acc_price += (float) ($data['final_price'] ?? 0);
-                    }
+                if ($down_payment > 0) {
+                    $pay_st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, cheque_number, bank_name, cheque_date, transaction_type, reference_id, party_name, notes) VALUES (?,?,?,?,?,?,'sale',?,?,?)");
+                    $pay_st->bind_param('ssdsssiss', $selling_date, $payment_method_dp, $down_payment, $cheque_number_dp, $bank_name_dp, $cheque_date_dp, $bike_id, $party_name, $payment_notes);
+                    $pay_st->execute();
+                    $pay_st->close();
                 }
                 $total_sale_amount = $selling_price + $total_acc_price;
                 $led_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'debit',?,'customer',?,?,'sale',?,?)");
@@ -1652,6 +1824,16 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 }
                 $sale_allocations = $_POST['money_alloc'] ?? [];
                 if (!empty($sale_allocations)) {
+                    $allocation_total = 0.0;
+                    foreach ($sale_allocations as $alloc) {
+                        $alloc_amount = (float) ($alloc['amount'] ?? 0);
+                        if ($alloc_amount > 0) {
+                            $allocation_total += $alloc_amount;
+                        }
+                    }
+                    if ($allocation_total - $total_sale_amount > 0.0001) {
+                        throw new Exception('Money allocations cannot exceed the total sale value.');
+                    }
                     $user = current_user($conn);
                     $alloc_created_by = $user ? $user['id'] : null;
                     $alloc_stmt = $conn->prepare('INSERT INTO sale_money_allocations (bike_id, destination_id, amount, allocation_date, notes, created_by) VALUES (?,?,?,?,?,?)');
@@ -1830,6 +2012,10 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                                 $ir = $conn->query('SELECT customer_id FROM installments WHERE id=' . (int) $pay['reference_id']);
                                 $cust_id = $ir && $ir->num_rows > 0 ? (int) $ir->fetch_assoc()['customer_id'] : 0;
                             }
+                            if ($cust_id === 0 && !empty($pay['party_name'])) {
+                                $cr = $conn->query("SELECT id FROM customers WHERE name='" . mysqli_real_escape_string($conn, $pay['party_name']) . "' LIMIT 1");
+                                $cust_id = $cr && $cr->num_rows > 0 ? (int) $cr->fetch_assoc()['id'] : 0;
+                            }
                             if ($cust_id > 0) {
                                 $led_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'debit',?,'customer',?,?,'cheque_bounce',?,?)");
                                 $desc = 'Cheque Bounced (Ref Payment #' . $pid . ')';
@@ -1890,11 +2076,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         }
         if ($action === 'delete') {
             require_permission($conn, 'payments', 'delete');
-            $pid = (int) ($_POST['id'] ?? 0);
-            $stmt = $conn->prepare('DELETE FROM payments WHERE id=?');
-            $stmt->bind_param('i', $pid);
-            $stmt->execute();
-            $msg = 'Payment entry deleted.';
+            $err = 'Payment deletion is disabled to protect accounting integrity. Use cheque status updates or post a correcting entry instead.';
         }
         header('Location: index.php?page=payments&msg=' . urlencode($msg) . '&err=' . urlencode($err));
         exit;
@@ -2022,7 +2204,30 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $err = 'All fields are required and amount must be greater than 0.';
                 goto end_money_track_post;
             }
+            try {
+                assert_allocation_within_sale_total($conn, $bike_id, $amount, $id);
+            } catch (Exception $e) {
+                $err = $e->getMessage();
+                goto end_money_track_post;
+            }
             if ($id) {
+                $alloc_chk = $conn->prepare('SELECT bike_id, destination_id, COALESCE((SELECT SUM(amount) FROM deposit_allocations WHERE allocation_id=sale_money_allocations.id),0) AS deposited_total FROM sale_money_allocations WHERE id=? LIMIT 1');
+                $alloc_chk->bind_param('i', $id);
+                $alloc_chk->execute();
+                $alloc_row = $alloc_chk->get_result()->fetch_assoc();
+                if (!$alloc_row) {
+                    $err = 'Allocation record not found.';
+                    goto end_money_track_post;
+                }
+                $deposited_total = (float) ($alloc_row['deposited_total'] ?? 0);
+                if ($deposited_total - $amount > 0.0001) {
+                    $err = 'Allocation amount cannot be less than the amount already deposited against it.';
+                    goto end_money_track_post;
+                }
+                if ($deposited_total > 0 && ((int) $alloc_row['bike_id'] !== $bike_id || (int) $alloc_row['destination_id'] !== $destination_id)) {
+                    $err = 'Bike and destination cannot be changed after deposits have been linked to this allocation.';
+                    goto end_money_track_post;
+                }
                 $stmt = $conn->prepare('UPDATE sale_money_allocations SET bike_id=?, destination_id=?, amount=?, allocation_date=?, notes=? WHERE id=?');
                 $stmt->bind_param('iidssi', $bike_id, $destination_id, $amount, $allocation_date, $alloc_notes, $id);
                 $stmt->execute();
@@ -2039,6 +2244,15 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         if (isset($_POST['delete_allocation'])) {
             require_permission($conn, 'money_tracking', 'delete');
             $id = (int) $_POST['id'];
+            $dep_chk = $conn->prepare('SELECT COUNT(*) FROM deposit_allocations WHERE allocation_id=?');
+            $dep_chk->bind_param('i', $id);
+            $dep_chk->execute();
+            $dep_count = (int) $dep_chk->get_result()->fetch_row()[0];
+            if ($dep_count > 0) {
+                $err = 'Allocation cannot be deleted because bank deposits are already linked to it.';
+                header('Location: index.php?page=money_tracking&err=' . urlencode($err));
+                exit;
+            }
             $stmt = $conn->prepare('DELETE FROM sale_money_allocations WHERE id=?');
             $stmt->bind_param('i', $id);
             $stmt->execute();
@@ -2065,6 +2279,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $err = 'Destination, amount and date are required.';
                 goto end_bank_deposits_post;
             }
+            $bike_links = $_POST['bike_link'] ?? [];
             $receipt_path = null;
             if (isset($_FILES['receipt_image']) && !empty($_FILES['receipt_image']['name'])) {
                 if ($_FILES['receipt_image']['error'] === UPLOAD_ERR_OK) {
@@ -2078,6 +2293,20 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $conn->begin_transaction();
             try {
                 if ($id) {
+                    $dep_stmt = $conn->prepare('SELECT destination_id FROM bank_deposits WHERE id=? LIMIT 1 FOR UPDATE');
+                    $dep_stmt->bind_param('i', $id);
+                    $dep_stmt->execute();
+                    $dep_row = $dep_stmt->get_result()->fetch_assoc();
+                    if (!$dep_row) {
+                        throw new Exception('Deposit record not found.');
+                    }
+                    $linked_total = get_total_linked_deposit_amount($conn, $id);
+                    if ($linked_total - $amount > 0.0001) {
+                        throw new Exception('Deposit amount cannot be less than the total amount already linked to bike allocations.');
+                    }
+                    if ($linked_total > 0 && (int) $dep_row['destination_id'] !== $destination_id) {
+                        throw new Exception('Destination cannot be changed after bike allocations have been linked to this deposit.');
+                    }
                     if ($receipt_path) {
                         $stmt = $conn->prepare('UPDATE bank_deposits SET destination_id=?, deposit_date=?, amount=?, deposit_type=?, reference_no=?, receipt_image=?, deposited_by=?, notes=? WHERE id=?');
                         $stmt->bind_param('isidssssi', $destination_id, $deposit_date, $amount, $deposit_type, $reference_no, $receipt_path, $deposited_by, $notes, $id);
@@ -2093,17 +2322,18 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     $stmt->execute();
                     $deposit_id = $conn->insert_id;
                     $msg = 'Deposit recorded successfully.';
-                    $bike_links = $_POST['bike_link'] ?? [];
-                    if (!empty($bike_links)) {
-                        foreach ($bike_links as $link) {
-                            $lb = (int) ($link['bike_id'] ?? 0);
-                            $la = (float) ($link['amount'] ?? 0);
-                            if ($lb > 0 && $la > 0) {
-                                $alloc_stmt = $conn->prepare('INSERT INTO deposit_allocations (deposit_id, bike_id, amount) VALUES (?,?,?)');
-                                $alloc_stmt->bind_param('iid', $deposit_id, $lb, $la);
-                                $alloc_stmt->execute();
-                            }
+                    $linked_amount = 0.0;
+                    foreach ($bike_links as $link) {
+                        $la = (float) ($link['amount'] ?? 0);
+                        if ($la > 0) {
+                            $linked_amount += $la;
                         }
+                    }
+                    if ($linked_amount - $amount > 0.0001) {
+                        throw new Exception('Linked bike amounts cannot exceed the deposit amount.');
+                    }
+                    if (!empty($bike_links)) {
+                        replace_deposit_links($conn, $deposit_id, $destination_id, $bike_links);
                     }
                 }
                 $conn->commit();
@@ -2348,6 +2578,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         exit;
     }
     if ($page === 'customer_ledger' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_payment'])) {
+        require_permission($conn, 'customer_ledger', 'add');
         $sel_cust = (int) ($_GET['cust_id'] ?? 0);
         $amount = (float) $_POST['amount'];
         $pay_date = sanitize($_POST['payment_date']);
@@ -2392,6 +2623,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         exit;
     }
     if ($page === 'customer_ledger' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['make_payment_cust'])) {
+        require_permission($conn, 'customer_ledger', 'add');
         $sel_cust = (int) ($_GET['cust_id'] ?? 0);
         $amount = (float) $_POST['amount'];
         $pay_date = sanitize($_POST['payment_date']);
@@ -2415,6 +2647,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         exit;
     }
     if ($page === 'supplier_ledger' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_sup_payment'])) {
+        require_permission($conn, 'supplier_ledger', 'add');
         $sel_sup = (int) ($_GET['sup_id'] ?? 0);
         $amount = (float) $_POST['amount'];
         $pay_date = sanitize($_POST['payment_date']);
@@ -2433,6 +2666,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         exit;
     }
     if ($page === 'supplier_ledger' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['receive_sup_payment'])) {
+        require_permission($conn, 'supplier_ledger', 'add');
         $sel_sup = (int) ($_GET['sup_id'] ?? 0);
         $amount = (float) $_POST['amount'];
         $pay_date = sanitize($_POST['payment_date']);
@@ -2483,7 +2717,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     $st->bind_param('sssisi', $name, $pos, $msg_text, $sort, $img_path, $lid);
                 } else {
                     $st = $conn->prepare('UPDATE leadership SET name=?, position=?, message=?, sort_order=? WHERE id=?');
-                    $st->bind_param('sssi i', $name, $pos, $msg_text, $sort, $lid);
+                    $st->bind_param('sssii', $name, $pos, $msg_text, $sort, $lid);
                 }
                 $st->execute();
                 $msg = 'Leadership entry updated.';
@@ -5303,7 +5537,7 @@ $(document).ready(function() {
             $total_dr_summary = $sums['total_billed'] ?? 0;
             $total_cr_summary = $sums['total_paid'] ?? 0;
             $bal_summary = ($sums['total_dr'] ?? 0) - ($sums['total_cr'] ?? 0);
-            $advance_total = $conn->query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE transaction_type='customer_advance' AND party_name=(SELECT name FROM customers WHERE id=$sel_cust)")->fetch_row()[0];
+            $advance_total = $conn->query("SELECT COALESCE(SUM(amount),0) FROM ledger WHERE party_type='customer' AND party_id=$sel_cust AND reference_type='advance_given'")->fetch_row()[0];
             ?>
 <div class="split-grid-3 animate__animated animate__fadeInDown" style="margin-bottom:14px">
     <div class="card danger"><div class="card-icon">🛒</div><div class="card-body"><div class="card-label">Total Billed (Sales)</div><div class="card-value"><?= fmt_money($total_dr_summary) ?></div></div></div>
@@ -7776,7 +8010,7 @@ function toggleBankFields(sel) {
             $alloc_where .= " AND sma.destination_id=$filter_dest";
         $alloc_result = $conn->query("SELECT sma.*, md.name as dest_name, md.type as dest_type, b.chassis_number, b.selling_price, m.model_name,
             COALESCE((SELECT SUM(sa2.final_price) FROM sale_accessories sa2 WHERE sa2.bike_id=b.id),0) as acc_total,
-            COALESCE((SELECT SUM(da.amount) FROM deposit_allocations da WHERE da.bike_id=sma.bike_id),0) as deposited_amount,
+            COALESCE((SELECT SUM(da.amount) FROM deposit_allocations da WHERE da.allocation_id=sma.id),0) as deposited_amount,
             u.full_name as created_by_name
             FROM sale_money_allocations sma
             LEFT JOIN money_destinations md ON sma.destination_id=md.id

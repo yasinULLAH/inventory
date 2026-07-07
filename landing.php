@@ -27,6 +27,7 @@ if (!$conn) {
     die('System Maintenance. Please check back later.');
 }
 $app_url = '';
+$self_page = $_SERVER['PHP_SELF'] ?? 'landing.php';
 
 function app_img($path)
 {
@@ -144,7 +145,6 @@ $raw_wa = get_setting('company_whatsapp') ?? '';
 $wa_numbers = array_filter(array_map('trim', explode(',', $raw_wa)));
 $wa_number = $wa_numbers[0] ?? '';
 $view = $_GET['view'] ?? 'home';
-$self_page = $_SERVER['PHP_SELF'] ?? 'landing.php';
 $is_bike_detail = false;
 $bike_detail = null;
 $meta_title = sanitize($company_name) . ' | Future of Electric Mobility';

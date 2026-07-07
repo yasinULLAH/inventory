@@ -134,7 +134,7 @@
 
 - **قسطیں منسوخ** — اس بائیک کی تمام زیر التواء اقساط خودکار طور پر منسوخ ہو جاتی ہیں
 - **ایکسسریز واپس** — بائیک کے ساتھ بیچی گئی ایکسسریز (جیسے ہیلمٹ، کور وغیرہ) کا اسٹاک خودکار طور پر بحال ہو جاتا ہے
-- **ایلوكیشنز صاف** — بینک ڈپازٹ اور منی ڈیسٹینیشن کی ایلوكیشنز خودکار طور پر ختم کر دی جاتی ہیں
+- **ایلوکیشنز صاف** — بینک ڈپازٹ اور منی ڈیسٹینیشن کی ایلوکیشنز خودکار طور پر ختم کر دی جاتی ہیں
 
 **فائدہ:** ریٹرن پروسیس کرتے وقت آپ کو یہ کام الگ سے کرنے کی ضرورت نہیں — سب خودکار ہے۔
 
@@ -151,11 +151,87 @@
 
 ---
 
+## 🔟 سیلز انٹری اور کوٹیشن کنورژن میں مزید پروفیشنل اپڈیٹس
+
+سیلز اور quotation to sale flow کو مزید مضبوط اور mature بنایا گیا ہے:
+
+- سیل محفوظ کرتے وقت بائیک availability check اب زیادہ بہتر انداز میں handle ہوتی ہے
+- ایک ہی بائیک کے sale flow کو زیادہ controlled انداز میں process کیا جاتا ہے
+- quotation سے sale بناتے وقت validation اور data flow مزید بہتر کیا گیا ہے
+- sale amount، accessories value اور installment creation کے درمیان linkage مزید صاف ہوا ہے
+
+**فائدہ:** سیل اور quotation conversion کا overall flow پہلے سے زیادہ smooth اور reliable ہو گیا ہے۔
+
+---
+
+## 1️⃣1️⃣ ایکسسریز اسٹاک اور سیل ویلیو میں مزید refinement
+
+اب accessories handling کو اور زیادہ بہتر بنایا گیا ہے:
+
+- sale کے وقت accessories stock کو زیادہ smart انداز میں manage کیا جاتا ہے
+- system available quantity کے مطابق entry flow کو بہتر handle کرتا ہے
+- accessories کی final value sale total کے ساتھ زیادہ منظم طریقے سے جڑتی ہے
+
+**فائدہ:** stock control اور sales value دونوں زیادہ aligned رہتے ہیں۔
+
+---
+
+## 1️⃣2️⃣ Purchase Summary اور Order Totals میں بہتری
+
+Purchase Entry کے اندر totals کو مزید practical اور accurate بنایا گیا ہے:
+
+- purchase order totals اب saved bike entries کے مطابق زیادہ بہتر sync رہتے ہیں
+- incomplete یا invalid rows overall summary کو خراب نہیں کرتیں
+- quantity اور amount calculation کو بہتر انداز میں finalize کیا جاتا ہے
+
+**فائدہ:** purchase summary دیکھتے وقت زیادہ صاف اور قابلِ اعتماد تصویر سامنے آتی ہے۔
+
+---
+
+## 1️⃣3️⃣ Money Tracking اور Bank Deposit Linking میں مزید بہتری
+
+Money Tracking اور Bank Deposits کے درمیان flow کو مزید refined بنایا گیا ہے:
+
+- allocation amount کو sale value کے مطابق زیادہ بہتر control کیا گیا ہے
+- deposit linkage اب destination کے حساب سے زیادہ منطقی انداز میں کام کرتی ہے
+- linked deposit amounts اور allocation values کی matching کو مزید بہتر بنایا گیا ہے
+- allocation اور deposit view میں progress زیادہ معنی خیز انداز میں نظر آتی ہے
+
+**فائدہ:** آپ بہتر انداز میں دیکھ سکتے ہیں کہ sale کی رقم کہاں allocate ہوئی، کتنی deposit ہوئی، اور کتنی باقی ہے۔
+
+---
+
+## 1️⃣4️⃣ کسٹمر اور سپلائر ریکارڈ ہم آہنگی میں بہتری
+
+Customer اور Supplier management کے اندر بھی کچھ اہم refinement شامل کی گئی ہے:
+
+- نام update ہونے کے بعد متعلقہ payment records بہتر continuity کے ساتھ چلتے ہیں
+- ledger اور payment register میں relation زیادہ صاف رہتا ہے
+- history follow کرنا زیادہ آسان ہو جاتا ہے
+
+**فائدہ:** پرانے اور نئے ریکارڈز کے درمیان زیادہ بہتر consistency برقرار رہتی ہے۔
+
+---
+
+## 1️⃣5️⃣ ایڈمن سائیڈ اسٹیبلٹی اپڈیٹس
+
+Admin side کے کچھ اہم حصوں کو بھی مزید smooth بنایا گیا ہے:
+
+- leadership update flow کو زیادہ قابلِ اعتماد انداز میں بہتر کیا گیا ہے
+- landing-side internal handling کو مزید stable بنایا گیا ہے
+- financial actions کے لیے system behavior کو زیادہ audit-friendly کیا گیا ہے
+
+**فائدہ:** admin operations زیادہ آرام سے اور confidence کے ساتھ manage کیے جا سکتے ہیں۔
+
+---
+
 ## اہم نوٹس
 
 - **رسید تصویر**: اپ لوڈ کرتے وقت تصویر خودکار طور پر 200KB سے کم ہو جاتی ہے
 - **ویب پیج کی پرفارمنس**: تمام ڈیٹا ڈیٹا بیس میں محفوظ ہوتا ہے، کوئی ڈیٹا ضائع نہیں ہوتا
 - **پرمیشن**: نئے فیچر استعمال کرنے کے لیے اپنے رول میں "bank_deposits" کی پرمیشن آن کرنی ہوگی
+- **لیجر پوسٹنگ**: customer_ledger اور supplier_ledger میں مالی اندراجات اب رول پرمیشن کے مطابق زیادہ بہتر control میں رہتے ہیں
+- **منی ٹریکنگ**: allocation اور deposit linking اب sale value اور destination flow کے مطابق زیادہ refined ہے
 - **بیک اپ**: ڈیٹا بیک اپ میں اب نئے ٹیبلز بھی شامل ہیں
 
 ---
@@ -170,6 +246,9 @@
 | بائیک سے لنک | کون سی بائیک کی رقم ڈپازٹ ہوئی |
 | ڈپازٹ سٹیٹس | کتنی رقم بینک پہنچی، کتنی باقی |
 | کھاتہ میں بہتری | ایڈوانس اور ڈیو کا واضح فرق |
+| سیلز اور کوٹیشن refinement | sale flow اور conversion کو زیادہ مضبوط بنانا |
+| purchase total refinement | saved entries کے مطابق summary بہتر بنانا |
+| منی ٹریکنگ refinement | allocation اور deposit relationship کو صاف کرنا |
 | رپورٹس | مکمل بینک ڈپازٹ کی تفصیل |
 
 **اب آپ کو معلوم ہے کہ آپ کی کمائی کہاں گئی، کتنی بینک گئی، کتنی باقی ہے — اور اس کا ثبوت بھی موجود ہے۔**
