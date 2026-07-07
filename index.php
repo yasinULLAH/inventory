@@ -8380,6 +8380,7 @@ updateAllocRemaining();
 <td class="no-print">
 <div class="actions-col">
 <?php if (has_permission($conn, 'money_tracking', 'edit')): ?><a href="index.php?page=money_tracking&edit_id=<?= $al['id'] ?>" class="btn btn-primary btn-sm">✏</a><?php endif; ?>
+<?php if (has_permission($conn, 'bank_deposits', 'add') && $al['dest_type'] === 'bank'): ?><a href="index.php?page=bank_deposits&amp;prefill_alloc=<?= $al['id'] ?>" class="btn btn-success btn-sm" title="Create bank deposit from this allocation">🏦</a><?php endif; ?>
 <?php if (has_permission($conn, 'money_tracking', 'delete')): ?>
 <form method="POST" style="display:inline"><input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>"><input type="hidden" name="id" value="<?= $al['id'] ?>">
 <button name="delete_allocation" class="btn btn-danger btn-sm" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete this allocation?', text: 'This will remove the money tracking record.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button>
@@ -8409,6 +8410,14 @@ updateAllocRemaining();
         if ($edit_dep_id) {
             $ed = $conn->query("SELECT * FROM bank_deposits WHERE id=$edit_dep_id");
             $edit_dep = $ed ? $ed->fetch_assoc() : null;
+        }
+        $prefill_alloc_id = (int) ($_GET['prefill_alloc'] ?? 0);
+        $prefill_alloc = null;
+        if ($prefill_alloc_id && !$edit_dep_id) {
+            $pa = $conn->query("SELECT sma.*, md.type as dest_type FROM sale_money_allocations sma
+                LEFT JOIN money_destinations md ON sma.destination_id=md.id
+                WHERE sma.id=$prefill_alloc_id");
+            $prefill_alloc = $pa ? $pa->fetch_assoc() : null;
         }
         $filter_dest_dep = (int) ($_GET['filter_dest'] ?? 0);
         $filter_type_dep = sanitize($_GET['filter_type'] ?? '');
@@ -8458,7 +8467,7 @@ updateAllocRemaining();
 <a href="index.php?page=bank_deposits" class="btn btn-default btn-sm" style="align-self:flex-end">Clear</a>
 </form>
 </div>
-<div id="addDepFormArea" style="display:<?= $edit_dep ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
+<div id="addDepFormArea" style="display:<?= ($edit_dep || $prefill_alloc) ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
 <fieldset class="fieldset"><legend><?= $edit_dep ? '✏ Edit Deposit' : '+ New Bank Deposit' ?></legend>
 <form method="POST" action="index.php?page=bank_deposits" enctype="multipart/form-data">
 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
@@ -8469,12 +8478,12 @@ updateAllocRemaining();
 <option value="">-- Select Bank --</option>
 <?php $bank_dests->data_seek(0);
         while ($bd_sel = $bank_dests->fetch_assoc()): ?>
-<option value="<?= $bd_sel['id'] ?>" <?= ($edit_dep && $edit_dep['destination_id'] == $bd_sel['id']) ? 'selected' : '' ?>><?= sanitize($bd_sel['name']) ?> — <?= sanitize($bd_sel['account_no'] ?: '-') ?></option>
+<option value="<?= $bd_sel['id'] ?>" <?= ($edit_dep && $edit_dep['destination_id'] == $bd_sel['id']) || ($prefill_alloc && $prefill_alloc['destination_id'] == $bd_sel['id']) ? 'selected' : '' ?>><?= sanitize($bd_sel['name']) ?> — <?= sanitize($bd_sel['account_no'] ?: '-') ?></option>
 <?php endwhile; ?>
 </select>
 </div>
-<div class="form-group"><label>Date <span class="req">*</span></label><input type="date" name="deposit_date" required value="<?= $edit_dep ? $edit_dep['deposit_date'] : date('Y-m-d') ?>"></div>
-<div class="form-group"><label>Amount (<?= $currency ?>) <span class="req">*</span></label><input type="number" name="amount" step="0.01" min="0.01" required value="<?= $edit_dep ? $edit_dep['amount'] : '' ?>" placeholder="0.00"></div>
+<div class="form-group"><label>Date <span class="req">*</span></label><input type="date" name="deposit_date" required value="<?= $edit_dep ? $edit_dep['deposit_date'] : ($prefill_alloc ? $prefill_alloc['allocation_date'] : date('Y-m-d')) ?>"></div>
+<div class="form-group"><label>Amount (<?= $currency ?>) <span class="req">*</span></label><input type="number" name="amount" step="0.01" min="0.01" required value="<?= $edit_dep ? $edit_dep['amount'] : ($prefill_alloc ? $prefill_alloc['amount'] : '') ?>" placeholder="0.00"></div>
 </div>
 <div class="form-row">
 <div class="form-group"><label>Deposit Type <span class="req">*</span></label>
@@ -8495,12 +8504,12 @@ updateAllocRemaining();
 <br><img src="<?= $edit_dep['receipt_image'] ?>" style="max-height:80px;margin-top:4px;border:1px solid var(--border);border-radius:2px">
 <?php endif; ?>
 </div>
-<div class="form-group" style="flex:3"><label>Notes</label><input type="text" name="deposit_notes" value="<?= sanitize($edit_dep['notes'] ?? '') ?>" placeholder="Optional note"></div>
+<div class="form-group" style="flex:3"><label>Notes</label><input type="text" name="deposit_notes" value="<?= $edit_dep ? sanitize($edit_dep['notes'] ?? '') : ($prefill_alloc ? sanitize($prefill_alloc['notes'] ?? '') : '') ?>" placeholder="Optional note"></div>
 </div>
 <?php if (!$edit_dep): ?>
 <fieldset class="fieldset" style="border-color:var(--accent);background:var(--surface);margin-bottom:10px">
 <legend style="cursor:pointer" onclick="document.getElementById('depBikeLinkArea').style.display=document.getElementById('depBikeLinkArea').style.display==='none'?'block':'none'">🔗 Link to Bike Sales <small style="color:var(--text3)">(Optional — click to expand)</small></legend>
-<div id="depBikeLinkArea" style="display:none">
+<div id="depBikeLinkArea" style="display:<?= $prefill_alloc ? 'block' : 'none' ?>">
 <div id="depBikeLinkRows"></div>
 <button type="button" class="btn btn-default btn-sm" onclick="addDepBikeLinkRow()" style="margin-top:6px">+ Add Bike</button>
 </div>
@@ -8514,6 +8523,11 @@ updateAllocRemaining();
 <script>
 var depBikeOptions = <?= json_encode($sold_bikes_deps_arr) ?>;
 var depBikeIdx = 0;
+<?php if ($prefill_alloc): ?>var prefillBikeId = <?= (int) $prefill_alloc['bike_id'] ?>;
+var prefillAmount = <?= (float) $prefill_alloc['amount'] ?>;
+<?php else: ?>var prefillBikeId = 0;
+var prefillAmount = 0;
+<?php endif; ?>
 function addDepBikeLinkRow() {
     var container = document.getElementById('depBikeLinkRows');
     var idx = depBikeIdx++;
@@ -8542,6 +8556,26 @@ function updateDepBikeRem(sel, idx) {
     } else {
         rem.innerHTML = '—';
     }
+}
+if (prefillBikeId > 0) {
+    addDepBikeLinkRow();
+    setTimeout(function() {
+        var container = document.getElementById('depBikeLinkRows');
+        if (container) {
+            var select = container.querySelector('select[name$="[bike_id]"]');
+            var amtInput = container.querySelector('input[name$="[amount]"]');
+            if (select) {
+                for (var i = 0; i < select.options.length; i++) {
+                    if (select.options[i].value == prefillBikeId) {
+                        select.selectedIndex = i;
+                        select.dispatchEvent(new Event('change'));
+                        break;
+                    }
+                }
+            }
+            if (amtInput) amtInput.value = prefillAmount.toFixed(2);
+        }
+    }, 100);
 }
 </script>
 <div class="data-table-wrap animate__animated animate__fadeInUp">
