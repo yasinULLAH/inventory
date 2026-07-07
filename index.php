@@ -676,6 +676,60 @@ function handle_bike_image_upload($file, $dest_dir = 'uploads/')
     return $dest;
 }
 
+function handle_receipt_upload($file, $dest_dir = 'receipts/')
+{
+    $dest_dir = basename($dest_dir) . '/';
+    if (!is_dir($dest_dir))
+        mkdir($dest_dir, 0755, true);
+    if (!isset($file['error']) || is_array($file['error']) || $file['error'] !== UPLOAD_ERR_OK)
+        return null;
+    $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+    if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif', 'pdf']))
+        return null;
+    $filename = uniqid('receipt_') . '.jpg';
+    $dest = $dest_dir . $filename;
+    if ($ext === 'pdf') {
+        copy($file['tmp_name'], $dest_dir . uniqid('receipt_') . '.pdf');
+        return $dest_dir . uniqid('receipt_') . '.pdf';
+    }
+    $info = getimagesize($file['tmp_name']);
+    if (!$info)
+        return null;
+    $img = null;
+    if ($info[2] == IMAGETYPE_JPEG)
+        $img = imagecreatefromjpeg($file['tmp_name']);
+    elseif ($info[2] == IMAGETYPE_PNG)
+        $img = imagecreatefrompng($file['tmp_name']);
+    elseif ($info[2] == IMAGETYPE_WEBP)
+        $img = imagecreatefromwebp($file['tmp_name']);
+    elseif ($info[2] == IMAGETYPE_GIF)
+        $img = imagecreatefromgif($file['tmp_name']);
+    if (!$img)
+        return null;
+    $w = imagesx($img);
+    $h = imagesy($img);
+    $new_w = min($w, 1200);
+    $new_h = ($new_w / $w) * $h;
+    $new_img = imagecreatetruecolor($new_w, $new_h);
+    if ($info[2] == IMAGETYPE_PNG || $info[2] == IMAGETYPE_GIF) {
+        $white = imagecolorallocate($new_img, 255, 255, 255);
+        imagefill($new_img, 0, 0, $white);
+    }
+    imagecopyresampled($new_img, $img, 0, 0, 0, 0, $new_w, $new_h, $w, $h);
+    $quality = 85;
+    do {
+        ob_start();
+        imagejpeg($new_img, null, $quality);
+        $size = ob_get_length();
+        $imgData = ob_get_clean();
+        $quality -= 10;
+    } while ($size > 204800 && $quality > 10);
+    file_put_contents($dest, $imgData);
+    imagedestroy($img);
+    imagedestroy($new_img);
+    return $dest;
+}
+
 function update_app_icons($file)
 {
     if (!isset($file['error']) || $file['error'] !== UPLOAD_ERR_OK)
@@ -829,7 +883,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
     $currency = get_setting('currency') ?? 'Rs.';
     $tax_rate = (float) (get_setting('tax_rate') ?? 0.1);
     $tax_on = get_setting('tax_on') ?? 'purchase_price';
-    $protected_pages = ['purchase', 'inventory', 'sale', 'returns', 'payments', 'customers', 'suppliers', 'models', 'reports', 'customer_ledger', 'supplier_ledger', 'settings', 'roles', 'users', 'income_expense', 'accessories', 'quotations', 'installments', 'money_destinations', 'money_tracking'];
+    $protected_pages = ['purchase', 'inventory', 'sale', 'returns', 'payments', 'customers', 'suppliers', 'models', 'reports', 'customer_ledger', 'supplier_ledger', 'settings', 'roles', 'users', 'income_expense', 'accessories', 'quotations', 'installments', 'money_destinations', 'money_tracking', 'bank_deposits'];
     if (in_array($page, $protected_pages)) {
         require_permission($conn, $page, 'view');
     }
@@ -857,7 +911,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $id = $conn->insert_id;
             }
             $conn->query("DELETE FROM role_permissions WHERE role_id=$id");
-            $all_pages_perm = ['dashboard', 'inventory', 'purchase', 'sale', 'customers', 'suppliers', 'models', 'reports', 'returns', 'payments', 'settings', 'roles', 'users', 'income_expense', 'accessories', 'quotations', 'installments', 'money_destinations', 'money_tracking'];
+            $all_pages_perm = ['dashboard', 'inventory', 'purchase', 'sale', 'customers', 'suppliers', 'models', 'reports', 'returns', 'payments', 'settings', 'roles', 'users', 'income_expense', 'accessories', 'quotations', 'installments', 'money_destinations', 'money_tracking', 'bank_deposits'];
             $stmtp = $conn->prepare('INSERT INTO role_permissions (role_id, page, can_view, can_add, can_edit, can_delete) VALUES (?,?,?,?,?,?)');
             foreach ($all_pages_perm as $p) {
                 $v = isset($_POST['perm'][$p]['view']) ? 1 : 0;
@@ -1899,19 +1953,25 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $type = sanitize($_POST['type'] ?? 'bank');
             $name = sanitize($_POST['name'] ?? '');
             $details = sanitize($_POST['details'] ?? '');
+            $account_title = sanitize($_POST['account_title'] ?? '');
+            $account_no = sanitize($_POST['account_no'] ?? '');
+            $branch = sanitize($_POST['branch'] ?? '');
+            $opening_balance = (float) ($_POST['opening_balance'] ?? 0);
+            $contact_person = sanitize($_POST['contact_person'] ?? '');
+            $contact_phone = sanitize($_POST['contact_phone'] ?? '');
             $is_active = isset($_POST['is_active']) ? 1 : 0;
             if (empty($name) || empty($type)) {
                 $err = 'Name and Type are required.';
                 goto end_money_dest_post;
             }
             if ($id) {
-                $stmt = $conn->prepare('UPDATE money_destinations SET type=?, name=?, details=?, is_active=? WHERE id=?');
-                $stmt->bind_param('sssii', $type, $name, $details, $is_active, $id);
+                $stmt = $conn->prepare('UPDATE money_destinations SET type=?, name=?, details=?, account_title=?, account_no=?, branch=?, opening_balance=?, contact_person=?, contact_phone=?, is_active=? WHERE id=?');
+                $stmt->bind_param('ssssssdssii', $type, $name, $details, $account_title, $account_no, $branch, $opening_balance, $contact_person, $contact_phone, $is_active, $id);
                 $stmt->execute();
                 $msg = 'Destination updated successfully.';
             } else {
-                $stmt = $conn->prepare('INSERT INTO money_destinations (type, name, details, is_active) VALUES (?,?,?,?)');
-                $stmt->bind_param('sssi', $type, $name, $details, $is_active);
+                $stmt = $conn->prepare('INSERT INTO money_destinations (type, name, details, account_title, account_no, branch, opening_balance, contact_person, contact_phone, is_active) VALUES (?,?,?,?,?,?,?,?,?,?)');
+                $stmt->bind_param('ssssssdssi', $type, $name, $details, $account_title, $account_no, $branch, $opening_balance, $contact_person, $contact_phone, $is_active);
                 $stmt->execute();
                 $msg = 'Destination added successfully.';
             }
@@ -1979,6 +2039,88 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         }
         end_money_track_post:;
     }
+    if ($page === 'bank_deposits' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        if (isset($_POST['save_deposit'])) {
+            require_permission($conn, 'bank_deposits', isset($_POST['id']) && (int) $_POST['id'] > 0 ? 'edit' : 'add');
+            $id = (int) ($_POST['id'] ?? 0);
+            $destination_id = (int) ($_POST['destination_id'] ?? 0);
+            $deposit_date = sanitize($_POST['deposit_date'] ?? date('Y-m-d'));
+            $amount = (float) ($_POST['amount'] ?? 0);
+            $deposit_type = sanitize($_POST['deposit_type'] ?? 'cash');
+            $reference_no = sanitize($_POST['reference_no'] ?? '');
+            $deposited_by = sanitize($_POST['deposited_by'] ?? '');
+            $notes = sanitize($_POST['deposit_notes'] ?? '');
+            $user = current_user($conn);
+            $created_by = $user ? $user['id'] : null;
+            if ($destination_id <= 0 || $amount <= 0 || empty($deposit_date)) {
+                $err = 'Destination, amount and date are required.';
+                goto end_bank_deposits_post;
+            }
+            $receipt_path = null;
+            if (isset($_FILES['receipt_image']) && !empty($_FILES['receipt_image']['name'])) {
+                if ($_FILES['receipt_image']['error'] === UPLOAD_ERR_OK) {
+                    $receipt_path = handle_receipt_upload($_FILES['receipt_image']);
+                    if (!$receipt_path)
+                        $err .= 'Receipt upload failed. ';
+                } else {
+                    $err .= 'Receipt upload error. ';
+                }
+            }
+            $conn->begin_transaction();
+            try {
+                if ($id) {
+                    if ($receipt_path) {
+                        $stmt = $conn->prepare('UPDATE bank_deposits SET destination_id=?, deposit_date=?, amount=?, deposit_type=?, reference_no=?, receipt_image=?, deposited_by=?, notes=? WHERE id=?');
+                        $stmt->bind_param('isidssssi', $destination_id, $deposit_date, $amount, $deposit_type, $reference_no, $receipt_path, $deposited_by, $notes, $id);
+                    } else {
+                        $stmt = $conn->prepare('UPDATE bank_deposits SET destination_id=?, deposit_date=?, amount=?, deposit_type=?, reference_no=?, deposited_by=?, notes=? WHERE id=?');
+                        $stmt->bind_param('isidsssi', $destination_id, $deposit_date, $amount, $deposit_type, $reference_no, $deposited_by, $notes, $id);
+                    }
+                    $stmt->execute();
+                    $msg = 'Deposit updated successfully.';
+                } else {
+                    $stmt = $conn->prepare('INSERT INTO bank_deposits (destination_id, deposit_date, amount, deposit_type, reference_no, receipt_image, deposited_by, notes, created_by) VALUES (?,?,?,?,?,?,?,?,?)');
+                    $stmt->bind_param('isidssssi', $destination_id, $deposit_date, $amount, $deposit_type, $reference_no, $receipt_path, $deposited_by, $notes, $created_by);
+                    $stmt->execute();
+                    $deposit_id = $conn->insert_id;
+                    $msg = 'Deposit recorded successfully.';
+                    $bike_links = $_POST['bike_link'] ?? [];
+                    if (!empty($bike_links)) {
+                        foreach ($bike_links as $link) {
+                            $lb = (int) ($link['bike_id'] ?? 0);
+                            $la = (float) ($link['amount'] ?? 0);
+                            if ($lb > 0 && $la > 0) {
+                                $alloc_stmt = $conn->prepare('INSERT INTO deposit_allocations (deposit_id, bike_id, amount) VALUES (?,?,?)');
+                                $alloc_stmt->bind_param('iid', $deposit_id, $lb, $la);
+                                $alloc_stmt->execute();
+                            }
+                        }
+                    }
+                }
+                $conn->commit();
+            } catch (Exception $e) {
+                $conn->rollback();
+                $err = 'Deposit transaction failed: ' . $e->getMessage();
+            }
+            header('Location: index.php?page=bank_deposits&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+            exit;
+        }
+        if (isset($_POST['delete_deposit'])) {
+            require_permission($conn, 'bank_deposits', 'delete');
+            $id = (int) $_POST['id'];
+            $dep = $conn->query("SELECT receipt_image FROM bank_deposits WHERE id=$id")->fetch_assoc();
+            $stmt = $conn->prepare('DELETE FROM bank_deposits WHERE id=?');
+            $stmt->bind_param('i', $id);
+            $stmt->execute();
+            if ($dep && $dep['receipt_image'] && file_exists($dep['receipt_image'])) {
+                unlink($dep['receipt_image']);
+            }
+            $msg = 'Deposit deleted successfully.';
+            header('Location: index.php?page=bank_deposits&msg=' . urlencode($msg));
+            exit;
+        }
+        end_bank_deposits_post:;
+    }
     if ($page === 'inventory' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'delete') {
             require_permission($conn, 'inventory', 'delete');
@@ -2010,7 +2152,8 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             if (isset($_FILES['image']) && !empty($_FILES['image']['name'])) {
                 if ($_FILES['image']['error'] === UPLOAD_ERR_OK) {
                     $img_path = handle_bike_image_upload($_FILES['image']);
-                    if (!$img_path) $img_err = 'Image processing failed. ';
+                    if (!$img_path)
+                        $img_err = 'Image processing failed. ';
                 } else {
                     $img_err = 'Upload failed (max size ' . ini_get('upload_max_filesize') . ' exceeded). ';
                 }
@@ -2053,7 +2196,8 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     $upd_exp->execute();
                 }
                 $msg = 'Bike updated. ' . $img_err;
-                if ($img_err) $err = trim($img_err);
+                if ($img_err)
+                    $err = trim($img_err);
             }
         }
         if ($action === 'bulk_delete') {
@@ -2149,7 +2293,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
     }
     if ($page === 'settings' && isset($_GET['action']) && $_GET['action'] === 'backup') {
         require_permission($conn, 'settings', 'view');
-        $tables_list = ['settings', 'suppliers', 'customers', 'models', 'accessories', 'purchase_orders', 'bikes', 'sale_accessories', 'payments', 'installments', 'ledger', 'roles', 'role_permissions', 'users', 'income_expenses', 'quotations', 'money_destinations', 'sale_money_allocations'];
+        $tables_list = ['settings', 'suppliers', 'customers', 'models', 'accessories', 'purchase_orders', 'bikes', 'sale_accessories', 'payments', 'installments', 'ledger', 'roles', 'role_permissions', 'users', 'income_expenses', 'quotations', 'money_destinations', 'sale_money_allocations', 'bank_deposits', 'deposit_allocations'];
         $sql_dump = "-- BNI Enterprises Database Backup\n-- Generated: " . date('Y-m-d H:i:s') . "\n-- Author: $author\n\n";
         $sql_dump .= "SET FOREIGN_KEY_CHECKS=0;\n\n";
         foreach ($tables_list as $tbl) {
@@ -3235,6 +3379,7 @@ else:
         ['installments', '🗓️', 'Installments'],
         ['money_destinations', '🏦', 'Money Destinations'],
         ['money_tracking', '💸', 'Money Tracking'],
+        ['bank_deposits', '🏧', 'Bank Deposits'],
         ['quotations', '📝', 'Quotations'],
         ['income_expense', '💰', 'Income/Expense'],
         ['customer_ledger', '👤', 'Customer Ledger'],
@@ -3341,6 +3486,9 @@ else:
         while ($r = $ie_summary->fetch_assoc()) {
             $ie_data[$r['type']] = $r['total'];
         }
+        $total_allocated_dash = $conn->query('SELECT COALESCE(SUM(amount),0) FROM sale_money_allocations')->fetch_row()[0];
+        $total_deposited_dash = $conn->query('SELECT COALESCE(SUM(amount),0) FROM bank_deposits')->fetch_row()[0];
+        $undeposited_dash = max(0, $total_allocated_dash - $total_deposited_dash);
         ?>
 <div class="card-grid">
 <div class="card accent"><div class="card-icon">📦</div><div class="card-body"><div class="card-label">In Stock</div><div class="card-value"><?= number_format($total_stock) ?></div><div class="card-sub">bikes</div></div></div>
@@ -3353,6 +3501,7 @@ else:
 <div class="card success"><div class="card-icon">📈</div><div class="card-body"><div class="card-label">Total Profit</div><div class="card-value" style="font-size:1rem;color:var(--success)"><?= $currency ?> <?= number_format($total_margin) ?></div></div></div>
 <div class="card"><div class="card-icon">💳</div><div class="card-body"><div class="card-label">Pending Cheques</div><div class="card-value" style="font-size:1rem;color:var(--warning)"><?= number_format($pending_payments['c'] ?? 0) ?></div><div class="card-sub"><?= $currency ?> <?= number_format($pending_payments['s'] ?? 0) ?></div></div></div>
 <div class="card success"><div class="card-icon">🔥</div><div class="card-body"><div class="card-label">Today's Sales</div><div class="card-value"><?= number_format($todays_sales['c']) ?></div><div class="card-sub"><?= $currency ?> <?= number_format($todays_sales['s'] ?? 0) ?></div></div></div>
+<div class="card <?= $undeposited_dash > 0 ? 'warning' : 'success' ?>"><div class="card-icon">🏧</div><div class="card-body"><div class="card-label">Pending Bank Deposit</div><div class="card-value" style="font-size:1rem;color:<?= $undeposited_dash > 0 ? 'var(--warning)' : 'var(--success)' ?>"><?= $currency ?> <?= number_format($undeposited_dash) ?></div><div class="card-sub"><?= fmt_money($total_deposited_dash) ?> deposited</div></div></div>
 <div class="card danger"><div class="card-icon">💸</div><div class="card-body"><div class="card-label">Total Expenses</div><div class="card-value" style="font-size:1rem;color:var(--danger)"><?= $currency ?> <?= number_format($total_expenses) ?></div></div></div>
 <div class="card accent"><div class="card-icon">👥</div><div class="card-body"><div class="card-label">Customers</div><div class="card-value"><?= number_format($total_customers) ?></div></div></div>
 <div class="card warning"><div class="card-icon">🏭</div><div class="card-body"><div class="card-label">Suppliers</div><div class="card-value"><?= number_format($total_suppliers) ?></div></div></div>
@@ -3373,6 +3522,7 @@ else:
 <a href="index.php?page=reports&sub=profit" class="btn btn-default">📈 Profit Report</a>
 <?php endif; ?>
 <?php if (has_permission($conn, 'payments', 'view')): ?><a href="index.php?page=payments" class="btn btn-default">💳 Payments</a><?php endif; ?>
+<?php if (has_permission($conn, 'bank_deposits', 'add')): ?><a href="index.php?page=bank_deposits" class="btn btn-default">🏧 New Deposit</a><?php endif; ?>
 <?php if (has_permission($conn, 'settings', 'view')): ?><a href="index.php?page=settings" class="btn btn-default">⚙ Settings</a><?php endif; ?>
 </div>
 </fieldset>
@@ -3572,11 +3722,11 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="invoice-header">
         <h1>⚡ <?= sanitize(get_setting('company_name') ?? 'BNI Enterprises') ?></h1>
         <h2><?= sanitize(get_setting('branch_name') ?? 'Dera (Ahmed Metro)') ?></h2>
-        <?php 
+        <?php
         $raw_wa = get_setting('company_whatsapp') ?? '';
         $wa_numbers = array_filter(array_map('trim', explode(',', $raw_wa)));
-        if (!empty($wa_numbers)): 
-        ?>
+        if (!empty($wa_numbers)):
+            ?>
         <div style="font-size:0.85rem;margin-top:2px;font-weight:normal;">WhatsApp: <?= sanitize(implode(', ', $wa_numbers)) ?></div>
         <?php endif; ?>
         <div style="font-size:0.9rem;margin-top:4px"><strong>PURCHASE RECEIPT</strong></div>
@@ -3984,7 +4134,9 @@ $(document).ready(function() {
 </ul>
 <?php
             if ($view_bike['status'] === 'sold' && has_permission($conn, 'money_tracking', 'view')):
-                $alloc_result = $conn->query("SELECT sma.*, md.name as dest_name, md.type as dest_type, md.details as dest_details, u.full_name as created_by_name FROM sale_money_allocations sma JOIN money_destinations md ON sma.destination_id=md.id LEFT JOIN users u ON sma.created_by=u.id WHERE sma.bike_id=$view_bike_id ORDER BY sma.allocation_date");
+                $alloc_result = $conn->query("SELECT sma.*, md.name as dest_name, md.type as dest_type, md.details as dest_details,
+                    COALESCE((SELECT SUM(da.amount) FROM deposit_allocations da WHERE da.allocation_id=sma.id),0) as deposited_amount,
+                    u.full_name as created_by_name FROM sale_money_allocations sma JOIN money_destinations md ON sma.destination_id=md.id LEFT JOIN users u ON sma.created_by=u.id WHERE sma.bike_id=$view_bike_id ORDER BY sma.allocation_date");
                 $acc_total_q = $conn->query("SELECT COALESCE(SUM(sa.final_price),0) as t FROM sale_accessories sa WHERE sa.bike_id=$view_bike_id");
                 $acc_total_row = $acc_total_q ? $acc_total_q->fetch_assoc() : ['t' => 0];
                 $sale_total = $view_bike['selling_price'] + $acc_total_row['t'];
@@ -4248,7 +4400,9 @@ document.getElementById('bulkExportForm').addEventListener('submit', function(){
         if ($sale_model_id)
             $sale_where .= " AND b.model_id=$sale_model_id";
         $bikes_instock = $conn->query("SELECT b.id, b.chassis_number, b.color, b.purchase_price, m.model_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE $sale_where ORDER BY b.created_at DESC");
-        $customers_list = $conn->query('SELECT id, name, phone, cnic, is_filer FROM customers ORDER BY name');
+        $customers_list = $conn->query("SELECT c.id, c.name, c.phone, c.cnic, c.is_filer,
+            COALESCE((SELECT SUM(CASE WHEN entry_type='credit' THEN amount ELSE 0 END) - SUM(CASE WHEN entry_type='debit' THEN amount ELSE 0 END) FROM ledger WHERE party_type='customer' AND party_id=c.id),0)
+            as advance_balance FROM customers c ORDER BY c.name");
         $accessories_list = $conn->query('SELECT id, name, selling_price, current_stock FROM accessories WHERE current_stock > 0 ORDER BY name');
         $last_sale_bike_id = $_SESSION['last_sale_bike_id'] ?? 0;
         unset($_SESSION['last_sale_bike_id']);
@@ -4290,15 +4444,17 @@ document.getElementById('bulkExportForm').addEventListener('submit', function(){
 <div class="form-group" style="min-width: 350px; flex: 2;">
 <label>Customer <span class="req">*</span></label>
 <div style="display:flex;gap:4px">
-<select name="customer_id" id="customerSel" class="select2-enable" required style="flex:1" onchange="updateFilerStatus(this)">
-<option value="0" data-is-filer="1">-- Walk-in / Cash Customer --</option>
+<select name="customer_id" id="customerSel" class="select2-enable" required style="flex:1" onchange="updateFilerStatus(this); updateAdvanceDisplay();">
+<option value="0" data-is-filer="1" data-advance="0">-- Walk-in / Cash Customer --</option>
 <?php $customers_list->data_seek(0);
-        while ($cl = $customers_list->fetch_assoc()): ?>
-<option value="<?= $cl['id'] ?>" data-is-filer="<?= $cl['is_filer'] ?>"><?= sanitize($cl['name']) ?> — <?= sanitize($cl['phone']) ?></option>
+        while ($cl = $customers_list->fetch_assoc()):
+            $adv_bal = (float) $cl['advance_balance']; ?>
+<option value="<?= $cl['id'] ?>" data-is-filer="<?= $cl['is_filer'] ?>" data-advance="<?= $adv_bal ?>"><?= sanitize($cl['name']) ?> — <?= sanitize($cl['phone']) ?></option>
 <?php endwhile; ?>
 </select>
 <button type="button" class="btn btn-default btn-sm" onclick="openCustomerModal()">+</button>
 </div>
+<span id="advanceDisplay" style="font-size:0.8rem;color:var(--text3);display:block;margin-top:2px"></span>
 </div>
 <div class="form-group"><label>Customer Filer Status</label><input type="text" id="filerStatusDisplay" readonly style="background:var(--bg3);color:var(--text2)" value="Filer"></div>
 <div class="form-group"><label>Down Payment (<?= $currency ?>) <span class="req">*</span></label><input type="number" name="down_payment" id="downPayment" step="0.01" min="0" value="0.00" oninput="calcRemainingBalance()" required></div>
@@ -4408,11 +4564,11 @@ function addMoneyAllocRow() {
     <div class="invoice-header">
         <h1>⚡ <?= sanitize(get_setting('company_name') ?? 'BNI Enterprises') ?></h1>
         <h2><?= sanitize(get_setting('branch_name') ?? 'Dera (Ahmed Metro)') ?></h2>
-        <?php 
+        <?php
         $raw_wa = get_setting('company_whatsapp') ?? '';
         $wa_numbers = array_filter(array_map('trim', explode(',', $raw_wa)));
-        if (!empty($wa_numbers)): 
-        ?>
+        if (!empty($wa_numbers)):
+            ?>
         <div style="font-size:0.85rem;margin-top:2px;font-weight:normal;">WhatsApp: <?= sanitize(implode(', ', $wa_numbers)) ?></div>
         <?php endif; ?>
         <div style="font-size:0.9rem;margin-top:4px"><strong>SALE RECEIPT</strong></div>
@@ -4515,6 +4671,23 @@ function updateFilerStatus(selectElement) {
     var isFiler = selectedOption.dataset.isFiler;
     document.getElementById('filerStatusDisplay').value = isFiler == '1' ? 'Filer' : 'Non-Filer';
     calcMargin(); 
+}
+function updateAdvanceDisplay() {
+    var sel = document.getElementById('customerSel');
+    var opt = sel.options[sel.selectedIndex];
+    var adv = opt ? parseFloat(opt.dataset.advance || 0) : 0;
+    var display = document.getElementById('advanceDisplay');
+    if (opt && opt.value && opt.value != '0') {
+        if (adv > 0) {
+            display.innerHTML = '💰 Advance Available: <strong style="color:var(--success)"><?= $currency ?> ' + adv.toLocaleString() + '</strong> <small style="color:var(--text3)">(can be applied to down payment)</small>';
+        } else if (adv < 0) {
+            display.innerHTML = '⚠️ Customer Due: <strong style="color:var(--danger)"><?= $currency ?> ' + Math.abs(adv).toLocaleString() + '</strong> <small style="color:var(--text3)">(outstanding balance)</small>';
+        } else {
+            display.innerHTML = '✅ No outstanding balance';
+        }
+    } else {
+        display.innerHTML = '';
+    }
 }
 function calcMargin() {
     var sp = parseFloat(document.getElementById('sellingPrice').value) || 0;
@@ -5121,11 +5294,12 @@ $(document).ready(function() {
             $total_dr_summary = $sums['total_billed'] ?? 0;
             $total_cr_summary = $sums['total_paid'] ?? 0;
             $bal_summary = ($sums['total_dr'] ?? 0) - ($sums['total_cr'] ?? 0);
+            $advance_total = $conn->query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE transaction_type='customer_advance' AND party_name=(SELECT name FROM customers WHERE id=$sel_cust)")->fetch_row()[0];
             ?>
 <div class="split-grid-3 animate__animated animate__fadeInDown" style="margin-bottom:14px">
-    <div class="card danger"><div class="card-icon">🛒</div><div class="card-body"><div class="card-label">Total Billed</div><div class="card-value"><?= fmt_money($total_dr_summary) ?></div></div></div>
+    <div class="card danger"><div class="card-icon">🛒</div><div class="card-body"><div class="card-label">Total Billed (Sales)</div><div class="card-value"><?= fmt_money($total_dr_summary) ?></div></div></div>
     <div class="card success"><div class="card-icon">💵</div><div class="card-body"><div class="card-label">Total Paid</div><div class="card-value"><?= fmt_money($total_cr_summary) ?></div></div></div>
-    <div class="card warning"><div class="card-icon">⚖️</div><div class="card-body"><div class="card-label">Remaining Balance</div><div class="card-value" style="color:<?= $bal_summary > 0 ? 'var(--danger)' : 'var(--success)' ?>"><?= fmt_money(abs($bal_summary)) ?> <?= $bal_summary > 0 ? 'Due' : 'Advance' ?></div></div></div>
+    <div class="card <?= $bal_summary > 0 ? 'warning' : 'info' ?>"><div class="card-icon">⚖️</div><div class="card-body"><div class="card-label"><?= $bal_summary > 0 ? 'Due (Customer owes you)' : 'Advance (You owe customer)' ?></div><div class="card-value" style="color:<?= $bal_summary > 0 ? 'var(--danger)' : 'var(--success)' ?>;font-size:1.1rem"><?= fmt_money(abs($bal_summary)) ?></div><div class="card-sub"><?= $bal_summary > 0 ? 'Outstanding receivable' : 'Advance balance available' ?></div></div></div>
 </div>
 <div class="print-btn-wrap no-print animate__animated animate__fadeInRight" style="display:flex;gap:8px;">
 <button onclick="document.getElementById('receivePaymentModal').classList.add('open')" class="btn btn-success btn-sm">+ Receive Payment</button>
@@ -5275,7 +5449,7 @@ $(document).ready(function() {
 <div class="split-grid-3 animate__animated animate__fadeInDown" style="margin-bottom:14px">
     <div class="card danger"><div class="card-icon">📦</div><div class="card-body"><div class="card-label">Total Purchased</div><div class="card-value"><?= fmt_money($purchase_total_sum) ?></div></div></div>
     <div class="card success"><div class="card-icon">💵</div><div class="card-body"><div class="card-label">Total Paid</div><div class="card-value"><?= fmt_money($payment_total_sum) ?></div></div></div>
-    <div class="card warning"><div class="card-icon">⚖️</div><div class="card-body"><div class="card-label">Remaining Balance</div><div class="card-value" style="color:<?= $bal_summary > 0 ? 'var(--danger)' : 'var(--success)' ?>"><?= fmt_money(abs($bal_summary)) ?> <?= $bal_summary > 0 ? 'Payable' : 'Advance' ?></div></div></div>
+    <div class="card <?= $bal_summary > 0 ? 'warning' : 'info' ?>"><div class="card-icon">⚖️</div><div class="card-body"><div class="card-label"><?= $bal_summary > 0 ? 'Payable (You owe supplier)' : 'Advance (Supplier owes you)' ?></div><div class="card-value" style="color:<?= $bal_summary > 0 ? 'var(--danger)' : 'var(--success)' ?>;font-size:1.1rem"><?= fmt_money(abs($bal_summary)) ?></div></div></div>
 </div>
 <div class="print-btn-wrap no-print animate__animated animate__fadeInRight" style="display:flex;gap:8px;">
 <button onclick="document.getElementById('makePaymentModal').classList.add('open')" class="btn btn-success btn-sm">+ Make Payment</button>
@@ -5418,6 +5592,7 @@ $(document).ready(function() {
             ['money_by_sale', '🧾 Money by Sale'],
             ['money_untracked', '⚠️ Untracked Sales'],
             ['money_flow', '📊 Money Flow'],
+            ['bank_deposits_report', '🏧 Bank Deposits'],
         ];
         foreach ($sub_items as $si):
             ?>
@@ -6132,8 +6307,64 @@ $(document).ready(function() {
 </table>
 </div>
 </fieldset>
-<?php endif; ?>
 <?php
+        elseif ($sub === 'bank_deposits_report'):
+            $dep_report_q = $conn->query("SELECT bd.*, md.name as dest_name, md.account_no,
+                COUNT(da.id) as bike_link_count,
+                GROUP_CONCAT(DISTINCT CONCAT(b.chassis_number, ' (', COALESCE(da.amount,0), ')') SEPARATOR ', ') as bike_details
+                FROM bank_deposits bd
+                LEFT JOIN money_destinations md ON bd.destination_id=md.id
+                LEFT JOIN deposit_allocations da ON da.deposit_id=bd.id
+                LEFT JOIN bikes b ON da.bike_id=b.id
+                WHERE bd.deposit_date BETWEEN '" . mysqli_real_escape_string($conn, $rep_from) . "' AND '" . mysqli_real_escape_string($conn, $rep_to) . "'
+                GROUP BY bd.id ORDER BY bd.deposit_date DESC");
+            $dep_grand = 0;
+            $dep_counts = ['cash' => 0, 'cheque' => 0, 'transfer' => 0, 'online' => 0, 'other' => 0];
+            $dep_totals = ['cash' => 0, 'cheque' => 0, 'transfer' => 0, 'online' => 0, 'other' => 0];
+?>
+<fieldset class="fieldset animate__animated animate__fadeInUp"><legend>🏧 Bank Deposits Report (<?= fmt_date($rep_from) ?> - <?= fmt_date($rep_to) ?>)</legend>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Sr#</th><th>Date</th><th>Destination</th><th>Amount</th><th>Type</th><th>Reference</th><th>Linked Bikes</th><th>Deposited By</th></tr></thead>
+<tbody>
+<?php
+            $sr = 1;
+            while ($dr = $dep_report_q->fetch_assoc()):
+                $dep_grand += $dr['amount'];
+                $dep_counts[$dr['deposit_type']]++;
+                $dep_totals[$dr['deposit_type']] += $dr['amount'];
+                ?>
+<tr>
+<td><?= $sr++ ?></td>
+<td><?= fmt_date($dr['deposit_date']) ?></td>
+<td><strong><?= sanitize($dr['dest_name']) ?></strong><br><small style="color:var(--text3)"><?= sanitize($dr['account_no'] ?: '') ?></small></td>
+<td><strong><?= fmt_money($dr['amount']) ?></strong></td>
+<td><span class="badge badge-<?= $dr['deposit_type'] === 'cash' ? 'success' : ($dr['deposit_type'] === 'cheque' ? 'warning' : 'info') ?>"><?= strtoupper($dr['deposit_type']) ?></span></td>
+<td><?= sanitize($dr['reference_no'] ?: '-') ?></td>
+<td><?= $dr['bike_link_count'] > 0 ? '<small>' . sanitize($dr['bike_details']) . '</small>' : '<span style="color:var(--text3)">—</span>' ?></td>
+<td><?= sanitize($dr['deposited_by'] ?: '-') ?></td>
+</tr>
+<?php endwhile; ?>
+</tbody>
+<tfoot><tr><td colspan="3"><strong>GRAND TOTAL</strong></td><td><strong><?= fmt_money($dep_grand) ?></strong></td><td colspan="4"></td></tr></tfoot>
+</table>
+</div>
+</fieldset>
+<fieldset class="fieldset animate__animated animate__fadeInUp" style="margin-top:12px"><legend>📊 Deposit Summary by Type</legend>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Type</th><th>Count</th><th>Total Amount</th></tr></thead>
+<tbody>
+<?php foreach (['cash' => 'Cash', 'cheque' => 'Cheque', 'transfer' => 'Transfer', 'online' => 'Online', 'other' => 'Other'] as $dk => $dl): ?>
+<tr><td><span class="badge badge-<?= $dk === 'cash' ? 'success' : ($dk === 'cheque' ? 'warning' : 'info') ?>"><?= strtoupper($dk) ?></span></td><td><?= $dep_counts[$dk] ?></td><td><strong><?= fmt_money($dep_totals[$dk]) ?></strong></td></tr>
+<?php endforeach; ?>
+</tbody>
+<tfoot><tr><td><strong>TOTAL</strong></td><td><strong><?= array_sum($dep_counts) ?></strong></td><td><strong><?= fmt_money($dep_grand) ?></strong></td></tr></tfoot>
+</table>
+</div>
+</fieldset>
+<?php
+        endif;
     elseif ($page === 'models'):
         $models_result = $conn->query("SELECT m.*, COUNT(b.id) as bike_count, SUM(CASE WHEN b.status='in_stock' THEN 1 ELSE 0 END) as in_stock, SUM(CASE WHEN b.status='sold' THEN 1 ELSE 0 END) as sold_cnt FROM models m LEFT JOIN bikes b ON m.id=b.model_id GROUP BY m.id ORDER BY m.model_name");
         $edit_model_id = (int) ($_GET['edit_id'] ?? 0);
@@ -6142,7 +6373,7 @@ $(document).ready(function() {
             $em = $conn->query("SELECT * FROM models WHERE id=$edit_model_id");
             $edit_model = $em ? $em->fetch_assoc() : null;
         }
-?>
+        ?>
 <div style="display:flex;gap:8px;margin-bottom:10px" class="no-print animate__animated animate__fadeInLeft">
 <?php if (has_permission($conn, 'models', 'add')): ?>
 <button class="btn btn-success" onclick="document.getElementById('addModelFormArea').style.display='block';document.getElementById('addModelFormArea').scrollIntoView()">+ Add Model</button>
@@ -6475,11 +6706,11 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="invoice-header">
         <h1>⚡ <?= sanitize(get_setting('company_name') ?? 'BNI Enterprises') ?></h1>
         <h2><?= sanitize(get_setting('branch_name') ?? 'Dera (Ahmed Metro)') ?></h2>
-        <?php 
+        <?php
         $raw_wa = get_setting('company_whatsapp') ?? '';
         $wa_numbers = array_filter(array_map('trim', explode(',', $raw_wa)));
-        if (!empty($wa_numbers)): 
-        ?>
+        if (!empty($wa_numbers)):
+            ?>
         <div style="font-size:0.85rem;margin-top:2px;font-weight:normal;">WhatsApp: <?= sanitize(implode(', ', $wa_numbers)) ?></div>
         <?php endif; ?>
         <div style="font-size:1.1rem;margin-top:8px;font-weight:700;letter-spacing:2px;color:#333;">OFFICIAL QUOTATION</div>
@@ -7398,9 +7629,10 @@ document.addEventListener('DOMContentLoaded', function() {
         while ($ds = $dest_stats->fetch_assoc()) {
             $type_counts[$ds['type']] = $ds['cnt'];
         }
+        $total_bank_deposited = $conn->query('SELECT COALESCE(SUM(amount),0) FROM bank_deposits')->fetch_row()[0];
 ?>
 <div class="card-grid animate__animated animate__fadeInDown">
-    <div class="card accent"><div class="card-icon">🏦</div><div class="card-body"><div class="card-label">Banks</div><div class="card-value"><?= $type_counts['bank'] ?></div></div></div>
+    <div class="card accent"><div class="card-icon">🏦</div><div class="card-body"><div class="card-label">Banks</div><div class="card-value"><?= $type_counts['bank'] ?></div><div class="card-sub">Deposited: <?= fmt_money($total_bank_deposited) ?></div></div></div>
     <div class="card success"><div class="card-icon">👤</div><div class="card-body"><div class="card-label">Persons</div><div class="card-value"><?= $type_counts['person'] ?></div></div></div>
     <div class="card warning"><div class="card-icon">💳</div><div class="card-body"><div class="card-label">Wallets</div><div class="card-value"><?= $type_counts['wallet'] ?></div></div></div>
 </div>
@@ -7423,6 +7655,18 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 <div class="form-group"><label>Name <span class="req">*</span></label><input type="text" name="name" value="<?= sanitize($edit_dest['name'] ?? '') ?>" required placeholder="e.g. HBL Main Branch"></div>
 <div class="form-group"><label>Details</label><input type="text" name="details" value="<?= sanitize($edit_dest['details'] ?? '') ?>" placeholder="Account #, phone, etc."></div>
+</div>
+<div class="form-row" id="bankFieldsRow">
+<div class="form-group"><label>Account Title</label><input type="text" name="account_title" value="<?= sanitize($edit_dest['account_title'] ?? '') ?>" placeholder="Account holder name"></div>
+<div class="form-group"><label>Account No</label><input type="text" name="account_no" value="<?= sanitize($edit_dest['account_no'] ?? '') ?>" placeholder="0000-0000-0000-0000"></div>
+<div class="form-group"><label>Branch</label><input type="text" name="branch" value="<?= sanitize($edit_dest['branch'] ?? '') ?>" placeholder="Branch name"></div>
+</div>
+<div class="form-row" id="bankFieldsRow2">
+<div class="form-group"><label>Opening Balance (<?= $currency ?>)</label><input type="number" name="opening_balance" step="0.01" min="0" value="<?= $edit_dest['opening_balance'] ?? 0 ?>"></div>
+<div class="form-group"><label>Contact Person</label><input type="text" name="contact_person" value="<?= sanitize($edit_dest['contact_person'] ?? '') ?>" placeholder="Bank manager/contact"></div>
+<div class="form-group"><label>Contact Phone</label><input type="text" name="contact_phone" value="<?= sanitize($edit_dest['contact_phone'] ?? '') ?>" placeholder="0300-0000000"></div>
+</div>
+<div class="form-row">
 <div class="form-group"><label>Active</label><label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" name="is_active" <?= ($edit_dest['is_active'] ?? 1) ? 'checked' : '' ?>> Active</label></div>
 </div>
 <button type="submit" name="save_destination" class="btn btn-primary">💾 Save</button>
@@ -7430,23 +7674,37 @@ document.addEventListener('DOMContentLoaded', function() {
 </form>
 </fieldset>
 </div>
+<script>
+function toggleBankFields(sel) {
+    var show = sel.value === 'bank';
+    document.getElementById('bankFieldsRow').style.display = show ? '' : 'none';
+    document.getElementById('bankFieldsRow2').style.display = show ? '' : 'none';
+}
+(function() {
+    var sel = document.querySelector('select[name="type"]');
+    if (sel) { toggleBankFields(sel); sel.addEventListener('change', function(){toggleBankFields(this);}); }
+})();
+</script>
 <div class="data-table-wrap animate__animated animate__fadeInUp">
 <table class="data-table">
-<thead><tr><th>Sr#</th><th>Type</th><th>Name</th><th>Details</th><th>Status</th><th>Total Allocated</th><th class="no-sort">Actions</th></tr></thead>
+<thead><tr><th>Sr#</th><th>Type</th><th>Name</th><th>Account Details</th><th>Contact</th><th>Balance</th><th>Status</th><th class="no-sort">Actions</th></tr></thead>
 <tbody>
 <?php
         $sr = 1;
         while ($dest = $dest_result->fetch_assoc()):
             $alloc_total = $conn->query('SELECT COALESCE(SUM(amount),0) FROM sale_money_allocations WHERE destination_id=' . $dest['id'])->fetch_row()[0];
+            $deposited_total = $conn->query('SELECT COALESCE(SUM(amount),0) FROM bank_deposits WHERE destination_id=' . $dest['id'])->fetch_row()[0];
+            $current_bal = $dest['opening_balance'] + $deposited_total;
             $type_icon = ['bank' => '🏦', 'person' => '👤', 'wallet' => '💳'][$dest['type']] ?? '📌';
             ?>
 <tr>
 <td><?= $sr++ ?></td>
 <td><span class="badge badge-<?= $dest['type'] === 'bank' ? 'info' : ($dest['type'] === 'person' ? 'success' : 'warning') ?>"><?= $type_icon ?> <?= strtoupper($dest['type']) ?></span></td>
 <td><strong><?= sanitize($dest['name']) ?></strong></td>
-<td><?= sanitize($dest['details'] ?: '-') ?></td>
+<td><?= $dest['type'] === 'bank' ? '<small>' . sanitize($dest['account_title'] ?: '-') . '<br><strong>' . sanitize($dest['account_no'] ?: '-') . '</strong><br>' . sanitize($dest['branch'] ?: '-') . '</small>' : sanitize($dest['details'] ?: '-') ?></td>
+<td><?= $dest['type'] === 'bank' ? sanitize($dest['contact_person'] ?: '-') . '<br>' . sanitize($dest['contact_phone'] ?: '') : '-' ?></td>
+<td><small>Opening: <?= fmt_money($dest['opening_balance']) ?><br>Deposited: <?= fmt_money($deposited_total) ?><br><strong>Current: <?= fmt_money($current_bal) ?></strong></small></td>
 <td><span class="badge badge-<?= $dest['is_active'] ? 'success' : 'danger' ?>"><?= $dest['is_active'] ? 'Active' : 'Inactive' ?></span></td>
-<td><?= fmt_money($alloc_total) ?></td>
 <td class="no-print">
 <div class="actions-col">
 <?php if (has_permission($conn, 'money_destinations', 'edit')): ?><a href="index.php?page=money_destinations&edit_id=<?= $dest['id'] ?>" class="btn btn-primary btn-sm">✏</a><?php endif; ?>
@@ -7491,6 +7749,7 @@ document.addEventListener('DOMContentLoaded', function() {
             $alloc_where .= " AND sma.destination_id=$filter_dest";
         $alloc_result = $conn->query("SELECT sma.*, md.name as dest_name, md.type as dest_type, b.chassis_number, b.selling_price, m.model_name,
             COALESCE((SELECT SUM(sa2.final_price) FROM sale_accessories sa2 WHERE sa2.bike_id=b.id),0) as acc_total,
+            COALESCE((SELECT SUM(da.amount) FROM deposit_allocations da WHERE da.bike_id=sma.bike_id),0) as deposited_amount,
             u.full_name as created_by_name
             FROM sale_money_allocations sma
             LEFT JOIN money_destinations md ON sma.destination_id=md.id
@@ -7591,7 +7850,7 @@ updateAllocRemaining();
 </script>
 <div class="data-table-wrap animate__animated animate__fadeInUp">
 <table class="data-table">
-<thead><tr><th>Sr#</th><th>Chassis / Model</th><th>Destination</th><th>Amount</th><th>Date</th><th>Notes</th><th>By</th><th class="no-sort">Actions</th></tr></thead>
+<thead><tr><th>Sr#</th><th>Chassis / Model</th><th>Destination</th><th>Amount</th><th>Deposit Status</th><th>Date</th><th>Notes</th><th>By</th><th class="no-sort">Actions</th></tr></thead>
 <tbody>
 <?php
         $sr = 1;
@@ -7599,12 +7858,21 @@ updateAllocRemaining();
         while ($al = $alloc_result->fetch_assoc()):
             $page_alloc_total += $al['amount'];
             $ti = ['bank' => '🏦', 'person' => '👤', 'wallet' => '💳'][$al['dest_type']] ?? '📌';
+            $dep_pct = $al['amount'] > 0 ? round(($al['deposited_amount'] / $al['amount']) * 100) : 0;
+            if ($dep_pct >= 100)
+                $dep_badge = 'success';
+            elseif ($dep_pct > 0)
+                $dep_badge = 'warning';
+            else
+                $dep_badge = 'danger';
+            $dep_label = $dep_pct >= 100 ? '✅ Deposited' : ($dep_pct > 0 ? $dep_pct . '% Dep.' : '⏳ Pending');
             ?>
 <tr>
 <td><?= $sr++ ?></td>
 <td><strong style="font-family:Consolas,monospace;font-size:0.8rem"><?= sanitize($al['chassis_number']) ?></strong><br><small><?= sanitize($al['model_name']) ?></small></td>
 <td><span class="badge badge-<?= $al['dest_type'] === 'bank' ? 'info' : ($al['dest_type'] === 'person' ? 'success' : 'warning') ?>"><?= $ti ?> <?= sanitize($al['dest_name']) ?></span></td>
 <td><strong><?= fmt_money($al['amount']) ?></strong></td>
+<td><span class="badge badge-<?= $dep_badge ?>"><?= $dep_label ?></span><br><small style="color:var(--text3)"><?= fmt_money($al['deposited_amount']) ?> deposited</small></td>
 <td><?= fmt_date($al['allocation_date']) ?></td>
 <td><?= sanitize($al['notes'] ?: '-') ?></td>
 <td><small><?= sanitize($al['created_by_name'] ?? '-') ?></small></td>
@@ -7622,6 +7890,196 @@ updateAllocRemaining();
 <?php endwhile; ?>
 </tbody>
 <tfoot><tr><td colspan="3"><strong>TOTAL</strong></td><td><strong><?= fmt_money($page_alloc_total) ?></strong></td><td colspan="4"></td></tr></tfoot>
+</table>
+</div>
+<?php
+    elseif ($page === 'bank_deposits'):
+        $bank_dests = $conn->query("SELECT id, name, account_title, account_no FROM money_destinations WHERE type='bank' AND is_active=1 ORDER BY name");
+        $sold_bikes_deps = $conn->query("SELECT b.id, b.chassis_number, b.selling_price, b.selling_date, m.model_name, c.name as cust_name,
+            COALESCE((SELECT SUM(sa2.final_price) FROM sale_accessories sa2 WHERE sa2.bike_id=b.id),0) as acc_total,
+            COALESCE((SELECT SUM(da.amount) FROM deposit_allocations da WHERE da.bike_id=b.id),0) as total_deposited
+            FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id
+            WHERE b.status='sold' ORDER BY b.selling_date DESC");
+        $sold_bikes_deps_arr = [];
+        while ($sbd = $sold_bikes_deps->fetch_assoc())
+            $sold_bikes_deps_arr[] = $sbd;
+        $edit_dep_id = (int) ($_GET['edit_id'] ?? 0);
+        $edit_dep = null;
+        if ($edit_dep_id) {
+            $ed = $conn->query("SELECT * FROM bank_deposits WHERE id=$edit_dep_id");
+            $edit_dep = $ed ? $ed->fetch_assoc() : null;
+        }
+        $filter_dest_dep = (int) ($_GET['filter_dest'] ?? 0);
+        $filter_type_dep = sanitize($_GET['filter_type'] ?? '');
+        $dep_where = '1=1';
+        if ($filter_dest_dep)
+            $dep_where .= " AND bd.destination_id=$filter_dest_dep";
+        if ($filter_type_dep)
+            $dep_where .= " AND bd.deposit_type='" . mysqli_real_escape_string($conn, $filter_type_dep) . "'";
+        $dep_result = $conn->query("SELECT bd.*, md.name as dest_name, md.account_title, md.account_no
+            FROM bank_deposits bd LEFT JOIN money_destinations md ON bd.destination_id=md.id
+            WHERE $dep_where ORDER BY bd.deposit_date DESC, bd.id DESC");
+        $total_deposited_range = $conn->query('SELECT COALESCE(SUM(amount),0) FROM bank_deposits')->fetch_row()[0];
+        $total_allocated_all = $conn->query('SELECT COALESCE(SUM(amount),0) FROM sale_money_allocations')->fetch_row()[0];
+        $total_sold_value = $conn->query("SELECT COALESCE(SUM(b.selling_price + COALESCE((SELECT SUM(sa2.final_price) FROM sale_accessories sa2 WHERE sa2.bike_id=b.id),0)),0) FROM bikes b WHERE b.status='sold'")->fetch_row()[0];
+        $pending_deposit = $total_allocated_all - $total_deposited_range;
+        if ($pending_deposit < 0)
+            $pending_deposit = 0;
+?>
+<div class="card-grid animate__animated animate__fadeInDown">
+    <div class="card success"><div class="card-icon">💰</div><div class="card-body"><div class="card-label">Total Deposited</div><div class="card-value" style="font-size:1rem"><?= fmt_money($total_deposited_range) ?></div></div></div>
+    <div class="card accent"><div class="card-icon">📊</div><div class="card-body"><div class="card-label">Allocated in Destinations</div><div class="card-value" style="font-size:1rem"><?= fmt_money($total_allocated_all) ?></div></div></div>
+    <div class="card <?= $pending_deposit > 0 ? 'warning' : 'success' ?>"><div class="card-icon"><?= $pending_deposit > 0 ? '⏳' : '✅' ?></div><div class="card-body"><div class="card-label">Pending Bank Deposit</div><div class="card-value" style="font-size:1rem;color:<?= $pending_deposit > 0 ? 'var(--warning)' : 'var(--success)' ?>"><?= fmt_money($pending_deposit) ?></div></div></div>
+</div>
+<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap" class="no-print animate__animated animate__fadeInLeft">
+<?php if (has_permission($conn, 'bank_deposits', 'add')): ?>
+<button class="btn btn-success" onclick="document.getElementById('addDepFormArea').style.display='block';document.getElementById('addDepFormArea').scrollIntoView()">+ New Bank Deposit</button>
+<?php endif; ?>
+</div>
+<div class="filter-bar no-print animate__animated animate__fadeInLeft" style="margin-bottom:10px">
+<form method="GET" action="index.php" style="display:contents">
+<input type="hidden" name="page" value="bank_deposits">
+<div class="form-group"><label>Destination</label>
+<select name="filter_dest"><option value="0">-- All Banks --</option>
+<?php $bank_dests->data_seek(0);
+        while ($bd_opt = $bank_dests->fetch_assoc()): ?>
+<option value="<?= $bd_opt['id'] ?>" <?= $filter_dest_dep == $bd_opt['id'] ? 'selected' : '' ?>><?= sanitize($bd_opt['name']) ?></option>
+<?php endwhile; ?>
+</select></div>
+<div class="form-group"><label>Type</label>
+<select name="filter_type"><option value="">-- All Types --</option>
+<option value="cash" <?= $filter_type_dep === 'cash' ? 'selected' : '' ?>>Cash</option>
+<option value="cheque" <?= $filter_type_dep === 'cheque' ? 'selected' : '' ?>>Cheque</option>
+<option value="transfer" <?= $filter_type_dep === 'transfer' ? 'selected' : '' ?>>Transfer</option>
+<option value="online" <?= $filter_type_dep === 'online' ? 'selected' : '' ?>>Online</option>
+</select></div>
+<button type="submit" class="btn btn-primary btn-sm" style="align-self:flex-end">🔍 Filter</button>
+<a href="index.php?page=bank_deposits" class="btn btn-default btn-sm" style="align-self:flex-end">Clear</a>
+</form>
+</div>
+<div id="addDepFormArea" style="display:<?= $edit_dep ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
+<fieldset class="fieldset"><legend><?= $edit_dep ? '✏ Edit Deposit' : '+ New Bank Deposit' ?></legend>
+<form method="POST" action="index.php?page=bank_deposits" enctype="multipart/form-data">
+<?php if ($edit_dep): ?><input type="hidden" name="id" value="<?= $edit_dep['id'] ?>"><?php endif; ?>
+<div class="form-row">
+<div class="form-group" style="flex:2"><label>Destination (Bank) <span class="req">*</span></label>
+<select name="destination_id" required>
+<option value="">-- Select Bank --</option>
+<?php $bank_dests->data_seek(0);
+        while ($bd_sel = $bank_dests->fetch_assoc()): ?>
+<option value="<?= $bd_sel['id'] ?>" <?= ($edit_dep && $edit_dep['destination_id'] == $bd_sel['id']) ? 'selected' : '' ?>><?= sanitize($bd_sel['name']) ?> — <?= sanitize($bd_sel['account_no'] ?: '-') ?></option>
+<?php endwhile; ?>
+</select>
+</div>
+<div class="form-group"><label>Date <span class="req">*</span></label><input type="date" name="deposit_date" required value="<?= $edit_dep ? $edit_dep['deposit_date'] : date('Y-m-d') ?>"></div>
+<div class="form-group"><label>Amount (<?= $currency ?>) <span class="req">*</span></label><input type="number" name="amount" step="0.01" min="0.01" required value="<?= $edit_dep ? $edit_dep['amount'] : '' ?>" placeholder="0.00"></div>
+</div>
+<div class="form-row">
+<div class="form-group"><label>Deposit Type <span class="req">*</span></label>
+<select name="deposit_type" required>
+<option value="cash" <?= ($edit_dep['deposit_type'] ?? '') === 'cash' ? 'selected' : '' ?>>Cash</option>
+<option value="cheque" <?= ($edit_dep['deposit_type'] ?? '') === 'cheque' ? 'selected' : '' ?>>Cheque</option>
+<option value="transfer" <?= ($edit_dep['deposit_type'] ?? '') === 'transfer' ? 'selected' : '' ?>>Transfer</option>
+<option value="online" <?= ($edit_dep['deposit_type'] ?? '') === 'online' ? 'selected' : '' ?>>Online</option>
+<option value="other" <?= ($edit_dep['deposit_type'] ?? '') === 'other' ? 'selected' : '' ?>>Other</option>
+</select>
+</div>
+<div class="form-group"><label>Reference No</label><input type="text" name="reference_no" value="<?= sanitize($edit_dep['reference_no'] ?? '') ?>" placeholder="Transaction/cheque #"></div>
+<div class="form-group"><label>Deposited By</label><input type="text" name="deposited_by" value="<?= sanitize($edit_dep['deposited_by'] ?? '') ?>" placeholder="Who deposited"></div>
+</div>
+<div class="form-row">
+<div class="form-group" style="flex:2"><label>Receipt Image</label><input type="file" name="receipt_image" accept="image/jpeg,image/png,image/webp,application/pdf"> <small style="color:var(--text3)">(optional, auto-resized to &lt;200KB)</small>
+<?php if ($edit_dep && $edit_dep['receipt_image']): ?>
+<br><img src="<?= $edit_dep['receipt_image'] ?>" style="max-height:80px;margin-top:4px;border:1px solid var(--border);border-radius:2px">
+<?php endif; ?>
+</div>
+<div class="form-group" style="flex:3"><label>Notes</label><input type="text" name="deposit_notes" value="<?= sanitize($edit_dep['notes'] ?? '') ?>" placeholder="Optional note"></div>
+</div>
+<?php if (!$edit_dep): ?>
+<fieldset class="fieldset" style="border-color:var(--accent);background:var(--surface);margin-bottom:10px">
+<legend style="cursor:pointer" onclick="document.getElementById('depBikeLinkArea').style.display=document.getElementById('depBikeLinkArea').style.display==='none'?'block':'none'">🔗 Link to Bike Sales <small style="color:var(--text3)">(Optional — click to expand)</small></legend>
+<div id="depBikeLinkArea" style="display:none">
+<div id="depBikeLinkRows"></div>
+<button type="button" class="btn btn-default btn-sm" onclick="addDepBikeLinkRow()" style="margin-top:6px">+ Add Bike</button>
+</div>
+</fieldset>
+<?php endif; ?>
+<button type="submit" name="save_deposit" class="btn btn-primary">💾 Save Deposit</button>
+<button type="button" class="btn btn-default" onclick="document.getElementById('addDepFormArea').style.display='none'">Cancel</button>
+</form>
+</fieldset>
+</div>
+<script>
+var depBikeOptions = <?= json_encode($sold_bikes_deps_arr) ?>;
+var depBikeIdx = 0;
+function addDepBikeLinkRow() {
+    var container = document.getElementById('depBikeLinkRows');
+    var idx = depBikeIdx++;
+    var opts = '<option value="">-- Select Sold Bike --</option>';
+    depBikeOptions.forEach(function(b) {
+        var saleTotal = parseFloat(b.selling_price) + parseFloat(b.acc_total || 0);
+        var rem = saleTotal - parseFloat(b.total_deposited || 0);
+        opts += '<option value="'+b.id+'" data-total="'+saleTotal+'" data-deposited="'+(b.total_deposited||0)+'" data-remaining="'+rem+'">'+b.chassis_number+' | '+b.model_name+' | Sale: '+saleTotal.toLocaleString()+' | Rem: '+rem.toLocaleString()+'</option>';
+    });
+    var row = document.createElement('div');
+    row.className = 'form-row';
+    row.style.alignItems = 'flex-end';
+    row.id = 'depBikeLinkRow_'+idx;
+    row.innerHTML = '<div class="form-group" style="flex:3"><label>Bike</label><select name="bike_link['+idx+'][bike_id]" onchange="updateDepBikeRem(this,'+idx+')">'+opts+'</select></div>'
+        + '<div class="form-group"><label>Amount (<?= $currency ?>)</label><input type="number" name="bike_link['+idx+'][amount]" step="0.01" min="0" placeholder="0.00"></div>'
+        + '<div class="form-group"><label>Remaining</label><span id="depBikeRem_'+idx+'" style="font-size:0.85rem;color:var(--text3);display:block;padding-top:6px">—</span></div>'
+        + '<div class="form-group"><button type="button" class="btn btn-danger btn-sm" onclick="document.getElementById(\'depBikeLinkRow_'+idx+'\').remove()">✕</button></div>';
+    container.appendChild(row);
+}
+function updateDepBikeRem(sel, idx) {
+    var opt = sel.options[sel.selectedIndex];
+    var rem = document.getElementById('depBikeRem_'+idx);
+    if (opt && opt.value) {
+        var remaining = parseFloat(opt.dataset.remaining || 0);
+        rem.innerHTML = '<strong style="color:'+(remaining>0?'var(--warning)':'var(--success)')+'"><?= $currency ?> '+remaining.toLocaleString()+'</strong>';
+    } else {
+        rem.innerHTML = '—';
+    }
+}
+</script>
+<div class="data-table-wrap animate__animated animate__fadeInUp">
+<table class="data-table">
+<thead><tr><th>Sr#</th><th>Date</th><th>Destination</th><th>Amount</th><th>Type</th><th>Reference</th><th>Receipt</th><th>Linked Bikes</th><th>Deposited By</th><th class="no-sort">Actions</th></tr></thead>
+<tbody>
+<?php
+        $sr = 1;
+        $page_dep_total = 0;
+        while ($dep = $dep_result->fetch_assoc()):
+            $page_dep_total += $dep['amount'];
+            $linked_bikes = $conn->query('SELECT COUNT(DISTINCT da.bike_id) as cnt, COALESCE(SUM(da.amount),0) as tot FROM deposit_allocations da WHERE da.deposit_id=' . $dep['id']);
+            $lb_row = $linked_bikes ? $linked_bikes->fetch_assoc() : ['cnt' => 0, 'tot' => 0];
+            ?>
+<tr>
+<td><?= $sr++ ?></td>
+<td><?= fmt_date($dep['deposit_date']) ?></td>
+<td><strong><?= sanitize($dep['dest_name']) ?></strong><br><small style="color:var(--text3)"><?= sanitize($dep['account_no'] ?: '') ?></small></td>
+<td><strong><?= fmt_money($dep['amount']) ?></strong></td>
+<td><span class="badge badge-<?= $dep['deposit_type'] === 'cash' ? 'success' : ($dep['deposit_type'] === 'cheque' ? 'warning' : 'info') ?>"><?= strtoupper($dep['deposit_type']) ?></span></td>
+<td><?= sanitize($dep['reference_no'] ?: '-') ?></td>
+<td><?php if ($dep['receipt_image']): ?>
+<a href="<?= $dep['receipt_image'] ?>" target="_blank"><img src="<?= $dep['receipt_image'] ?>" style="max-height:40px;border-radius:2px;border:1px solid var(--border)" title="View Receipt"></a>
+<?php else: ?><span style="color:var(--text3)">—</span><?php endif; ?></td>
+<td><?= $lb_row['cnt'] > 0 ? $lb_row['cnt'] . ' bike(s) — ' . fmt_money($lb_row['tot']) : '<span style="color:var(--text3)">—</span>' ?></td>
+<td><?= sanitize($dep['deposited_by'] ?: '-') ?></td>
+<td class="no-print">
+<div class="actions-col">
+<?php if (has_permission($conn, 'bank_deposits', 'edit')): ?><a href="index.php?page=bank_deposits&edit_id=<?= $dep['id'] ?>" class="btn btn-primary btn-sm">✏</a><?php endif; ?>
+<?php if (has_permission($conn, 'bank_deposits', 'delete')): ?>
+<form method="POST" style="display:inline"><input type="hidden" name="id" value="<?= $dep['id'] ?>">
+<button name="delete_deposit" class="btn btn-danger btn-sm" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete this deposit?', text: 'This will remove the deposit and its bike links.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button>
+</form>
+<?php endif; ?>
+</div>
+</td>
+</tr>
+<?php endwhile; ?>
+</tbody>
+<tfoot><tr><td colspan="3"><strong>TOTAL</strong></td><td><strong><?= fmt_money($page_dep_total) ?></strong></td><td colspan="6"></td></tr></tfoot>
 </table>
 </div>
 <?php
