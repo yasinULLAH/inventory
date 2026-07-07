@@ -1,11 +1,11 @@
 {
-    "last_backup_at": 0,
-    "last_backup_file": null,
-    "last_checked_at": null,
-    "next_backup_due_at": null,
+    "last_backup_at": 1783420221,
+    "last_backup_file": "bni_auto_backup_20260707_113021.sql",
+    "last_checked_at": 1783421303,
+    "next_backup_due_at": 1783765821,
     "interval_days": 4,
     "max_backups": 20,
-    "backup_count": 0,
-    "storage_dir": "secure_storage/auto_backups",
+    "backup_count": 1,
+    "storage_dir": "secure_storage\\auto_backups",
     "last_error": null
 }

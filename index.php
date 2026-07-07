@@ -18,7 +18,17 @@ if (time() > $_SESSION['captcha_lifetime']) {
 $_SESSION['csrf_token'] = $_SESSION['csrf_token'] ?? bin2hex(random_bytes(32));
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
-        die('<div style="padding:40px;text-align:center;font-family:sans-serif"><h2>🚫 Invalid Request</h2><p>Security token missing or expired. Please refresh the page and try again.</p></div>');
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+        $params = [];
+        if (!empty($_GET['page'])) {
+            $params[] = 'page=' . urlencode($_GET['page']);
+            if (!empty($_GET['edit_id'])) {
+                $params[] = 'edit_id=' . urlencode($_GET['edit_id']);
+            }
+        }
+        $params[] = 'err=' . urlencode('Security token missing or expired. Please try again.');
+        header('Location: index.php' . (!empty($params) ? '?' . implode('&', $params) : ''));
+        exit;
     }
 }
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING & ~E_DEPRECATED & ~E_STRICT & ~E_USER_DEPRECATED);
@@ -3533,6 +3543,14 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     injectCsrf();
+    document.addEventListener('submit', function(e) {
+        let form = e.target;
+        if (form && form.tagName === 'FORM' && form.method && form.method.toUpperCase() === 'POST') {
+            if (!form.querySelector('input[name="csrf_token"]')) {
+                let c = document.createElement('input'); c.type = 'hidden'; c.name = 'csrf_token'; c.value = typeof csrfToken !== 'undefined' ? csrfToken : ''; form.appendChild(c);
+            }
+        }
+    }, true);
     ['click', 'change'].forEach(evt => {
         document.addEventListener(evt, function(e) {
             let form = e.target.closest ? e.target.closest('form') : null;
@@ -3730,6 +3748,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <div class="login-err animate__animated animate__shakeX">Database connection failed. Please check your credentials in index.php.</div>
 <?php endif; ?>
 <form method="POST">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <button type="submit" name="do_install" class="btn btn-primary animate__animated animate__pulse animate__infinite" style="width:100%;font-size:0.95rem;padding:10px">⚡ Install Database</button>
 </form>
 <p style="margin-top:14px;font-size:0.75rem;color:var(--text3)">Created by: <?= $author ?> | v<?= $app_version ?> | WhatsApp: 03361593533</p>
@@ -3748,6 +3767,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <div class="login-err animate__animated animate__shakeX"><?= $login_error ?></div>
 <?php endif; ?>
 <form method="POST" id="loginForm">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <div class="form-group"><label>Username <span class="req">*</span></label><input type="text" name="username" required autocomplete="username" placeholder="admin"></div>
 <div class="form-group" style="margin-top:10px"><label>Password <span class="req">*</span></label><input type="password" name="password" required autocomplete="current-password" placeholder="••••••••"></div>
 <div class="form-group" style="margin-top:10px">
@@ -3863,6 +3883,7 @@ else:
 <?php $cu = current_user($conn);
     if ($cu): ?><span style="font-size:0.8rem;color:var(--text2);margin-right:10px">👤 <?= sanitize($cu['full_name'] ?: $cu['username']) ?> (<?= sanitize($cu['role_name']) ?>)</span><?php endif; ?>
 <form method="POST" action="index.php?<?= http_build_query(array_merge($_GET, [])) ?>">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <button type="submit" name="toggle_theme" title="Toggle Theme"><?= ($theme ?? 'dark') === 'dark' ? '☀' : '🌙' ?></button>
 </form>
 <span style="font-size:0.75rem;color:var(--text3)"><?= date('d/m/Y H:i') ?></span>
@@ -4077,6 +4098,7 @@ document.addEventListener('DOMContentLoaded', function() {
         $models_list = $conn->query('SELECT id, model_code, model_name FROM models ORDER BY model_name');
 ?>
 <form method="POST" id="purchaseForm" enctype="multipart/form-data" class="animate__animated animate__fadeIn">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="save_purchase" value="1">
 <fieldset class="fieldset"><legend>📦 Purchase Order Details</legend>
 <div class="form-row">
@@ -4207,6 +4229,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <div class="modal">
 <div class="modal-header"><h3>Add New Supplier</h3><button class="modal-close" onclick="closeSupplierModal()">✕</button></div>
 <form id="supplierForm" class="ajax-form" method="POST" action="index.php?page=suppliers&action=add">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <div class="form-group" style="margin-bottom:8px"><label>Name <span class="req">*</span></label><input type="text" name="name" required></div>
 <div class="form-group" style="margin-bottom:8px"><label>Contact</label><input type="text" name="contact"></div>
 <div class="form-group" style="margin-bottom:12px"><label>Address</label><textarea name="address" rows="2"></textarea></div>
@@ -4218,6 +4241,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <div class="modal">
 <div class="modal-header"><h3>Add New Model</h3><button class="modal-close" onclick="closeModelModal()">✕</button></div>
 <form id="modelForm" class="ajax-form" method="POST" enctype="multipart/form-data" action="index.php?page=models&action=add">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <div class="form-group" style="margin-bottom:8px"><label>Model Code <span class="req">*</span></label><input type="text" name="model_code" required></div>
 <div class="form-group" style="margin-bottom:8px"><label>Model Name <span class="req">*</span></label><input type="text" name="model_name" required></div>
 <div class="form-group" style="margin-bottom:8px"><label>Category</label><input type="text" name="category" value="Electric Bike"></div>
@@ -4654,6 +4678,7 @@ $(document).ready(function() {
 </form>
 </div>
 <form method="POST" id="bulkForm" action="index.php?page=inventory&action=bulk_delete">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center" class="no-print animate__animated animate__fadeInLeft">
 <span style="font-size:0.8rem;color:var(--text2)">Total: <?= $bikes_result->num_rows ?> record(s)</span>
 <?php if (has_permission($conn, 'purchase', 'add')): ?><a href="index.php?page=purchase" class="btn btn-success btn-sm">+ New Purchase</a><?php endif; ?>
@@ -4731,6 +4756,7 @@ $(document).ready(function() {
 <?php endif; ?>
 <?php if (has_permission($conn, 'inventory', 'delete')): ?>
 <form method="POST" action="index.php?page=inventory&action=delete" style="display:inline">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="id" value="<?= $bike['id'] ?>">
 <button type="submit" class="btn btn-danger btn-sm" title="Delete" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete this bike?', text: 'Are you sure you want to delete this bike? This cannot be undone.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button>
 </form>
@@ -4755,6 +4781,7 @@ $(document).ready(function() {
 </div>
 </form>
 <form method="POST" id="bulkExportForm" action="index.php?page=inventory&action=bulk_export">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <div id="hiddenBikeIds"></div>
 </form>
 <?php if ($edit_bike): ?>
@@ -4762,6 +4789,7 @@ $(document).ready(function() {
 <div class="modal animate__animated animate__zoomIn">
 <div class="modal-header"><h3>✏ Edit Bike — <?= sanitize($edit_bike['chassis_number']) ?></h3><a href="index.php?page=inventory" class="modal-close">✕</a></div>
 <form id="editBikeForm" method="POST" enctype="multipart/form-data" action="index.php?page=inventory&action=edit">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="id" value="<?= $edit_bike['id'] ?>">
 <div class="form-group" style="margin-bottom:8px"><label>Model</label>
 <select name="model_id" required>
@@ -4830,6 +4858,7 @@ document.getElementById('bulkExportForm').addEventListener('submit', function(){
         unset($_SESSION['last_sale_bike_id']);
 ?>
 <form method="POST" id="saleForm" class="animate__animated animate__fadeIn">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="save_sale" value="1">
 <fieldset class="fieldset"><legend>🛒 Sale Details</legend>
 <div class="form-row">
@@ -5063,6 +5092,7 @@ function addMoneyAllocRow() {
 <div class="modal">
 <div class="modal-header"><h3>Add New Customer</h3><button class="modal-close" onclick="closeCustomerModal()">✕</button></div>
 <form id="customerForm" class="ajax-form" method="POST" action="index.php?page=customers&action=add">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <div class="form-group" style="margin-bottom:8px"><label>Name <span class="req">*</span></label><input type="text" name="name" required></div>
 <div class="form-group" style="margin-bottom:8px"><label>Phone</label><input type="text" name="phone"></div>
 <div class="form-group" style="margin-bottom:8px"><label>CNIC</label><input type="text" name="cnic" placeholder="XXXXX-XXXXXXX-X"></div>
@@ -5269,6 +5299,7 @@ window.onload = function() {
             $sold_bikes = $conn->query("SELECT b.id, b.chassis_number, b.color, b.selling_price, b.purchase_price, m.model_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.status='sold' ORDER BY b.selling_date DESC");
             ?>
 <form method="POST" id="returnForm" class="animate__animated animate__fadeIn">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="save_return" value="1">
 <fieldset class="fieldset"><legend>↩ Sales Return / Adjustment</legend>
 <div class="form-row">
@@ -5311,6 +5342,7 @@ window.onload = function() {
             $purchased_bikes = $conn->query("SELECT b.id, b.chassis_number, b.color, b.purchase_price, m.model_name, s.name AS sup_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN purchase_orders po ON b.purchase_order_id=po.id LEFT JOIN suppliers s ON po.supplier_id=s.id WHERE b.status='in_stock' ORDER BY b.inventory_date DESC");
 ?>
 <form method="POST" id="purchaseReturnForm" class="animate__animated animate__fadeIn">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="save_purchase_return" value="1">
 <fieldset class="fieldset"><legend>📤 Purchase Return (To Supplier)</legend>
 <div class="form-row">
@@ -5490,11 +5522,13 @@ $(document).ready(function() {
 <div class="actions-col">
 <?php if ($pay['payment_type'] === 'cheque' && $pay['status_display'] === 'pending' && has_permission($conn, 'payments', 'edit')): ?>
 <form method="POST" action="index.php?page=payments&action=status" style="display:inline">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="id" value="<?= $pay['id'] ?>">
 <input type="hidden" name="status" value="cleared">
 <button type="submit" class="btn btn-success btn-sm" title="Mark Cleared">✓ Clear</button>
 </form>
 <form method="POST" action="index.php?page=payments&action=status" style="display:inline">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="id" value="<?= $pay['id'] ?>">
 <input type="hidden" name="status" value="bounced">
 <button type="submit" class="btn btn-danger btn-sm" title="Mark Bounced" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Mark as Bounced?', text: 'Are you sure you want to mark this cheque as bounced?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, mark bounced!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">✗ Bounce</button>
@@ -5502,6 +5536,7 @@ $(document).ready(function() {
 <?php endif; ?>
 <?php if (has_permission($conn, 'payments', 'delete')): ?>
 <form method="POST" action="index.php?page=payments&action=delete" style="display:inline">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="id" value="<?= $pay['id'] ?>">
 <button type="submit" class="btn btn-danger btn-sm" title="Delete" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete this payment?', text: 'Are you sure you want to delete this payment entry? This cannot be undone.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button>
 </form>
@@ -5627,6 +5662,7 @@ $(document).ready(function() {
 <div class="modal">
 <div class="modal-header"><h3>Pay Installment</h3><button class="modal-close" onclick="closePayInstallmentModal()">✕</button></div>
 <form id="payInstallmentForm" method="POST" action="index.php?page=installments&action=pay_installment">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="installment_id" id="modalInstallmentId">
 <div class="form-group" style="margin-bottom:8px"><label>Installment Due Date</label><input type="text" id="modalDueDate" readonly style="background:var(--bg3);color:var(--text2)"></div>
 <div class="form-group" style="margin-bottom:8px"><label>Installment Amount</label><input type="text" id="modalInstallmentAmount" readonly style="background:var(--bg3);color:var(--text2)"></div>
@@ -5732,6 +5768,7 @@ $(document).ready(function() {
 <div class="modal">
 <div class="modal-header"><h3>Receive Payment</h3><button class="modal-close" onclick="document.getElementById('receivePaymentModal').classList.remove('open')">✕</button></div>
 <form method="POST">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="add_payment" value="1">
 <div class="form-group" style="margin-bottom:8px"><label>Date <span class="req">*</span></label><input type="date" name="payment_date" value="<?= date('Y-m-d') ?>" required></div>
 <div class="form-group" style="margin-bottom:8px"><label>Amount <span class="req">*</span></label><input type="number" name="amount" step="0.01" min="0.01" required value="<?= $bal_summary > 0 ? $bal_summary : '' ?>"></div>
@@ -5745,6 +5782,7 @@ $(document).ready(function() {
 <div class="modal">
 <div class="modal-header"><h3>Make Payment (Advance/Loan)</h3><button class="modal-close" onclick="document.getElementById('makePaymentCustModal').classList.remove('open')">✕</button></div>
 <form method="POST">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="make_payment_cust" value="1">
 <div class="form-group" style="margin-bottom:8px"><label>Date <span class="req">*</span></label><input type="date" name="payment_date" value="<?= date('Y-m-d') ?>" required></div>
 <div class="form-group" style="margin-bottom:8px"><label>Amount <span class="req">*</span></label><input type="number" name="amount" step="0.01" min="0.01" required></div>
@@ -5885,6 +5923,7 @@ $(document).ready(function() {
 <div class="modal">
 <div class="modal-header"><h3>Make Payment to Supplier</h3><button class="modal-close" onclick="document.getElementById('makePaymentModal').classList.remove('open')">✕</button></div>
 <form method="POST">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="add_sup_payment" value="1">
 <div class="form-group" style="margin-bottom:8px"><label>Date <span class="req">*</span></label><input type="date" name="payment_date" value="<?= date('Y-m-d') ?>" required></div>
 <div class="form-group" style="margin-bottom:8px"><label>Amount <span class="req">*</span></label><input type="number" name="amount" step="0.01" min="0.01" required value="<?= $bal_summary > 0 ? $bal_summary : '' ?>"></div>
@@ -5898,6 +5937,7 @@ $(document).ready(function() {
 <div class="modal">
 <div class="modal-header"><h3>Receive Refund from Supplier</h3><button class="modal-close" onclick="document.getElementById('receiveRefundSupModal').classList.remove('open')">✕</button></div>
 <form method="POST">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="receive_sup_payment" value="1">
 <div class="form-group" style="margin-bottom:8px"><label>Date <span class="req">*</span></label><input type="date" name="payment_date" value="<?= date('Y-m-d') ?>" required></div>
 <div class="form-group" style="margin-bottom:8px"><label>Amount <span class="req">*</span></label><input type="number" name="amount" step="0.01" min="0.01" required></div>
@@ -6822,6 +6862,7 @@ $(document).ready(function() {
 <div id="addModelFormArea" style="display:<?= $edit_model ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
 <fieldset class="fieldset"><legend><?= $edit_model ? '✏ Edit Model' : '+ Add New Model' ?></legend>
 <form id="modelForm" method="POST" enctype="multipart/form-data" action="index.php?page=models&action=<?= $edit_model ? 'edit' : 'add' ?>">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <?php if ($edit_model): ?><input type="hidden" name="id" value="<?= $edit_model['id'] ?>"><?php endif; ?>
 <div class="form-row">
 <div class="form-group"><label>Model Code <span class="req">*</span></label><input type="text" name="model_code" value="<?= sanitize($edit_model['model_code'] ?? '') ?>" required></div>
@@ -6862,6 +6903,7 @@ $(document).ready(function() {
 <?php if (has_permission($conn, 'models', 'edit')): ?><a href="index.php?page=models&edit_id=<?= $mdl['id'] ?>" class="btn btn-primary btn-sm">✏ Edit</a><?php endif; ?>
 <?php if (has_permission($conn, 'models', 'delete')): ?>
 <form method="POST" action="index.php?page=models&action=delete" style="display:inline">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="id" value="<?= $mdl['id'] ?>">
 <button type="submit" class="btn btn-danger btn-sm" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete this model?', text: 'Are you sure you want to delete this model? Only possible if no bikes are linked.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button>
 </form>
@@ -6933,6 +6975,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <div id="addAccFormArea" style="display:<?= $edit_acc ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
 <fieldset class="fieldset"><legend><?= $edit_acc ? '✏ Edit Accessory' : '+ Add New Accessory' ?></legend>
 <form id="accessoryForm" method="POST" action="index.php?page=accessories&action=<?= $edit_acc ? 'edit' : 'add' ?>">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <?php if ($edit_acc): ?><input type="hidden" name="id" value="<?= $edit_acc['id'] ?>"><?php endif; ?>
 <div class="form-row">
 <div class="form-group"><label>Accessory Name <span class="req">*</span></label><input type="text" name="name" value="<?= sanitize($edit_acc['name'] ?? '') ?>" required></div>
@@ -6966,6 +7009,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <?php if (has_permission($conn, 'accessories', 'edit')): ?><a href="index.php?page=accessories&edit_id=<?= $acc['id'] ?>" class="btn btn-primary btn-sm">✏ Edit</a><?php endif; ?>
 <?php if (has_permission($conn, 'accessories', 'delete')): ?>
 <form method="POST" action="index.php?page=accessories&action=delete" style="display:inline">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="id" value="<?= $acc['id'] ?>">
 <button type="submit" class="btn btn-danger btn-sm" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete this accessory?', text: 'Are you sure you want to delete this accessory? Only possible if no sales are linked.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button>
 </form>
@@ -6998,6 +7042,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <div id="addQuoteFormArea" style="display:<?= $edit_quote ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
 <fieldset class="fieldset"><legend><?= $edit_quote ? '✏ Edit Quotation' : '+ Create New Quotation' ?></legend>
 <form id="quotationForm" method="POST" action="index.php?page=quotations&action=<?= $edit_quote ? 'edit' : 'add' ?>">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <?php if ($edit_quote): ?><input type="hidden" name="id" value="<?= $edit_quote['id'] ?>"><?php endif; ?>
 <input type="hidden" name="save_quote" value="1">
 <div class="form-row">
@@ -7111,6 +7156,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <a href="index.php?page=quotations&print_quote=<?= $quote['id'] ?>" class="btn btn-primary btn-sm" title="Print Quotation" target="_blank">📄</a>    
 <?php if ($quote['status'] == 'pending' && has_permission($conn, 'quotations', 'edit')): ?>
 <form method="POST" action="index.php?page=quotations&action=convert_quote_to_sale" style="display:inline">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="quote_id" value="<?= $quote['id'] ?>">
 <input type="hidden" name="convert_quote_to_sale" value="1">
 <button type="submit" class="btn btn-success btn-sm" title="Convert to Sale" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Convert to Sale?', text: 'This will create a new sale entry and mark this quotation as converted. Are you sure?', icon: 'info', showCancelButton: true, confirmButtonText: 'Yes, convert it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🛒</button>
@@ -7119,6 +7165,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <?php endif; ?>
 <?php if (has_permission($conn, 'quotations', 'delete')): ?>
 <form method="POST" action="index.php?page=quotations&action=delete" style="display:inline">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="id" value="<?= $quote['id'] ?>">
 <input type="hidden" name="delete_quote" value="1">
 <button type="submit" class="btn btn-danger btn-sm" title="Delete" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete this quotation?', text: 'Are you sure you want to delete this quotation?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button>
@@ -7414,6 +7461,7 @@ function showQuoteBikeDetails(sel) {
 <div id="addCustFormArea" style="display:<?= $edit_cust ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
 <fieldset class="fieldset"><legend><?= $edit_cust ? '✏ Edit Customer' : '+ Add New Customer' ?></legend>
 <form id="customerForm" method="POST" action="index.php?page=customers&action=<?= $edit_cust ? 'edit' : 'add' ?>">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <?php if ($edit_cust): ?><input type="hidden" name="id" value="<?= $edit_cust['id'] ?>"><?php endif; ?>
 <div class="form-row">
 <div class="form-group"><label>Name <span class="req">*</span></label><input type="text" name="name" value="<?= sanitize($edit_cust['name'] ?? '') ?>" required></div>
@@ -7452,6 +7500,7 @@ function showQuoteBikeDetails(sel) {
 <?php if (has_permission($conn, 'customers', 'edit')): ?><a href="index.php?page=customers&edit_id=<?= $cu['id'] ?>" class="btn btn-primary btn-sm">✏</a><?php endif; ?>
 <?php if (has_permission($conn, 'customers', 'delete')): ?>
 <form method="POST" action="index.php?page=customers&action=delete" style="display:inline">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="id" value="<?= $cu['id'] ?>">
 <button type="submit" class="btn btn-danger btn-sm" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete customer?', text: 'Are you sure you want to delete this customer? Only possible if no bikes are linked.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button>
 </form>
@@ -7481,6 +7530,7 @@ function showQuoteBikeDetails(sel) {
 <div id="addSupFormArea" style="display:<?= $edit_sup ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
 <fieldset class="fieldset"><legend><?= $edit_sup ? '✏ Edit Supplier' : '+ Add New Supplier' ?></legend>
 <form id="supplierForm" method="POST" action="index.php?page=suppliers&action=<?= $edit_sup ? 'edit' : 'add' ?>">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <?php if ($edit_sup): ?><input type="hidden" name="id" value="<?= $edit_sup['id'] ?>"><?php endif; ?>
 <div class="form-row">
 <div class="form-group"><label>Name <span class="req">*</span></label><input type="text" name="name" value="<?= sanitize($edit_sup['name'] ?? '') ?>" required></div>
@@ -7513,6 +7563,7 @@ function showQuoteBikeDetails(sel) {
 <?php if (has_permission($conn, 'suppliers', 'edit')): ?><a href="index.php?page=suppliers&edit_id=<?= $sv['id'] ?>" class="btn btn-primary btn-sm">✏</a><?php endif; ?>
 <?php if (has_permission($conn, 'suppliers', 'delete')): ?>
 <form method="POST" action="index.php?page=suppliers&action=delete" style="display:inline">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="id" value="<?= $sv['id'] ?>">
 <button type="submit" class="btn btn-danger btn-sm" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete supplier?', text: 'Are you sure you want to delete this supplier? Only possible if no purchase orders are linked.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button>
 </form>
@@ -7551,6 +7602,7 @@ function showQuoteBikeDetails(sel) {
 <div id="roleForm" style="display:<?= $edit_role ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
 <fieldset class="fieldset"><legend><?= $edit_role ? '✏ Edit Role' : ' + Add New Role' ?></legend>
 <form id="editRoleForm" method="POST">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="id" value="<?= $edit_role['id'] ?? 0 ?>">
 <input type="hidden" name="save_role" value="1">
 <div class="form-row">
@@ -7597,6 +7649,7 @@ function showQuoteBikeDetails(sel) {
 <?php endif; ?>
 <?php if ($r['id'] != 1 && has_permission($conn, 'roles', 'delete')): ?>
 <form method="POST" style="display:inline">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="id" value="<?= $r['id'] ?>">
 <button name="delete_role" class="btn btn-danger btn-sm" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete role?', text: 'Are you sure you want to delete this role? Only possible if no users are linked.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button>
 </form>
@@ -7627,6 +7680,7 @@ function showQuoteBikeDetails(sel) {
 <div id="userForm" style="display:<?= $edit_user ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
 <fieldset class="fieldset"><legend><?= $edit_user ? '✏ Edit User' : ' + Add New User' ?></legend>
 <form id="editUserForm" method="POST">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="id" value="<?= $edit_user['id'] ?? 0 ?>">
 <input type="hidden" name="save_user" value="1">
 <div class="form-row">
@@ -7669,6 +7723,7 @@ function showQuoteBikeDetails(sel) {
 <?php endif; ?>
 <?php if ($u['id'] != 1 && $u['id'] != $_SESSION['user_id'] && has_permission($conn, 'users', 'delete')): ?>
 <form method="POST" style="display:inline">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="id" value="<?= $u['id'] ?>">
 <button name="delete_user" class="btn btn-danger btn-sm" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete user?', text: 'Are you sure you want to delete this user?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button>
 </form>
@@ -7822,6 +7877,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <div id="ieForm" style="display:<?= $edit_entry ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
 <fieldset class="fieldset"><legend><?= $edit_entry ? '✏ Edit' : ' + Add' ?> Income/Expense</legend>
 <form id="ieEntryForm" method="POST">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="id" value="<?= $edit_entry['id'] ?? 0 ?>">
 <input type="hidden" name="save_entry" value="1">
 <div class="form-row">
@@ -7861,7 +7917,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <td><?= sanitize($e['full_name'] ?? '-') ?></td>
 <td class="no-print">
 <?php if (has_permission($conn, 'income_expense', 'edit')): ?><a href="index.php?page=income_expense&edit_id=<?= $e['id'] ?>&from=<?= $filter_from ?>&to=<?= $filter_to ?>" class="btn btn-primary btn-sm">✏</a><?php endif; ?>
-<?php if (has_permission($conn, 'income_expense', 'delete')): ?><form method="POST" style="display:inline"><input type="hidden" name="id" value="<?= $e['id'] ?>"><button name="delete_entry" class="btn btn-danger btn-sm" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete this entry?', text: 'Are you sure you want to delete this income/expense entry?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button></form><?php endif; ?>
+<?php if (has_permission($conn, 'income_expense', 'delete')): ?><form method="POST" style="display:inline"><input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>"><input type="hidden" name="id" value="<?= $e['id'] ?>"><button name="delete_entry" class="btn btn-danger btn-sm" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete this entry?', text: 'Are you sure you want to delete this income/expense entry?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button></form><?php endif; ?>
 </td>
 </tr>
 <?php endwhile; ?>
@@ -7881,6 +7937,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 <?php if ($sub === 'general'): ?>
 <form method="POST" class="animate__animated animate__fadeIn">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="save_landing_settings" value="1">
 <input type="hidden" name="sub" value="general">
 <fieldset class="fieldset"><legend>🌐 Hero Section</legend>
@@ -7924,6 +7981,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <div id="leadershipFormArea" style="display:<?= $edit_l ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
 <fieldset class="fieldset"><legend><?= $edit_l ? '✏ Edit Leadership' : '+ Add Leader' ?></legend>
 <form method="POST" enctype="multipart/form-data">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="save_leadership" value="1">
 <input type="hidden" name="sub" value="leadership">
 <?php if ($edit_l): ?><input type="hidden" name="id" value="<?= $edit_l['id'] ?>"><?php endif; ?>
@@ -7956,7 +8014,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <td>
 <div class="actions-col">
 <a href="index.php?page=landing_page&sub=leadership&edit_lid=<?= $l['id'] ?>" class="btn btn-primary btn-sm">✏</a>
-<form method="POST" style="display:inline"><input type="hidden" name="id" value="<?= $l['id'] ?>"><input type="hidden" name="sub" value="leadership"><button name="delete_leadership" class="btn btn-danger btn-sm" onclick="return confirm('Delete this leader?')">🗑</button></form>
+<form method="POST" style="display:inline"><input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>"><input type="hidden" name="id" value="<?= $l['id'] ?>"><input type="hidden" name="sub" value="leadership"><button name="delete_leadership" class="btn btn-danger btn-sm" onclick="return confirm('Delete this leader?')">🗑</button></form>
 </div>
 </td>
 </tr>
@@ -7976,6 +8034,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <div id="galleryFormArea" style="display:<?= $edit_g ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
 <fieldset class="fieldset"><legend><?= $edit_g ? '✏ Edit Gallery Item' : '+ Add Gallery Item' ?></legend>
 <form method="POST" enctype="multipart/form-data">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="save_gallery" value="1">
 <input type="hidden" name="sub" value="gallery">
 <?php if ($edit_g): ?><input type="hidden" name="id" value="<?= $edit_g['id'] ?>"><?php endif; ?>
@@ -8001,7 +8060,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <div style="font-size:0.75rem;color:var(--text2)"><?= sanitize(substr($g['description'], 0, 40)) ?>...</div>
 <div style="display:flex;gap:5px;margin-top:auto">
 <a href="index.php?page=landing_page&sub=gallery&edit_gid=<?= $g['id'] ?>" class="btn btn-default btn-sm">✏</a>
-<form method="POST" style="display:inline"><input type="hidden" name="id" value="<?= $g['id'] ?>"><input type="hidden" name="sub" value="gallery"><button name="delete_gallery" class="btn btn-danger btn-sm" onclick="return confirm('Delete item?')">🗑</button></form>
+<form method="POST" style="display:inline"><input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>"><input type="hidden" name="id" value="<?= $g['id'] ?>"><input type="hidden" name="sub" value="gallery"><button name="delete_gallery" class="btn btn-danger btn-sm" onclick="return confirm('Delete item?')">🗑</button></form>
 </div>
 </div>
 <?php endwhile; ?>
@@ -8024,7 +8083,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <td><small><?= defang_spam($r['bike_details']) ?></small></td>
 <td><span class="badge badge-<?= ($r['status'] === 'fulfilled') ? 'success' : (($r['status'] === 'cancelled') ? 'danger' : 'warning') ?>"><?= strtoupper($r['status']) ?></span></td>
 <td>
-<form method="POST" style="display:inline"><input type="hidden" name="update_request_status" value="1"><input type="hidden" name="id" value="<?= $r['id'] ?>"><input type="hidden" name="type" value="bike"><input type="hidden" name="sub" value="requests"><select name="status" onchange="this.form.submit()"><option value="pending" <?= $r['status'] === 'pending' ? 'selected' : '' ?>>Pending</option><option value="contacted" <?= $r['status'] === 'contacted' ? 'selected' : '' ?>>Contacted</option><option value="fulfilled" <?= $r['status'] === 'fulfilled' ? 'selected' : '' ?>>Fulfilled</option><option value="cancelled" <?= $r['status'] === 'cancelled' ? 'selected' : '' ?>>Cancelled</option></select></form>
+<form method="POST" style="display:inline"><input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>"><input type="hidden" name="update_request_status" value="1"><input type="hidden" name="id" value="<?= $r['id'] ?>"><input type="hidden" name="type" value="bike"><input type="hidden" name="sub" value="requests"><select name="status" onchange="this.form.submit()"><option value="pending" <?= $r['status'] === 'pending' ? 'selected' : '' ?>>Pending</option><option value="contacted" <?= $r['status'] === 'contacted' ? 'selected' : '' ?>>Contacted</option><option value="fulfilled" <?= $r['status'] === 'fulfilled' ? 'selected' : '' ?>>Fulfilled</option><option value="cancelled" <?= $r['status'] === 'cancelled' ? 'selected' : '' ?>>Cancelled</option></select></form>
 </td>
 </tr>
 <?php endwhile; ?>
@@ -8046,7 +8105,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <td><small><?= defang_spam($r['details']) ?></small></td>
 <td><span class="badge badge-<?= ($r['status'] === 'accepted') ? 'success' : (($r['status'] === 'rejected') ? 'danger' : 'warning') ?>"><?= strtoupper($r['status']) ?></span></td>
 <td>
-<form method="POST" style="display:inline"><input type="hidden" name="update_request_status" value="1"><input type="hidden" name="id" value="<?= $r['id'] ?>"><input type="hidden" name="type" value="quote"><input type="hidden" name="sub" value="requests"><select name="status" onchange="this.form.submit()"><option value="pending" <?= $r['status'] === 'pending' ? 'selected' : '' ?>>Pending</option><option value="sent" <?= $r['status'] === 'sent' ? 'selected' : '' ?>>Sent</option><option value="accepted" <?= $r['status'] === 'accepted' ? 'selected' : '' ?>>Accepted</option><option value="rejected" <?= $r['status'] === 'rejected' ? 'selected' : '' ?>>Rejected</option></select></form>
+<form method="POST" style="display:inline"><input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>"><input type="hidden" name="update_request_status" value="1"><input type="hidden" name="id" value="<?= $r['id'] ?>"><input type="hidden" name="type" value="quote"><input type="hidden" name="sub" value="requests"><select name="status" onchange="this.form.submit()"><option value="pending" <?= $r['status'] === 'pending' ? 'selected' : '' ?>>Pending</option><option value="sent" <?= $r['status'] === 'sent' ? 'selected' : '' ?>>Sent</option><option value="accepted" <?= $r['status'] === 'accepted' ? 'selected' : '' ?>>Accepted</option><option value="rejected" <?= $r['status'] === 'rejected' ? 'selected' : '' ?>>Rejected</option></select></form>
 </td>
 </tr>
 <?php endwhile; ?>
@@ -8084,6 +8143,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <div id="addDestFormArea" style="display:<?= $edit_dest ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
 <fieldset class="fieldset"><legend><?= $edit_dest ? '✏ Edit Destination' : '+ Add New Destination' ?></legend>
 <form method="POST" action="index.php?page=money_destinations">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <?php if ($edit_dest): ?><input type="hidden" name="id" value="<?= $edit_dest['id'] ?>"><?php endif; ?>
 <div class="form-row">
 <div class="form-group"><label>Type <span class="req">*</span></label>
@@ -8149,7 +8209,7 @@ function toggleBankFields(sel) {
 <div class="actions-col">
 <?php if (has_permission($conn, 'money_destinations', 'edit')): ?><a href="index.php?page=money_destinations&edit_id=<?= $dest['id'] ?>" class="btn btn-primary btn-sm">✏</a><?php endif; ?>
 <?php if (has_permission($conn, 'money_destinations', 'delete')): ?>
-<form method="POST" style="display:inline"><input type="hidden" name="id" value="<?= $dest['id'] ?>">
+<form method="POST" style="display:inline"><input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>"><input type="hidden" name="id" value="<?= $dest['id'] ?>">
 <button name="delete_destination" class="btn btn-danger btn-sm" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete this destination?', text: 'Only possible if no allocations are linked.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button>
 </form>
 <?php endif; ?>
@@ -8233,6 +8293,7 @@ function toggleBankFields(sel) {
 <div id="addAllocFormArea" style="display:<?= $edit_alloc ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
 <fieldset class="fieldset"><legend><?= $edit_alloc ? '✏ Edit Allocation' : '+ Add New Allocation' ?></legend>
 <form method="POST" action="index.php?page=money_tracking">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <?php if ($edit_alloc): ?><input type="hidden" name="id" value="<?= $edit_alloc['id'] ?>"><?php endif; ?>
 <div class="form-row">
 <div class="form-group" style="flex:2"><label>Sold Bike <span class="req">*</span></label>
@@ -8320,7 +8381,7 @@ updateAllocRemaining();
 <div class="actions-col">
 <?php if (has_permission($conn, 'money_tracking', 'edit')): ?><a href="index.php?page=money_tracking&edit_id=<?= $al['id'] ?>" class="btn btn-primary btn-sm">✏</a><?php endif; ?>
 <?php if (has_permission($conn, 'money_tracking', 'delete')): ?>
-<form method="POST" style="display:inline"><input type="hidden" name="id" value="<?= $al['id'] ?>">
+<form method="POST" style="display:inline"><input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>"><input type="hidden" name="id" value="<?= $al['id'] ?>">
 <button name="delete_allocation" class="btn btn-danger btn-sm" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete this allocation?', text: 'This will remove the money tracking record.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button>
 </form>
 <?php endif; ?>
@@ -8400,6 +8461,7 @@ updateAllocRemaining();
 <div id="addDepFormArea" style="display:<?= $edit_dep ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
 <fieldset class="fieldset"><legend><?= $edit_dep ? '✏ Edit Deposit' : '+ New Bank Deposit' ?></legend>
 <form method="POST" action="index.php?page=bank_deposits" enctype="multipart/form-data">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <?php if ($edit_dep): ?><input type="hidden" name="id" value="<?= $edit_dep['id'] ?>"><?php endif; ?>
 <div class="form-row">
 <div class="form-group" style="flex:2"><label>Destination (Bank) <span class="req">*</span></label>
@@ -8510,7 +8572,7 @@ function updateDepBikeRem(sel, idx) {
 <div class="actions-col">
 <?php if (has_permission($conn, 'bank_deposits', 'edit')): ?><a href="index.php?page=bank_deposits&edit_id=<?= $dep['id'] ?>" class="btn btn-primary btn-sm">✏</a><?php endif; ?>
 <?php if (has_permission($conn, 'bank_deposits', 'delete')): ?>
-<form method="POST" style="display:inline"><input type="hidden" name="id" value="<?= $dep['id'] ?>">
+<form method="POST" style="display:inline"><input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>"><input type="hidden" name="id" value="<?= $dep['id'] ?>">
 <button name="delete_deposit" class="btn btn-danger btn-sm" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete this deposit?', text: 'This will remove the deposit and its bike links.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button>
 </form>
 <?php endif; ?>
@@ -8534,6 +8596,7 @@ function updateDepBikeRem(sel, idx) {
         $s_absolute_timeout = get_setting('session_timeout_absolute') ?? '28800';
 ?>
 <form id="settingsForm" method="POST" enctype="multipart/form-data" class="animate__animated animate__fadeIn">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="save_settings" value="1">
 <fieldset class="fieldset"><legend>⚙ Company Settings</legend>
 <div class="form-row">
