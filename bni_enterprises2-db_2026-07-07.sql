@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3306
--- Generation Time: Jul 07, 2026 at 07:12 AM
+-- Generation Time: Jul 08, 2026 at 05:32 AM
 -- Server version: 8.2.0
 -- PHP Version: 8.3.0
 
@@ -474,7 +474,7 @@ CREATE TABLE `money_destinations` (
 --
 
 INSERT INTO `money_destinations` (`id`, `type`, `name`, `details`, `account_title`, `account_no`, `branch`, `opening_balance`, `contact_person`, `contact_phone`, `is_active`, `created_at`, `updated_at`) VALUES
-(1, 'bank', 'HBL - Habib Bank', 'Main Branch Account', NULL, NULL, NULL, 0.00, NULL, NULL, 1, '2026-05-16 12:10:44', '2026-05-16 12:10:44'),
+(1, 'bank', 'HBL - Habib Bank', 'Main Branch Account', 'Yasin Ullah', '003231665656555', 'Bannu Branch', 0.00, 'Khan', '03313626566', 1, '2026-05-16 12:10:44', '2026-07-07 10:31:07'),
 (2, 'bank', 'MCB - Muslim Commercial Bank', 'Business Account', NULL, NULL, NULL, 0.00, NULL, NULL, 1, '2026-05-16 12:10:44', '2026-05-16 12:10:44'),
 (3, 'bank', 'UBL - United Bank', 'Savings Account', NULL, NULL, NULL, 0.00, NULL, NULL, 1, '2026-05-16 12:10:44', '2026-05-16 12:10:44'),
 (4, 'person', 'Owner / Proprietor', 'Main business owner', NULL, NULL, NULL, 0.00, NULL, NULL, 1, '2026-05-16 12:10:44', '2026-05-16 12:10:44'),
@@ -788,6 +788,13 @@ CREATE TABLE `sale_money_allocations` (
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+--
+-- Dumping data for table `sale_money_allocations`
+--
+
+INSERT INTO `sale_money_allocations` (`id`, `bike_id`, `destination_id`, `amount`, `allocation_date`, `notes`, `created_by`, `created_at`, `updated_at`) VALUES
+(1, 40, 1, 320000.00, '2026-07-07', '', 1, '2026-07-07 10:48:23', '2026-07-07 10:48:23');
+
 -- --------------------------------------------------------
 
 --
@@ -1086,7 +1093,7 @@ ALTER TABLE `accessories`
 -- AUTO_INCREMENT for table `bank_deposits`
 --
 ALTER TABLE `bank_deposits`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT for table `bikes`
@@ -1116,7 +1123,7 @@ ALTER TABLE `customers`
 -- AUTO_INCREMENT for table `deposit_allocations`
 --
 ALTER TABLE `deposit_allocations`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT for table `gallery`
@@ -1206,7 +1213,7 @@ ALTER TABLE `sale_accessories`
 -- AUTO_INCREMENT for table `sale_money_allocations`
 --
 ALTER TABLE `sale_money_allocations`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT for table `settings`

@@ -2705,7 +2705,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         $st = $conn->prepare('UPDATE settings SET setting_value=? WHERE setting_key=?');
         foreach ($fields as $f) {
             if (isset($_POST[$f])) {
-                $val = sanitize($_POST[$f]);
+                $val = ($f === 'tax_rate') ? (string) ((float) $_POST[$f] / 100) : sanitize($_POST[$f]);
                 $st->bind_param('ss', $val, $f);
                 $st->execute();
             }
@@ -3568,6 +3568,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 minimumResultsForSearch: 10, placeholder: '-- Select --', allowClear: false, theme: 'default'
             });
         }
+    });
+    $(document).on('change', 'select[name^="bike_link"]', function() {
+        var m = this.name.match(/\[(\d+)\]/);
+        if (m) updateDepBikeRem(this, parseInt(m[1]));
+    });
+    $(document).on('input', 'input[name^="bike_link"][name$="[amount]"]', function() {
+        var m = this.name.match(/\[(\d+)\]/);
+        if (m) updateDepBikeRemFromAmount(this, parseInt(m[1]));
     });
     window.originalAlert = window.alert;
     window.alert = function(message) {
@@ -8413,11 +8421,17 @@ updateAllocRemaining();
         }
         $prefill_alloc_id = (int) ($_GET['prefill_alloc'] ?? 0);
         $prefill_alloc = null;
+        $prefill_remaining_amount = 0;
         if ($prefill_alloc_id && !$edit_dep_id) {
-            $pa = $conn->query("SELECT sma.*, md.type as dest_type FROM sale_money_allocations sma
+            $pa = $conn->query("SELECT sma.*, md.type as dest_type,
+                COALESCE((SELECT SUM(da.amount) FROM deposit_allocations da WHERE da.allocation_id=sma.id),0) as already_deposited
+                FROM sale_money_allocations sma
                 LEFT JOIN money_destinations md ON sma.destination_id=md.id
                 WHERE sma.id=$prefill_alloc_id");
             $prefill_alloc = $pa ? $pa->fetch_assoc() : null;
+            if ($prefill_alloc) {
+                $prefill_remaining_amount = max(0, (float) $prefill_alloc['amount'] - (float) $prefill_alloc['already_deposited']);
+            }
         }
         $filter_dest_dep = (int) ($_GET['filter_dest'] ?? 0);
         $filter_type_dep = sanitize($_GET['filter_type'] ?? '');
@@ -8483,7 +8497,7 @@ updateAllocRemaining();
 </select>
 </div>
 <div class="form-group"><label>Date <span class="req">*</span></label><input type="date" name="deposit_date" required value="<?= $edit_dep ? $edit_dep['deposit_date'] : ($prefill_alloc ? $prefill_alloc['allocation_date'] : date('Y-m-d')) ?>"></div>
-<div class="form-group"><label>Amount (<?= $currency ?>) <span class="req">*</span></label><input type="number" name="amount" step="0.01" min="0.01" required value="<?= $edit_dep ? $edit_dep['amount'] : ($prefill_alloc ? $prefill_alloc['amount'] : '') ?>" placeholder="0.00"></div>
+<div class="form-group"><label>Amount (<?= $currency ?>) <span class="req">*</span></label><input type="number" name="amount" step="0.01" min="0.01" required value="<?= $edit_dep ? $edit_dep['amount'] : ($prefill_alloc ? $prefill_remaining_amount : '') ?>" placeholder="0.00"></div>
 </div>
 <div class="form-row">
 <div class="form-group"><label>Deposit Type <span class="req">*</span></label>
@@ -8524,7 +8538,7 @@ updateAllocRemaining();
 var depBikeOptions = <?= json_encode($sold_bikes_deps_arr) ?>;
 var depBikeIdx = 0;
 <?php if ($prefill_alloc): ?>var prefillBikeId = <?= (int) $prefill_alloc['bike_id'] ?>;
-var prefillAmount = <?= (float) $prefill_alloc['amount'] ?>;
+var prefillAmount = <?= $prefill_remaining_amount ?>;
 <?php else: ?>var prefillBikeId = 0;
 var prefillAmount = 0;
 <?php endif; ?>
@@ -8541,20 +8555,36 @@ function addDepBikeLinkRow() {
     row.className = 'form-row';
     row.style.alignItems = 'flex-end';
     row.id = 'depBikeLinkRow_'+idx;
-    row.innerHTML = '<div class="form-group" style="flex:3"><label>Bike</label><select name="bike_link['+idx+'][bike_id]" onchange="updateDepBikeRem(this,'+idx+')">'+opts+'</select></div>'
+    row.innerHTML = '<div class="form-group" style="flex:3"><label>Bike</label><select name="bike_link['+idx+'][bike_id]">'+opts+'</select></div>'
         + '<div class="form-group"><label>Amount (<?= $currency ?>)</label><input type="number" name="bike_link['+idx+'][amount]" step="0.01" min="0" placeholder="0.00"></div>'
         + '<div class="form-group"><label>Remaining</label><span id="depBikeRem_'+idx+'" style="font-size:0.85rem;color:var(--text3);display:block;padding-top:6px">—</span></div>'
         + '<div class="form-group"><button type="button" class="btn btn-danger btn-sm" onclick="document.getElementById(\'depBikeLinkRow_'+idx+'\').remove()">✕</button></div>';
     container.appendChild(row);
 }
 function updateDepBikeRem(sel, idx) {
-    var opt = sel.options[sel.selectedIndex];
     var rem = document.getElementById('depBikeRem_'+idx);
-    if (opt && opt.value) {
-        var remaining = parseFloat(opt.dataset.remaining || 0);
-        rem.innerHTML = '<strong style="color:'+(remaining>0?'var(--warning)':'var(--success)')+'"><?= $currency ?> '+remaining.toLocaleString()+'</strong>';
+    var row = sel.closest('.form-row');
+    var amtInput = row ? row.querySelector('input[name$="[amount]"]') : null;
+    if (sel.value) {
+        var opt = Array.from(sel.options).find(function(o) { return o.value == sel.value; });
+        if (opt) {
+            var remaining = parseFloat(opt.dataset.remaining || 0);
+            var amt = amtInput ? (parseFloat(amtInput.value) || 0) : 0;
+            var displayRem = Math.max(0, remaining - amt);
+            rem.innerHTML = '<strong style="color:'+(displayRem>0?'var(--warning)':'var(--success)')+'"><?= $currency ?> '+displayRem.toLocaleString()+'</strong>';
+            if (amtInput) amtInput.max = remaining;
+        } else {
+            rem.innerHTML = '—';
+        }
     } else {
         rem.innerHTML = '—';
+    }
+}
+function updateDepBikeRemFromAmount(input, idx) {
+    var row = input.closest('.form-row');
+    var select = row ? row.querySelector('select[name$="[bike_id]"]') : null;
+    if (select) {
+        updateDepBikeRem(select, idx);
     }
 }
 if (prefillBikeId > 0) {
@@ -8565,15 +8595,12 @@ if (prefillBikeId > 0) {
             var select = container.querySelector('select[name$="[bike_id]"]');
             var amtInput = container.querySelector('input[name$="[amount]"]');
             if (select) {
-                for (var i = 0; i < select.options.length; i++) {
-                    if (select.options[i].value == prefillBikeId) {
-                        select.selectedIndex = i;
-                        select.dispatchEvent(new Event('change'));
-                        break;
-                    }
-                }
+                $(select).val(prefillBikeId).trigger('change');
             }
-            if (amtInput) amtInput.value = prefillAmount.toFixed(2);
+            if (amtInput) {
+                amtInput.value = prefillAmount.toFixed(2);
+                amtInput.dispatchEvent(new Event('input', { bubbles: true }));
+            }
         }
     }, 100);
 }
@@ -8622,7 +8649,7 @@ if (prefillBikeId > 0) {
     elseif ($page === 'settings'):
         $s_company = get_setting('company_name') ?? 'BNI Enterprises';
         $s_branch = get_setting('branch_name') ?? 'Dera (Ahmed Metro)';
-        $s_tax = get_setting('tax_rate') ?? '0.1';
+        $s_tax = ((float) (get_setting('tax_rate') ?? 0.1)) * 100;
         $s_curr = get_setting('currency') ?? 'Rs.';
         $s_taxon = get_setting('tax_on') ?? 'purchase_price';
         $s_show_pp = get_setting('show_purchase_on_invoice') ?? '0';
