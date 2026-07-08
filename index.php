@@ -1549,7 +1549,8 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     $errors_list[] = 'Bike entry requires Chassis, Model, and Purchase Price. Skipping incomplete bike.';
                     continue;
                 }
-                $tax = ($pp * $tax_rate);
+                $base_tax = ($tax_on === 'selling_price') ? 0 : $pp;
+                $tax = ($base_tax * $tax_rate);
                 $bike_stmt->bind_param('issssisddsss', $po_id, $order_date, $inventory_date, $chassis, $motor, $model_id, $color, $pp, $tax, $safe_notes, $bnotes, $bike_img);
                 if (!$bike_stmt->execute()) {
                     $errors_list[] = "Chassis $chassis: Could not be saved (duplicate or database constraint error).";
@@ -2091,7 +2092,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     throw new Exception('Bike not found for return.');
                 }
                 $full_reversal_amount = $bike_info['purchase_price'];
-                $st = $conn->prepare("UPDATE bikes SET status='returned_to_supplier', return_date=?, return_amount=?, return_notes=? WHERE id=? AND status='in_stock'");
+                $st = $conn->prepare("UPDATE bikes SET status='returned_to_supplier', return_date=?, return_amount=?, return_notes=?, tax_amount=0 WHERE id=? AND status='in_stock'");
                 $st->bind_param('sdsi', $return_date, $return_amount, $return_notes, $bike_id);
                 $st->execute();
                 if ($st->affected_rows === 0) {
@@ -2146,7 +2147,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $acc_q = $conn->query("SELECT SUM(final_price) as total_acc FROM sale_accessories WHERE bike_id=$bike_id");
             $acc_total = $acc_q ? (float) ($acc_q->fetch_assoc()['total_acc'] ?? 0) : 0;
             $full_reversal_amount = $bike_info['selling_price'] + $acc_total;
-            $st = $conn->prepare("UPDATE bikes SET status='returned', return_date=?, return_amount=?, return_notes=? WHERE id=? AND status='sold'");
+            $st = $conn->prepare("UPDATE bikes SET status='returned', return_date=?, return_amount=?, return_notes=?, tax_amount=0, margin=0 WHERE id=? AND status='sold'");
             $st->bind_param('sdsi', $return_date, $return_amount, $return_notes, $bike_id);
             $st->execute();
             if ($st->affected_rows === 0) {
@@ -2684,10 +2685,10 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             if (!empty($ids)) {
                 $id_str = implode(',', $ids);
                 $er = $conn->query("SELECT b.*, m.model_name, m.model_code FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.id IN ($id_str)");
-                $csv_data = "Sr,Chassis,Motor,Model,Color,Purchase Price,Status,Selling Price,Selling Date,Margin\n";
+                $csv_data = "Sr,Chassis,Motor,Model,Color,Purchase Price,Tax,Status,Selling Price,Selling Date,Margin\n";
                 $sr = 1;
                 while ($row = $er->fetch_assoc()) {
-                    $csv_data .= "$sr,{$row['chassis_number']},{$row['motor_number']},{$row['model_name']},{$row['color']},{$row['purchase_price']},{$row['status']},{$row['selling_price']},{$row['selling_date']},{$row['margin']}\n";
+                    $csv_data .= "$sr,{$row['chassis_number']},{$row['motor_number']},{$row['model_name']},{$row['color']},{$row['purchase_price']},{$row['tax_amount']},{$row['status']},{$row['selling_price']},{$row['selling_date']},{$row['margin']}\n";
                     $sr++;
                 }
                 header('Content-Type: text/csv');
@@ -2994,10 +2995,10 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         $er = $conn->query("SELECT b.*, m.model_name, m.model_code, c.name as cust_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id WHERE $where ORDER BY b.id DESC");
         header('Content-Type: text/csv');
         header('Content-Disposition: attachment; filename="inventory_' . date('Ymd') . '.csv"');
-        echo "Sr,Chassis,Motor,Model,Color,Purchase Price,Status,Selling Price,Selling Date,Customer,Margin\n";
+        echo "Sr,Chassis,Motor,Model,Color,Purchase Price,Tax,Status,Selling Price,Selling Date,Customer,Margin\n";
         $sr = 1;
         while ($row = $er->fetch_assoc()) {
-            echo "$sr,\"{$row['chassis_number']}\",\"{$row['motor_number']}\",\"{$row['model_name']}\",\"{$row['color']}\",{$row['purchase_price']},{$row['status']},{$row['selling_price']},\"{$row['selling_date']}\",\"{$row['cust_name']}\",{$row['margin']}\n";
+            echo "$sr,\"{$row['chassis_number']}\",\"{$row['motor_number']}\",\"{$row['model_name']}\",\"{$row['color']}\",{$row['purchase_price']},{$row['tax_amount']},{$row['status']},{$row['selling_price']},\"{$row['selling_date']}\",\"{$row['cust_name']}\",{$row['margin']}\n";
             $sr++;
         }
         exit;
@@ -4707,6 +4708,7 @@ $(document).ready(function() {
 <th>Model</th>
 <th>Color</th>
 <th>Purchase Price</th>
+<th>Tax</th>
 <th>Status</th>
 <th>Selling Price</th>
 <th>Selling Date</th>
@@ -4720,11 +4722,13 @@ $(document).ready(function() {
             $total_pp = 0;
             $total_sp = 0;
             $total_mg = 0;
+            $total_tax = 0;
             while ($bike = $bikes_result->fetch_assoc()):
                 $st_badge = $bike['status'] === 'sold' ? 'badge-success' : (in_array($bike['status'], ['returned', 'returned_to_supplier']) ? 'badge-danger' : ($bike['status'] === 'damaged_lost' ? 'badge-dark' : ($bike['status'] === 'reserved' ? 'badge-warning' : 'badge-info')));
                 $total_pp += $bike['purchase_price'];
                 $total_sp += $bike['selling_price'] ?? 0;
                 $total_mg += $bike['margin'] ?? 0;
+                $total_tax += $bike['tax_amount'] ?? 0;
                 ?>
 <tr class="row-<?= $bike['status'] ?>">
 <td><input type="checkbox" name="selected_bikes[]" value="<?= $bike['id'] ?>" class="bike-check"></td>
@@ -4735,6 +4739,7 @@ $(document).ready(function() {
 <td><?= sanitize($bike['model_name'] ?? '-') ?></td>
 <td><?= sanitize($bike['color'] ?? '-') ?></td>
 <td><?= fmt_money($bike['purchase_price']) ?></td>
+<td><?= $bike['tax_amount'] > 0 ? fmt_money($bike['tax_amount']) : '-' ?></td>
 <td><span class="badge <?= $st_badge ?>"><?= strtoupper($bike['status']) ?></span></td>
 <td><?= $bike['selling_price'] ? fmt_money($bike['selling_price']) : '-' ?></td>
 <td><?= fmt_date($bike['selling_date']) ?></td>
@@ -4778,6 +4783,7 @@ $(document).ready(function() {
 <tr>
 <td colspan="7"><strong>PAGE TOTAL</strong></td>
 <td><strong><?= fmt_money($total_pp) ?></strong></td>
+<td><strong><?= fmt_money($total_tax) ?></strong></td>
 <td></td>
 <td><strong><?= fmt_money($total_sp) ?></strong></td>
 <td></td>
@@ -5077,7 +5083,7 @@ function addMoneyAllocRow() {
             <tbody>
                 <?php if ($show_pp): ?><tr><td>Purchase Price</td><td style="text-align:right"><?= fmt_money($inv['purchase_price']) ?></td></tr><?php endif; ?>
                 <tr><td><strong>Total Sale Price</strong></td><td style="text-align:right"><strong><?= fmt_money($inv['selling_price'] + ($sold_acc_r->num_rows > 0 ? 0 : 0) /* Acc already included in ledger */) ?></strong></td></tr>
-                <tr><td>Tax (<?= get_setting('tax_rate') * 100 ?? 0.1 ?>%)</td><td style="text-align:right"><?= fmt_money($inv['tax_amount']) ?></td></tr>
+                <tr><td>Tax (<?= (get_setting('tax_rate') ?? 0.1) * 100 ?>%)</td><td style="text-align:right"><?= fmt_money($inv['tax_amount']) ?></td></tr>
                 <?php if ($dp_amount > 0): ?><tr><td>Down Payment Received</td><td style="text-align:right; color:green;">- <?= fmt_money($dp_amount) ?></td></tr><?php endif; ?>
                 <?php if ($total_installments > 0): ?><tr><td>Total Installments Plan</td><td style="text-align:right"><?= fmt_money($total_installments) ?></td></tr><?php endif; ?>
                 <?php if ($total_paid_installments > 0): ?><tr><td>Installments Paid</td><td style="text-align:right; color:green;">- <?= fmt_money($total_paid_installments) ?></td></tr><?php endif; ?>
@@ -6061,6 +6067,10 @@ $(document).ready(function() {
         $rep_to = (!empty($_GET['rep_to']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['rep_to'])) ? $_GET['rep_to'] : date('Y-12-31');
         $rep_year = !empty($_GET['rep_year']) ? (int) $_GET['rep_year'] : (int) date('Y');
         $rep_month = !empty($_GET['rep_month']) ? (int) $_GET['rep_month'] : (int) date('n');
+        $dep_type = sanitize($_GET['dep_type'] ?? '');
+        $dest_id = (int) ($_GET['dest_id'] ?? 0);
+        $deposited_by = sanitize($_GET['deposited_by'] ?? '');
+        $ref_no = sanitize($_GET['ref_no'] ?? '');
 ?>
 <div class="sub-tabs no-print animate__animated animate__fadeInDown">
 <?php
@@ -6084,7 +6094,7 @@ $(document).ready(function() {
         ];
         foreach ($sub_items as $si):
             ?>
-<a href="index.php?page=reports&sub=<?= $si[0] ?>&rep_from=<?= $rep_from ?>&rep_to=<?= $rep_to ?>&rep_year=<?= $rep_year ?>&rep_month=<?= $rep_month ?>" class="sub-tab <?= $sub === $si[0] ? 'active' : '' ?>"><?= $si[1] ?></a>
+<a href="index.php?page=reports&sub=<?= $si[0] ?>&rep_from=<?= $rep_from ?>&rep_to=<?= $rep_to ?>&rep_year=<?= $rep_year ?>&rep_month=<?= $rep_month ?>&dep_type=<?= $dep_type ?>&dest_id=<?= $dest_id ?>&deposited_by=<?= urlencode($deposited_by) ?>&ref_no=<?= urlencode($ref_no) ?>" class="sub-tab <?= $sub === $si[0] ? 'active' : '' ?>"><?= $si[1] ?></a>
 <?php endforeach; ?>
 </div>
 <div class="filter-bar no-print animate__animated animate__fadeInLeft">
@@ -6101,6 +6111,30 @@ $(document).ready(function() {
 <?php endfor; ?>
 </select>
 </div>
+<?php if ($sub === 'bank_deposits_report'): ?>
+<div class="form-group"><label>Type</label>
+<select name="dep_type">
+<option value="">All Types</option>
+<option value="cash" <?= $dep_type === 'cash' ? 'selected' : '' ?>>Cash</option>
+<option value="cheque" <?= $dep_type === 'cheque' ? 'selected' : '' ?>>Cheque</option>
+<option value="transfer" <?= $dep_type === 'transfer' ? 'selected' : '' ?>>Transfer</option>
+<option value="online" <?= $dep_type === 'online' ? 'selected' : '' ?>>Online</option>
+<option value="other" <?= $dep_type === 'other' ? 'selected' : '' ?>>Other</option>
+</select>
+</div>
+<div class="form-group"><label>Destination</label>
+<select name="dest_id">
+<option value="0">All Destinations</option>
+<?php
+$dest_q = $conn->query("SELECT id, name, account_no FROM money_destinations WHERE (is_active=1 OR is_active IS NULL) ORDER BY name");
+while ($d = $dest_q->fetch_assoc()):
+?><option value="<?= $d['id'] ?>" <?= $dest_id == $d['id'] ? 'selected' : '' ?>><?= sanitize($d['name']) ?> (<?= sanitize($d['account_no'] ?: 'N/A') ?>)</option>
+<?php endwhile; ?>
+</select>
+</div>
+<div class="form-group"><label>Deposited By</label><input type="text" name="deposited_by" value="<?= sanitize($deposited_by) ?>" placeholder="Name" style="min-width:120px"></div>
+<div class="form-group"><label>Ref #</label><input type="text" name="ref_no" value="<?= sanitize($ref_no) ?>" placeholder="Reference" style="min-width:120px"></div>
+<?php endif; ?>
 <button type="submit" class="btn btn-primary btn-sm" style="align-self:flex-end">🔍 Filter</button>
 </form>
 <button onclick="window.print()" class="btn btn-default btn-sm" style="align-self:flex-end">🖨 Print</button>
@@ -6243,7 +6277,7 @@ $(document).ready(function() {
 <fieldset class="fieldset animate__animated animate__fadeInUp"><legend>🧾 Tax Report by Month</legend>
 <div class="data-table-wrap">
 <table class="data-table">
-<thead><tr><th>Month</th><th>Bikes Sold</th><th>Total Purchase Value</th><th>Tax Amount (<?= get_setting('tax_rate') * 100 ?? 0.1 ?>%)</th></tr></thead>
+<thead><tr><th>Month</th><th>Bikes Sold</th><th>Total Purchase Value</th><th>Tax Amount (<?= (get_setting('tax_rate') ?? 0.1) * 100 ?>%)</th></tr></thead>
 <tbody>
 <?php
             while ($tr = $tax_result->fetch_assoc()):
@@ -6797,6 +6831,19 @@ $(document).ready(function() {
 </fieldset>
 <?php
         elseif ($sub === 'bank_deposits_report'):
+            $dep_where = ["bd.deposit_date BETWEEN '" . mysqli_real_escape_string($conn, $rep_from) . "' AND '" . mysqli_real_escape_string($conn, $rep_to) . "'"];
+            if (!empty($dep_type)) {
+                $dep_where[] = "bd.deposit_type = '" . mysqli_real_escape_string($conn, $dep_type) . "'";
+            }
+            if ($dest_id > 0) {
+                $dep_where[] = "bd.destination_id = $dest_id";
+            }
+            if (!empty($deposited_by)) {
+                $dep_where[] = "bd.deposited_by LIKE '%" . mysqli_real_escape_string($conn, $deposited_by) . "%'";
+            }
+            if (!empty($ref_no)) {
+                $dep_where[] = "bd.reference_no LIKE '%" . mysqli_real_escape_string($conn, $ref_no) . "%'";
+            }
             $dep_report_q = $conn->query("SELECT bd.*, md.name as dest_name, md.account_no,
                 COUNT(da.id) as bike_link_count,
                 GROUP_CONCAT(DISTINCT CONCAT(b.chassis_number, ' (', COALESCE(da.amount,0), ')') SEPARATOR ', ') as bike_details
@@ -6804,7 +6851,7 @@ $(document).ready(function() {
                 LEFT JOIN money_destinations md ON bd.destination_id=md.id
                 LEFT JOIN deposit_allocations da ON da.deposit_id=bd.id
                 LEFT JOIN bikes b ON da.bike_id=b.id
-                WHERE bd.deposit_date BETWEEN '" . mysqli_real_escape_string($conn, $rep_from) . "' AND '" . mysqli_real_escape_string($conn, $rep_to) . "'
+                WHERE " . implode(" AND ", $dep_where) . "
                 GROUP BY bd.id ORDER BY bd.deposit_date DESC");
             $dep_grand = 0;
             $dep_counts = ['cash' => 0, 'cheque' => 0, 'transfer' => 0, 'online' => 0, 'other' => 0];
