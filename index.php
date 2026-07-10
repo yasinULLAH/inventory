@@ -2516,16 +2516,16 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     }
                     if ($receipt_path) {
                         $stmt = $conn->prepare('UPDATE bank_deposits SET destination_id=?, deposit_date=?, amount=?, deposit_type=?, reference_no=?, receipt_image=?, deposited_by=?, notes=? WHERE id=?');
-                        $stmt->bind_param('isidssssi', $destination_id, $deposit_date, $amount, $deposit_type, $reference_no, $receipt_path, $deposited_by, $notes, $id);
+                        $stmt->bind_param('isdsssssi', $destination_id, $deposit_date, $amount, $deposit_type, $reference_no, $receipt_path, $deposited_by, $notes, $id);
                     } else {
                         $stmt = $conn->prepare('UPDATE bank_deposits SET destination_id=?, deposit_date=?, amount=?, deposit_type=?, reference_no=?, deposited_by=?, notes=? WHERE id=?');
-                        $stmt->bind_param('isidsssi', $destination_id, $deposit_date, $amount, $deposit_type, $reference_no, $deposited_by, $notes, $id);
+                        $stmt->bind_param('isdssssi', $destination_id, $deposit_date, $amount, $deposit_type, $reference_no, $deposited_by, $notes, $id);
                     }
                     $stmt->execute();
                     $msg = 'Deposit updated successfully.';
                 } else {
                     $stmt = $conn->prepare('INSERT INTO bank_deposits (destination_id, deposit_date, amount, deposit_type, reference_no, receipt_image, deposited_by, notes, created_by) VALUES (?,?,?,?,?,?,?,?,?)');
-                    $stmt->bind_param('isidssssi', $destination_id, $deposit_date, $amount, $deposit_type, $reference_no, $receipt_path, $deposited_by, $notes, $created_by);
+                    $stmt->bind_param('isdsssssi', $destination_id, $deposit_date, $amount, $deposit_type, $reference_no, $receipt_path, $deposited_by, $notes, $created_by);
                     $stmt->execute();
                     $deposit_id = $conn->insert_id;
                     $msg = 'Deposit recorded successfully.';
@@ -8607,6 +8607,7 @@ function addDepBikeLinkRow() {
         + '<div class="form-group"><label>Remaining</label><span id="depBikeRem_'+idx+'" style="font-size:0.85rem;color:var(--text3);display:block;padding-top:6px">—</span></div>'
         + '<div class="form-group"><button type="button" class="btn btn-danger btn-sm" onclick="document.getElementById(\'depBikeLinkRow_'+idx+'\').remove()">✕</button></div>';
     container.appendChild(row);
+    $(row).find('select').select2('destroy').select2({ minimumResultsForSearch: 10, placeholder: '-- Select --', allowClear: false, theme: 'default' });
 }
 function updateDepBikeRem(sel, idx) {
     var rem = document.getElementById('depBikeRem_'+idx);
