@@ -170,6 +170,8 @@ The **BNI Enterprises BDMS** is an enterprise-grade inventory and financial mana
 **English:**
 - **Sale Allocations:** Track where each sale's money goes — to bank, person, or wallet.
 - **Multiple Allocations:** One sale can be split across multiple destinations.
+- **Smart Bike Filtering:** Dropdown only shows bikes that still have remaining amount to allocate — fully tracked bikes are hidden automatically.
+- **Auto-Fill Amount:** When a bike is selected, the amount field auto-fills with the full remaining amount by default — no manual typing needed.
 - **Deposit Status:** Shows what percentage of allocation has been deposited to bank.
 - **Inline Sale Entry:** Optional collapsible section during sale to track destinations.
 - **Reports:** Money by Destination, Money by Sale, Untracked Sales, Money Flow.
@@ -185,6 +187,10 @@ The **BNI Enterprises BDMS** is an enterprise-grade inventory and financial mana
 - **Deposit Recording:** Record actual bank deposits with date, amount, deposit type (cash/cheque/transfer/online), reference number.
 - **Receipt Upload:** Upload bank slip images (auto-compressed to max 200KB).
 - **Link to Sales:** Link deposits to specific bike sale allocations — track which sale money went into which deposit.
+- **Smart Bike Selection:** Dropdown only shows bikes that have been allocated to the selected bank destination and still have undeposited amount remaining.
+- **Auto-Fill Amount:** When a bike is linked, the amount field auto-fills with the full remaining deposit amount; you can adjust it as needed.
+- **Amount Validation:** Client-side clamping prevents entering more than the bike's remaining deposit amount.
+- **Searchable Dropdowns:** All bike selection dropdowns use Select2 with search — easy to find bikes even as the list grows.
 - **Pending Deposit Tracking:** Dashboard shows total allocated but undeposited amount.
 
 **اردو:**

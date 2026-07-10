@@ -40,7 +40,7 @@ This is the exhaustive, complete, and definitive master documentation for the **
 ## 2. Technical Architecture & System Requirements
 - **Backend:** PHP (7.4 or 8.x compatibility).
 - **Database:** MySQL 5.7+ or MariaDB.
-- **Frontend Stack:** HTML5, CSS3 (Vanilla + Custom CSS Variables), JavaScript (ES6), jQuery, Select2 (Dropdowns), DataTables (Grids), SweetAlert2 (Notifications).
+- **Frontend Stack:** HTML5, CSS3 (Vanilla + Custom CSS Variables), JavaScript (ES6), jQuery, Select2 (Dropdowns with live search), DataTables (Grids with responsive design), SweetAlert2 (Notifications).
 - **Security Protocols:**
   - Password Hashing: `PASSWORD_DEFAULT` (Bcrypt).
   - CSRF Protection: Unique tokens per session validated on every POST request.
@@ -208,6 +208,10 @@ The system uses a strict RBAC engine.
 **Purpose:** Record actual bank deposits and link to sale allocations.
 - **Deposit Fields:** Destination (bank), date, amount, deposit type (cash/cheque/transfer/online), reference, receipt image upload (auto-compressed), deposited by, notes.
 - **Link to Sales:** Select which bike sale allocations are covered by this deposit.
+- **Smart Bike Selection:** Dropdown only shows bikes that have been allocated (tracked) to the selected bank destination and still have undeposited remaining amount.
+- **Auto-Fill Amount:** When linking a bike, the amount field auto-fills with the full remaining deposit amount; you can adjust it as needed.
+- **Amount Validation:** Client-side clamping prevents entering more than the bike's remaining deposit amount.
+- **Searchable Dropdowns:** All bike selection dropdowns use Select2 with search — easy to find bikes even as the list grows.
 - **Deposit Status:** See deposit progress per allocation (Deposited/Partial/Pending).
 - **Dashboard Widget:** Pending bank deposit total.
 - **Report:** Date-range filtering, breakdown by deposit type, per-deposit sale linkage.
@@ -236,6 +240,8 @@ The system uses a strict RBAC engine.
 - Full CRUD on allocations at any time after sale.
 - Inline allocation during sale entry (collapsible section).
 - Audit trail: created_by tracking.
+- **Smart Bike Filtering:** The bike dropdown only shows sold bikes that are not yet fully allocated — fully tracked bikes are hidden automatically.
+- **Auto-Fill Amount:** Selecting a bike auto-fills the amount field with its remaining (unallocated) sale value, reducing manual entry.
 
 **Reports (4 Sub-tabs):**
   - Money by Destination: Per-destination totals with date filtering.
