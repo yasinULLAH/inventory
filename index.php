@@ -3501,27 +3501,29 @@ document.addEventListener('DOMContentLoaded', function() {
         urlParams.delete('err');
         window.history.replaceState(null, '', window.location.pathname + '?' + urlParams.toString());
     }
-    $('table.data-table:not(.no-dt)').DataTable({
-        responsive: true,
-        pagingType: 'full_numbers',
-        lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
-        pageLength: 100,
-        stateSave: true,
-        language: {
-            search: "_INPUT_",
-            searchPlaceholder: "Search records...",
-            lengthMenu: "_MENU_",
-            paginate: {
-                first: "«",
-                last: "»",
-                next: "›",
-                previous: "‹"
-            }
-        },
-        columnDefs: [
-            { targets: 'no-sort', orderable: false }
-        ]
-    });
+    try {
+        $('table.data-table:not(.no-dt)').DataTable({
+            responsive: true,
+            pagingType: 'full_numbers',
+            lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
+            pageLength: 100,
+            stateSave: true,
+            language: {
+                search: "_INPUT_",
+                searchPlaceholder: "Search records...",
+                lengthMenu: "_MENU_",
+                paginate: {
+                    first: "«",
+                    last: "»",
+                    next: "›",
+                    previous: "‹"
+                }
+            },
+            columnDefs: [
+                { targets: 'no-sort', orderable: false }
+            ]
+        });
+    } catch (e) { console.warn('DataTable init error:', e); }
     $('select:not([name$="_length"]):not(.swal2-select)').select2({
         minimumResultsForSearch: 10, 
         placeholder: '-- Select --',
@@ -3564,9 +3566,11 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     $(document).on('draw.dt responsive-display.dt', function() { injectCsrf(); });
     $(document).on('DOMNodeInserted', function(e) {
-        if (e.target && e.target.nodeType === 1) {
-            $(e.target).find('select:not([name$="_length"]):not(.swal2-select)').select2({
-                minimumResultsForSearch: 10, placeholder: '-- Select --', allowClear: false, theme: 'default'
+        if (e.target && e.target.nodeType === 1 && !$(e.target).closest('.dataTable, .select2-container').length) {
+            $(e.target).find('select:not([name$="_length"]):not(.swal2-select)').each(function() {
+                if (!$(this).data('select2')) {
+                    $(this).select2({ minimumResultsForSearch: 10, placeholder: '-- Select --', allowClear: false, theme: 'default' });
+                }
             });
         }
     });
@@ -4352,6 +4356,7 @@ function addPaymentRow() {
         <div class="form-group"><label>Cheque Date</label><input type="date" name="payments[${paymentCount}][cheque_date]"></div>
     </div>`;
     document.getElementById('paymentsList').appendChild(d);
+    $(d).find('select').select2({ minimumResultsForSearch: 10, placeholder: '-- Select --', allowClear: false, theme: 'default' });
     if (typeof updatePurchaseTotals === 'function') updatePurchaseTotals(true);
 }
 function togglePaymentFields(selectElement, index) {
@@ -4989,6 +4994,7 @@ function addMoneyAllocRow() {
         + '<div class="form-group"><label>Notes</label><input type="text" name="money_alloc['+idx+'][notes]" placeholder="Optional note"></div>'
         + '<div class="form-group"><button type="button" class="btn btn-danger btn-sm" onclick="document.getElementById(\'moneyAllocRow_'+idx+'\').remove()">✕</button></div>';
     container.appendChild(row);
+    $(row).find('select').select2({ minimumResultsForSearch: 10, placeholder: '-- Select --', allowClear: false, theme: 'default' });
 }
 </script>
 <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -8446,7 +8452,7 @@ updateAllocRemaining();
 </tr>
 <?php endwhile; ?>
 </tbody>
-<tfoot><tr><td colspan="3"><strong>TOTAL</strong></td><td><strong><?= fmt_money($page_alloc_total) ?></strong></td><td colspan="4"></td></tr></tfoot>
+<tfoot><tr><td colspan="3"><strong>TOTAL</strong></td><td><strong><?= fmt_money($page_alloc_total) ?></strong></td><td colspan="5"></td></tr></tfoot>
 </table>
 </div>
 <?php
