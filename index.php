@@ -8287,7 +8287,9 @@ function toggleBankFields(sel) {
             COALESCE((SELECT SUM(amount) FROM sale_money_allocations WHERE bike_id=b.id),0) as allocated,
             COALESCE((SELECT SUM(sa2.final_price) FROM sale_accessories sa2 WHERE sa2.bike_id=b.id),0) as acc_total
             FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id
-            WHERE b.status='sold' ORDER BY b.selling_date DESC");
+            WHERE b.status='sold'
+            HAVING (b.selling_price + COALESCE((SELECT SUM(sa2.final_price) FROM sale_accessories sa2 WHERE sa2.bike_id=b.id),0)) > allocated
+            ORDER BY b.selling_date DESC");
         $sold_bikes_arr = [];
         while ($sb = $sold_bikes->fetch_assoc())
             $sold_bikes_arr[] = $sb;
@@ -8399,13 +8401,16 @@ function updateAllocRemaining() {
     var sel = document.getElementById('allocBikeSelect');
     var opt = sel.options[sel.selectedIndex];
     var info = document.getElementById('allocRemainingInfo');
+    var amtInput = document.querySelector('input[name="amount"]');
     if (opt && opt.value) {
         var total = parseFloat(opt.dataset.total||0);
         var allocated = parseFloat(opt.dataset.allocated||0);
         var remaining = parseFloat(opt.dataset.remaining||0);
         info.innerHTML = '<strong>Sale Total:</strong> <?= $currency ?> '+total.toLocaleString()+' | <strong>Already Allocated:</strong> <?= $currency ?> '+allocated.toLocaleString()+' | <strong style="color:'+(remaining>0?'var(--warning)':'var(--success)')+'">Remaining:</strong> <?= $currency ?> '+remaining.toLocaleString();
+        if (amtInput) amtInput.value = remaining.toFixed(2);
     } else {
         info.innerHTML = '';
+        if (amtInput) amtInput.value = '';
     }
 }
 updateAllocRemaining();
@@ -8460,9 +8465,12 @@ updateAllocRemaining();
         $bank_dests = $conn->query("SELECT id, name, account_title, account_no FROM money_destinations WHERE type='bank' AND is_active=1 ORDER BY name");
         $sold_bikes_deps = $conn->query("SELECT b.id, b.chassis_number, b.selling_price, b.selling_date, m.model_name, c.name as cust_name,
             COALESCE((SELECT SUM(sa2.final_price) FROM sale_accessories sa2 WHERE sa2.bike_id=b.id),0) as acc_total,
+            COALESCE((SELECT SUM(sma.amount) FROM sale_money_allocations sma WHERE sma.bike_id=b.id),0) as total_allocated,
             COALESCE((SELECT SUM(da.amount) FROM deposit_allocations da WHERE da.bike_id=b.id),0) as total_deposited
             FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id
-            WHERE b.status='sold' ORDER BY b.selling_date DESC");
+            WHERE b.status='sold'
+            HAVING total_allocated > total_deposited
+            ORDER BY b.selling_date DESC");
         $sold_bikes_deps_arr = [];
         while ($sbd = $sold_bikes_deps->fetch_assoc())
             $sold_bikes_deps_arr[] = $sbd;
@@ -8613,9 +8621,9 @@ function addDepBikeLinkRow() {
         + '<div class="form-group"><label>Remaining</label><span id="depBikeRem_'+idx+'" style="font-size:0.85rem;color:var(--text3);display:block;padding-top:6px">—</span></div>'
         + '<div class="form-group"><button type="button" class="btn btn-danger btn-sm" onclick="document.getElementById(\'depBikeLinkRow_'+idx+'\').remove()">✕</button></div>';
     container.appendChild(row);
-    $(row).find('select').select2('destroy').select2({ minimumResultsForSearch: 10, placeholder: '-- Select --', allowClear: false, theme: 'default' });
+    $(row).find('select').select2({ minimumResultsForSearch: 10, placeholder: '-- Select --', allowClear: false, theme: 'default' });
 }
-function updateDepBikeRem(sel, idx) {
+function updateDepBikeRem(sel, idx, noFill) {
     var rem = document.getElementById('depBikeRem_'+idx);
     var row = sel.closest('.form-row');
     var amtInput = row ? row.querySelector('input[name$="[amount]"]') : null;
@@ -8623,10 +8631,11 @@ function updateDepBikeRem(sel, idx) {
         var opt = Array.from(sel.options).find(function(o) { return o.value == sel.value; });
         if (opt) {
             var remaining = parseFloat(opt.dataset.remaining || 0);
+            if (amtInput) amtInput.max = remaining;
+            if (!noFill && amtInput) amtInput.value = remaining.toFixed(2);
             var amt = amtInput ? (parseFloat(amtInput.value) || 0) : 0;
             var displayRem = Math.max(0, remaining - amt);
             rem.innerHTML = '<strong style="color:'+(displayRem>0?'var(--warning)':'var(--success)')+'"><?= $currency ?> '+displayRem.toLocaleString()+'</strong>';
-            if (amtInput) amtInput.max = remaining;
         } else {
             rem.innerHTML = '—';
         }
@@ -8635,10 +8644,13 @@ function updateDepBikeRem(sel, idx) {
     }
 }
 function updateDepBikeRemFromAmount(input, idx) {
+    if (input.max && parseFloat(input.value) > parseFloat(input.max)) {
+        input.value = input.max;
+    }
     var row = input.closest('.form-row');
     var select = row ? row.querySelector('select[name$="[bike_id]"]') : null;
     if (select) {
-        updateDepBikeRem(select, idx);
+        updateDepBikeRem(select, idx, true);
     }
 }
 if (prefillBikeId > 0) {
