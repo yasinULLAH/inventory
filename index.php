@@ -2971,18 +2971,13 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $stmt_check_sold->bind_param('i', $bid);
             $stmt_check_sold->execute();
             $delete_bike_row = $stmt_check_sold->get_result()->fetch_assoc();
-            $bike_status = $delete_bike_row['status'] ?? '';
-            if ($bike_status === 'sold' || $bike_status === 'returned' || $bike_status === 'returned_to_supplier' || $bike_status === 'damaged_lost') {
-                $err = 'Cannot delete a sold or returned bike. Please adjust its status if necessary.';
-            } else {
-                $conn->begin_transaction();
-                $stmt = $conn->prepare('DELETE FROM bikes WHERE id=?');
-                $stmt->bind_param('i', $bid);
-                $stmt->execute();
-                sync_purchase_order_totals($conn, (int) ($delete_bike_row['purchase_order_id'] ?? 0));
-                $conn->commit();
-                $msg = 'Bike deleted from inventory.';
-            }
+            $conn->begin_transaction();
+            $stmt = $conn->prepare('DELETE FROM bikes WHERE id=?');
+            $stmt->bind_param('i', $bid);
+            $stmt->execute();
+            sync_purchase_order_totals($conn, (int) ($delete_bike_row['purchase_order_id'] ?? 0));
+            $conn->commit();
+            $msg = 'Bike deleted from inventory.';
         }
         if ($action === 'edit') {
             require_permission($conn, 'inventory', 'edit');
@@ -3004,7 +2999,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     $img_err = 'Upload failed (max size ' . ini_get('upload_max_filesize') . ' exceeded). ';
                 }
             }
-            if ($bid <= 0 || $pp < 0 || $model_id <= 0 || !in_array($status, ['in_stock', 'reserved', 'damaged_lost'], true)) {
+            if ($bid <= 0 || $pp < 0 || $model_id <= 0 || !in_array($status, ['in_stock', 'reserved', 'damaged_lost', 'sold', 'returned', 'returned_to_supplier'], true)) {
                 $err = 'Invalid bike ID, model, or purchase price.';
             } else {
                 $old_bike_q = $conn->query("SELECT status, chassis_number, selling_price, purchase_order_id, tax_rate_applied, tax_basis FROM bikes WHERE id=$bid");
@@ -3022,17 +3017,31 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 }
                 $conn->begin_transaction();
                 try {
-                $historical_tax_basis = $old_bike['tax_basis'] ?: $tax_on;
-                $historical_tax_rate = $old_bike['tax_rate_applied'] !== null ? (float) $old_bike['tax_rate_applied'] : $tax_rate;
-                $base_tax = ($historical_tax_basis === 'selling_price') ? (float) $old_bike['selling_price'] : $pp;
-                $tax_amount = ($base_tax * $historical_tax_rate);
+                $recalc_tax = !empty($_POST['recalc_tax']);
+                if ($recalc_tax) {
+                    $use_tax_basis = $tax_on;
+                    $use_tax_rate = $tax_rate;
+                } else {
+                    $use_tax_basis = $old_bike['tax_basis'] ?: $tax_on;
+                    $use_tax_rate = $old_bike['tax_rate_applied'] !== null ? (float) $old_bike['tax_rate_applied'] : $tax_rate;
+                }
+                $base_tax = ($use_tax_basis === 'selling_price') ? (float) ($old_bike['selling_price'] ?: $pp) : $pp;
+                $tax_amount = ($base_tax * $use_tax_rate);
                 $margin = (float) $old_bike['selling_price'] > 0 ? ((float) $old_bike['selling_price'] - $pp - $tax_amount) : 0;
                 if ($img_path) {
-                    $stmt = $conn->prepare('UPDATE bikes SET model_id=?, color=?, purchase_price=?, tax_amount=?, margin=?, status=?, notes=?, safeguard_notes=?, image=? WHERE id=?');
-                    $stmt->bind_param('isddsssssi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $img_path, $bid);
+                    $stmt = $conn->prepare('UPDATE bikes SET model_id=?, color=?, purchase_price=?, tax_amount=?, margin=?, status=?, notes=?, safeguard_notes=?, image=' . ($recalc_tax ? ', tax_rate_applied=?, tax_basis=?' : '') . ' WHERE id=?');
+                    if ($recalc_tax) {
+                        $stmt->bind_param('isddsssssdsi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $img_path, $use_tax_rate, $use_tax_basis, $bid);
+                    } else {
+                        $stmt->bind_param('isddsssssi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $img_path, $bid);
+                    }
                 } else {
-                    $stmt = $conn->prepare('UPDATE bikes SET model_id=?, color=?, purchase_price=?, tax_amount=?, margin=?, status=?, notes=?, safeguard_notes=? WHERE id=?');
-                    $stmt->bind_param('isddssssi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $bid);
+                    $stmt = $conn->prepare('UPDATE bikes SET model_id=?, color=?, purchase_price=?, tax_amount=?, margin=?, status=?, notes=?, safeguard_notes=' . ($recalc_tax ? ', tax_rate_applied=?, tax_basis=?' : '') . ' WHERE id=?');
+                    if ($recalc_tax) {
+                        $stmt->bind_param('isddssssdsi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $use_tax_rate, $use_tax_basis, $bid);
+                    } else {
+                        $stmt->bind_param('isddssssi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $bid);
+                    }
                 }
                 $stmt->execute();
                 sync_purchase_order_totals($conn, (int) ($old_bike['purchase_order_id'] ?? 0));
@@ -3080,25 +3089,15 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             if (!empty($ids)) {
                 $conn->begin_transaction();
                 try {
-                    $errors_found = false;
                     foreach ($ids as $id) {
                         $stmt_check_sold = $conn->prepare('SELECT status, purchase_order_id FROM bikes WHERE id = ?');
                         $stmt_check_sold->bind_param('i', $id);
                         $stmt_check_sold->execute();
                         $bulk_bike_row = $stmt_check_sold->get_result()->fetch_assoc();
-                        $bike_status = $bulk_bike_row['status'] ?? '';
-                        if ($bike_status === 'sold' || $bike_status === 'returned' || $bike_status === 'returned_to_supplier' || $bike_status === 'damaged_lost') {
-                            $err .= "Cannot delete bike ID $id (status: $bike_status). ";
-                            $errors_found = true;
-                        } else {
-                            $stmt_delete = $conn->prepare('DELETE FROM bikes WHERE id = ?');
-                            $stmt_delete->bind_param('i', $id);
-                            $stmt_delete->execute();
-                            sync_purchase_order_totals($conn, (int) ($bulk_bike_row['purchase_order_id'] ?? 0));
-                        }
-                    }
-                    if ($errors_found) {
-                        throw new Exception('Some bikes could not be deleted due to their status.');
+                        $stmt_delete = $conn->prepare('DELETE FROM bikes WHERE id = ?');
+                        $stmt_delete->bind_param('i', $id);
+                        $stmt_delete->execute();
+                        sync_purchase_order_totals($conn, (int) ($bulk_bike_row['purchase_order_id'] ?? 0));
                     }
                     $conn->commit();
                     $msg = count($ids) . ' bike(s) deleted.';
@@ -5270,10 +5269,10 @@ $(document).ready(function() {
 <a href="index.php?page=purchase&print_po=<?= $bike['purchase_order_id'] ?>&format=a4" class="btn btn-primary btn-sm" title="A4 Purchase Receipt" target="_blank">📄</a>
 <a href="index.php?page=purchase&print_po=<?= $bike['purchase_order_id'] ?>&format=thermal" class="btn btn-default btn-sm" title="Thermal Purchase Receipt" target="_blank">📦</a>
 <?php endif; ?>
-<?php if (in_array($bike['status'], ['in_stock', 'reserved', 'damaged_lost'], true) && has_permission($conn, 'inventory', 'edit')): ?>
+<?php if (has_permission($conn, 'inventory', 'edit')): ?>
 <a href="index.php?page=inventory&edit_id=<?= $bike['id'] ?>" class="btn btn-primary btn-sm" title="Edit">✏</a>
 <?php endif; ?>
-<?php if (in_array($bike['status'], ['in_stock', 'reserved'], true) && has_permission($conn, 'inventory', 'delete')): ?>
+<?php if (has_permission($conn, 'inventory', 'delete')): ?>
 <form method="POST" action="index.php?page=inventory&action=delete" style="display:inline">
 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="id" value="<?= $bike['id'] ?>">
@@ -5323,11 +5322,28 @@ $(document).ready(function() {
 </div>
 <div class="form-group" style="margin-bottom:8px"><label>Color</label><input type="text" name="color" value="<?= sanitize($edit_bike['color']) ?>"></div>
 <div class="form-group" style="margin-bottom:8px"><label>Purchase Price</label><input type="number" name="purchase_price" step="0.01" value="<?= $edit_bike['purchase_price'] ?>"></div>
+<div class="form-group" style="margin-bottom:8px;font-size:0.85rem">
+<label><input type="checkbox" name="recalc_tax" value="1"> Recalculate tax with current settings (<?= $tax_rate * 100 ?>% on <?= $tax_on ?>)</label>
+<small style="display:block;color:var(--text3)">Stored: <?= $edit_bike['tax_rate_applied'] !== null ? ($edit_bike['tax_rate_applied'] * 100) . '%' : 'N/A' ?> on <?= sanitize($edit_bike['tax_basis'] ?? 'N/A') ?></small>
+</div>
 <div class="form-group" style="margin-bottom:8px"><label>Status</label>
 <select name="status">
-<option value="in_stock" <?= $edit_bike['status'] === 'in_stock' ? 'selected' : '' ?>>In Stock</option>
-<?php if ($edit_bike['status'] !== 'damaged_lost'): ?><option value="reserved" <?= $edit_bike['status'] === 'reserved' ? 'selected' : '' ?>>Reserved</option><?php endif; ?>
-<option value="damaged_lost" <?= $edit_bike['status'] === 'damaged_lost' ? 'selected' : '' ?>>Damaged / Lost</option>
+<?php
+$allowed_statuses = [
+    'in_stock' => ['in_stock' => 'In Stock', 'reserved' => 'Reserved', 'damaged_lost' => 'Damaged / Lost'],
+    'reserved' => ['reserved' => 'Reserved', 'in_stock' => 'In Stock', 'damaged_lost' => 'Damaged / Lost'],
+    'sold' => ['sold' => 'Sold'],
+    'returned' => ['returned' => 'Returned by Customer'],
+    'returned_to_supplier' => ['returned_to_supplier' => 'Returned to Supplier'],
+    'damaged_lost' => ['damaged_lost' => 'Damaged / Lost', 'in_stock' => 'In Stock'],
+];
+$current_status = $edit_bike['status'] ?? 'in_stock';
+$opts = $allowed_statuses[$current_status] ?? $allowed_statuses['in_stock'];
+foreach ($opts as $val => $label):
+    $sel = $val === $current_status ? 'selected' : '';
+?>
+<option value="<?= $val ?>" <?= $sel ?>><?= $label ?></option>
+<?php endforeach; ?>
 </select>
 </div>
 <div class="form-group" style="margin-bottom:8px"><label>Safeguard Notes</label><input type="text" name="safeguard_notes" value="<?= sanitize($edit_bike['safeguard_notes'] ?? '') ?>"></div>
