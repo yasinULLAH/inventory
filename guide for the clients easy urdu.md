@@ -662,3 +662,22 @@
 > 📝 **نوٹ**: یہ گائیڈ ورژن 2.0.0 کے لیے ہے۔ مستقبل میں اپ ڈیٹس کے ساتھ نئے فیچرز شامل ہو سکتے ہیں۔ ہمیشہ تازہ ترین گائیڈ کے لیے ڈیولپر سے رابطہ کریں۔
 
 **اللہ آپ کے کاروبار میں برکت ڈالے! 🤲**
+
+---
+
+## 🆕 Recent System Updates (Bank Deposits & Money Tracking)
+**English:**
+The system has been recently upgraded to include comprehensive money flow tracking:
+- **Money Destinations:** Track business funds across Banks, Persons, and Wallets.
+- **Sale Allocations:** Allocate exactly where the bike's sale money is going.
+- **Bank Deposits:** Record actual bank deposits, link them to specific bike sales, and upload deposit receipts.
+- **Smart UI:** Searchable Select2 dropdowns, auto-filling remaining amounts, and a Dashboard widget for Pending Deposits.
+- **Auto-Cleanup:** Returning a sale now automatically deletes its linked installments, accessory stock deductions, and money allocations.
+
+**Urdu / اردو:**
+سسٹم میں حال ہی میں پیسوں کے حساب کتاب (Money Flow Tracking) کے نئے فیچرز شامل کیے گئے ہیں:
+- **منی ڈیسٹینیشنز (Money Destinations):** اپنے بینک اکاؤنٹس، کیش، اور والٹس کو سسٹم میں شامل کریں۔
+- **رقم کی ایلوکیشن:** بائیک بیچنے کے بعد بتائیں کہ اس کی رقم کس بینک یا شخص کے پاس گئی ہے۔
+- **بینک ڈپازٹ:** بینک جا کر پیسے جمع کروانے کا ریکارڈ رکھیں، بائیک کی سیل سے لنک کریں، اور بینک سلپ اپ لوڈ کریں۔
+- **سمارٹ فلٹرز:** ڈیش بورڈ پر Pending Deposits کا کارڈ جو یاد دلاتا ہے کہ کتنے پیسے بینک میں جمع کروانے ہیں۔
+- **خودکار واپسی:** سیل ریٹرن پر اقساط، ایکسسریز کا سٹاک، اور منی ٹریکنگ خودکار طور پر ایڈجسٹ ہو جاتی ہے۔
