@@ -386,12 +386,12 @@ function assert_allocation_within_sale_total($conn, $bike_id, $amount, $exclude_
 
 function lock_in_stock_bike($conn, $bike_id)
 {
-    $stmt = $conn->prepare("SELECT * FROM bikes WHERE id=? AND status='in_stock' LIMIT 1 FOR UPDATE");
+    $stmt = $conn->prepare("SELECT * FROM bikes WHERE id=? AND status IN ('in_stock','returned') LIMIT 1 FOR UPDATE");
     $stmt->bind_param('i', $bike_id);
     $stmt->execute();
     $bike = $stmt->get_result()->fetch_assoc();
     if (!$bike) {
-        throw new Exception('Bike not found or already sold.');
+        throw new Exception('Bike not found, already sold, or returned.');
     }
     return $bike;
 }
@@ -2395,11 +2395,11 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 if ($return_amount - $full_reversal_amount > 0.0001) {
                     throw new Exception('Supplier refund cannot exceed the original bike purchase value.');
                 }
-                $st = $conn->prepare("UPDATE bikes SET status='returned_to_supplier', return_date=?, return_amount=?, return_notes=?, tax_amount=0 WHERE id=? AND status='in_stock'");
+                $st = $conn->prepare("UPDATE bikes SET status='returned_to_supplier', return_date=?, return_amount=?, return_notes=?, tax_amount=0 WHERE id=? AND status IN ('in_stock','returned')");
                 $st->bind_param('sdsi', $return_date, $return_amount, $return_notes, $bike_id);
                 $st->execute();
                 if ($st->affected_rows === 0) {
-                    throw new Exception("Bike not found or not in 'in_stock' status.");
+                    throw new Exception("Bike not found or not in 'in_stock' or 'returned' status.");
                 }
                 $st->close();
                 $party_name = $bike_info['sup_name'] ?? 'Unknown Supplier';
@@ -4579,7 +4579,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <thead><tr><th>Date</th><th>Chassis</th><th>Model</th><th>Price</th><th>Margin</th></tr></thead>
 <tbody>
 <?php
-        $recent_sales = $conn->query("SELECT b.chassis_number, b.selling_date, b.selling_price, b.margin, m.model_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.status='sold' ORDER BY b.selling_date DESC LIMIT 10");
+        $recent_sales = $conn->query("SELECT b.chassis_number, b.selling_date, b.selling_price, b.margin, m.model_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.selling_date IS NOT NULL ORDER BY b.selling_date DESC LIMIT 10");
         while ($rs = $recent_sales->fetch_assoc()):
             ?>
 <tr class="row-sold">
@@ -5094,7 +5094,7 @@ $(document).ready(function() {
 <ul class="timeline">
 <li><div class="timeline-dot" style="background:#4a9eff"></div><div class="timeline-content"><div class="timeline-date"><?= fmt_date($view_bike['order_date']) ?></div><div class="timeline-text">📦 <strong>Purchased</strong> — <?= sanitize($view_bike['sup_name'] ?? 'Unknown Supplier') ?> | <?= fmt_money($view_bike['purchase_price']) ?></div></div></li>
 <li><div class="timeline-dot" style="background:#4ec94e"></div><div class="timeline-content"><div class="timeline-date"><?= fmt_date($view_bike['inventory_date']) ?></div><div class="timeline-text">📋 <strong>Added to Inventory</strong> — Status: IN STOCK</div></div></li>
-<?php if ($view_bike['status'] === 'sold' || $view_bike['selling_date']): ?>
+<?php if ($view_bike['selling_date']): ?>
 <li><div class="timeline-dot" style="background:#4ec94e"></div><div class="timeline-content"><div class="timeline-date"><?= fmt_date($view_bike['selling_date']) ?></div><div class="timeline-text">🛒 <strong>Sold</strong> to <?= sanitize($view_bike['cust_name'] ?? 'Cash Customer') ?> — <?= fmt_money($view_bike['selling_price']) ?> | Margin: <?= fmt_money($view_bike['margin']) ?></div></div></li>
 <?php endif; ?>
 <?php if ($view_bike['status'] === 'damaged_lost'): ?>
@@ -5102,7 +5102,8 @@ $(document).ready(function() {
 <?php endif; ?>
 <?php if ($view_bike['status'] === 'returned_to_supplier'): ?>
 <li><div class="timeline-dot" style="background:#e74c3c"></div><div class="timeline-content"><div class="timeline-date"><?= fmt_date($view_bike['return_date']) ?></div><div class="timeline-text">📤 <strong>Returned to Supplier</strong> — Refund: <?= fmt_money($view_bike['return_amount']) ?> | Notes: <?= sanitize($view_bike['return_notes'] ?? '-') ?></div></div></li>
-<?php elseif ($view_bike['status'] === 'returned' || $view_bike['return_date']): ?>
+<?php endif; ?>
+<?php if ($view_bike['status'] === 'returned' || ($view_bike['return_date'] && $view_bike['status'] !== 'returned_to_supplier')): ?>
 <li><div class="timeline-dot" style="background:#e74c3c"></div><div class="timeline-content"><div class="timeline-date"><?= fmt_date($view_bike['return_date']) ?></div><div class="timeline-text">↩ <strong>Returned by Customer</strong> — Refund: <?= fmt_money($view_bike['return_amount']) ?> | Notes: <?= sanitize($view_bike['return_notes'] ?? '-') ?></div></div></li>
 <?php endif; ?>
 </ul>
@@ -5262,17 +5263,20 @@ $(document).ready(function() {
 <td><span class="badge <?= $st_badge ?>"><?= strtoupper($bike['status']) ?></span></td>
 <td><?= $bike['selling_price'] ? fmt_money($bike['selling_price']) : '-' ?></td>
 <td><?= fmt_date($bike['selling_date']) ?></td>
-<td style="color:<?= ($bike['margin'] ?? 0) >= 0 ? 'var(--success)' : 'var(--danger)' ?>"><?= $bike['status'] === 'sold' ? fmt_money($bike['margin']) : '-' ?></td>
+<td style="color:<?= ($bike['margin'] ?? 0) >= 0 ? 'var(--success)' : 'var(--danger)' ?>"><?= in_array($bike['status'], ['sold','returned']) ? fmt_money($bike['margin']) : '-' ?></td>
 <td>
 <div class="actions-col">
 <a href="index.php?page=inventory&view_id=<?= $bike['id'] ?>" class="btn btn-default btn-sm" title="View">👁</a>
-<?php if ($bike['status'] === 'in_stock' && has_permission($conn, 'sale', 'add')): ?>
+<?php if (in_array($bike['status'], ['in_stock','returned']) && has_permission($conn, 'sale', 'add')): ?>
 <a href="index.php?page=sale&bike_id=<?= $bike['id'] ?>" class="btn btn-success btn-sm" title="Sell">🛒</a>
 <?php endif; ?>
 <?php if ($bike['status'] === 'sold' && has_permission($conn, 'returns', 'add')): ?>
 <a href="index.php?page=returns&bike_id=<?= $bike['id'] ?>" class="btn btn-warning btn-sm" title="Return">↩</a>
 <?php endif; ?>
-<?php if ($bike['status'] === 'sold' && has_permission($conn, 'sale', 'view')): ?>
+<?php if ($bike['status'] === 'returned' && has_permission($conn, 'inventory', 'edit')): ?>
+<a href="index.php?page=inventory&edit_id=<?= $bike['id'] ?>" class="btn btn-default btn-sm" title="Restock" style="background:var(--bg3);color:var(--success)">📦</a>
+<?php endif; ?>
+<?php if (in_array($bike['status'], ['sold','returned']) && $bike['selling_date'] && has_permission($conn, 'sale', 'view')): ?>
 <a href="index.php?page=sale&print_invoice=<?= $bike['id'] ?>&format=a4" class="btn btn-primary btn-sm" title="A4 Invoice" target="_blank">📄</a>
 <a href="index.php?page=sale&print_invoice=<?= $bike['id'] ?>&format=thermal" class="btn btn-warning btn-sm" title="Thermal POS" target="_blank">🧾</a>
 <?php endif; ?>
@@ -5351,7 +5355,7 @@ $allowed_statuses = [
     'in_stock' => ['in_stock' => 'In Stock', 'reserved' => 'Reserved', 'damaged_lost' => 'Damaged / Lost'],
     'reserved' => ['reserved' => 'Reserved', 'in_stock' => 'In Stock', 'damaged_lost' => 'Damaged / Lost'],
     'sold' => ['sold' => 'Sold'],
-    'returned' => ['returned' => 'Returned by Customer'],
+    'returned' => ['returned' => 'Returned by Customer', 'in_stock' => 'Restock (In Stock)'],
     'returned_to_supplier' => ['returned_to_supplier' => 'Returned to Supplier'],
     'damaged_lost' => ['damaged_lost' => 'Damaged / Lost', 'in_stock' => 'In Stock'],
 ];
@@ -5393,11 +5397,11 @@ document.getElementById('bulkExportForm').addEventListener('submit', function(){
         $prefill_bike_id = (int) ($_GET['bike_id'] ?? 0);
         $prefill_bike = null;
         if ($prefill_bike_id) {
-            $pr = $conn->query("SELECT b.*, m.model_name, m.model_code FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.id=$prefill_bike_id AND b.status='in_stock'");
+            $pr = $conn->query("SELECT b.*, m.model_name, m.model_code FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.id=$prefill_bike_id AND b.status IN ('in_stock','returned')");
             $prefill_bike = $pr ? $pr->fetch_assoc() : null;
         }
         $sale_model_id = (int) ($_GET['model_id'] ?? 0);
-        $sale_where = "b.status='in_stock'";
+        $sale_where = "b.status IN ('in_stock','returned')";
         if ($sale_model_id)
             $sale_where .= " AND b.model_id=$sale_model_id";
         $bikes_instock = $conn->query("SELECT b.id, b.chassis_number, b.color, b.purchase_price, m.model_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE $sale_where ORDER BY b.created_at DESC");
@@ -5896,7 +5900,7 @@ window.onload = function() {
 </form>
 <?php
         elseif ($sub === 'purchase'):
-            $purchased_bikes = $conn->query("SELECT b.id, b.chassis_number, b.color, b.purchase_price, m.model_name, s.name AS sup_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN purchase_orders po ON b.purchase_order_id=po.id LEFT JOIN suppliers s ON po.supplier_id=s.id WHERE b.status='in_stock' ORDER BY b.inventory_date DESC");
+            $purchased_bikes = $conn->query("SELECT b.id, b.chassis_number, b.color, b.purchase_price, m.model_name, s.name AS sup_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN purchase_orders po ON b.purchase_order_id=po.id LEFT JOIN suppliers s ON po.supplier_id=s.id WHERE b.status IN ('in_stock','returned') ORDER BY b.created_at DESC");
 ?>
 <form method="POST" id="purchaseReturnForm" class="animate__animated animate__fadeIn">
 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
@@ -6712,7 +6716,7 @@ while ($d = $dest_q->fetch_assoc()):
 </fieldset>
 <?php
         elseif ($sub === 'sold'):
-            $sold_bikes_r = $conn->query("SELECT b.*, m.model_name, m.short_code, c.name as cust_name, COALESCE((SELECT SUM(sa.final_price) FROM sale_accessories sa WHERE sa.bike_id=b.id),0) AS acc_total FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id WHERE b.status='sold' AND b.selling_date BETWEEN '" . mysqli_real_escape_string($conn, $rep_from) . "' AND '" . mysqli_real_escape_string($conn, $rep_to) . "' ORDER BY b.selling_date DESC");
+            $sold_bikes_r = $conn->query("SELECT b.*, m.model_name, m.short_code, c.name as cust_name, COALESCE((SELECT SUM(sa.final_price) FROM sale_accessories sa WHERE sa.bike_id=b.id),0) AS acc_total FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id WHERE b.selling_date IS NOT NULL AND b.selling_date BETWEEN '" . mysqli_real_escape_string($conn, $rep_from) . "' AND '" . mysqli_real_escape_string($conn, $rep_to) . "' ORDER BY b.selling_date DESC");
             $sold_total_sp = 0;
             $sold_total_pp = 0;
             $sold_total_mg = 0;
@@ -6959,7 +6963,7 @@ while ($d = $dest_q->fetch_assoc()):
 <?php
         elseif ($sub === 'daily'):
             $daily_date = valid_date($_GET['daily_date'] ?? '', true) && !empty($_GET['daily_date']) ? $_GET['daily_date'] : date('Y-m-d');
-            $daily_sales = $conn->query("SELECT b.*, m.model_name, c.name as cust_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id WHERE b.selling_date='" . mysqli_real_escape_string($conn, $daily_date) . "' AND b.status='sold'");
+            $daily_sales = $conn->query("SELECT b.*, m.model_name, c.name as cust_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id WHERE b.selling_date='" . mysqli_real_escape_string($conn, $daily_date) . "' AND b.selling_date IS NOT NULL");
             $daily_purch = $conn->query("SELECT b.*, m.model_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.inventory_date='" . mysqli_real_escape_string($conn, $daily_date) . "'");
             $daily_expenses = $conn->query("SELECT * FROM income_expenses WHERE entry_date='" . mysqli_real_escape_string($conn, $daily_date) . "' AND type='expense'");
             $daily_income_other = $conn->query("SELECT * FROM income_expenses WHERE entry_date='" . mysqli_real_escape_string($conn, $daily_date) . "' AND type='income'");
@@ -7236,7 +7240,7 @@ while ($d = $dest_q->fetch_assoc()):
                 FROM bikes b
                 LEFT JOIN models m ON b.model_id=m.id
                 LEFT JOIN customers c ON b.customer_id=c.id
-                WHERE b.status='sold' AND b.selling_date BETWEEN '" . mysqli_real_escape_string($conn, $rep_from) . "' AND '" . mysqli_real_escape_string($conn, $rep_to) . "'
+                WHERE b.selling_date IS NOT NULL AND b.selling_date BETWEEN '" . mysqli_real_escape_string($conn, $rep_from) . "' AND '" . mysqli_real_escape_string($conn, $rep_to) . "'
                 ORDER BY b.selling_date DESC");
 ?>
 <fieldset class="fieldset animate__animated animate__fadeInUp"><legend>🧾 Money by Sale (<?= fmt_date($rep_from) ?> - <?= fmt_date($rep_to) ?>)</legend>
@@ -7288,7 +7292,7 @@ while ($d = $dest_q->fetch_assoc()):
                 FROM bikes b
                 LEFT JOIN models m ON b.model_id=m.id
                 LEFT JOIN customers c ON b.customer_id=c.id
-                WHERE b.status='sold'
+                WHERE b.selling_date IS NOT NULL
                 HAVING (b.selling_price + acc_total) > total_allocated
                 ORDER BY (b.selling_price + acc_total - total_allocated) DESC");
             $mu_total_gap = 0;
@@ -8820,7 +8824,7 @@ function toggleBankFields(sel) {
             COALESCE((SELECT SUM(amount) FROM sale_money_allocations WHERE bike_id=b.id),0) as allocated,
             COALESCE((SELECT SUM(sa2.final_price) FROM sale_accessories sa2 WHERE sa2.bike_id=b.id),0) as acc_total
             FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id
-            WHERE b.status='sold'
+            WHERE b.selling_date IS NOT NULL
             HAVING (b.selling_price + COALESCE((SELECT SUM(sa2.final_price) FROM sale_accessories sa2 WHERE sa2.bike_id=b.id),0)) > allocated
             ORDER BY b.selling_date DESC");
         $sold_bikes_arr = [];
@@ -9001,7 +9005,7 @@ updateAllocRemaining();
             COALESCE((SELECT SUM(sma.amount) FROM sale_money_allocations sma WHERE sma.bike_id=b.id),0) as total_allocated,
             COALESCE((SELECT SUM(da.amount) FROM deposit_allocations da WHERE da.bike_id=b.id),0) as total_deposited
             FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id
-            WHERE b.status='sold'
+            WHERE b.selling_date IS NOT NULL
             HAVING total_allocated > total_deposited
             ORDER BY b.selling_date DESC");
         $sold_bikes_deps_arr = [];
