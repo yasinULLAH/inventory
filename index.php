@@ -2988,6 +2988,10 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $status = clean_text($_POST['status'] ?? 'in_stock');
             $notes = clean_text($_POST['notes'] ?? '');
             $safe = clean_text($_POST['safeguard_notes'] ?? '');
+            $order_date = clean_text($_POST['order_date'] ?? '');
+            $inventory_date = clean_text($_POST['inventory_date'] ?? '');
+            $chassis_number = clean_text($_POST['chassis_number'] ?? '');
+            $motor_number = clean_text($_POST['motor_number'] ?? '');
             $img_path = null;
             $img_err = '';
             if (isset($_FILES['image']) && !empty($_FILES['image']['name'])) {
@@ -3007,6 +3011,13 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 if (!$old_bike) {
                     $err = 'Bike record not found.';
                     goto end_inventory_post;
+                }
+                if ($chassis_number !== '' && $chassis_number !== $old_bike['chassis_number']) {
+                    $chk = $conn->query("SELECT id FROM bikes WHERE chassis_number='" . mysqli_real_escape_string($conn, $chassis_number) . "' AND id != $bid");
+                    if ($chk && $chk->num_rows > 0) {
+                        $err = 'Chassis number "' . sanitize($chassis_number) . '" already exists in the system.';
+                        goto end_inventory_post;
+                    }
                 }
                 $old_status = $old_bike['status'] ?? '';
                 try {
@@ -3029,18 +3040,18 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $tax_amount = ($base_tax * $use_tax_rate);
                 $margin = (float) $old_bike['selling_price'] > 0 ? ((float) $old_bike['selling_price'] - $pp - $tax_amount) : 0;
                 if ($img_path) {
-                    $stmt = $conn->prepare('UPDATE bikes SET model_id=?, color=?, purchase_price=?, tax_amount=?, margin=?, status=?, notes=?, safeguard_notes=?, image=?' . ($recalc_tax ? ', tax_rate_applied=?, tax_basis=?' : '') . ' WHERE id=?');
+                    $stmt = $conn->prepare('UPDATE bikes SET model_id=?, color=?, purchase_price=?, tax_amount=?, margin=?, status=?, notes=?, safeguard_notes=?, image=?, order_date=?, inventory_date=?, chassis_number=?, motor_number=?' . ($recalc_tax ? ', tax_rate_applied=?, tax_basis=?' : '') . ' WHERE id=?');
                     if ($recalc_tax) {
-                        $stmt->bind_param('isddsssssdsi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $img_path, $use_tax_rate, $use_tax_basis, $bid);
+                        $stmt->bind_param('isddssssssssdsi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $img_path, $order_date, $inventory_date, $chassis_number, $motor_number, $use_tax_rate, $use_tax_basis, $bid);
                     } else {
-                        $stmt->bind_param('isddsssssi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $img_path, $bid);
+                        $stmt->bind_param('isddssssssssi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $img_path, $order_date, $inventory_date, $chassis_number, $motor_number, $bid);
                     }
                 } else {
-                    $stmt = $conn->prepare('UPDATE bikes SET model_id=?, color=?, purchase_price=?, tax_amount=?, margin=?, status=?, notes=?, safeguard_notes=?' . ($recalc_tax ? ', tax_rate_applied=?, tax_basis=?' : '') . ' WHERE id=?');
+                    $stmt = $conn->prepare('UPDATE bikes SET model_id=?, color=?, purchase_price=?, tax_amount=?, margin=?, status=?, notes=?, safeguard_notes=?, order_date=?, inventory_date=?, chassis_number=?, motor_number=?' . ($recalc_tax ? ', tax_rate_applied=?, tax_basis=?' : '') . ' WHERE id=?');
                     if ($recalc_tax) {
-                        $stmt->bind_param('isddssssdsi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $use_tax_rate, $use_tax_basis, $bid);
+                        $stmt->bind_param('isddsssssssdsi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $order_date, $inventory_date, $chassis_number, $motor_number, $use_tax_rate, $use_tax_basis, $bid);
                     } else {
-                        $stmt->bind_param('isddssssi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $bid);
+                        $stmt->bind_param('isddsssssssi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $order_date, $inventory_date, $chassis_number, $motor_number, $bid);
                     }
                 }
                 $stmt->execute();
@@ -5324,6 +5335,10 @@ $(document).ready(function() {
 </select>
 </div>
 <div class="form-group" style="margin-bottom:8px"><label>Color</label><input type="text" name="color" value="<?= sanitize($edit_bike['color']) ?>"></div>
+<div class="form-group" style="margin-bottom:8px"><label>Chassis Number</label><input type="text" name="chassis_number" value="<?= sanitize($edit_bike['chassis_number']) ?>"></div>
+<div class="form-group" style="margin-bottom:8px"><label>Motor Number</label><input type="text" name="motor_number" value="<?= sanitize($edit_bike['motor_number'] ?? '') ?>"></div>
+<div class="form-group" style="margin-bottom:8px"><label>Order Date</label><input type="date" name="order_date" value="<?= $edit_bike['order_date'] ?? '' ?>"></div>
+<div class="form-group" style="margin-bottom:8px"><label>Inventory Date</label><input type="date" name="inventory_date" value="<?= $edit_bike['inventory_date'] ?? '' ?>"></div>
 <div class="form-group" style="margin-bottom:8px"><label>Purchase Price</label><input type="number" name="purchase_price" step="0.01" value="<?= $edit_bike['purchase_price'] ?>"></div>
 <div class="form-group" style="margin-bottom:8px;font-size:0.85rem">
 <label><input type="checkbox" name="recalc_tax" value="1"> Recalculate tax with current settings (<?= $tax_rate * 100 ?>% on <?= $tax_on ?>)</label>
