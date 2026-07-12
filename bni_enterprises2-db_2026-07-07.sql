@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3306
--- Generation Time: Jul 08, 2026 at 05:32 AM
+-- Generation Time: Jul 12, 2026 at 09:01 AM
 -- Server version: 8.2.0
 -- PHP Version: 8.3.0
 
@@ -67,6 +67,14 @@ CREATE TABLE `bank_deposits` (
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+--
+-- Dumping data for table `bank_deposits`
+--
+
+INSERT INTO `bank_deposits` (`id`, `destination_id`, `deposit_date`, `amount`, `deposit_type`, `reference_no`, `receipt_image`, `deposited_by`, `notes`, `created_by`, `created_at`) VALUES
+(6, 1, '2026-07-07', 310000.00, '', '', NULL, '', '', 1, '2026-07-08 04:56:31'),
+(7, 1, '2026-07-07', 5000.00, '', '', NULL, '', '', 1, '2026-07-08 05:05:46');
+
 -- --------------------------------------------------------
 
 --
@@ -87,6 +95,8 @@ CREATE TABLE `bikes` (
   `selling_date` date DEFAULT NULL,
   `customer_id` int DEFAULT NULL,
   `tax_amount` decimal(15,2) DEFAULT '0.00',
+  `tax_rate_applied` decimal(9,6) DEFAULT NULL,
+  `tax_basis` enum('purchase_price','selling_price') DEFAULT NULL,
   `margin` decimal(15,2) DEFAULT '0.00',
   `status` enum('in_stock','sold','returned','returned_to_supplier','reserved','damaged_lost') DEFAULT 'in_stock',
   `return_date` date DEFAULT NULL,
@@ -103,45 +113,45 @@ CREATE TABLE `bikes` (
 -- Dumping data for table `bikes`
 --
 
-INSERT INTO `bikes` (`id`, `purchase_order_id`, `order_date`, `inventory_date`, `chassis_number`, `motor_number`, `model_id`, `color`, `purchase_price`, `selling_price`, `selling_date`, `customer_id`, `tax_amount`, `margin`, `status`, `return_date`, `return_amount`, `return_notes`, `safeguard_notes`, `notes`, `image`, `created_at`, `updated_at`) VALUES
-(1, 1, '2026-02-03', '2026-02-05', 'LY05G48270002304', '*XRLY48052125D0002228*', 1, 'Black', 125225.00, 210000.00, '2026-05-06', NULL, 12522.50, 72252.50, 'sold', NULL, NULL, NULL, NULL, '', NULL, '2026-04-20 09:01:57', '2026-05-06 16:38:41'),
-(2, 1, '2026-02-03', '2026-02-05', 'LY05G48270002202', '*XRLY48052125D0002322*', 1, 'Grey', 125225.00, NULL, NULL, NULL, 125.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
-(3, 1, '2026-02-03', '2026-02-05', 'DD35G48130001177', '*48V350WA8T454708922*', 13, 'Black', 94595.00, 130000.00, '2026-04-28', 5, 9459.50, 25945.50, 'sold', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_13_w_bike_h2_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
-(4, 1, '2026-02-03', '2026-02-05', 'M615G72380002665', 'A9A756800994', 9, 'Silver', 220721.00, 242000.00, NULL, NULL, 221.00, 0.00, 'returned', NULL, NULL, NULL, NULL, 'Returned on 200,000 Cheque to be issued.', 'uploads/models/model_9_m6_k6_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
-(5, 1, '2026-02-03', '2026-02-05', 'T910G72260006966', '*XR9S72102825N0007369*', 2, 'Red', 161261.00, 179000.00, '2026-03-05', NULL, 161.00, 17578.00, 'sold', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_2_t9_sports_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
-(6, 1, '2026-02-03', '2026-02-05', 'T910G72260007041', '*XR9S72102825N0007701*', 2, 'Black', 161261.00, 179000.00, NULL, NULL, 161.00, 17578.00, 'sold', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_2_t9_sports_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
-(7, 1, '2026-02-03', '2026-02-05', 'T910G72260006884', '*XR9S72102825N0007393*', 2, 'Grey', 161261.00, 179000.00, '2026-03-02', NULL, 161.00, 17578.00, 'sold', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_2_t9_sports_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
-(8, 1, '2026-02-03', '2026-02-05', 'E820G72380002293', '*PJE872203525N0002160*', 7, 'Grey', 251351.00, 279000.00, '2026-02-23', NULL, 251.00, 27398.00, 'sold', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
-(9, 1, '2026-02-03', '2026-02-05', 'TH12G72260005515', 'AIMTP721240259005364', 5, 'Grey', 179279.00, 199000.00, '2026-02-22', NULL, 179.00, 19542.00, 'sold', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_5_thrill_pro_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
-(10, 1, '2026-02-03', '2026-02-05', 'TH12G72260006004', 'AIMTP721240259006297', 5, 'Black', 179279.00, 200000.00, '2026-05-06', NULL, 17927.90, 2793.10, 'returned', '2026-05-07', 0.00, '30000', NULL, '', 'uploads/models/model_5_thrill_pro_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
-(11, 1, '2026-02-03', '2026-02-05', 'T910L72300000632', '*XR9S7210282500000640*', 3, 'Silver', 193694.00, NULL, NULL, NULL, 194.00, 0.00, 'damaged_lost', NULL, NULL, NULL, '', '', 'uploads/models/model_3_t9_sports_lfp_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
-(12, 1, '2026-02-03', '2026-02-05', 'T910L72300000916', '*XR9S7210282500000927*', 3, 'Black', 193694.00, 234000.00, '2026-03-07', NULL, 194.00, 40112.00, 'sold', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_3_t9_sports_lfp_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
-(13, 1, '2026-02-03', '2026-02-05', 'TH12L72300000445', 'AIMTP72124025N001005', 6, 'Black', 211712.00, NULL, NULL, NULL, 212.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_6_thrill_pro_lfp_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
-(14, 1, '2026-02-03', '2026-02-05', 'TH12L72300000416', 'AIMTP72124025N001176', 6, 'Grey', 211712.00, 246000.00, '2026-03-18', NULL, 212.00, 34076.00, 'sold', NULL, NULL, NULL, NULL, '(2,470,276) Received', 'uploads/models/model_6_thrill_pro_lfp_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
-(15, 2, '2026-02-27', '2026-03-12', 'M615L72300006176', 'XRM672153025D0007536', 11, 'Unknown', 254955.00, 285000.00, '2026-03-12', NULL, 285.00, 29760.00, 'sold', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_11_m6_lithium_np_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
-(16, 2, '2026-02-27', '2026-03-12', 'M615L72300006278', 'XRM672153025D0007499', 11, 'Unknown', 254955.00, 283000.00, '2026-03-12', NULL, 285.00, 27760.00, 'sold', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_11_m6_lithium_np_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
-(17, 3, '2026-03-12', '2026-03-16', 'T910G72260008882', '*XR9S72102825D0007890*', 4, 'Red', 238739.00, 179000.00, NULL, NULL, 239.00, -59978.00, 'sold', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
-(18, 3, '2026-03-12', '2026-03-16', 'T910G72260008478', '*XR9S72102825D0007855*', 4, 'Black', 238739.00, NULL, NULL, NULL, 239.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
-(19, 3, '2026-03-12', '2026-03-16', 'T910G72260008679', '*XR9S72102825D0007954*', 2, 'Grey', 161261.00, 179000.00, '2026-03-18', NULL, 179.00, 17560.00, 'sold', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_2_t9_sports_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
-(20, 3, '2026-03-12', '2026-03-16', 'TH12G72260006279', 'AIMTP721240259006047', 5, 'Unknown', 179279.00, NULL, NULL, NULL, 179.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_5_thrill_pro_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
-(21, 3, '2026-03-12', '2026-03-16', 'TH12G72260006236', 'AIMTP721240259006039', 5, 'Unknown', 179279.00, NULL, NULL, NULL, 179.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, '(997,297) Receiving', 'uploads/models/model_5_thrill_pro_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
-(22, 4, '2026-03-18', '2026-03-27', 'E820G72380000466', '12ZW7271327YE*CERR116670C*', 8, 'Blue', 247748.00, NULL, NULL, NULL, 247.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
-(23, 4, '2026-03-18', '2026-03-27', 'P308L72300000159', 'PHPM7208352610000422', 12, 'Unknown', 234234.00, NULL, NULL, NULL, 234.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_12_premium_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
-(24, 4, '2026-03-18', '2026-03-27', 'E810G72380000595', '*10ZW7273316YECKTS0000107*', 7, 'Grey', 251351.00, NULL, NULL, NULL, 251.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-04-20 09:01:57'),
-(25, 4, '2026-03-18', '2026-03-27', 'T910G72260008720', '*XR9S72102825D0007987*', 3, 'Unknown', 193694.00, NULL, NULL, NULL, 194.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_3_t9_sports_lfp_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
-(26, 4, '2026-03-18', '2026-03-27', 'T910G72260008894', '*XR9S72102825D0008251*', 3, 'Unknown', 193694.00, NULL, NULL, NULL, 194.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, 'Diff ledger= (70,137)+ new delivery', 'uploads/models/model_3_t9_sports_lfp_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
-(27, 4, '2026-03-18', '2026-03-27', 'T910G72260008737', '*XR9S72102825D0008003*', 3, 'Unknown', 193694.00, NULL, NULL, NULL, 194.00, 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_3_t9_sports_lfp_electric_bike.webp', '2026-04-20 09:01:57', '2026-05-12 09:47:11'),
-(28, 5, '2026-04-26', '2026-04-26', 'NW-21233', 'MT-002', 7, 'Red', 120000.00, 150000.00, '2026-04-26', 5, 120.00, 29880.00, 'returned', '2026-04-26', 190000.00, 'Said not appliable', 'must be charged 100 percent for the first time use', '', NULL, '2026-04-26 10:13:52', '2026-04-26 10:21:35'),
-(30, 7, '2026-04-27', '2026-04-27', 'NW-212331', 'MT-002', 7, 'Red', 190000.00, 240000.00, '2026-04-28', 5, 19000.00, 31000.00, 'sold', NULL, NULL, NULL, 'must be charged 100 percent for the first time use', '', NULL, '2026-04-27 10:25:19', '2026-04-28 04:50:16'),
-(32, 9, '2026-04-27', '2026-04-27', 'NW-212331a', 'MT-002', 7, 'Red', 190000.00, 230000.00, '2026-05-02', 1, 19000.00, 21000.00, 'sold', NULL, NULL, NULL, 'must be charged 100 percent for the first time use', '', NULL, '2026-04-27 10:29:45', '2026-05-01 13:22:14'),
-(33, 10, '2026-04-28', '2026-04-28', 'NW-2123353', 'MT-GT-022', 8, 'Newd', 20000.00, 60000.00, '2026-04-28', 1, 2000.00, 38000.00, 'sold', NULL, NULL, NULL, 'must be charged 100 percent for the first time use a', '', NULL, '2026-04-28 04:24:26', '2026-04-28 05:08:07'),
-(34, 11, '2026-04-28', '2026-04-28', 'NW-212331aa', 'MT-GT-02a', 11, 'Newda', 40000.00, 60000.00, '2026-04-28', 1, 4000.00, 16000.00, 'sold', NULL, NULL, NULL, 'must be charged 100 percent for the first time use aa', '', 'uploads/models/model_11_m6_lithium_np_electric_bike.webp', '2026-04-28 04:29:37', '2026-05-12 09:47:11'),
-(35, 12, '2026-04-28', '2026-04-28', 'NW-21233213', 'MT-002414', 10, 'Reda', 90000.00, 130000.00, '2026-04-28', 5, 9000.00, 31000.00, 'sold', NULL, NULL, NULL, 'new hai', '', 'uploads/models/model_10_m6_np_electric_bike.webp', '2026-04-28 04:33:26', '2026-05-12 09:47:11'),
-(36, 13, '2026-04-28', '2026-04-28', 'NW-21233132', 'MT-0021231', 2, 'Yellow', 90000.00, 220000.00, '2026-04-28', 6, 9000.00, 121000.00, 'sold', NULL, NULL, NULL, 'theek hai', '', 'uploads/models/model_2_t9_sports_electric_bike.webp', '2026-04-28 04:36:57', '2026-05-12 09:47:11'),
-(37, 14, '2026-05-01', '2026-05-01', 'NW-212335123', 'MT-GT-02aa', 7, 'Yellow', 290000.00, 340000.00, '2026-05-01', 5, 29000.00, 21000.00, 'sold', NULL, NULL, NULL, '', '', 'uploads/bike_6a2e70a3860e6.webp', '2026-05-01 06:59:16', '2026-06-14 09:13:08'),
-(38, 15, '2026-05-06', '2026-05-06', 'T929283007', 'TI8399uue', 2, 'Rad', 200000.00, 220000.00, '2026-05-06', NULL, 20000.00, 0.00, 'sold', NULL, NULL, NULL, '', '', 'uploads/img_69fb71525af01.jpg', '2026-05-06 16:50:26', '2026-05-06 16:51:52'),
-(39, 16, '2026-05-07', '2026-05-07', 'NW-21233123', 'MT-GT-0223', 14, 'Red', 250000.00, NULL, NULL, NULL, 25000.00, 0.00, 'in_stock', NULL, NULL, NULL, '', '', 'uploads/bike_6a0308a7eb3fc.webp', '2026-05-07 06:41:42', '2026-05-12 11:02:00'),
-(40, 16, '2026-05-07', '2026-05-07', 'qrqwer', '12341', 14, 'Yellow', 250000.00, 320000.00, '2026-05-07', 2, 25000.00, 45000.00, 'sold', NULL, NULL, NULL, '', '', 'uploads/models/model_14_super_star_70.webp', '2026-05-07 06:41:42', '2026-05-12 09:47:11');
+INSERT INTO `bikes` (`id`, `purchase_order_id`, `order_date`, `inventory_date`, `chassis_number`, `motor_number`, `model_id`, `color`, `purchase_price`, `selling_price`, `selling_date`, `customer_id`, `tax_amount`, `tax_rate_applied`, `tax_basis`, `margin`, `status`, `return_date`, `return_amount`, `return_notes`, `safeguard_notes`, `notes`, `image`, `created_at`, `updated_at`) VALUES
+(1, 1, '2026-02-03', '2026-02-05', 'LY05G48270002304', '*XRLY48052125D0002228*', 1, 'Black', 125225.00, 210000.00, '2026-05-06', NULL, 12522.50, 0.100000, 'purchase_price', 72252.50, 'sold', NULL, NULL, NULL, NULL, '', NULL, '2026-04-20 09:01:57', '2026-07-12 07:28:32'),
+(2, 1, '2026-02-03', '2026-02-05', 'LY05G48270002202', '*XRLY48052125D0002322*', 1, 'Grey', 125225.00, NULL, NULL, NULL, 125.00, 0.000998, 'purchase_price', 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-07-12 07:28:32'),
+(3, 1, '2026-02-03', '2026-02-05', 'DD35G48130001177', '*48V350WA8T454708922*', 13, 'Black', 94595.00, 130000.00, '2026-04-28', 5, 9459.50, 0.100000, 'purchase_price', 25945.50, 'sold', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_13_w_bike_h2_electric_bike.webp', '2026-04-20 09:01:57', '2026-07-12 07:28:32'),
+(4, 1, '2026-02-03', '2026-02-05', 'M615G72380002665', 'A9A756800994', 9, 'Silver', 220721.00, 242000.00, NULL, NULL, 221.00, 0.001001, 'purchase_price', 0.00, 'returned', NULL, NULL, NULL, NULL, 'Returned on 200,000 Cheque to be issued.', 'uploads/models/model_9_m6_k6_electric_bike.webp', '2026-04-20 09:01:57', '2026-07-12 07:28:32'),
+(5, 1, '2026-02-03', '2026-02-05', 'T910G72260006966', '*XR9S72102825N0007369*', 2, 'Red', 161261.00, 179000.00, '2026-03-05', NULL, 161.00, 0.000998, 'purchase_price', 17578.00, 'sold', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_2_t9_sports_electric_bike.webp', '2026-04-20 09:01:57', '2026-07-12 07:28:32'),
+(6, 1, '2026-02-03', '2026-02-05', 'T910G72260007041', '*XR9S72102825N0007701*', 2, 'Black', 161261.00, 179000.00, NULL, NULL, 161.00, 0.000998, 'purchase_price', 17578.00, 'sold', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_2_t9_sports_electric_bike.webp', '2026-04-20 09:01:57', '2026-07-12 07:28:32'),
+(7, 1, '2026-02-03', '2026-02-05', 'T910G72260006884', '*XR9S72102825N0007393*', 2, 'Grey', 161261.00, 179000.00, '2026-03-02', NULL, 161.00, 0.000998, 'purchase_price', 17578.00, 'sold', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_2_t9_sports_electric_bike.webp', '2026-04-20 09:01:57', '2026-07-12 07:28:32'),
+(8, 1, '2026-02-03', '2026-02-05', 'E820G72380002293', '*PJE872203525N0002160*', 7, 'Grey', 251351.00, 279000.00, '2026-02-23', NULL, 251.00, 0.000999, 'purchase_price', 27398.00, 'sold', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-07-12 07:28:32'),
+(9, 1, '2026-02-03', '2026-02-05', 'TH12G72260005515', 'AIMTP721240259005364', 5, 'Grey', 179279.00, 199000.00, '2026-02-22', NULL, 179.00, 0.000998, 'purchase_price', 19542.00, 'sold', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_5_thrill_pro_electric_bike.webp', '2026-04-20 09:01:57', '2026-07-12 07:28:32'),
+(10, 1, '2026-02-03', '2026-02-05', 'TH12G72260006004', 'AIMTP721240259006297', 5, 'Black', 179279.00, 200000.00, '2026-05-06', NULL, 17927.90, 0.100000, 'purchase_price', 2793.10, 'returned', '2026-05-07', 0.00, '30000', NULL, '', 'uploads/models/model_5_thrill_pro_electric_bike.webp', '2026-04-20 09:01:57', '2026-07-12 07:28:32'),
+(11, 1, '2026-02-03', '2026-02-05', 'T910L72300000632', '*XR9S7210282500000640*', 3, 'Silver', 193694.00, NULL, NULL, NULL, 194.00, 0.001002, 'purchase_price', 0.00, 'damaged_lost', NULL, NULL, NULL, '', '', 'uploads/models/model_3_t9_sports_lfp_electric_bike.webp', '2026-04-20 09:01:57', '2026-07-12 07:28:32'),
+(12, 1, '2026-02-03', '2026-02-05', 'T910L72300000916', '*XR9S7210282500000927*', 3, 'Black', 193694.00, 234000.00, '2026-03-07', NULL, 194.00, 0.001002, 'purchase_price', 40112.00, 'sold', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_3_t9_sports_lfp_electric_bike.webp', '2026-04-20 09:01:57', '2026-07-12 07:28:32'),
+(13, 1, '2026-02-03', '2026-02-05', 'TH12L72300000445', 'AIMTP72124025N001005', 6, 'Black', 211712.00, NULL, NULL, NULL, 212.00, 0.001001, 'purchase_price', 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_6_thrill_pro_lfp_electric_bike.webp', '2026-04-20 09:01:57', '2026-07-12 07:28:32'),
+(14, 1, '2026-02-03', '2026-02-05', 'TH12L72300000416', 'AIMTP72124025N001176', 6, 'Grey', 211712.00, 246000.00, '2026-03-18', NULL, 212.00, 0.001001, 'purchase_price', 34076.00, 'sold', NULL, NULL, NULL, NULL, '(2,470,276) Received', 'uploads/models/model_6_thrill_pro_lfp_electric_bike.webp', '2026-04-20 09:01:57', '2026-07-12 07:28:32'),
+(15, 2, '2026-02-27', '2026-03-12', 'M615L72300006176', 'XRM672153025D0007536', 11, 'Unknown', 254955.00, 285000.00, '2026-03-12', NULL, 285.00, 0.001118, 'purchase_price', 29760.00, 'sold', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_11_m6_lithium_np_electric_bike.webp', '2026-04-20 09:01:57', '2026-07-12 07:28:32'),
+(16, 2, '2026-02-27', '2026-03-12', 'M615L72300006278', 'XRM672153025D0007499', 11, 'Unknown', 254955.00, 283000.00, '2026-03-12', NULL, 285.00, 0.001118, 'purchase_price', 27760.00, 'sold', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_11_m6_lithium_np_electric_bike.webp', '2026-04-20 09:01:57', '2026-07-12 07:28:32'),
+(17, 3, '2026-03-12', '2026-03-16', 'T910G72260008882', '*XR9S72102825D0007890*', 4, 'Red', 238739.00, 179000.00, NULL, NULL, 239.00, 0.001001, 'purchase_price', -59978.00, 'sold', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-07-12 07:28:32'),
+(18, 3, '2026-03-12', '2026-03-16', 'T910G72260008478', '*XR9S72102825D0007855*', 4, 'Black', 238739.00, NULL, NULL, NULL, 239.00, 0.001001, 'purchase_price', 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-07-12 07:28:32'),
+(19, 3, '2026-03-12', '2026-03-16', 'T910G72260008679', '*XR9S72102825D0007954*', 2, 'Grey', 161261.00, 179000.00, '2026-03-18', NULL, 179.00, 0.001110, 'purchase_price', 17560.00, 'sold', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_2_t9_sports_electric_bike.webp', '2026-04-20 09:01:57', '2026-07-12 07:28:32'),
+(20, 3, '2026-03-12', '2026-03-16', 'TH12G72260006279', 'AIMTP721240259006047', 5, 'Unknown', 179279.00, NULL, NULL, NULL, 179.00, 0.000998, 'purchase_price', 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_5_thrill_pro_electric_bike.webp', '2026-04-20 09:01:57', '2026-07-12 07:28:32'),
+(21, 3, '2026-03-12', '2026-03-16', 'TH12G72260006236', 'AIMTP721240259006039', 5, 'Unknown', 179279.00, NULL, NULL, NULL, 179.00, 0.000998, 'purchase_price', 0.00, 'in_stock', NULL, NULL, NULL, NULL, '(997,297) Receiving', 'uploads/models/model_5_thrill_pro_electric_bike.webp', '2026-04-20 09:01:57', '2026-07-12 07:28:32'),
+(22, 4, '2026-03-18', '2026-03-27', 'E820G72380000466', '12ZW7271327YE*CERR116670C*', 8, 'Blue', 247748.00, NULL, NULL, NULL, 247.00, 0.000997, 'purchase_price', 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-07-12 07:28:32'),
+(23, 4, '2026-03-18', '2026-03-27', 'P308L72300000159', 'PHPM7208352610000422', 12, 'Unknown', 234234.00, NULL, NULL, NULL, 234.00, 0.000999, 'purchase_price', 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_12_premium_electric_bike.webp', '2026-04-20 09:01:57', '2026-07-12 07:28:32'),
+(24, 4, '2026-03-18', '2026-03-27', 'E810G72380000595', '*10ZW7273316YECKTS0000107*', 7, 'Grey', 251351.00, NULL, NULL, NULL, 251.00, 0.000999, 'purchase_price', 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-20 09:01:57', '2026-07-12 07:28:32'),
+(25, 4, '2026-03-18', '2026-03-27', 'T910G72260008720', '*XR9S72102825D0007987*', 3, 'Unknown', 193694.00, NULL, NULL, NULL, 194.00, 0.001002, 'purchase_price', 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_3_t9_sports_lfp_electric_bike.webp', '2026-04-20 09:01:57', '2026-07-12 07:28:32'),
+(26, 4, '2026-03-18', '2026-03-27', 'T910G72260008894', '*XR9S72102825D0008251*', 3, 'Unknown', 193694.00, NULL, NULL, NULL, 194.00, 0.001002, 'purchase_price', 0.00, 'in_stock', NULL, NULL, NULL, NULL, 'Diff ledger= (70,137)+ new delivery', 'uploads/models/model_3_t9_sports_lfp_electric_bike.webp', '2026-04-20 09:01:57', '2026-07-12 07:28:32'),
+(27, 4, '2026-03-18', '2026-03-27', 'T910G72260008737', '*XR9S72102825D0008003*', 3, 'Unknown', 193694.00, NULL, NULL, NULL, 194.00, 0.001002, 'purchase_price', 0.00, 'in_stock', NULL, NULL, NULL, NULL, NULL, 'uploads/models/model_3_t9_sports_lfp_electric_bike.webp', '2026-04-20 09:01:57', '2026-07-12 07:28:32'),
+(28, 5, '2026-04-26', '2026-04-26', 'NW-21233', 'MT-002', 7, 'Red', 120000.00, 150000.00, '2026-04-26', 5, 120.00, 0.001000, 'purchase_price', 29880.00, 'returned', '2026-04-26', 190000.00, 'Said not appliable', 'must be charged 100 percent for the first time use', '', NULL, '2026-04-26 10:13:52', '2026-07-12 07:28:32'),
+(30, 7, '2026-04-27', '2026-04-27', 'NW-212331', 'MT-002', 7, 'Red', 190000.00, 240000.00, '2026-04-28', 5, 19000.00, 0.100000, 'purchase_price', 31000.00, 'sold', NULL, NULL, NULL, 'must be charged 100 percent for the first time use', '', NULL, '2026-04-27 10:25:19', '2026-07-12 07:28:32'),
+(32, 9, '2026-04-27', '2026-04-27', 'NW-212331a', 'MT-002', 7, 'Red', 190000.00, 230000.00, '2026-05-02', 1, 19000.00, 0.100000, 'purchase_price', 21000.00, 'sold', NULL, NULL, NULL, 'must be charged 100 percent for the first time use', '', NULL, '2026-04-27 10:29:45', '2026-07-12 07:28:32'),
+(33, 10, '2026-04-28', '2026-04-28', 'NW-2123353', 'MT-GT-022', 8, 'Newd', 20000.00, 60000.00, '2026-04-28', 1, 2000.00, 0.100000, 'purchase_price', 38000.00, 'sold', NULL, NULL, NULL, 'must be charged 100 percent for the first time use a', '', NULL, '2026-04-28 04:24:26', '2026-07-12 07:28:32'),
+(34, 11, '2026-04-28', '2026-04-28', 'NW-212331aa', 'MT-GT-02a', 11, 'Newda', 40000.00, 60000.00, '2026-04-28', 1, 4000.00, 0.100000, 'purchase_price', 16000.00, 'sold', NULL, NULL, NULL, 'must be charged 100 percent for the first time use aa', '', 'uploads/models/model_11_m6_lithium_np_electric_bike.webp', '2026-04-28 04:29:37', '2026-07-12 07:28:32'),
+(35, 12, '2026-04-28', '2026-04-28', 'NW-21233213', 'MT-002414', 10, 'Reda', 90000.00, 130000.00, '2026-04-28', 5, 9000.00, 0.100000, 'purchase_price', 31000.00, 'sold', NULL, NULL, NULL, 'new hai', '', 'uploads/models/model_10_m6_np_electric_bike.webp', '2026-04-28 04:33:26', '2026-07-12 07:28:32'),
+(36, 13, '2026-04-28', '2026-04-28', 'NW-21233132', 'MT-0021231', 2, 'Yellow', 90000.00, 220000.00, '2026-04-28', 6, 9000.00, 0.100000, 'purchase_price', 121000.00, 'sold', NULL, NULL, NULL, 'theek hai', '', 'uploads/models/model_2_t9_sports_electric_bike.webp', '2026-04-28 04:36:57', '2026-07-12 07:28:32'),
+(37, 14, '2026-05-01', '2026-05-01', 'NW-212335123', 'MT-GT-02aa', 7, 'Yellow', 290000.00, 340000.00, '2026-05-01', 5, 29000.00, 0.100000, 'purchase_price', 21000.00, 'sold', NULL, NULL, NULL, '', '', 'uploads/bike_6a2e70a3860e6.webp', '2026-05-01 06:59:16', '2026-07-12 07:28:32'),
+(38, 15, '2026-05-06', '2026-05-06', 'T929283007', 'TI8399uue', 2, 'Rad', 200000.00, 220000.00, '2026-05-06', NULL, 20000.00, 0.100000, 'purchase_price', 0.00, 'sold', NULL, NULL, NULL, '', '', 'uploads/img_69fb71525af01.jpg', '2026-05-06 16:50:26', '2026-07-12 07:28:32'),
+(39, 16, '2026-05-07', '2026-05-07', 'NW-21233123', 'MT-GT-0223', 14, 'Red', 250000.00, NULL, NULL, NULL, 25000.00, 0.100000, 'purchase_price', 0.00, 'in_stock', NULL, NULL, NULL, '', '', 'uploads/bike_6a0308a7eb3fc.webp', '2026-05-07 06:41:42', '2026-07-12 07:28:32'),
+(40, 16, '2026-05-07', '2026-05-07', 'qrqwer', '12341', 14, 'Yellow', 250000.00, 320000.00, '2026-05-07', 2, 25000.00, 0.100000, 'purchase_price', 45000.00, 'sold', NULL, NULL, NULL, '', '', 'uploads/models/model_14_super_star_70.webp', '2026-05-07 06:41:42', '2026-07-12 07:28:32');
 
 -- --------------------------------------------------------
 
@@ -233,6 +243,14 @@ CREATE TABLE `deposit_allocations` (
   `amount` decimal(15,2) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+--
+-- Dumping data for table `deposit_allocations`
+--
+
+INSERT INTO `deposit_allocations` (`id`, `deposit_id`, `allocation_id`, `bike_id`, `amount`) VALUES
+(3, 6, 1, 40, 310000.00),
+(4, 7, 1, 40, 5000.00);
+
 -- --------------------------------------------------------
 
 --
@@ -296,6 +314,7 @@ CREATE TABLE `installments` (
   `installment_amount` decimal(15,2) NOT NULL,
   `amount_paid` decimal(15,2) DEFAULT '0.00',
   `penalty_fee` decimal(15,2) DEFAULT '0.00',
+  `penalty_paid` decimal(15,2) NOT NULL DEFAULT '0.00',
   `status` enum('pending','paid','overdue','cancelled') DEFAULT 'pending',
   `payment_id` int DEFAULT NULL,
   `notes` text,
@@ -307,25 +326,57 @@ CREATE TABLE `installments` (
 -- Dumping data for table `installments`
 --
 
-INSERT INTO `installments` (`id`, `bike_id`, `customer_id`, `due_date`, `installment_amount`, `amount_paid`, `penalty_fee`, `status`, `payment_id`, `notes`, `created_at`, `updated_at`) VALUES
-(7, 36, 6, '2026-05-28', 33000.00, 33000.00, 0.00, 'paid', 23, 'Installment 1 for Chassis NW-21233132', '2026-04-28 10:24:33', '2026-04-28 10:24:51'),
-(8, 36, 6, '2026-06-28', 33000.00, 33000.00, 9000.00, 'paid', 24, 'Installment 2 for Chassis NW-21233132', '2026-04-28 10:24:33', '2026-04-28 10:25:07'),
-(9, 36, 6, '2026-07-28', 33000.00, 0.00, 0.00, 'pending', NULL, 'Installment 3 for Chassis NW-21233132', '2026-04-28 10:24:33', '2026-04-28 10:24:33'),
-(10, 36, 6, '2026-08-28', 33000.00, 0.00, 0.00, 'pending', NULL, 'Installment 4 for Chassis NW-21233132', '2026-04-28 10:24:33', '2026-04-28 10:24:33'),
-(11, 36, 6, '2026-09-28', 33000.00, 0.00, 0.00, 'pending', NULL, 'Installment 5 for Chassis NW-21233132', '2026-04-28 10:24:33', '2026-04-28 10:24:33'),
-(12, 36, 6, '2026-10-28', 33000.00, 0.00, 0.00, 'pending', NULL, 'Installment 6 for Chassis NW-21233132', '2026-04-28 10:24:33', '2026-04-28 10:24:33'),
-(13, 37, 5, '2026-06-01', 26666.67, 26666.67, 9000.00, 'paid', 27, 'Installment 1 for Chassis NW-212335123', '2026-05-01 07:02:42', '2026-05-01 07:03:28'),
-(14, 37, 5, '2026-07-01', 26666.67, 0.00, 0.00, 'pending', NULL, 'Installment 2 for Chassis NW-212335123', '2026-05-01 07:02:42', '2026-05-01 07:02:42'),
-(15, 37, 5, '2026-08-01', 26666.67, 0.00, 0.00, 'pending', NULL, 'Installment 3 for Chassis NW-212335123', '2026-05-01 07:02:42', '2026-05-01 07:02:42'),
-(16, 37, 5, '2026-09-01', 26666.67, 0.00, 0.00, 'pending', NULL, 'Installment 4 for Chassis NW-212335123', '2026-05-01 07:02:42', '2026-05-01 07:02:42'),
-(17, 37, 5, '2026-10-01', 26666.67, 0.00, 0.00, 'pending', NULL, 'Installment 5 for Chassis NW-212335123', '2026-05-01 07:02:42', '2026-05-01 07:02:42'),
-(18, 37, 5, '2026-11-01', 26666.67, 0.00, 0.00, 'pending', NULL, 'Installment 6 for Chassis NW-212335123', '2026-05-01 07:02:42', '2026-05-01 07:02:42'),
-(19, 37, 5, '2026-12-01', 26666.67, 0.00, 0.00, 'pending', NULL, 'Installment 7 for Chassis NW-212335123', '2026-05-01 07:02:42', '2026-05-01 07:02:42'),
-(20, 37, 5, '2027-01-01', 26666.67, 0.00, 0.00, 'pending', NULL, 'Installment 8 for Chassis NW-212335123', '2026-05-01 07:02:42', '2026-05-01 07:02:42'),
-(21, 37, 5, '2027-02-01', 26666.67, 0.00, 0.00, 'pending', NULL, 'Installment 9 for Chassis NW-212335123', '2026-05-01 07:02:42', '2026-05-01 07:02:42'),
-(22, 37, 5, '2027-03-01', 26666.67, 0.00, 0.00, 'pending', NULL, 'Installment 10 for Chassis NW-212335123', '2026-05-01 07:02:42', '2026-05-01 07:02:42'),
-(23, 37, 5, '2027-04-01', 26666.67, 0.00, 0.00, 'pending', NULL, 'Installment 11 for Chassis NW-212335123', '2026-05-01 07:02:42', '2026-05-01 07:02:42'),
-(24, 37, 5, '2027-05-01', 26666.67, 0.00, 0.00, 'pending', NULL, 'Installment 12 for Chassis NW-212335123', '2026-05-01 07:02:42', '2026-05-01 07:02:42');
+INSERT INTO `installments` (`id`, `bike_id`, `customer_id`, `due_date`, `installment_amount`, `amount_paid`, `penalty_fee`, `penalty_paid`, `status`, `payment_id`, `notes`, `created_at`, `updated_at`) VALUES
+(7, 36, 6, '2026-05-28', 33000.00, 33000.00, 0.00, 0.00, 'paid', 23, 'Installment 1 for Chassis NW-21233132', '2026-04-28 10:24:33', '2026-04-28 10:24:51'),
+(8, 36, 6, '2026-06-28', 33000.00, 33000.00, 9000.00, 9000.00, 'paid', 24, 'Installment 2 for Chassis NW-21233132', '2026-04-28 10:24:33', '2026-07-12 07:28:32'),
+(9, 36, 6, '2026-07-28', 33000.00, 0.00, 0.00, 0.00, 'pending', NULL, 'Installment 3 for Chassis NW-21233132', '2026-04-28 10:24:33', '2026-04-28 10:24:33'),
+(10, 36, 6, '2026-08-28', 33000.00, 0.00, 0.00, 0.00, 'pending', NULL, 'Installment 4 for Chassis NW-21233132', '2026-04-28 10:24:33', '2026-04-28 10:24:33'),
+(11, 36, 6, '2026-09-28', 33000.00, 0.00, 0.00, 0.00, 'pending', NULL, 'Installment 5 for Chassis NW-21233132', '2026-04-28 10:24:33', '2026-04-28 10:24:33'),
+(12, 36, 6, '2026-10-28', 33000.00, 0.00, 0.00, 0.00, 'pending', NULL, 'Installment 6 for Chassis NW-21233132', '2026-04-28 10:24:33', '2026-04-28 10:24:33'),
+(13, 37, 5, '2026-06-01', 26666.67, 26666.67, 9000.00, 9000.00, 'paid', 27, 'Installment 1 for Chassis NW-212335123', '2026-05-01 07:02:42', '2026-07-12 07:28:32'),
+(14, 37, 5, '2026-07-01', 26666.67, 0.00, 0.00, 0.00, 'pending', NULL, 'Installment 2 for Chassis NW-212335123', '2026-05-01 07:02:42', '2026-05-01 07:02:42'),
+(15, 37, 5, '2026-08-01', 26666.67, 0.00, 0.00, 0.00, 'pending', NULL, 'Installment 3 for Chassis NW-212335123', '2026-05-01 07:02:42', '2026-05-01 07:02:42'),
+(16, 37, 5, '2026-09-01', 26666.67, 0.00, 0.00, 0.00, 'pending', NULL, 'Installment 4 for Chassis NW-212335123', '2026-05-01 07:02:42', '2026-05-01 07:02:42'),
+(17, 37, 5, '2026-10-01', 26666.67, 0.00, 0.00, 0.00, 'pending', NULL, 'Installment 5 for Chassis NW-212335123', '2026-05-01 07:02:42', '2026-05-01 07:02:42'),
+(18, 37, 5, '2026-11-01', 26666.67, 0.00, 0.00, 0.00, 'pending', NULL, 'Installment 6 for Chassis NW-212335123', '2026-05-01 07:02:42', '2026-05-01 07:02:42'),
+(19, 37, 5, '2026-12-01', 26666.67, 0.00, 0.00, 0.00, 'pending', NULL, 'Installment 7 for Chassis NW-212335123', '2026-05-01 07:02:42', '2026-05-01 07:02:42'),
+(20, 37, 5, '2027-01-01', 26666.67, 0.00, 0.00, 0.00, 'pending', NULL, 'Installment 8 for Chassis NW-212335123', '2026-05-01 07:02:42', '2026-05-01 07:02:42'),
+(21, 37, 5, '2027-02-01', 26666.67, 0.00, 0.00, 0.00, 'pending', NULL, 'Installment 9 for Chassis NW-212335123', '2026-05-01 07:02:42', '2026-05-01 07:02:42'),
+(22, 37, 5, '2027-03-01', 26666.67, 0.00, 0.00, 0.00, 'pending', NULL, 'Installment 10 for Chassis NW-212335123', '2026-05-01 07:02:42', '2026-05-01 07:02:42'),
+(23, 37, 5, '2027-04-01', 26666.67, 0.00, 0.00, 0.00, 'pending', NULL, 'Installment 11 for Chassis NW-212335123', '2026-05-01 07:02:42', '2026-05-01 07:02:42'),
+(24, 37, 5, '2027-05-01', 26666.63, 0.00, 0.00, 0.00, 'pending', NULL, 'Installment 12 for Chassis NW-212335123', '2026-05-01 07:02:42', '2026-07-12 07:28:32');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `installment_payment_allocations`
+--
+
+CREATE TABLE `installment_payment_allocations` (
+  `id` bigint NOT NULL,
+  `payment_id` int NOT NULL,
+  `installment_id` int NOT NULL,
+  `principal_amount` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `penalty_amount` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `inventory_status_history`
+--
+
+CREATE TABLE `inventory_status_history` (
+  `id` bigint NOT NULL,
+  `bike_id` int DEFAULT NULL,
+  `chassis_number` varchar(100) NOT NULL,
+  `old_status` varchar(40) NOT NULL,
+  `new_status` varchar(40) NOT NULL,
+  `changed_by` int DEFAULT NULL,
+  `change_reason` varchar(1000) DEFAULT NULL,
+  `changed_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
 
@@ -501,6 +552,8 @@ CREATE TABLE `payments` (
   `status` enum('pending','cleared','bounced','cancelled') DEFAULT 'pending',
   `transaction_type` enum('purchase','sale','installment','expense_payment','supplier_payment','customer_refund','customer_advance','supplier_refund') NOT NULL,
   `reference_id` int DEFAULT NULL,
+  `customer_id` int DEFAULT NULL,
+  `supplier_id` int DEFAULT NULL,
   `party_name` varchar(255) DEFAULT NULL,
   `notes` text,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
@@ -510,33 +563,33 @@ CREATE TABLE `payments` (
 -- Dumping data for table `payments`
 --
 
-INSERT INTO `payments` (`id`, `payment_date`, `payment_type`, `amount`, `cheque_number`, `bank_name`, `cheque_date`, `status`, `transaction_type`, `reference_id`, `party_name`, `notes`, `created_at`) VALUES
-(1, '2026-04-26', 'cheque', 150000.00, NULL, NULL, NULL, 'cleared', 'sale', 28, 'Yasin Ullah', '', '2026-04-26 10:17:45'),
-(2, '2026-04-28', 'cash', 20000.00, NULL, NULL, NULL, 'pending', 'supplier_payment', 10, '0', '', '2026-04-28 04:24:26'),
-(3, '2026-04-28', 'cash', 40000.00, NULL, NULL, NULL, 'pending', 'supplier_payment', 11, '0', '', '2026-04-28 04:29:37'),
-(4, '2026-04-28', 'cash', 90000.00, NULL, NULL, NULL, 'pending', 'supplier_payment', 12, '0', 'new', '2026-04-28 04:33:26'),
-(5, '2026-04-28', 'cheque', 90000.00, 'nw1023900', '0', '2026-04-28', 'pending', 'supplier_payment', 13, '0', '', '2026-04-28 04:36:57'),
-(6, '2026-04-28', 'cash', 110000.00, '', '0', NULL, 'pending', 'sale', 36, '0', 'Down Payment for Chassis: NW-21233132', '2026-04-28 04:40:25'),
-(7, '2026-04-28', 'cash', 110000.00, '', '0', NULL, 'pending', 'sale', 35, '0', 'Down Payment for Chassis: NW-21233213', '2026-04-28 04:43:01'),
-(8, '2026-04-28', 'cash', 220000.00, '', '0', NULL, 'pending', 'sale', 30, '0', 'Down Payment for Chassis: NW-212331', '2026-04-28 04:50:16'),
-(9, '2026-04-28', 'cash', 30000.00, '', '0', NULL, 'pending', 'sale', 33, '0', 'Down Payment for Chassis: NW-2123353', '2026-04-28 05:08:07'),
-(10, '2026-04-28', 'cash', 60000.00, '', '0', NULL, 'pending', 'sale', 34, '0', 'Down Payment for Chassis: NW-212331aa', '2026-04-28 05:09:01'),
-(11, '2026-04-28', 'cash', 30000.00, NULL, NULL, NULL, 'pending', 'sale', NULL, 'Ahmed Ali', 'baqaya', '2026-04-28 05:21:39'),
-(12, '2026-04-28', 'cash', 600.00, NULL, NULL, NULL, 'pending', 'sale', NULL, 'Ahmed Ali', '', '2026-04-28 05:25:33'),
-(13, '2026-04-28', 'cash', 130000.00, NULL, NULL, NULL, 'pending', 'sale', 3, 'Yasin Ullah', 'Sale from Quotation #1', '2026-04-28 09:37:06'),
-(22, '2026-04-28', 'cash', 22000.00, '', '', NULL, 'pending', 'sale', 36, 'Shams Uddin', 'Down Payment for Chassis: NW-21233132', '2026-04-28 10:24:33'),
-(23, '2026-04-28', 'cash', 33000.00, '', '', NULL, 'pending', 'installment', 7, 'Shams Uddin', 'Installment payment for Chassis NW-21233132 (ID: 7)', '2026-04-28 10:24:51'),
-(24, '2026-04-28', 'cash', 42000.00, '', '', NULL, 'pending', 'installment', 8, 'Shams Uddin', 'Installment payment for Chassis NW-21233132 (ID: 8)', '2026-04-28 10:25:07'),
-(25, '2026-05-01', 'cash', 290000.00, NULL, NULL, NULL, 'pending', 'supplier_payment', 14, 'Yasin Ullah', '', '2026-05-01 06:59:16'),
-(26, '2026-05-01', 'cash', 20000.00, '', '', NULL, 'pending', 'sale', 37, 'Yasin Ullah', 'Down Payment for Chassis: NW-212335123', '2026-05-01 07:02:42'),
-(27, '2026-05-01', 'cash', 35666.67, '', '', NULL, 'pending', 'installment', 13, 'Yasin Ullah', 'Installment payment for Chassis NW-212335123 (ID: 13)', '2026-05-01 07:03:28'),
-(28, '2026-05-02', 'cash', 230000.00, '', '', NULL, 'pending', 'sale', 32, 'Ahmed Ali', 'Down Payment for Chassis: NW-212331a', '2026-05-01 13:22:14'),
-(29, '2026-05-06', 'cash', 210000.00, '', '', NULL, 'pending', 'sale', 1, 'Walk-in Customer', 'Down Payment for Chassis: LY05G48270002304', '2026-05-06 16:38:41'),
-(30, '2026-05-06', 'cash', 220000.00, '', '', NULL, 'pending', 'sale', 38, 'Walk-in Customer', 'Down Payment for Chassis: T929283007', '2026-05-06 16:51:52'),
-(31, '2026-05-06', 'online', 200000.00, '', '', NULL, 'pending', 'sale', 10, 'Walk-in Customer', 'Down Payment for Chassis: TH12G72260006004', '2026-05-06 16:54:50'),
-(32, '2026-05-07', 'cash', 0.00, '', '', NULL, 'pending', 'customer_refund', 10, 'Unknown Customer', '30000', '2026-05-06 16:57:35'),
-(33, '2026-05-07', 'cash', 500000.00, NULL, NULL, NULL, 'pending', 'supplier_payment', 16, 'Khan Gull', '', '2026-05-07 06:41:42'),
-(34, '2026-05-07', 'cash', 320000.00, '', '', NULL, 'pending', 'sale', 40, 'Muhammad Usman', 'Down Payment for Chassis: qrqwer', '2026-05-07 06:50:37');
+INSERT INTO `payments` (`id`, `payment_date`, `payment_type`, `amount`, `cheque_number`, `bank_name`, `cheque_date`, `status`, `transaction_type`, `reference_id`, `customer_id`, `supplier_id`, `party_name`, `notes`, `created_at`) VALUES
+(1, '2026-04-26', 'cheque', 150000.00, NULL, NULL, NULL, 'cleared', 'sale', 28, 5, NULL, 'Yasin Ullah', '', '2026-04-26 10:17:45'),
+(2, '2026-04-28', 'cash', 20000.00, NULL, NULL, NULL, 'cleared', 'supplier_payment', 10, NULL, 5, '0', '', '2026-04-28 04:24:26'),
+(3, '2026-04-28', 'cash', 40000.00, NULL, NULL, NULL, 'cleared', 'supplier_payment', 11, NULL, 2, '0', '', '2026-04-28 04:29:37'),
+(4, '2026-04-28', 'cash', 90000.00, NULL, NULL, NULL, 'cleared', 'supplier_payment', 12, NULL, 2, '0', 'new', '2026-04-28 04:33:26'),
+(5, '2026-04-28', 'cheque', 90000.00, 'nw1023900', '0', '2026-04-28', 'pending', 'supplier_payment', 13, NULL, 3, '0', '', '2026-04-28 04:36:57'),
+(6, '2026-04-28', 'cash', 110000.00, '', '0', NULL, 'cleared', 'sale', 36, 6, NULL, '0', 'Down Payment for Chassis: NW-21233132', '2026-04-28 04:40:25'),
+(7, '2026-04-28', 'cash', 110000.00, '', '0', NULL, 'cleared', 'sale', 35, 5, NULL, '0', 'Down Payment for Chassis: NW-21233213', '2026-04-28 04:43:01'),
+(8, '2026-04-28', 'cash', 220000.00, '', '0', NULL, 'cleared', 'sale', 30, 5, NULL, '0', 'Down Payment for Chassis: NW-212331', '2026-04-28 04:50:16'),
+(9, '2026-04-28', 'cash', 30000.00, '', '0', NULL, 'cleared', 'sale', 33, 1, NULL, '0', 'Down Payment for Chassis: NW-2123353', '2026-04-28 05:08:07'),
+(10, '2026-04-28', 'cash', 60000.00, '', '0', NULL, 'cleared', 'sale', 34, 1, NULL, '0', 'Down Payment for Chassis: NW-212331aa', '2026-04-28 05:09:01'),
+(11, '2026-04-28', 'cash', 30000.00, NULL, NULL, NULL, 'cleared', 'sale', NULL, 1, NULL, 'Ahmed Ali', 'baqaya', '2026-04-28 05:21:39'),
+(12, '2026-04-28', 'cash', 600.00, NULL, NULL, NULL, 'cleared', 'sale', NULL, 1, NULL, 'Ahmed Ali', '', '2026-04-28 05:25:33'),
+(13, '2026-04-28', 'cash', 130000.00, NULL, NULL, NULL, 'cleared', 'sale', 3, 5, NULL, 'Yasin Ullah', 'Sale from Quotation #1', '2026-04-28 09:37:06'),
+(22, '2026-04-28', 'cash', 22000.00, '', '', NULL, 'cleared', 'sale', 36, 6, NULL, 'Shams Uddin', 'Down Payment for Chassis: NW-21233132', '2026-04-28 10:24:33'),
+(23, '2026-04-28', 'cash', 33000.00, '', '', NULL, 'cleared', 'installment', 7, 6, NULL, 'Shams Uddin', 'Installment payment for Chassis NW-21233132 (ID: 7)', '2026-04-28 10:24:51'),
+(24, '2026-04-28', 'cash', 42000.00, '', '', NULL, 'cleared', 'installment', 8, 6, NULL, 'Shams Uddin', 'Installment payment for Chassis NW-21233132 (ID: 8)', '2026-04-28 10:25:07'),
+(25, '2026-05-01', 'cash', 290000.00, NULL, NULL, NULL, 'cleared', 'supplier_payment', 14, NULL, 2, 'Yasin Ullah', '', '2026-05-01 06:59:16'),
+(26, '2026-05-01', 'cash', 20000.00, '', '', NULL, 'cleared', 'sale', 37, 5, NULL, 'Yasin Ullah', 'Down Payment for Chassis: NW-212335123', '2026-05-01 07:02:42'),
+(27, '2026-05-01', 'cash', 35666.67, '', '', NULL, 'cleared', 'installment', 13, 5, NULL, 'Yasin Ullah', 'Installment payment for Chassis NW-212335123 (ID: 13)', '2026-05-01 07:03:28'),
+(28, '2026-05-02', 'cash', 230000.00, '', '', NULL, 'cleared', 'sale', 32, 1, NULL, 'Ahmed Ali', 'Down Payment for Chassis: NW-212331a', '2026-05-01 13:22:14'),
+(29, '2026-05-06', 'cash', 210000.00, '', '', NULL, 'cleared', 'sale', 1, NULL, NULL, 'Walk-in Customer', 'Down Payment for Chassis: LY05G48270002304', '2026-05-06 16:38:41'),
+(30, '2026-05-06', 'cash', 220000.00, '', '', NULL, 'cleared', 'sale', 38, NULL, NULL, 'Walk-in Customer', 'Down Payment for Chassis: T929283007', '2026-05-06 16:51:52'),
+(31, '2026-05-06', 'online', 200000.00, '', '', NULL, 'cleared', 'sale', 10, NULL, NULL, 'Walk-in Customer', 'Down Payment for Chassis: TH12G72260006004', '2026-05-06 16:54:50'),
+(32, '2026-05-07', 'cash', 0.00, '', '', NULL, 'cleared', 'customer_refund', 10, NULL, NULL, 'Unknown Customer', '30000', '2026-05-06 16:57:35'),
+(33, '2026-05-07', 'cash', 500000.00, NULL, NULL, NULL, 'cleared', 'supplier_payment', 16, NULL, 6, 'Khan Gull', '', '2026-05-07 06:41:42'),
+(34, '2026-05-07', 'cash', 320000.00, '', '', NULL, 'cleared', 'sale', 40, 2, NULL, 'Muhammad Usman', 'Down Payment for Chassis: qrqwer', '2026-05-07 06:50:37');
 
 -- --------------------------------------------------------
 
@@ -559,15 +612,15 @@ CREATE TABLE `purchase_orders` (
 --
 
 INSERT INTO `purchase_orders` (`id`, `order_date`, `supplier_id`, `total_units`, `total_amount`, `notes`, `created_at`) VALUES
-(1, '2026-02-03', 1, 14, 0.00, 'First Order', '2026-04-20 09:01:57'),
-(2, '2026-02-27', 1, 2, 0.00, 'Second Order', '2026-04-20 09:01:57'),
-(3, '2026-03-12', 1, 5, 0.00, 'Third Order', '2026-04-20 09:01:57'),
-(4, '2026-03-18', 1, 6, 0.00, 'Fourth Order', '2026-04-20 09:01:57'),
-(5, '2026-04-26', 1, 1, 0.00, '', '2026-04-26 10:13:52'),
-(6, '2026-04-27', 1, 1, 0.00, '', '2026-04-27 10:25:09'),
-(7, '2026-04-27', 1, 1, 0.00, '', '2026-04-27 10:25:19'),
-(8, '2026-04-27', 1, 1, 0.00, '', '2026-04-27 10:29:22'),
-(9, '2026-04-27', 1, 1, 0.00, '', '2026-04-27 10:29:45'),
+(1, '2026-02-03', 1, 14, 2470270.00, 'First Order', '2026-04-20 09:01:57'),
+(2, '2026-02-27', 1, 2, 509910.00, 'Second Order', '2026-04-20 09:01:57'),
+(3, '2026-03-12', 1, 5, 997297.00, 'Third Order', '2026-04-20 09:01:57'),
+(4, '2026-03-18', 1, 6, 1314415.00, 'Fourth Order', '2026-04-20 09:01:57'),
+(5, '2026-04-26', 1, 1, 120000.00, '', '2026-04-26 10:13:52'),
+(6, '2026-04-27', 1, 0, 0.00, '', '2026-04-27 10:25:09'),
+(7, '2026-04-27', 1, 1, 190000.00, '', '2026-04-27 10:25:19'),
+(8, '2026-04-27', 1, 0, 0.00, '', '2026-04-27 10:29:22'),
+(9, '2026-04-27', 1, 1, 190000.00, '', '2026-04-27 10:29:45'),
 (10, '2026-04-28', 5, 1, 20000.00, '', '2026-04-28 04:24:26'),
 (11, '2026-04-28', 2, 1, 40000.00, '', '2026-04-28 04:29:37'),
 (12, '2026-04-28', 2, 1, 90000.00, 'new', '2026-04-28 04:33:26'),
@@ -744,7 +797,22 @@ INSERT INTO `role_permissions` (`id`, `role_id`, `page`, `can_view`, `can_add`, 
 (104, 1, 'installments', 1, 1, 1, 1),
 (105, 1, 'money_destinations', 0, 0, 0, 0),
 (106, 1, 'money_tracking', 0, 0, 0, 0),
-(107, 1, 'bank_deposits', 0, 0, 0, 0);
+(107, 1, 'bank_deposits', 0, 0, 0, 0),
+(108, 5, 'customer_ledger', 0, 0, 0, 0),
+(109, 2, 'customer_ledger', 0, 0, 0, 0),
+(110, 3, 'customer_ledger', 0, 0, 0, 0),
+(111, 4, 'customer_ledger', 0, 0, 0, 0),
+(112, 1, 'customer_ledger', 0, 0, 0, 0),
+(113, 5, 'supplier_ledger', 0, 0, 0, 0),
+(114, 2, 'supplier_ledger', 0, 0, 0, 0),
+(115, 3, 'supplier_ledger', 0, 0, 0, 0),
+(116, 4, 'supplier_ledger', 0, 0, 0, 0),
+(117, 1, 'supplier_ledger', 0, 0, 0, 0),
+(118, 5, 'landing_page', 0, 0, 0, 0),
+(119, 2, 'landing_page', 0, 0, 0, 0),
+(120, 3, 'landing_page', 0, 0, 0, 0),
+(121, 4, 'landing_page', 0, 0, 0, 0),
+(122, 1, 'landing_page', 0, 0, 0, 0);
 
 -- --------------------------------------------------------
 
@@ -794,6 +862,25 @@ CREATE TABLE `sale_money_allocations` (
 
 INSERT INTO `sale_money_allocations` (`id`, `bike_id`, `destination_id`, `amount`, `allocation_date`, `notes`, `created_by`, `created_at`, `updated_at`) VALUES
 (1, 40, 1, 320000.00, '2026-07-07', '', 1, '2026-07-07 10:48:23', '2026-07-07 10:48:23');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `schema_migrations`
+--
+
+CREATE TABLE `schema_migrations` (
+  `migration_key` varchar(100) NOT NULL,
+  `applied_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `details` varchar(255) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Dumping data for table `schema_migrations`
+--
+
+INSERT INTO `schema_migrations` (`migration_key`, `applied_at`, `details`) VALUES
+('2026-07-production-integrity-hardening', '2026-07-12 07:28:32', 'Payment ownership, installment allocations, historical tax metadata and safe data repairs');
 
 -- --------------------------------------------------------
 
@@ -971,6 +1058,23 @@ ALTER TABLE `installments`
   ADD KEY `idx_installments_customer` (`customer_id`);
 
 --
+-- Indexes for table `installment_payment_allocations`
+--
+ALTER TABLE `installment_payment_allocations`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_installment_payment` (`payment_id`,`installment_id`),
+  ADD KEY `idx_ipa_installment` (`installment_id`);
+
+--
+-- Indexes for table `inventory_status_history`
+--
+ALTER TABLE `inventory_status_history`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_ish_bike` (`bike_id`),
+  ADD KEY `idx_ish_changed_at` (`changed_at`),
+  ADD KEY `fk_ish_user` (`changed_by`);
+
+--
 -- Indexes for table `leadership`
 --
 ALTER TABLE `leadership`
@@ -1002,7 +1106,9 @@ ALTER TABLE `payments`
   ADD PRIMARY KEY (`id`),
   ADD KEY `idx_payment_date` (`payment_date`),
   ADD KEY `idx_transaction_type` (`transaction_type`),
-  ADD KEY `idx_payments_ref` (`transaction_type`,`reference_id`);
+  ADD KEY `idx_payments_ref` (`transaction_type`,`reference_id`),
+  ADD KEY `idx_payments_customer` (`customer_id`),
+  ADD KEY `idx_payments_supplier` (`supplier_id`);
 
 --
 -- Indexes for table `purchase_orders`
@@ -1059,6 +1165,12 @@ ALTER TABLE `sale_money_allocations`
   ADD KEY `created_by` (`created_by`);
 
 --
+-- Indexes for table `schema_migrations`
+--
+ALTER TABLE `schema_migrations`
+  ADD PRIMARY KEY (`migration_key`);
+
+--
 -- Indexes for table `settings`
 --
 ALTER TABLE `settings`
@@ -1087,19 +1199,19 @@ ALTER TABLE `users`
 -- AUTO_INCREMENT for table `accessories`
 --
 ALTER TABLE `accessories`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT for table `bank_deposits`
 --
 ALTER TABLE `bank_deposits`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 --
 -- AUTO_INCREMENT for table `bikes`
 --
 ALTER TABLE `bikes`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=41;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=43;
 
 --
 -- AUTO_INCREMENT for table `bike_requests`
@@ -1117,13 +1229,13 @@ ALTER TABLE `cheque_register`
 -- AUTO_INCREMENT for table `customers`
 --
 ALTER TABLE `customers`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
 
 --
 -- AUTO_INCREMENT for table `deposit_allocations`
 --
 ALTER TABLE `deposit_allocations`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT for table `gallery`
@@ -1141,7 +1253,19 @@ ALTER TABLE `income_expenses`
 -- AUTO_INCREMENT for table `installments`
 --
 ALTER TABLE `installments`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=25;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=28;
+
+--
+-- AUTO_INCREMENT for table `installment_payment_allocations`
+--
+ALTER TABLE `installment_payment_allocations`
+  MODIFY `id` bigint NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+
+--
+-- AUTO_INCREMENT for table `inventory_status_history`
+--
+ALTER TABLE `inventory_status_history`
+  MODIFY `id` bigint NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `leadership`
@@ -1153,31 +1277,31 @@ ALTER TABLE `leadership`
 -- AUTO_INCREMENT for table `ledger`
 --
 ALTER TABLE `ledger`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=44;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=48;
 
 --
 -- AUTO_INCREMENT for table `models`
 --
 ALTER TABLE `models`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
 
 --
 -- AUTO_INCREMENT for table `money_destinations`
 --
 ALTER TABLE `money_destinations`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT for table `payments`
 --
 ALTER TABLE `payments`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=35;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=37;
 
 --
 -- AUTO_INCREMENT for table `purchase_orders`
 --
 ALTER TABLE `purchase_orders`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=18;
 
 --
 -- AUTO_INCREMENT for table `quotations`
@@ -1201,19 +1325,19 @@ ALTER TABLE `roles`
 -- AUTO_INCREMENT for table `role_permissions`
 --
 ALTER TABLE `role_permissions`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=108;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=126;
 
 --
 -- AUTO_INCREMENT for table `sale_accessories`
 --
 ALTER TABLE `sale_accessories`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT for table `sale_money_allocations`
 --
 ALTER TABLE `sale_money_allocations`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `settings`
@@ -1225,13 +1349,13 @@ ALTER TABLE `settings`
 -- AUTO_INCREMENT for table `suppliers`
 --
 ALTER TABLE `suppliers`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 --
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 
 --
 -- Constraints for dumped tables
@@ -1273,6 +1397,27 @@ ALTER TABLE `installments`
   ADD CONSTRAINT `installments_ibfk_1` FOREIGN KEY (`bike_id`) REFERENCES `bikes` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `installments_ibfk_2` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `installments_ibfk_3` FOREIGN KEY (`payment_id`) REFERENCES `payments` (`id`) ON DELETE SET NULL;
+
+--
+-- Constraints for table `installment_payment_allocations`
+--
+ALTER TABLE `installment_payment_allocations`
+  ADD CONSTRAINT `fk_ipa_installment` FOREIGN KEY (`installment_id`) REFERENCES `installments` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_ipa_payment` FOREIGN KEY (`payment_id`) REFERENCES `payments` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `inventory_status_history`
+--
+ALTER TABLE `inventory_status_history`
+  ADD CONSTRAINT `fk_ish_bike` FOREIGN KEY (`bike_id`) REFERENCES `bikes` (`id`) ON DELETE SET NULL,
+  ADD CONSTRAINT `fk_ish_user` FOREIGN KEY (`changed_by`) REFERENCES `users` (`id`) ON DELETE SET NULL;
+
+--
+-- Constraints for table `payments`
+--
+ALTER TABLE `payments`
+  ADD CONSTRAINT `fk_payments_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE SET NULL,
+  ADD CONSTRAINT `fk_payments_supplier` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers` (`id`) ON DELETE SET NULL;
 
 --
 -- Constraints for table `purchase_orders`
