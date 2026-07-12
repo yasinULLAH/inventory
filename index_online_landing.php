@@ -2,6 +2,12 @@
 ini_set('session.cookie_httponly', 1);
 ini_set('session.use_only_cookies', 1);
 ini_set('session.cookie_samesite', 'Strict');
+ini_set('session.use_strict_mode', '1');
+$request_is_https = (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off') || (($_SERVER['SERVER_PORT'] ?? null) == 443) || strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
+$request_host = strtolower(preg_replace('/:\d+$/', '', (string) ($_SERVER['HTTP_HOST'] ?? '')));
+$is_local_host = in_array($request_host, ['localhost', '127.0.0.1', '::1', ''], true) || str_ends_with($request_host, '.local');
+if (!$request_is_https && !$is_local_host && preg_match('/^[a-z0-9.-]+$/', $request_host)) { header('Location: https://' . $request_host . ($_SERVER['REQUEST_URI'] ?? '/'), true, 301); exit; }
+if ($request_is_https) { ini_set('session.cookie_secure', '1'); header('Strict-Transport-Security: max-age=300'); }
 ini_set('display_errors', '0');
 ini_set('log_errors', '1');
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING & ~E_DEPRECATED);
@@ -51,6 +57,22 @@ function get_setting($key)
 function sanitize($val)
 {
     return htmlspecialchars(strip_tags(trim($val ?? '')), ENT_QUOTES, 'UTF-8');
+}
+
+function clean_text($val, $max_length = 2000)
+{
+    $value = trim(strip_tags((string) $val));
+    return function_exists('mb_substr') ? mb_substr($value, 0, $max_length, 'UTF-8') : substr($value, 0, $max_length);
+}
+
+function safe_public_url($value, array $allowed_hosts = [])
+{
+    $value = trim((string) $value);
+    if ($value === '' || !filter_var($value, FILTER_VALIDATE_URL)) return '';
+    $parts = parse_url($value);
+    if (($parts['scheme'] ?? '') !== 'https') return '';
+    if ($allowed_hosts && !in_array(strtolower($parts['host'] ?? ''), $allowed_hosts, true)) return '';
+    return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
 function format_speed($val)
@@ -110,10 +132,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Location: ' . $self_page . '?err=' . urlencode('Security Check Failed! Invalid Captcha.'));
         exit;
     }
+    $last_public_submit = (int) ($_SESSION['last_public_submit_at'] ?? 0);
+    if ($last_public_submit > 0 && time() - $last_public_submit < 5) {
+        header('Location: ' . $self_page . '?err=' . urlencode('Please wait a few seconds before submitting again.'));
+        exit;
+    }
+    unset($_SESSION['captcha_ans']);
+    $_SESSION['last_public_submit_at'] = time();
     if (isset($_POST['request_bike'])) {
-        $name = sanitize($_POST['name']);
-        $phone = sanitize($_POST['phone']);
-        $details = sanitize($_POST['bike_details']);
+        $name = clean_text($_POST['name'], 255);
+        $phone = clean_text($_POST['phone'], 50);
+        $details = clean_text($_POST['bike_details']);
         $st = $conn->prepare('INSERT INTO bike_requests (customer_name, customer_phone, bike_details) VALUES (?,?,?)');
         $st->bind_param('sss', $name, $phone, $details);
         $st->execute();
@@ -121,10 +150,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
     if (isset($_POST['request_quote'])) {
-        $name = sanitize($_POST['name']);
-        $phone = sanitize($_POST['phone']);
+        $name = clean_text($_POST['name'], 255);
+        $phone = clean_text($_POST['phone'], 50);
         $bike_id = (int) $_POST['bike_id'];
-        $details = sanitize($_POST['details']);
+        $details = clean_text($_POST['details']);
         $st = $conn->prepare('INSERT INTO quote_requests (customer_name, customer_phone, bike_id, details) VALUES (?,?,?,?)');
         $st->bind_param('ssis', $name, $phone, $bike_id, $details);
         $st->execute();
@@ -1223,7 +1252,7 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
             ?>
     <section class="footer-map-section">
         <div class="container" style="height:350px;">
-            <iframe src="<?= $map_url ?>" width="100%" height="100%" style="border:0; border-radius:30px; box-shadow: 0 20px 60px rgba(0,0,0,0.4);" allowfullscreen="" loading="lazy"></iframe>
+            <iframe src="<?= safe_public_url($map_url, ['www.google.com', 'maps.google.com']) ?>" width="100%" height="100%" style="border:0; border-radius:30px; box-shadow: 0 20px 60px rgba(0,0,0,0.4);" allowfullscreen="" loading="lazy"></iframe>
         </div>
     </section>
     <?php endif;
@@ -1257,9 +1286,9 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
                     </a>
                     <p class="footer-desc"><?= sanitize(get_setting('mission_statement') ?? 'Redefining movement through sustainable innovation.') ?></p>
                     <div class="socials">
-                        <?php if ($fb = get_setting('social_facebook')): ?><a href="<?= $fb ?>"><i class="fab fa-facebook-f"></i></a><?php endif; ?>
-                        <?php if ($ig = get_setting('social_instagram')): ?><a href="<?= $ig ?>"><i class="fab fa-instagram"></i></a><?php endif; ?>
-                        <?php if ($tw = get_setting('social_twitter')): ?><a href="<?= $tw ?>"><i class="fab fa-twitter"></i></a><?php endif; ?>
+                        <?php if ($fb = safe_public_url(get_setting('social_facebook'))): ?><a href="<?= $fb ?>" rel="noopener noreferrer"><i class="fab fa-facebook-f"></i></a><?php endif; ?>
+                        <?php if ($ig = safe_public_url(get_setting('social_instagram'))): ?><a href="<?= $ig ?>" rel="noopener noreferrer"><i class="fab fa-instagram"></i></a><?php endif; ?>
+                        <?php if ($tw = safe_public_url(get_setting('social_twitter'))): ?><a href="<?= $tw ?>" rel="noopener noreferrer"><i class="fab fa-twitter"></i></a><?php endif; ?>
                     </div>
                 </div>
                 <div>

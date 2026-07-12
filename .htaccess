@@ -21,7 +21,7 @@ IndexIgnore *
 </FilesMatch>
 
 # 2b. Block access to phpinfo, backup copies, and dev files by name
-<FilesMatch "^(info2\.php|phpinfo\.php|Copy.*\.php|index2\.php|index3\.php|indexv2\.php|index best.*\.php|index2 bestest.*\.php|\.htaccess|\.gitattributes)$">
+<FilesMatch "^(info2\.php|phpinfo\.php|Copy.*\.php|index2\.php|index3\.php|indexv2\.php|index best.*\.php|index2 bestest.*\.php|index app online version\.php|\.htaccess|\.gitattributes)$">
     <IfModule mod_authz_core.c>
         Require all denied
     </IfModule>
@@ -47,7 +47,7 @@ IndexIgnore *
 # 4. Security Response Headers
 <IfModule mod_headers.c>
     Header set X-XSS-Protection "1; mode=block"
-    Header unset X-Frame-Options
+    Header always set X-Frame-Options "DENY"
     Header set X-Content-Type-Options "nosniff"
     Header set Referrer-Policy "strict-origin-when-cross-origin"
     Header set Permissions-Policy "camera=(), microphone=(), geolocation=(self), payment=()"
@@ -56,7 +56,7 @@ IndexIgnore *
     # Header set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
 
     # Modern Content-Security-Policy
-    Header set Content-Security-Policy "default-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://code.jquery.com https://unpkg.com https://cdn.datatables.net https://fonts.googleapis.com https://fonts.gstatic.com; img-src 'self' data: blob: https://cdn.datatables.net https://via.placeholder.com; frame-src 'self' https://www.google.com https://maps.google.com; connect-src 'self' https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com https://fonts.googleapis.com https://cdnjs.cloudflare.com;"
+    Header set Content-Security-Policy "default-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://code.jquery.com https://unpkg.com https://cdn.datatables.net https://fonts.googleapis.com https://fonts.gstatic.com; img-src 'self' data: blob: https://cdn.datatables.net https://via.placeholder.com; frame-src 'self' https://www.google.com https://maps.google.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; connect-src 'self' https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com https://fonts.googleapis.com https://cdnjs.cloudflare.com;"
 </IfModule>
 
 # 5. Prevent Execution of Scripts inside the uploads directory

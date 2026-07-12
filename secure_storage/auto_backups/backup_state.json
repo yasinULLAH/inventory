@@ -1,7 +1,7 @@
 {
     "last_backup_at": 1783834924,
     "last_backup_file": "bni_auto_backup_20260712_064204.sql",
-    "last_checked_at": 1783835052,
+    "last_checked_at": 1783841773,
     "next_backup_due_at": 1784180524,
     "interval_days": 4,
     "max_backups": 20,
