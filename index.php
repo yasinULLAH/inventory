@@ -3029,14 +3029,14 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $tax_amount = ($base_tax * $use_tax_rate);
                 $margin = (float) $old_bike['selling_price'] > 0 ? ((float) $old_bike['selling_price'] - $pp - $tax_amount) : 0;
                 if ($img_path) {
-                    $stmt = $conn->prepare('UPDATE bikes SET model_id=?, color=?, purchase_price=?, tax_amount=?, margin=?, status=?, notes=?, safeguard_notes=?, image=' . ($recalc_tax ? ', tax_rate_applied=?, tax_basis=?' : '') . ' WHERE id=?');
+                    $stmt = $conn->prepare('UPDATE bikes SET model_id=?, color=?, purchase_price=?, tax_amount=?, margin=?, status=?, notes=?, safeguard_notes=?, image=?' . ($recalc_tax ? ', tax_rate_applied=?, tax_basis=?' : '') . ' WHERE id=?');
                     if ($recalc_tax) {
                         $stmt->bind_param('isddsssssdsi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $img_path, $use_tax_rate, $use_tax_basis, $bid);
                     } else {
                         $stmt->bind_param('isddsssssi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $img_path, $bid);
                     }
                 } else {
-                    $stmt = $conn->prepare('UPDATE bikes SET model_id=?, color=?, purchase_price=?, tax_amount=?, margin=?, status=?, notes=?, safeguard_notes=' . ($recalc_tax ? ', tax_rate_applied=?, tax_basis=?' : '') . ' WHERE id=?');
+                    $stmt = $conn->prepare('UPDATE bikes SET model_id=?, color=?, purchase_price=?, tax_amount=?, margin=?, status=?, notes=?, safeguard_notes=?' . ($recalc_tax ? ', tax_rate_applied=?, tax_basis=?' : '') . ' WHERE id=?');
                     if ($recalc_tax) {
                         $stmt->bind_param('isddssssdsi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $use_tax_rate, $use_tax_basis, $bid);
                     } else {
@@ -3683,7 +3683,7 @@ body.sidebar-collapsed nav::-webkit-scrollbar-thumb:hover { background: var(--te
 .card.warning{border-color:var(--warning)}
 .split-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .split-grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.data-table-wrap{margin-bottom:14px;width:100%;max-width:100%;border:1px solid var(--border);overflow:hidden}
+.data-table-wrap{margin-bottom:14px;width:100%;max-width:100%;border:1px solid var(--border);overflow-x:auto;-webkit-overflow-scrolling:touch}
 .data-table{width:100%;font-size:0.82rem;border-collapse:separate;border-spacing:0}
 .data-table th,.data-table td{border:1px solid var(--border);padding:6px 9px}
 .data-table th{white-space:nowrap;background:var(--bg2);color:var(--text);font-weight:700;text-align:left;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.3px;cursor:pointer;user-select:none}
@@ -3699,6 +3699,7 @@ body.sidebar-collapsed nav::-webkit-scrollbar-thumb:hover { background: var(--te
 [data-theme="light"] .data-table tbody tr.row-returned{background:#f4d4d4 !important}
 [data-theme="light"] .data-table tbody tr.row-reserved{background:#f4f0d4 !important}
 .data-table tfoot tr{background:var(--bg2);font-weight:700}
+.data-table tfoot td{white-space:nowrap}
 .data-table .actions-col{white-space:nowrap;display:flex;gap:4px;flex-wrap:wrap}
 .pagination{display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-top:10px}
 .pagination a,.pagination span{padding:5px 10px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.8rem;border-radius:1px;text-decoration:none}
@@ -5055,6 +5056,8 @@ $(document).ready(function() {
                 ['Purchase Price', fmt_money($view_bike['purchase_price'])],
                 ['Selling Price', $view_bike['selling_price'] ? fmt_money($view_bike['selling_price']) : '-'],
                 ['Tax Amount', fmt_money($view_bike['tax_amount'])],
+                ['Tax Rate', $view_bike['tax_rate_applied'] !== null ? ($view_bike['tax_rate_applied'] * 100) . '%' : '-'],
+                ['Tax Basis', $view_bike['tax_basis'] ?? '-'],
                 ['Margin', $view_bike['margin'] ? fmt_money($view_bike['margin']) : '-'],
                 ['Order Date', fmt_date($view_bike['order_date'])],
                 ['Inventory Date', fmt_date($view_bike['inventory_date'])],
@@ -5287,12 +5290,12 @@ $(document).ready(function() {
 <tfoot>
 <tr>
 <td colspan="7"><strong>PAGE TOTAL</strong></td>
-<td><strong><?= fmt_money($total_pp) ?></strong></td>
-<td><strong><?= fmt_money($total_tax) ?></strong></td>
+<td style="white-space:nowrap"><strong><?= fmt_money($total_pp) ?></strong></td>
+<td style="white-space:nowrap"><strong><?= fmt_money($total_tax) ?></strong></td>
 <td></td>
-<td><strong><?= fmt_money($total_sp) ?></strong></td>
+<td style="white-space:nowrap"><strong><?= fmt_money($total_sp) ?></strong></td>
 <td></td>
-<td style="color:<?= $total_mg >= 0 ? 'var(--success)' : 'var(--danger)' ?>"><strong><?= fmt_money($total_mg) ?></strong></td>
+<td style="white-space:nowrap;color:<?= $total_mg >= 0 ? 'var(--success)' : 'var(--danger)' ?>"><strong><?= fmt_money($total_mg) ?></strong></td>
 <td></td>
 </tr>
 </tfoot>
