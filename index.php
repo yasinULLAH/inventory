@@ -1182,7 +1182,7 @@ function assert_valid_bike_status_transition($old_status, $new_status)
         'in_stock' => ['in_stock', 'reserved', 'damaged_lost'],
         'reserved' => ['reserved', 'in_stock', 'damaged_lost'],
         'sold' => ['sold'],
-        'returned' => ['returned'],
+        'returned' => ['returned', 'in_stock', 'damaged_lost'],
         'returned_to_supplier' => ['returned_to_supplier'],
         'damaged_lost' => ['damaged_lost', 'in_stock'],
     ];
@@ -2384,6 +2384,10 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $err = 'Please fill all required fields correctly.';
                 goto end_returns_post;
             }
+            if ($refund_method === 'cheque' && (empty($cheque_number) || empty($bank_name))) {
+                $err = 'Cheque number and bank name are required for cheque refunds.';
+                goto end_returns_post;
+            }
             $conn->begin_transaction();
             try {
                 $bike_q = $conn->query("SELECT b.chassis_number, b.purchase_price, b.status, po.supplier_id, s.name AS sup_name FROM bikes b LEFT JOIN purchase_orders po ON b.purchase_order_id=po.id LEFT JOIN suppliers s ON po.supplier_id=s.id WHERE b.id=$bike_id FOR UPDATE");
@@ -2395,6 +2399,11 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 if ($return_amount - $full_reversal_amount > 0.0001) {
                     throw new Exception('Supplier refund cannot exceed the original bike purchase value.');
                 }
+                $paid_to_supplier = $conn->query("SELECT COALESCE(SUM(p.amount),0) FROM payments p JOIN purchase_orders po ON po.id=p.reference_id WHERE p.transaction_type='supplier_payment' AND po.supplier_id={$bike_info['supplier_id']} AND p.status!='bounced'")->fetch_row()[0];
+                $actual_refundable = min($full_reversal_amount, (float) $paid_to_supplier);
+                if ($return_amount - $actual_refundable > 0.0001) {
+                    throw new Exception('Supplier refund cannot exceed the amount actually paid for this purchase.');
+                }
                 $st = $conn->prepare("UPDATE bikes SET status='returned_to_supplier', return_date=?, return_amount=?, return_notes=?, tax_amount=0 WHERE id=? AND status IN ('in_stock','returned')");
                 $st->bind_param('sdsi', $return_date, $return_amount, $return_notes, $bike_id);
                 $st->execute();
@@ -2405,10 +2414,17 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $party_name = $bike_info['sup_name'] ?? 'Unknown Supplier';
                 assert_valid_payment_method($refund_method);
                 $payment_status = $refund_method === 'cheque' ? 'pending' : 'cleared';
-                $pay_st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, cheque_number, bank_name, cheque_date, transaction_type, reference_id, supplier_id, party_name, notes, status) VALUES (?,?,?,?,?,?,'supplier_refund',?,?,?,?,?)");
-                $pay_st->bind_param('ssdsssiisss', $return_date, $refund_method, $return_amount, $cheque_number, $bank_name, $cheque_date, $bike_id, $bike_info['supplier_id'], $party_name, $return_notes, $payment_status);
-                $pay_st->execute();
-                $pay_st->close();
+                if ($return_amount > 0) {
+                    $pay_st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, cheque_number, bank_name, cheque_date, transaction_type, reference_id, supplier_id, party_name, notes, status) VALUES (?,?,?,?,?,?,'supplier_refund',?,?,?,?,?)");
+                    $pay_st->bind_param('ssdsssiisss', $return_date, $refund_method, $return_amount, $cheque_number, $bank_name, $cheque_date, $bike_id, $bike_info['supplier_id'], $party_name, $return_notes, $payment_status);
+                    $pay_st->execute();
+                    $pay_st->close();
+                }
+                $history_stmt = $conn->prepare('INSERT INTO inventory_status_history (bike_id, chassis_number, old_status, new_status, changed_by, change_reason) VALUES (?,?,?,?,?,?)');
+                $change_reason = $return_notes ?: 'Purchase return processed';
+                $history_stmt->bind_param('isssis', $bike_id, $bike_info['chassis_number'], $bike_info['status'], 'returned_to_supplier', $_SESSION['user_id'], $change_reason);
+                $history_stmt->execute();
+                $history_stmt->close();
                 $led_st1 = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'debit',?,'supplier',?,?,'purchase_reversal',?,?)");
                 $desc1 = 'Bike Returned to Supplier (Chassis: ' . $bike_info['chassis_number'] . ')';
                 $led_st1->bind_param('sdisid', $return_date, $full_reversal_amount, $bike_info['supplier_id'], $desc1, $bike_id, $full_reversal_amount);
@@ -2442,9 +2458,13 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $err = 'Please fill all required fields correctly.';
             goto end_returns_post;
         }
+        if ($refund_method === 'cheque' && (empty($cheque_number) || empty($bank_name))) {
+            $err = 'Cheque number and bank name are required for cheque refunds.';
+            goto end_returns_post;
+        }
         $conn->begin_transaction();
         try {
-            $bike_q = $conn->query("SELECT b.chassis_number, b.customer_id, b.selling_price, b.status, c.name AS cust_name FROM bikes b LEFT JOIN customers c ON b.customer_id=c.id WHERE b.id=$bike_id FOR UPDATE");
+            $bike_q = $conn->query("SELECT b.chassis_number, COALESCE(b.customer_id,0) as customer_id, b.selling_price, b.status, c.name AS cust_name FROM bikes b LEFT JOIN customers c ON b.customer_id=c.id WHERE b.id=$bike_id FOR UPDATE");
             $bike_info = $bike_q ? $bike_q->fetch_assoc() : null;
             if (!$bike_info) {
                 throw new Exception('Bike not found for return.');
@@ -2464,22 +2484,30 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 throw new Exception("Bike not found or not in 'sold' status to be returned.");
             }
             $st->close();
+            $history_stmt = $conn->prepare('INSERT INTO inventory_status_history (bike_id, chassis_number, old_status, new_status, changed_by, change_reason) VALUES (?,?,?,?,?,?)');
+            $change_reason = $return_notes ?: 'Sales return processed';
+            $history_stmt->bind_param('isssis', $bike_id, $bike_info['chassis_number'], 'sold', 'returned', $_SESSION['user_id'], $change_reason);
+            $history_stmt->execute();
+            $history_stmt->close();
             $party_name = $bike_info['cust_name'] ?? 'Unknown Customer';
             assert_valid_payment_method($refund_method);
             $payment_status = $refund_method === 'cheque' ? 'pending' : 'cleared';
-            $pay_st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, cheque_number, bank_name, cheque_date, transaction_type, reference_id, customer_id, party_name, notes, status) VALUES (?,?,?,?,?,?,'customer_refund',?,?,?,?,?)");
-            $pay_st->bind_param('ssdsssiisss', $return_date, $refund_method, $return_amount, $cheque_number, $bank_name, $cheque_date, $bike_id, $bike_info['customer_id'], $party_name, $return_notes, $payment_status);
-            $pay_st->execute();
-            $pay_st->close();
+            $cust_id = (int) $bike_info['customer_id'];
+            if ($return_amount > 0) {
+                $pay_st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, cheque_number, bank_name, cheque_date, transaction_type, reference_id, customer_id, party_name, notes, status) VALUES (?,?,?,?,?,?,'customer_refund',?,?,?,?,?)");
+                $pay_st->bind_param('ssdsssiisss', $return_date, $refund_method, $return_amount, $cheque_number, $bank_name, $cheque_date, $bike_id, $cust_id, $party_name, $return_notes, $payment_status);
+                $pay_st->execute();
+                $pay_st->close();
+            }
             $led_st1 = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'credit',?,'customer',?,?,'return_reversal',?,?)");
             $desc1 = 'Bike Return (Reversal) for Chassis: ' . $bike_info['chassis_number'];
-            $led_st1->bind_param('sdisid', $return_date, $full_reversal_amount, $bike_info['customer_id'], $desc1, $bike_id, $full_reversal_amount);
+            $led_st1->bind_param('sdisid', $return_date, $full_reversal_amount, $cust_id, $desc1, $bike_id, $full_reversal_amount);
             $led_st1->execute();
             $led_st1->close();
             if ($return_amount > 0) {
                 $led_st2 = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'debit',?,'customer',?,?,'return_refund',?,?)");
                 $desc2 = 'Refund given for Chassis: ' . $bike_info['chassis_number'];
-                $led_st2->bind_param('sdisid', $return_date, $return_amount, $bike_info['customer_id'], $desc2, $bike_id, $return_amount);
+                $led_st2->bind_param('sdisid', $return_date, $return_amount, $cust_id, $desc2, $bike_id, $return_amount);
                 $led_st2->execute();
                 $led_st2->close();
             }
@@ -5355,7 +5383,7 @@ $allowed_statuses = [
     'in_stock' => ['in_stock' => 'In Stock', 'reserved' => 'Reserved', 'damaged_lost' => 'Damaged / Lost'],
     'reserved' => ['reserved' => 'Reserved', 'in_stock' => 'In Stock', 'damaged_lost' => 'Damaged / Lost'],
     'sold' => ['sold' => 'Sold'],
-    'returned' => ['returned' => 'Returned by Customer', 'in_stock' => 'Restock (In Stock)'],
+    'returned' => ['returned' => 'Returned by Customer', 'in_stock' => 'Restock (In Stock)', 'damaged_lost' => 'Damaged / Lost'],
     'returned_to_supplier' => ['returned_to_supplier' => 'Returned to Supplier'],
     'damaged_lost' => ['damaged_lost' => 'Damaged / Lost', 'in_stock' => 'In Stock'],
 ];
@@ -5404,7 +5432,7 @@ document.getElementById('bulkExportForm').addEventListener('submit', function(){
         $sale_where = "b.status IN ('in_stock','returned')";
         if ($sale_model_id)
             $sale_where .= " AND b.model_id=$sale_model_id";
-        $bikes_instock = $conn->query("SELECT b.id, b.chassis_number, b.color, b.purchase_price, m.model_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE $sale_where ORDER BY b.created_at DESC");
+        $bikes_instock = $conn->query("SELECT b.id, b.chassis_number, b.color, b.purchase_price, b.status, m.model_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE $sale_where ORDER BY b.created_at DESC");
         $customers_list = $conn->query("SELECT c.id, c.name, c.phone, c.cnic, c.is_filer,
             COALESCE((SELECT SUM(CASE WHEN entry_type='credit' THEN amount ELSE 0 END) - SUM(CASE WHEN entry_type='debit' THEN amount ELSE 0 END) FROM ledger WHERE party_type='customer' AND party_id=c.id),0)
             as advance_balance FROM customers c ORDER BY c.name");
@@ -5433,7 +5461,7 @@ document.getElementById('bulkExportForm').addEventListener('submit', function(){
             }
             ?>
 <option value="<?= $bs['id'] ?>" data-pp="<?= $bs['purchase_price'] ?>" <?= $sel_attr ?>>
-<?= sanitize($bs['chassis_number']) ?> | <?= sanitize($bs['model_name']) ?> | <?= sanitize($bs['color']) ?> | Pp: <?= fmt_money($bs['purchase_price']) ?>
+<?= sanitize($bs['chassis_number']) ?> | <?= sanitize($bs['model_name']) ?> | <?= sanitize($bs['color']) ?> | Pp: <?= fmt_money($bs['purchase_price']) ?><?= $bs['status'] === 'returned' ? ' | ⚠️ RETURNED' : '' ?>
 </option>
 <?php endwhile; ?>
 </select>
@@ -5900,7 +5928,7 @@ window.onload = function() {
 </form>
 <?php
         elseif ($sub === 'purchase'):
-            $purchased_bikes = $conn->query("SELECT b.id, b.chassis_number, b.color, b.purchase_price, m.model_name, s.name AS sup_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN purchase_orders po ON b.purchase_order_id=po.id LEFT JOIN suppliers s ON po.supplier_id=s.id WHERE b.status IN ('in_stock','returned') ORDER BY b.created_at DESC");
+            $purchased_bikes = $conn->query("SELECT b.id, b.chassis_number, b.color, b.purchase_price, b.status, m.model_name, s.name AS sup_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN purchase_orders po ON b.purchase_order_id=po.id LEFT JOIN suppliers s ON po.supplier_id=s.id WHERE b.status IN ('in_stock','returned') ORDER BY b.created_at DESC");
 ?>
 <form method="POST" id="purchaseReturnForm" class="animate__animated animate__fadeIn">
 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
@@ -5912,7 +5940,7 @@ window.onload = function() {
 <select name="bike_id" id="purchReturnBikeSelect" required onchange="fillPurchReturnAmount(this)">
 <option value="">-- Select Bike --</option>
 <?php while ($pb = $purchased_bikes->fetch_assoc()): ?>
-<option value="<?= $pb['id'] ?>" data-pp="<?= $pb['purchase_price'] ?>"><?= sanitize($pb['chassis_number']) ?> | <?= sanitize($pb['model_name']) ?> | <?= sanitize($pb['sup_name'] ?? 'Unknown Supplier') ?> | PP: <?= fmt_money($pb['purchase_price']) ?></option>
+<option value="<?= $pb['id'] ?>" data-pp="<?= $pb['purchase_price'] ?>"><?= sanitize($pb['chassis_number']) ?> | <?= sanitize($pb['model_name']) ?> | <?= sanitize($pb['sup_name'] ?? 'Unknown Supplier') ?> | PP: <?= fmt_money($pb['purchase_price']) ?><?= $pb['status'] === 'returned' ? ' | ⚠️ RETURNED' : '' ?></option>
 <?php endwhile; ?>
 </select>
 </div>
