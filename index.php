@@ -126,6 +126,57 @@ function db_connect($create_db = false)
     return $conn;
 }
 
+function get_suppliers_with_balances($conn)
+{
+    return $conn->query("SELECT s.id, s.name,
+        COALESCE((
+            SELECT SUM(CASE WHEN b.status != 'returned_to_supplier' THEN b.purchase_price ELSE 0 END)
+            FROM purchase_orders po
+            LEFT JOIN bikes b ON b.purchase_order_id=po.id
+            WHERE po.supplier_id=s.id
+        ),0) - COALESCE((
+            SELECT SUM(CASE WHEN p.transaction_type='supplier_refund' THEN -p.amount ELSE p.amount END)
+            FROM payments p
+            WHERE p.transaction_type IN ('supplier_payment','supplier_refund')
+              AND COALESCE(p.status,'cleared') != 'bounced'
+              AND (
+                  p.supplier_id=s.id
+                  OR (p.transaction_type='supplier_payment' AND p.reference_id IN (SELECT po2.id FROM purchase_orders po2 WHERE po2.supplier_id=s.id))
+                  OR (p.transaction_type='supplier_refund' AND p.reference_id IN (
+                      SELECT b2.id FROM bikes b2 JOIN purchase_orders po3 ON po3.id=b2.purchase_order_id WHERE po3.supplier_id=s.id
+                  ))
+              )
+        ),0) AS current_balance
+        FROM suppliers s
+        ORDER BY s.name");
+}
+
+function get_customers_with_balances($conn)
+{
+    return $conn->query("SELECT c.id, c.name, c.phone, c.cnic, c.is_filer,
+        COALESCE((
+            SELECT SUM(CASE WHEN l.entry_type='credit' THEN l.amount ELSE -l.amount END)
+            FROM ledger l
+            WHERE l.party_type='customer' AND l.party_id=c.id
+        ),0) AS advance_balance
+        FROM customers c
+        ORDER BY c.name");
+}
+
+function get_customer_advance_balance($conn, $customer_id)
+{
+    if ($customer_id <= 0) {
+        return 0.0;
+    }
+    $stmt = $conn->prepare("SELECT COALESCE(SUM(CASE WHEN entry_type='credit' THEN amount ELSE -amount END),0) AS advance_balance
+        FROM ledger WHERE party_type='customer' AND party_id=?");
+    $stmt->bind_param('i', $customer_id);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return (float) ($row['advance_balance'] ?? 0);
+}
+
 function ensure_secure_backup_storage()
 {
     $configured_dir = trim((string) getenv('BNI_BACKUP_DIR'));
@@ -1756,6 +1807,15 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         }
         $conn->begin_transaction();
         try {
+            $supplier_stmt = $conn->prepare('SELECT name FROM suppliers WHERE id=? LIMIT 1 FOR UPDATE');
+            $supplier_stmt->bind_param('i', $supplier_id);
+            $supplier_stmt->execute();
+            $supplier_row = $supplier_stmt->get_result()->fetch_assoc();
+            $supplier_stmt->close();
+            if (!$supplier_row) {
+                throw new Exception('Selected supplier does not exist.');
+            }
+            $party = $supplier_row['name'];
             $total_units = 0;
             $po_total_amount = 0.0;
             $po_stmt = $conn->prepare('INSERT INTO purchase_orders (order_date,supplier_id,total_units,total_amount,notes) VALUES (?,?,?,?,?)');
@@ -1814,13 +1874,6 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $upd_po_stmt->bind_param('idi', $saved_count, $saved_total_amount, $po_id);
             $upd_po_stmt->execute();
             $upd_po_stmt->close();
-            $purchase_payment_total = 0.0;
-            foreach ($payments_data as $payment_check) {
-                $purchase_payment_total += max(0, (float) ($payment_check['amount'] ?? 0));
-            }
-            if ($purchase_payment_total - $saved_total_amount > 0.0001) {
-                throw new Exception('Supplier payments cannot exceed this purchase order total.');
-            }
             foreach ($payments_data as $p) {
                 $pay_type = clean_text($p['payment_type'] ?? 'cash', 30);
                 assert_valid_payment_method($pay_type);
@@ -1829,9 +1882,6 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $bank_name = $pay_type === 'cheque' ? sanitize($p['bank_name'] ?? '') : null;
                 $chq_date = $pay_type === 'cheque' && !empty($p['cheque_date']) ? $p['cheque_date'] : null;
                 if ($pay_amount > 0) {
-                    $sup_r = $conn->query("SELECT name FROM suppliers WHERE id=$supplier_id");
-                    $sup_row = $sup_r ? $sup_r->fetch_assoc() : null;
-                    $party = $sup_row ? $sup_row['name'] : 'Unknown Supplier';
                     $payment_status = $pay_type === 'cheque' ? 'pending' : 'cleared';
                     $pay_stmt = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, cheque_number, bank_name, cheque_date, transaction_type, reference_id, supplier_id, party_name, notes, status) VALUES (?,?,?,?,?,?,'supplier_payment',?,?,?,?,?)");
                     $pay_stmt->bind_param('ssdsssiisss', $order_date, $pay_type, $pay_amount, $chq_num, $bank_name, $chq_date, $po_id, $supplier_id, $party, $po_notes, $payment_status);
@@ -2116,7 +2166,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $err = 'All required fields must be filled.';
                 goto end_quotations_post;
             }
-            if (!valid_date($quote_date) || !valid_date($valid_until) || $valid_until < $quote_date || $down_payment < 0 || $down_payment > $quoted_price || $total_installments < 0 || $installment_amount < 0) {
+            if (!valid_date($quote_date) || !valid_date($valid_until) || $valid_until < $quote_date || $down_payment < 0 || $total_installments < 0 || $installment_amount < 0) {
                 $err = 'Quotation dates, payment amounts, or installment details are invalid.';
                 goto end_quotations_post;
             }
@@ -2168,14 +2218,21 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $total_acc_price = attach_sale_accessories($conn, $bike_id, $accessories_data);
                 $accessory_cost = get_sale_accessory_cost_for_bike($conn, $bike_id);
                 $cust_sql_id = (int) $customer_id;
-                $cust_r = $conn->query("SELECT name FROM customers WHERE id=$cust_sql_id");
-                $cust_row = $cust_r ? $cust_r->fetch_assoc() : null;
-                $party_name = $cust_row ? $cust_row['name'] : 'Walk-in Customer';
+                $cust_stmt = $conn->prepare('SELECT name FROM customers WHERE id=? LIMIT 1 FOR UPDATE');
+                $cust_stmt->bind_param('i', $cust_sql_id);
+                $cust_stmt->execute();
+                $cust_row = $cust_stmt->get_result()->fetch_assoc();
+                $cust_stmt->close();
+                if (!$cust_row) {
+                    throw new Exception('Quotation customer does not exist.');
+                }
+                $party_name = $cust_row['name'];
+                $prior_customer_advance = get_customer_advance_balance($conn, $cust_sql_id);
                 $total_sale_amount = $selling_price + $total_acc_price;
                 $is_inst = $quote['is_installment'] == 1;
                 $dp_amount = $is_inst ? (float) $quote['down_payment'] : $total_sale_amount;
-                if ($dp_amount < 0 || $dp_amount - $total_sale_amount > 0.0001) {
-                    throw new Exception('Quotation down payment exceeds the final sale total.');
+                if ($dp_amount < 0) {
+                    throw new Exception('Quotation payment amount is invalid.');
                 }
                 $margin = round($total_sale_amount - ((float) $bike['purchase_price'] + $accessory_cost) - $tax_amount, 2);
                 $margin_stmt = $conn->prepare('UPDATE bikes SET margin=? WHERE id=?');
@@ -2198,19 +2255,21 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     $led_dp_st->execute();
                 }
                 if ($is_inst && $quote['total_installments'] > 0) {
-                    $remaining_quote_balance = round($total_sale_amount - $dp_amount, 2);
-                    $installment_per_month = round($remaining_quote_balance / $quote['total_installments'], 2);
-                    $current_date = new DateTime($sale_date);
-                    $current_date->modify('+1 month');
-                    $inst_stmt = $conn->prepare("INSERT INTO installments (bike_id, customer_id, due_date, installment_amount, status, notes) VALUES (?,?,?,?,'pending',?)");
-                    for ($i = 0; $i < $quote['total_installments']; $i++) {
-                        $due_date = $current_date->format('Y-m-d');
-                        $scheduled_before = $installment_per_month * $i;
-                        $this_installment = ($i === (int) $quote['total_installments'] - 1) ? round($remaining_quote_balance - $scheduled_before, 2) : $installment_per_month;
-                        $inst_notes = 'Installment ' . ($i + 1) . ' from Quote #' . $quote_id;
-                        $inst_stmt->bind_param('iisds', $bike_id, $customer_id, $due_date, $this_installment, $inst_notes);
-                        $inst_stmt->execute();
+                    $remaining_quote_balance = max(0, round($total_sale_amount - $dp_amount - max(0, $prior_customer_advance), 2));
+                    if ($remaining_quote_balance > 0) {
+                        $installment_per_month = round($remaining_quote_balance / $quote['total_installments'], 2);
+                        $current_date = new DateTime($sale_date);
                         $current_date->modify('+1 month');
+                        $inst_stmt = $conn->prepare("INSERT INTO installments (bike_id, customer_id, due_date, installment_amount, status, notes) VALUES (?,?,?,?,'pending',?)");
+                        for ($i = 0; $i < $quote['total_installments']; $i++) {
+                            $due_date = $current_date->format('Y-m-d');
+                            $scheduled_before = $installment_per_month * $i;
+                            $this_installment = ($i === (int) $quote['total_installments'] - 1) ? round($remaining_quote_balance - $scheduled_before, 2) : $installment_per_month;
+                            $inst_notes = 'Installment ' . ($i + 1) . ' from Quote #' . $quote_id;
+                            $inst_stmt->bind_param('iisds', $bike_id, $customer_id, $due_date, $this_installment, $inst_notes);
+                            $inst_stmt->execute();
+                            $current_date->modify('+1 month');
+                        }
                     }
                 }
                 $conn->query("UPDATE quotations SET status='converted' WHERE id=$quote_id");
@@ -2270,9 +2329,27 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $margin_stmt->bind_param('di', $margin, $bike_id);
                 $margin_stmt->execute();
                 $cust_sql_id = (int) $customer_id;
-                $cust_r = $conn->query("SELECT name FROM customers WHERE id=$cust_sql_id");
-                $cust_row = $cust_r ? $cust_r->fetch_assoc() : null;
-                $party_name = $cust_row ? $cust_row['name'] : 'Walk-in Customer';
+                $prior_customer_advance = 0.0;
+                if ($cust_sql_id > 0) {
+                    $cust_stmt = $conn->prepare('SELECT name FROM customers WHERE id=? LIMIT 1 FOR UPDATE');
+                    $cust_stmt->bind_param('i', $cust_sql_id);
+                    $cust_stmt->execute();
+                    $cust_row = $cust_stmt->get_result()->fetch_assoc();
+                    $cust_stmt->close();
+                    if (!$cust_row) {
+                        throw new Exception('Selected customer does not exist.');
+                    }
+                    $party_name = $cust_row['name'];
+                    $prior_customer_advance = get_customer_advance_balance($conn, $cust_sql_id);
+                } else {
+                    $party_name = 'Walk-in Customer';
+                }
+                $total_sale_amount = $selling_price + $total_acc_price;
+                $transaction_balance = $total_sale_amount - $down_payment;
+                if (empty($customer_id) && abs($transaction_balance) > 0.0001) {
+                    throw new Exception('Walk-in customers must pay the exact sale total.');
+                }
+                assert_valid_payment_method($payment_method_dp);
                 $payment_notes = 'Down Payment for Chassis: ' . $bike['chassis_number'];
                 if ($down_payment > 0) {
                     $payment_status = $payment_method_dp === 'cheque' ? 'pending' : 'cleared';
@@ -2281,11 +2358,6 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     $pay_st->execute();
                     $pay_st->close();
                 }
-                $total_sale_amount = $selling_price + $total_acc_price;
-                if ($down_payment - $total_sale_amount > 0.0001) {
-                    throw new Exception('Down payment cannot exceed the total sale value.');
-                }
-                assert_valid_payment_method($payment_method_dp);
                 $led_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'debit',?,'customer',?,?,'sale',?,?)");
                 $desc = 'Sale of Chassis: ' . $bike['chassis_number'];
                 $led_st->bind_param('sdisid', $selling_date, $total_sale_amount, $customer_id, $desc, $bike_id, $total_sale_amount);
@@ -2298,10 +2370,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     $led_dp_st->execute();
                     $led_dp_st->close();
                 }
-                $remaining_balance = $total_sale_amount - $down_payment;
-                if (empty($customer_id) && round($remaining_balance, 2) > 0) {
-                    throw new Exception('Walk-in customers must pay the full amount upfront. Partial payments are not allowed.');
-                }
+                $remaining_balance = max(0, $total_sale_amount - $down_payment - max(0, $prior_customer_advance));
                 if ($total_installments > 0 && $remaining_balance > 0) {
                     if (empty($customer_id) || !valid_date($first_due_date)) {
                         throw new Exception('A customer and valid first due date are required for installment sales.');
@@ -2319,9 +2388,6 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                         $current_date->modify('+1 month');
                     }
                     $msg .= ' Installment plan created.';
-                }
-                if ($remaining_balance > 0 && $total_installments === 0 && empty($customer_id)) {
-                    throw new Exception('Walk-in customers cannot leave an outstanding balance.');
                 }
                 $sale_allocations = $_POST['money_alloc'] ?? [];
                 if (!empty($sale_allocations)) {
@@ -3546,7 +3612,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             echo ($r && $r->num_rows > 0) ? '1' : '0';
         } elseif ($_GET['ajax'] === 'get_suppliers') {
             require_any_permission($conn, [['purchase', 'add'], ['suppliers', 'view']]);
-            $suppliers_list_ajax = $conn->query('SELECT id, name FROM suppliers ORDER BY name');
+            $suppliers_list_ajax = get_suppliers_with_balances($conn);
             echo json_encode($suppliers_list_ajax->fetch_all(MYSQLI_ASSOC));
         } elseif ($_GET['ajax'] === 'get_models') {
             require_any_permission($conn, [['purchase', 'add'], ['sale', 'add'], ['models', 'view']]);
@@ -3554,7 +3620,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             echo json_encode($models_list_ajax->fetch_all(MYSQLI_ASSOC));
         } elseif ($_GET['ajax'] === 'get_customers') {
             require_any_permission($conn, [['sale', 'add'], ['quotations', 'add'], ['customers', 'view']]);
-            $customers_list_ajax = $conn->query('SELECT id, name, phone, is_filer FROM customers ORDER BY name');
+            $customers_list_ajax = get_customers_with_balances($conn);
             echo json_encode($customers_list_ajax->fetch_all(MYSQLI_ASSOC));
         }
         exit;
@@ -4647,7 +4713,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 <?php elseif ($page === 'purchase'): ?>
 <?php
-        $suppliers_list = $conn->query('SELECT id, name FROM suppliers ORDER BY name');
+        $suppliers_list = get_suppliers_with_balances($conn);
         $models_list = $conn->query('SELECT id, model_code, model_name FROM models ORDER BY model_name');
 ?>
 <form method="POST" id="purchaseForm" enctype="multipart/form-data" class="animate__animated animate__fadeIn">
@@ -4660,15 +4726,16 @@ document.addEventListener('DOMContentLoaded', function() {
 <div class="form-group">
 <label>Supplier <span class="req">*</span></label>
 <div style="display:flex;gap:4px">
-<select name="supplier_id" required style="flex:1">
+<select name="supplier_id" id="purchaseSupplierSel" required style="flex:1" onchange="updatePurchaseTotals(false)">
 <option value="">-- Select Supplier --</option>
 <?php $suppliers_list->data_seek(0);
         while ($sup = $suppliers_list->fetch_assoc()): ?>
-<option value="<?= $sup['id'] ?>"><?= sanitize($sup['name']) ?></option>
+<option value="<?= $sup['id'] ?>" data-balance="<?= (float) $sup['current_balance'] ?>"><?= sanitize($sup['name']) ?></option>
 <?php endwhile; ?>
 </select>
 <button type="button" class="btn btn-default btn-sm" onclick="openSupplierModal()">+</button>
 </div>
+<span id="supplierBalanceHint" style="font-size:0.8rem;color:var(--text3);display:block;margin-top:2px" aria-live="polite"></span>
 </div>
 </div>
 <div class="form-row">
@@ -4686,7 +4753,9 @@ document.addEventListener('DOMContentLoaded', function() {
 <div id="purchaseSummaryBox" style="background:var(--bg3);padding:12px;border-radius:2px;margin-bottom:14px;display:flex;gap:15px;align-items:center;border:1px solid var(--border);flex-wrap:wrap;">
     <div style="flex:1;min-width:140px"><strong style="color:var(--text2);display:block;font-size:0.75rem;text-transform:uppercase">Total Payment</strong> <span id="sumPay" style="font-size:1.3rem;font-weight:bold;color:var(--success)">0.00</span></div>
     <div style="flex:1;min-width:140px"><strong style="color:var(--text2);display:block;font-size:0.75rem;text-transform:uppercase">Total Purchase</strong> <span id="sumPurch" style="font-size:1.3rem;font-weight:bold;color:var(--warning)">0.00</span></div>
-    <div style="flex:1;min-width:140px"><strong style="color:var(--text2);display:block;font-size:0.75rem;text-transform:uppercase">Difference</strong> <span id="sumDiff" style="font-size:1.3rem;font-weight:bold">0.00</span></div>
+    <div style="flex:1;min-width:140px"><strong style="color:var(--text2);display:block;font-size:0.75rem;text-transform:uppercase">This Purchase Difference</strong> <span id="sumDiff" style="font-size:1.3rem;font-weight:bold">0.00</span><small id="sumDiffLabel" style="display:block;color:var(--text3)">Balanced</small></div>
+    <div style="flex:1;min-width:140px"><strong style="color:var(--text2);display:block;font-size:0.75rem;text-transform:uppercase">Previous Khata</strong> <span id="sumPreviousSupplier" style="font-size:1.1rem;font-weight:bold">0.00</span><small id="sumPreviousSupplierLabel" style="display:block;color:var(--text3)">Select supplier</small></div>
+    <div style="flex:1;min-width:140px"><strong style="color:var(--text2);display:block;font-size:0.75rem;text-transform:uppercase">Closing Khata</strong> <span id="sumClosingSupplier" style="font-size:1.3rem;font-weight:bold">0.00</span><small id="sumClosingSupplierLabel" style="display:block;color:var(--text3)">Select supplier</small></div>
     <div style="flex:1;min-width:140px"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:bold;color:var(--accent);font-size:0.85rem"><input type="checkbox" id="autoDivideCb" checked onchange="updatePurchaseTotals(true)" style="width:16px;height:16px"> Auto-Divide Payment</label></div>
 </div>
 <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -4814,29 +4883,74 @@ var modelsOptions = `<?php $models_list->data_seek(0);
             $mo .= '<option value="' . $m['id'] . '">' . $m['model_code'] . ' - ' . $m['model_name'] . '</option>';
         echo $mo; ?>`;
 var allSuppliers = <?= json_encode($conn->query('SELECT id, name FROM suppliers ORDER BY name')->fetch_all(MYSQLI_ASSOC)) ?>;
-function updatePurchaseTotals(triggeredByGlobalChange = false) {
-    let autoDivideCb = document.getElementById('autoDivideCb');
-    if (!triggeredByGlobalChange && autoDivideCb) {
-        autoDivideCb.checked = false;
+function formatPurchaseAmount(amount) {
+    return Math.abs(amount).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+function setKhataSummary(amount, valueElement, labelElement, positiveLabel, negativeLabel) {
+    valueElement.innerText = formatPurchaseAmount(amount);
+    if (Math.abs(amount) < 0.005) {
+        valueElement.style.color = 'var(--text)';
+        labelElement.innerText = 'Settled';
+    } else if (amount > 0) {
+        valueElement.style.color = 'var(--danger)';
+        labelElement.innerText = positiveLabel;
+    } else {
+        valueElement.style.color = 'var(--success)';
+        labelElement.innerText = negativeLabel;
     }
+}
+function disableAutoDivideAndUpdate() {
+    let autoDivideCb = document.getElementById('autoDivideCb');
+    if (autoDivideCb) autoDivideCb.checked = false;
+    updatePurchaseTotals(false);
+}
+function updatePurchaseTotals(allowAutoDivide = false) {
+    let autoDivideCb = document.getElementById('autoDivideCb');
     let totalPay = 0;
     document.querySelectorAll('.pay-amount-input').forEach(inp => totalPay += parseFloat(inp.value) || 0);
     let bikeInputs = document.querySelectorAll('.bike-price-input');
-    if (triggeredByGlobalChange && autoDivideCb && autoDivideCb.checked && bikeInputs.length > 0) {
+    if (allowAutoDivide && autoDivideCb && autoDivideCb.checked && bikeInputs.length > 0) {
         let divided = (totalPay / bikeInputs.length).toFixed(2);
         bikeInputs.forEach(inp => inp.value = divided);
     }
     let totalPurch = 0;
     bikeInputs.forEach(inp => totalPurch += parseFloat(inp.value) || 0);
     let diff = totalPay - totalPurch;
+    let supplierSelect = document.getElementById('purchaseSupplierSel');
+    let supplierOption = supplierSelect && supplierSelect.selectedIndex >= 0 ? supplierSelect.options[supplierSelect.selectedIndex] : null;
+    let supplierSelected = supplierOption && supplierOption.value;
+    let previousBalance = supplierSelected ? (parseFloat(supplierOption.dataset.balance || 0) || 0) : 0;
+    let closingBalance = previousBalance + totalPurch - totalPay;
     let sumPayEl = document.getElementById('sumPay');
     let sumPurchEl = document.getElementById('sumPurch');
     let sumDiffEl = document.getElementById('sumDiff');
-    if (sumPayEl) sumPayEl.innerText = totalPay.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-    if (sumPurchEl) sumPurchEl.innerText = totalPurch.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    if (sumPayEl) sumPayEl.innerText = formatPurchaseAmount(totalPay);
+    if (sumPurchEl) sumPurchEl.innerText = formatPurchaseAmount(totalPurch);
     if (sumDiffEl) {
-        sumDiffEl.innerText = Math.abs(diff).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        sumDiffEl.innerText = formatPurchaseAmount(diff);
         sumDiffEl.style.color = diff === 0 ? 'var(--text)' : (diff > 0 ? 'var(--success)' : 'var(--danger)');
+    }
+    let diffLabel = document.getElementById('sumDiffLabel');
+    if (diffLabel) diffLabel.innerText = Math.abs(diff) < 0.005 ? 'Balanced' : (diff > 0 ? 'Added as supplier advance' : 'Added as amount payable');
+    let previousValue = document.getElementById('sumPreviousSupplier');
+    let previousLabel = document.getElementById('sumPreviousSupplierLabel');
+    let closingValue = document.getElementById('sumClosingSupplier');
+    let closingLabel = document.getElementById('sumClosingSupplierLabel');
+    let balanceHint = document.getElementById('supplierBalanceHint');
+    if (supplierSelected) {
+        setKhataSummary(previousBalance, previousValue, previousLabel, 'You owe supplier', 'Supplier advance');
+        setKhataSummary(closingBalance, closingValue, closingLabel, 'You will owe supplier', 'Supplier advance after purchase');
+        if (balanceHint) {
+            balanceHint.innerText = Math.abs(previousBalance) < 0.005
+                ? 'Current khata is settled.'
+                : (previousBalance > 0 ? 'Current payable: <?= $currency ?> ' : 'Current supplier advance: <?= $currency ?> ') + formatPurchaseAmount(previousBalance);
+        }
+    } else {
+        if (previousValue) previousValue.innerText = '0.00';
+        if (closingValue) closingValue.innerText = '0.00';
+        if (previousLabel) previousLabel.innerText = 'Select supplier';
+        if (closingLabel) closingLabel.innerText = 'Select supplier';
+        if (balanceHint) balanceHint.innerText = '';
     }
 }
 function addBikeRow() {
@@ -4854,7 +4968,7 @@ function addBikeRow() {
     </div>
     <div class="form-row">
     <div class="form-group"><label>Color</label><input type="text" name="bikes[${bikeCount}][color]" placeholder="Red, Black, White..."></div>
-    <div class="form-group"><label>Purchase Price (Rs.) <span class="req">*</span></label><input type="number" name="bikes[${bikeCount}][purchase_price]" class="bike-price-input" step="0.01" min="0" required placeholder="0.00" oninput="updatePurchaseTotals(false)"></div>
+    <div class="form-group"><label>Purchase Price (Rs.) <span class="req">*</span></label><input type="number" name="bikes[${bikeCount}][purchase_price]" class="bike-price-input" step="0.01" min="0" required placeholder="0.00" oninput="disableAutoDivideAndUpdate()"></div>
     <div class="form-group"><label>Safeguard Notes</label><input type="text" name="bikes[${bikeCount}][safeguard_notes]" placeholder="Helmet, Tyre, Warranty..."></div>
     </div>
     <div class="form-row">
@@ -4970,7 +5084,7 @@ function closeSupplierModal(selectName) {
             var newValToSelect = currentVal;
             var sName = selectName ? selectName.trim().toLowerCase() : null;
             newOptions.forEach(function(sup) {
-                supplierSelect.append(`<option value="${sup.id}">${sup.name}</option>`);
+                supplierSelect.append(`<option value="${sup.id}" data-balance="${sup.current_balance || 0}">${sup.name}</option>`);
                 if (sName && sup.name.toLowerCase() === sName) newValToSelect = sup.id;
             });
             supplierSelect.val(newValToSelect).trigger('change');
@@ -5433,9 +5547,7 @@ document.getElementById('bulkExportForm').addEventListener('submit', function(){
         if ($sale_model_id)
             $sale_where .= " AND b.model_id=$sale_model_id";
         $bikes_instock = $conn->query("SELECT b.id, b.chassis_number, b.color, b.purchase_price, b.status, m.model_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE $sale_where ORDER BY b.created_at DESC");
-        $customers_list = $conn->query("SELECT c.id, c.name, c.phone, c.cnic, c.is_filer,
-            COALESCE((SELECT SUM(CASE WHEN entry_type='credit' THEN amount ELSE 0 END) - SUM(CASE WHEN entry_type='debit' THEN amount ELSE 0 END) FROM ledger WHERE party_type='customer' AND party_id=c.id),0)
-            as advance_balance FROM customers c ORDER BY c.name");
+        $customers_list = get_customers_with_balances($conn);
         $accessories_list = $conn->query('SELECT id, name, selling_price, current_stock FROM accessories WHERE current_stock > 0 ORDER BY name');
         $last_sale_bike_id = $_SESSION['last_sale_bike_id'] ?? 0;
         unset($_SESSION['last_sale_bike_id']);
@@ -5488,7 +5600,7 @@ document.getElementById('bulkExportForm').addEventListener('submit', function(){
 </select>
 <button type="button" class="btn btn-default btn-sm" onclick="openCustomerModal()">+</button>
 </div>
-<span id="advanceDisplay" style="font-size:0.8rem;color:var(--text3);display:block;margin-top:2px"></span>
+<span id="advanceDisplay" style="font-size:0.8rem;color:var(--text3);display:block;margin-top:2px" aria-live="polite"></span>
 </div>
 <div class="form-group"><label>Customer Filer Status</label><input type="text" id="filerStatusDisplay" readonly style="background:var(--bg3);color:var(--text2)" value="Filer"></div>
 <div class="form-group"><label>Down Payment (<?= $currency ?>) <span class="req">*</span></label><input type="number" name="down_payment" id="downPayment" step="0.01" min="0" value="0.00" oninput="calcRemainingBalance()" required></div>
@@ -5507,8 +5619,10 @@ document.getElementById('bulkExportForm').addEventListener('submit', function(){
 <div class="form-group"><label>Cheque Date</label><input type="date" name="cheque_date_dp"></div>
 </div>
 <div class="form-row">
-    <div class="form-group"><label>Total Amount Due</label><input type="text" id="totalAmountDue" readonly style="background:var(--bg3);color:var(--text2)"></div>
-    <div class="form-group"><label>Remaining Balance</label><input type="text" id="remainingBalance" readonly style="background:var(--bg3);color:var(--text2)"></div>
+    <div class="form-group"><label>This Sale Total</label><input type="text" id="totalAmountDue" readonly style="background:var(--bg3);color:var(--text2)"></div>
+    <div class="form-group"><label>Previous Khata</label><input type="text" id="previousCustomerBalance" readonly style="background:var(--bg3);color:var(--text2)"></div>
+    <div class="form-group"><label>Amount to Finance</label><input type="text" id="remainingBalance" readonly style="background:var(--bg3);color:var(--text2)" aria-describedby="financeBalanceHelp"><small id="financeBalanceHelp" style="color:var(--text3)">After today’s payment and any existing advance</small></div>
+    <div class="form-group"><label>Closing Khata</label><input type="text" id="closingCustomerBalance" readonly style="background:var(--bg3);font-weight:700"></div>
 </div>
 <div class="form-row">
     <div class="form-group"><label>Total Installments</label><input type="number" name="total_installments" id="totalInstallments" min="0" value="0" oninput="calcInstallments()"></div>
@@ -5729,6 +5843,7 @@ function updateAdvanceDisplay() {
     } else {
         display.innerHTML = '';
     }
+    calcRemainingBalance();
 }
 function calcMargin() {
     var sp = parseFloat(document.getElementById('sellingPrice').value) || 0;
@@ -5750,6 +5865,8 @@ function calcRemainingBalance() {
     });
     var totalAmountDue = sellingPrice + totalAccessoriesPrice;
     var custSel = document.getElementById('customerSel');
+    var selectedCustomer = custSel && custSel.selectedIndex >= 0 ? custSel.options[custSel.selectedIndex] : null;
+    var existingAdvance = selectedCustomer ? (parseFloat(selectedCustomer.dataset.advance || 0) || 0) : 0;
     if (custSel && custSel.value == '0') {
         document.getElementById('downPayment').value = totalAmountDue.toFixed(2);
         document.getElementById('downPayment').readOnly = true;
@@ -5766,14 +5883,30 @@ function calcRemainingBalance() {
         }
     }
     var downPayment = parseFloat(document.getElementById('downPayment').value) || 0;
-    var remainingBalance = totalAmountDue - downPayment;
+    var amountToFinance = Math.max(0, totalAmountDue - downPayment - Math.max(0, existingAdvance));
+    var closingBalance = -existingAdvance + totalAmountDue - downPayment;
     document.getElementById('totalAmountDue').value = '<?= $currency ?> ' + totalAmountDue.toFixed(2);
-    document.getElementById('remainingBalance').value = '<?= $currency ?> ' + remainingBalance.toFixed(2);
+    var previousBalanceEl = document.getElementById('previousCustomerBalance');
+    var closingBalanceEl = document.getElementById('closingCustomerBalance');
+    if (custSel && custSel.value != '0') {
+        previousBalanceEl.value = Math.abs(existingAdvance) < 0.005
+            ? 'Settled'
+            : (existingAdvance > 0 ? 'Advance <?= $currency ?> ' : 'Due <?= $currency ?> ') + Math.abs(existingAdvance).toFixed(2);
+        closingBalanceEl.value = Math.abs(closingBalance) < 0.005
+            ? 'Settled'
+            : (closingBalance > 0 ? 'Customer Due <?= $currency ?> ' : 'Customer Advance <?= $currency ?> ') + Math.abs(closingBalance).toFixed(2);
+        closingBalanceEl.style.color = closingBalance > 0 ? 'var(--danger)' : (closingBalance < 0 ? 'var(--success)' : 'var(--text2)');
+    } else {
+        previousBalanceEl.value = 'Walk-in customer';
+        closingBalanceEl.value = Math.abs(closingBalance) < 0.005 ? 'Settled' : 'Payment must equal sale total';
+        closingBalanceEl.style.color = Math.abs(closingBalance) < 0.005 ? 'var(--text2)' : 'var(--danger)';
+    }
+    document.getElementById('remainingBalance').value = '<?= $currency ?> ' + amountToFinance.toFixed(2);
     calcInstallments();
 }
 function calcInstallments() {
     var remainingBalanceStr = document.getElementById('remainingBalance').value.replace('<?= $currency ?> ', '');
-    var remainingBalance = parseFloat(remainingBalanceStr.replace(/[^0-9.-]/g, '')) || 0;
+    var remainingBalance = Math.max(0, parseFloat(remainingBalanceStr.replace(/[^0-9.-]/g, '')) || 0);
     var totalInstallments = parseInt(document.getElementById('totalInstallments').value) || 0;
     var installmentAmount = 0;
     if (totalInstallments > 0) {
@@ -5856,11 +5989,11 @@ function closeCustomerModal(selectName) {
             var customerSelect = $('#customerSel');
             var currentVal = customerSelect.val();
             customerSelect.empty();
-            customerSelect.append('<option value="0" data-is-filer="1">-- Walk-in / Cash Customer --</option>');
+            customerSelect.append('<option value="0" data-is-filer="1" data-advance="0">-- Walk-in / Cash Customer --</option>');
             var newValToSelect = currentVal;
             var sName = selectName ? selectName.trim().toLowerCase() : null;
             newOptions.forEach(function(cust) {
-                customerSelect.append(`<option value="${cust.id}" data-is-filer="${cust.is_filer}">${cust.name} — ${cust.phone}</option>`);
+                customerSelect.append(`<option value="${cust.id}" data-is-filer="${cust.is_filer}" data-advance="${cust.advance_balance || 0}">${cust.name} — ${cust.phone}</option>`);
                 if (sName && cust.name.toLowerCase() === sName) newValToSelect = cust.id;
             });
             customerSelect.val(newValToSelect).trigger('change');
@@ -5871,6 +6004,7 @@ window.onload = function() {
     var sel = document.getElementById('bikeSelect');
     if (sel.value) fillBikeDetails(sel);
     updateFilerStatus(document.getElementById('customerSel'));
+    updateAdvanceDisplay();
     calcRemainingBalance(); 
 };
 </script>
@@ -6480,7 +6614,7 @@ $(document).ready(function() {
         if ($sel_sup > 0):
             $sup_info = $conn->query("SELECT * FROM suppliers WHERE id=$sel_sup")->fetch_assoc();
             $sup_orders = $conn->query("SELECT po.*, COALESCE(SUM(CASE WHEN b.status!='returned_to_supplier' THEN b.purchase_price ELSE 0 END), po.total_amount) as bikes_total, SUM(CASE WHEN b.status!='returned_to_supplier' THEN 1 ELSE 0 END) as bike_count FROM purchase_orders po LEFT JOIN bikes b ON po.id=b.purchase_order_id WHERE po.supplier_id=$sel_sup GROUP BY po.id ORDER BY po.order_date ASC");
-            $supplier_payments = $conn->query("SELECT * FROM payments WHERE transaction_type IN ('supplier_payment', 'supplier_refund') AND status!='bounced' AND ((transaction_type='supplier_payment' AND reference_id IN (SELECT id FROM purchase_orders WHERE supplier_id=$sel_sup)) OR (transaction_type='supplier_refund' AND reference_id IN (SELECT b.id FROM bikes b JOIN purchase_orders po2 ON po2.id=b.purchase_order_id WHERE po2.supplier_id=$sel_sup)) OR (reference_id=0 AND supplier_id=$sel_sup)) ORDER BY payment_date ASC");
+            $supplier_payments = $conn->query("SELECT * FROM payments WHERE transaction_type IN ('supplier_payment', 'supplier_refund') AND COALESCE(status,'cleared')!='bounced' AND ((transaction_type='supplier_payment' AND reference_id IN (SELECT id FROM purchase_orders WHERE supplier_id=$sel_sup)) OR (transaction_type='supplier_refund' AND reference_id IN (SELECT b.id FROM bikes b JOIN purchase_orders po2 ON po2.id=b.purchase_order_id WHERE po2.supplier_id=$sel_sup)) OR (reference_id=0 AND supplier_id=$sel_sup)) ORDER BY payment_date ASC");
             $running_bal = 0;
             $purchase_total_sum = 0;
             $payment_total_sum = 0;
