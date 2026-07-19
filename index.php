@@ -6628,7 +6628,79 @@ $(document).ready(function() {
                 }
             }
             $bal_summary = $purchase_total_sum - $payment_total_sum;
+            $view_supplier_payment_id = (int) ($_GET['view_payment'] ?? 0);
+            $supplier_payment_receipt = null;
+            if ($view_supplier_payment_id > 0) {
+                $receipt_stmt = $conn->prepare("SELECT p.*,
+                    COALESCE(sd.name, spo.name, srb.name, p.party_name) AS supplier_name,
+                    po.id AS purchase_order_id,
+                    rb.chassis_number AS refund_chassis
+                    FROM payments p
+                    LEFT JOIN suppliers sd ON sd.id=p.supplier_id
+                    LEFT JOIN purchase_orders po ON p.transaction_type='supplier_payment' AND po.id=p.reference_id
+                    LEFT JOIN suppliers spo ON spo.id=po.supplier_id
+                    LEFT JOIN bikes rb ON p.transaction_type='supplier_refund' AND rb.id=p.reference_id
+                    LEFT JOIN purchase_orders rpo ON rpo.id=rb.purchase_order_id
+                    LEFT JOIN suppliers srb ON srb.id=rpo.supplier_id
+                    WHERE p.id=?
+                      AND p.transaction_type IN ('supplier_payment','supplier_refund')
+                      AND COALESCE(NULLIF(p.supplier_id,0),po.supplier_id,rpo.supplier_id)=?
+                    LIMIT 1");
+                $receipt_stmt->bind_param('ii', $view_supplier_payment_id, $sel_sup);
+                $receipt_stmt->execute();
+                $supplier_payment_receipt = $receipt_stmt->get_result()->fetch_assoc();
+                $receipt_stmt->close();
+            }
             ?>
+<?php if ($view_supplier_payment_id > 0): ?>
+<style>
+.sidebar,.topbar{display:none!important}.main-wrap{margin-left:0!important}.content{padding:40px!important;background:#333!important}.content>*:not(#receiptArea){display:none!important}body{background:#333!important}
+@media print{.content,body{padding:0!important;background:#fff!important}}
+</style>
+<?php if ($supplier_payment_receipt):
+    $is_supplier_refund = $supplier_payment_receipt['transaction_type'] === 'supplier_refund';
+    $supplier_receipt_no = ($is_supplier_refund ? 'SR-' : 'SP-') . date('Ymd', strtotime($supplier_payment_receipt['payment_date'])) . '-' . str_pad($supplier_payment_receipt['id'], 4, '0', STR_PAD_LEFT);
+?>
+<div class="a4-invoice" id="receiptArea">
+    <div class="invoice-header">
+        <h1>⚡ <?= sanitize(get_setting('company_name') ?? 'BNI Enterprises') ?></h1>
+        <h2><?= sanitize(get_setting('branch_name') ?? 'Dera (Ahmed Metro)') ?></h2>
+        <div style="font-size:0.9rem;margin-top:4px"><strong><?= $is_supplier_refund ? 'SUPPLIER REFUND RECEIPT' : 'SUPPLIER PAYMENT RECEIPT' ?></strong></div>
+    </div>
+    <div class="invoice-meta">
+        <div><strong>Receipt #:</strong> <?= sanitize($supplier_receipt_no) ?><br><strong>Date:</strong> <?= fmt_date($supplier_payment_receipt['payment_date']) ?></div>
+        <div style="text-align:right"><strong>Supplier:</strong> <?= sanitize($supplier_payment_receipt['supplier_name'] ?? $sup_info['name']) ?><br><strong>Status:</strong> <?= strtoupper(sanitize($supplier_payment_receipt['status'] ?? 'cleared')) ?></div>
+    </div>
+    <div class="invoice-section">
+        <h3>Transaction Details</h3>
+        <table class="invoice-table">
+            <tbody>
+                <tr><td><strong>Transaction</strong></td><td><?= $is_supplier_refund ? 'Refund received from supplier' : 'Payment made to supplier' ?></td></tr>
+                <tr><td><strong>Amount</strong></td><td style="font-size:1.15rem;font-weight:700"><?= fmt_money($supplier_payment_receipt['amount']) ?></td></tr>
+                <tr><td><strong>Payment Method</strong></td><td><?= strtoupper(str_replace('_', ' ', sanitize($supplier_payment_receipt['payment_type']))) ?></td></tr>
+                <?php if (!empty($supplier_payment_receipt['cheque_number'])): ?><tr><td><strong>Cheque Number</strong></td><td><?= sanitize($supplier_payment_receipt['cheque_number']) ?></td></tr><?php endif; ?>
+                <?php if (!empty($supplier_payment_receipt['bank_name'])): ?><tr><td><strong>Bank</strong></td><td><?= sanitize($supplier_payment_receipt['bank_name']) ?></td></tr><?php endif; ?>
+                <?php if (!empty($supplier_payment_receipt['cheque_date'])): ?><tr><td><strong>Cheque Date</strong></td><td><?= fmt_date($supplier_payment_receipt['cheque_date']) ?></td></tr><?php endif; ?>
+                <tr><td><strong>Reference</strong></td><td>
+                    <?php if (!$is_supplier_refund && !empty($supplier_payment_receipt['purchase_order_id'])): ?>Purchase Order #<?= (int) $supplier_payment_receipt['purchase_order_id'] ?>
+                    <?php elseif ($is_supplier_refund && !empty($supplier_payment_receipt['refund_chassis'])): ?>Returned Bike — Chassis <?= sanitize($supplier_payment_receipt['refund_chassis']) ?>
+                    <?php else: ?>General supplier khata transaction<?php endif; ?>
+                </td></tr>
+                <tr><td><strong>Notes</strong></td><td><?= nl2br(sanitize($supplier_payment_receipt['notes'] ?: '-')) ?></td></tr>
+                <tr><td><strong>Recorded At</strong></td><td><?= sanitize($supplier_payment_receipt['created_at'] ?? '-') ?></td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="invoice-footer">Generated by <?= sanitize($author) ?></div>
+    <div class="no-print" style="margin-top:12px;display:flex;gap:8px">
+        <button type="button" onclick="window.print()" class="btn btn-success">🖨 Print Receipt</button>
+        <a href="index.php?page=supplier_ledger&amp;sup_id=<?= $sel_sup ?>" class="btn btn-default">Back to Supplier Ledger</a>
+    </div>
+</div>
+<?php else: ?>
+<div class="alert alert-danger" id="receiptArea">Supplier transaction was not found or does not belong to this supplier.<br><a href="index.php?page=supplier_ledger&amp;sup_id=<?= $sel_sup ?>" class="btn btn-default btn-sm" style="margin-top:10px">Back to Supplier Ledger</a></div>
+<?php endif; ?>
+<?php endif; ?>
 <div class="split-grid-3 animate__animated animate__fadeInDown" style="margin-bottom:14px">
     <div class="card danger"><div class="card-icon">📦</div><div class="card-body"><div class="card-label">Total Purchased</div><div class="card-value"><?= fmt_money($purchase_total_sum) ?></div></div></div>
     <div class="card success"><div class="card-icon">💵</div><div class="card-body"><div class="card-label">Total Paid</div><div class="card-value"><?= fmt_money($payment_total_sum) ?></div></div></div>
@@ -6673,7 +6745,8 @@ $(document).ready(function() {
 </div>
 <div class="data-table-wrap">
 <table class="data-table">
-<thead><tr><th>Sr#</th><th>Date</th><th>Description</th><th>Debit (Dr)</th><th>Credit (Cr)</th><th>Balance</th></tr></thead>
+<caption style="text-align:left;padding:8px 0;color:var(--text2)">Select a transaction description or View button to open its full receipt.</caption>
+<thead><tr><th scope="col">Sr#</th><th scope="col">Date</th><th scope="col">Description</th><th scope="col">Debit (Dr)</th><th scope="col">Credit (Cr)</th><th scope="col">Balance</th><th scope="col" class="no-print">Receipt</th></tr></thead>
 <tbody>
 <?php
             $sr = 1;
@@ -6687,7 +6760,8 @@ $(document).ready(function() {
                     'type' => 'purchase',
                     'amount' => $order['bikes_total'],
                     'description' => "Purchase Order #{$order['id']} ({$order['bike_count']} bikes)",
-                    'id' => $order['id']
+                    'id' => $order['id'],
+                    'view_url' => 'index.php?page=purchase&print_po=' . $order['id'] . '&format=a4'
                 ];
             }
             $supplier_payments->data_seek(0);
@@ -6698,7 +6772,8 @@ $(document).ready(function() {
                         'type' => 'refund',
                         'amount' => $payment['amount'],
                         'description' => "Refund Received #{$payment['id']} ({$payment['payment_type']} - " . ($payment['cheque_number'] ?? '-') . ')',
-                        'id' => $payment['id']
+                        'id' => $payment['id'],
+                        'view_url' => 'index.php?page=supplier_ledger&sup_id=' . $sel_sup . '&view_payment=' . $payment['id']
                     ];
                 } else {
                     $transactions[] = [
@@ -6706,7 +6781,8 @@ $(document).ready(function() {
                         'type' => 'payment',
                         'amount' => $payment['amount'],
                         'description' => "Payment #{$payment['id']} ({$payment['payment_type']} - " . ($payment['cheque_number'] ?? '-') . ')',
-                        'id' => $payment['id']
+                        'id' => $payment['id'],
+                        'view_url' => 'index.php?page=supplier_ledger&sup_id=' . $sel_sup . '&view_payment=' . $payment['id']
                     ];
                 }
             }
@@ -6735,10 +6811,11 @@ $(document).ready(function() {
 <tr>
 <td><?= $sr++ ?></td>
 <td><?= fmt_date($trans['date']) ?></td>
-<td><?= sanitize($trans['description']) ?></td>
+<td><a href="<?= sanitize($trans['view_url']) ?>" target="_blank" rel="noopener" style="color:var(--accent);font-weight:700;text-decoration:underline"><?= sanitize($trans['description']) ?></a></td>
 <td><?= $debit > 0 ? fmt_money($debit) : '-' ?></td>
 <td><?= $credit > 0 ? fmt_money($credit) : '-' ?></td>
 <td style="color:<?= $running_bal >= 0 ? 'var(--success)' : 'var(--danger)' ?>;font-weight:700"><?= fmt_money(abs($running_bal)) ?> <?= $running_bal >= 0 ? 'Cr' : 'Dr' ?></td>
+<td class="no-print"><a href="<?= sanitize($trans['view_url']) ?>" target="_blank" rel="noopener" class="btn btn-default btn-sm" aria-label="View receipt for <?= sanitize($trans['description']) ?>">View</a></td>
 </tr>
 <?php endforeach; ?>
 </tbody>
@@ -6748,6 +6825,7 @@ $(document).ready(function() {
 <td><strong><?= fmt_money($purchase_total) ?></strong></td>
 <td><strong><?= fmt_money($payment_total) ?></strong></td>
 <td style="color:<?= $running_bal >= 0 ? 'var(--success)' : 'var(--danger)' ?>;font-weight:700"><strong><?= fmt_money(abs($running_bal)) ?> <?= $running_bal >= 0 ? 'Cr' : 'Dr' ?></strong></td>
+<td class="no-print"></td>
 </tr>
 </tfoot>
 </table>
