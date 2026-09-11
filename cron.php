@@ -11,6 +11,8 @@
  *  3. Compresses it with gzip into the "thedbbackups" folder.
  *  4. Keeps ONLY the newest 20 backups — as soon as the 21st backup is
  *     created, the oldest one is deleted automatically.
+ *  5. OPTIONALLY emails the backup to you as an attachment (set
+ *     $EMAIL_BACKUP = true below).
  *
  *  SCHEDULE — RUN ONCE PER DAY
  *  ----------------------------
@@ -52,6 +54,21 @@ $MAX_BACKUPS = 20;
 // CHANGE THIS to a long random value (e.g. 40+ random letters/numbers).
 // You only need it if you run the cron job via URL (see instructions below).
 $SECRET_KEY = 'CHANGE_ME_TO_A_LONG_RANDOM_SECRET_STRING';
+
+// ---------------------------------------------------------------------------
+// EMAIL BACKUP (OPTIONAL)
+// ---------------------------------------------------------------------------
+// Set $EMAIL_BACKUP to true to also send the freshly-created backup file to
+// your inbox as an email attachment after every run. Leave false to disable.
+// See the "EMAIL SETUP INSTRUCTIONS" in the comments at the bottom.
+$EMAIL_BACKUP = false;
+
+// The address the backup should be sent TO.
+$EMAIL_TO = 'you@example.com';
+
+// The "From" address. On most shared hosts this must be a valid address on
+// your own domain (e.g. backup@yourdomain.com) or the mail may be rejected.
+$EMAIL_FROM = 'backup@yourdomain.com';
 
 /* ===========================================================================
  * Nothing below this line normally needs to be changed.
@@ -119,6 +136,57 @@ function ensure_backup_folder($dir)
     }
 
     @chmod($dir, 0700);
+}
+
+/**
+ * Email a file as an attachment using PHP's built-in mail() function.
+ * No external library (PHPMailer etc.) is required — works on shared hosting.
+ *
+ * Returns true on success, false on failure.
+ */
+function send_backup_email($file_path, $filename, $to, $from, $subject)
+{
+    if (!is_file($file_path)) {
+        return false;
+    }
+    $content = @file_get_contents($file_path);
+    if ($content === false) {
+        return false;
+    }
+
+    // Strip CR/LF from addresses/subject to prevent email header injection.
+    $to      = str_replace(["\r", "\n"], '', trim((string) $to));
+    $from    = str_replace(["\r", "\n"], '', trim((string) $from));
+    $subject = str_replace(["\r", "\n"], '', (string) $subject);
+    $filename = basename(str_replace(["\r", "\n"], '', (string) $filename));
+
+    if ($to === '' || $from === '' || $filename === '') {
+        return false;
+    }
+
+    $encoded  = chunk_split(base64_encode($content), 76, "\r\n");
+    $boundary = 'bni_' . md5(uniqid((string) mt_rand(), true));
+
+    // Sensible MIME type based on the file extension.
+    $mime = (substr($filename, -3) === '.gz') ? 'application/gzip' : 'application/sql';
+
+    $headers = 'From: ' . $from . "\r\n"
+        . 'Reply-To: ' . $from . "\r\n"
+        . 'MIME-Version: 1.0' . "\r\n"
+        . 'Content-Type: multipart/mixed; boundary="' . $boundary . '"';
+
+    $body = '--' . $boundary . "\r\n"
+        . 'Content-Type: text/plain; charset=UTF-8' . "\r\n"
+        . 'Content-Transfer-Encoding: 8bit' . "\r\n\r\n"
+        . "Attached is the latest database backup.\n\n"
+        . '--' . $boundary . "\r\n"
+        . 'Content-Type: ' . $mime . '; name="' . $filename . '"' . "\r\n"
+        . 'Content-Transfer-Encoding: base64' . "\r\n"
+        . 'Content-Disposition: attachment; filename="' . $filename . '"' . "\r\n\r\n"
+        . $encoded
+        . '--' . $boundary . "--\r\n";
+
+    return @mail($to, $subject, $body, $headers);
 }
 
 /* ------------------------- Access control ------------------------------ */
@@ -272,6 +340,19 @@ if (is_array($files)) {
 
 $conn->close();
 
+/* ------------------- Email the backup (if enabled) ---------------------- */
+
+$email_status = '';
+if ($EMAIL_BACKUP) {
+    $email_subject = 'Database Backup — ' . $DB_NAME . ' (' . date('Y-m-d') . ')';
+    if (send_backup_email($final_file, basename($final_file), $EMAIL_TO, $EMAIL_FROM, $email_subject)) {
+        $email_status = 'Backup emailed to ' . $EMAIL_TO;
+    } else {
+        $email_status = 'Email backup FAILED';
+        error_log('[cron.php] Email backup failed.');
+    }
+}
+
 /* ------------------------------ Report --------------------------------- */
 
 $remaining = glob($BACKUP_DIR . '/bni_backup_*.sql*');
@@ -281,6 +362,9 @@ $count = is_array($remaining)
 
 if ($IS_CLI) {
     echo "Backup OK: " . basename($final_file) . " (" . $count . " backup(s) kept).\n";
+    if ($email_status !== '') {
+        echo $email_status . "\n";
+    }
 } else {
     http_response_code(200);
     echo 'OK';
@@ -311,6 +395,26 @@ if ($IS_CLI) {
  *
  *  5. Save the cron job. It will now run every day, keep the 20 newest
  *     backups in "thedbbackups", and delete the oldest one each time.
+ *
+ *  EMAIL SETUP INSTRUCTIONS
+ *  -------------------------
+ *  1. Set $EMAIL_BACKUP = true (near the top of this file).
+ *  2. Set $EMAIL_TO to the address that should receive the backup.
+ *  3. Set $EMAIL_FROM to a valid address on YOUR domain, e.g.
+ *     backup@yourdomain.com. On most shared hosts, using a foreign "From"
+ *     (like Gmail) will cause the email to be rejected or marked as spam.
+ *     For best results, create a real mailbox (e.g. "backup") in cPanel →
+ *     Email Accounts, and use that address here.
+ *  4. Save and run once (or wait for the next cron run). You should receive
+ *     the .sql.gz backup as an attachment. If it does not arrive:
+ *       - Check the server error log for "[cron.php] Email backup failed."
+ *       - Confirm PHP's mail() works on your account (test with a simple
+ *         mail() script), or switch to your host's SMTP via a library.
+ *
+ *  NOTE ON SIZE: The backup is emailed as a base64 attachment, which makes
+ *  it about 33% larger than the .sql.gz file on disk. For very large
+ *  databases it may be better to rely on the server copy only, or attach an
+ *  off-site copy via FTP instead of email.
  *
  *  IMPORTANT SECURITY NOTES
  *  -------------------------

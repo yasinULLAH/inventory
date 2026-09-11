@@ -3303,6 +3303,29 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         echo $sql_dump;
         exit;
     }
+    if ($page === 'settings' && isset($_GET['download_backup'])) {
+        if (!is_administrator($conn)) {
+            die('Database backups are restricted to the primary Administrator.');
+        }
+        $backup_name = basename((string) $_GET['download_backup']);
+        $backup_root = realpath(__DIR__ . DIRECTORY_SEPARATOR . 'thedbbackups');
+        $backup_file = realpath(__DIR__ . DIRECTORY_SEPARATOR . 'thedbbackups' . DIRECTORY_SEPARATOR . $backup_name);
+        $is_sql_gz = (substr($backup_name, -7) === '.sql.gz');
+        $is_sql    = (substr($backup_name, -4) === '.sql');
+        if ($backup_name === '' || (!$is_sql && !$is_sql_gz)
+            || !$backup_root || !$backup_file || !is_file($backup_file)
+            || strpos($backup_file, $backup_root . DIRECTORY_SEPARATOR) !== 0) {
+            http_response_code(404);
+            exit('Backup file not found.');
+        }
+        header('Content-Type: ' . ($is_sql_gz ? 'application/gzip' : 'application/sql'));
+        header('Content-Disposition: attachment; filename="' . $backup_name . '"');
+        header('Content-Length: ' . (string) filesize($backup_file));
+        header('Cache-Control: private, no-store');
+        header('X-Content-Type-Options: nosniff');
+        readfile($backup_file);
+        exit;
+    }
     if ($page === 'settings' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['restore_db']) && isset($_FILES['backup_file'])) {
         if (!is_administrator($conn)) {
             die('Database restore is restricted to the primary Administrator.');
@@ -9498,6 +9521,26 @@ if (prefillBikeId > 0) {
         $s_show_pp = get_setting('show_purchase_on_invoice') ?? '0';
         $s_idle_timeout = get_setting('session_timeout_idle') ?? '2400';
         $s_absolute_timeout = get_setting('session_timeout_absolute') ?? '28800';
+        $backup_dir_path = __DIR__ . '/thedbbackups';
+        $stored_backups = [];
+        if (is_dir($backup_dir_path)) {
+            $found_backups = glob($backup_dir_path . '/bni_backup_*.sql*');
+            if (is_array($found_backups)) {
+                foreach ($found_backups as $bf) {
+                    if (substr($bf, -4) === '.tmp' || !is_file($bf)) {
+                        continue;
+                    }
+                    $stored_backups[] = [
+                        'name'  => basename($bf),
+                        'size'  => (int) filesize($bf),
+                        'mtime' => (int) filemtime($bf),
+                    ];
+                }
+            }
+        }
+        usort($stored_backups, function ($a, $b) {
+            return strcmp($b['name'], $a['name']);
+        });
 ?>
 <form id="settingsForm" method="POST" enctype="multipart/form-data" class="animate__animated animate__fadeIn">
 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
@@ -9554,6 +9597,30 @@ if (prefillBikeId > 0) {
 <input type="file" name="backup_file" accept=".sql" style="font-size:0.8rem;background:var(--input-bg);color:var(--input-text);border:1px solid var(--input-border);padding:5px;border-radius:2px">
 <button type="submit" name="restore_db" class="btn btn-danger" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'WARNING: Restore Database?', text: 'Restoring will OVERWRITE ALL CURRENT DATA! Are you absolutely sure?', icon: 'error', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, Restore!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">⬆ Restore Database</button>
 <span style="font-size:0.8rem;color:var(--text2)">Upload a previously downloaded .sql backup file.</span>
+</div>
+<div style="border-top:1px solid var(--border);margin-top:14px;padding-top:14px">
+<strong style="font-size:0.8rem;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px">📁 Stored Daily Backups (thedbbackups folder)</strong>
+<?php if (empty($stored_backups)): ?>
+<p style="font-size:0.8rem;color:var(--text3);margin-top:6px">No automatic backups found yet. They will appear here once your daily cron job runs.</p>
+<?php else: ?>
+<div class="data-table-wrap" style="margin-top:8px">
+<table class="data-table">
+<thead><tr><th>Backup File</th><th>Size</th><th>Date</th><th class="no-sort">Action</th></tr></thead>
+<tbody>
+<?php foreach ($stored_backups as $sb):
+    $sb_size = $sb['size'] >= 1048576 ? number_format($sb['size'] / 1048576, 2) . ' MB' : number_format($sb['size'] / 1024, 1) . ' KB';
+?>
+<tr>
+<td style="font-family:Consolas,monospace"><?= sanitize($sb['name']) ?></td>
+<td><?= $sb_size ?></td>
+<td><?= date('d/m/Y H:i:s', $sb['mtime']) ?></td>
+<td><a href="index.php?page=settings&download_backup=<?= urlencode($sb['name']) ?>" class="btn btn-primary btn-sm">⬇ Download</a></td>
+</tr>
+<?php endforeach; ?>
+</tbody>
+</table>
+</div>
+<?php endif; ?>
 </div>
 </fieldset>
 <fieldset class="fieldset"><legend>ℹ System Info</legend>
