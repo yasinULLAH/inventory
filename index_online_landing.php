@@ -11,6 +11,10 @@ if ($request_is_https) { ini_set('session.cookie_secure', '1'); header('Strict-T
 ini_set('display_errors', '0');
 ini_set('log_errors', '1');
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING & ~E_DEPRECATED);
+header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: SAMEORIGIN');
+header('Referrer-Policy: strict-origin-when-cross-origin');
+header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
 session_start();
 $_SESSION['csrf_token'] = $_SESSION['csrf_token'] ?? bin2hex(random_bytes(32));
 $db_host = 'localhost:3306';
@@ -28,6 +32,24 @@ function db_connect()
     return $conn;
 }
 
+function db_query($sql, $types = '', array $params = [])
+{
+    global $conn;
+    $stmt = $conn->prepare($sql);
+    if (!$stmt)
+        return false;
+    if ($types !== '') {
+        $refs = [];
+        foreach ($params as $i => $v) {
+            $refs[$i] = &$params[$i];
+        }
+        $args = array_merge([$types], $refs);
+        call_user_func_array([$stmt, 'bind_param'], $args);
+    }
+    $stmt->execute();
+    return $stmt->get_result();
+}
+
 $conn = db_connect();
 if (!$conn) {
     die('System Maintenance. Please check back later.');
@@ -38,7 +60,8 @@ function app_img($path)
 {
     if (empty($path))
         return '';
-    if (strpos($path, 'http') === 0 || strpos($path, 'data:') === 0)
+    $path = trim((string) $path);
+    if (preg_match('/^https?:\/\//i', $path) || preg_match('/^data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,/i', $path))
         return $path;
     return 'serve_img.php?p=' . urlencode(ltrim($path, '/'));
 }
@@ -63,6 +86,11 @@ function clean_text($val, $max_length = 2000)
 {
     $value = trim(strip_tags((string) $val));
     return function_exists('mb_substr') ? mb_substr($value, 0, $max_length, 'UTF-8') : substr($value, 0, $max_length);
+}
+
+function js_escape($value)
+{
+    return htmlspecialchars(json_encode((string) $value, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
 }
 
 function safe_public_url($value, array $allowed_hosts = [])
@@ -121,10 +149,16 @@ function generate_math_captcha()
     return 'data:image/png;base64,' . base64_encode($data);
 }
 
+$self_page = basename(__FILE__);
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+    if (!isset($_POST['csrf_token']) || !is_string($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
         header('Location: ' . $self_page . '?err=' . urlencode('Security token expired. Please refresh the page and try again.'));
         exit;
+    }
+    if (!empty($_POST['website'])) {
+        http_response_code(403);
+        exit('Access denied.');
     }
     $user_captcha = (int) ($_POST['captcha'] ?? 0);
     $real_captcha = (int) ($_SESSION['captcha_ans'] ?? -1);
@@ -139,25 +173,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     unset($_SESSION['captcha_ans']);
     $_SESSION['last_public_submit_at'] = time();
+    $name = clean_text($_POST['name'] ?? '', 255);
+    $phone = preg_replace('/[^0-9+\-\s]/', '', (string) ($_POST['phone'] ?? ''));
+    $phone = clean_text($phone, 50);
+    if ($name === '' || $phone === '') {
+        header('Location: ' . $self_page . '?err=' . urlencode('Please provide a valid name and phone number.'));
+        exit;
+    }
     if (isset($_POST['request_bike'])) {
-        $name = clean_text($_POST['name'], 255);
-        $phone = clean_text($_POST['phone'], 50);
         $details = clean_text($_POST['bike_details']);
         $st = $conn->prepare('INSERT INTO bike_requests (customer_name, customer_phone, bike_details) VALUES (?,?,?)');
         $st->bind_param('sss', $name, $phone, $details);
         $st->execute();
-        header('Location: ' . $self_page . '?msg=Request Sent! Our team will contact you.');
+        header('Location: ' . $self_page . '?msg=' . urlencode('Request Sent! Our team will contact you.'));
         exit;
     }
     if (isset($_POST['request_quote'])) {
-        $name = clean_text($_POST['name'], 255);
-        $phone = clean_text($_POST['phone'], 50);
-        $bike_id = (int) $_POST['bike_id'];
+        $bike_id = (int) ($_POST['bike_id'] ?? 0);
         $details = clean_text($_POST['details']);
         $st = $conn->prepare('INSERT INTO quote_requests (customer_name, customer_phone, bike_id, details) VALUES (?,?,?,?)');
         $st->bind_param('ssis', $name, $phone, $bike_id, $details);
         $st->execute();
-        header('Location: ' . $self_page . '?msg=Quote Requested! Check WhatsApp shortly.');
+        header('Location: ' . $self_page . '?msg=' . urlencode('Quote Requested! Check WhatsApp shortly.'));
         exit;
     }
 }
@@ -171,7 +208,6 @@ $hero_title = get_setting('landing_hero_title') ?? 'The Next Generation of Elect
 $hero_sub = get_setting('landing_hero_subtitle') ?? 'Eco-friendly, powerful, and designed for the modern world.';
 $wa_number = get_setting('company_whatsapp') ?? '';
 $view = $_GET['view'] ?? 'home';
-$self_page = $_SERVER['PHP_SELF'] ?? 'landing.php';
 $is_bike_detail = false;
 $bike_detail = null;
 $meta_title = sanitize($company_name) . ' | Future of Electric Mobility';
@@ -205,8 +241,8 @@ if ($view === 'bike') {
     }
 }
 $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-$host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-$base_url = $scheme . '://' . $host . rtrim(dirname($_SERVER['PHP_SELF']), '/\\');
+$host = preg_replace('/[^a-zA-Z0-9.:-]/', '', (string) ($_SERVER['HTTP_HOST'] ?? 'localhost'));
+$base_url = $scheme . '://' . $host . rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\');
 $canonical_url = $base_url . '/' . ltrim($meta_canonical, '/');
 $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($meta_image === 'logo.png' ? $base_url . '/' . ltrim($meta_image, '/') : $base_url . '/' . ltrim(app_img($meta_image), '/'));
 ?>
@@ -915,7 +951,7 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
                     LIMIT 4");
                 $elite_rank = 0;
                 while ($m = $top_models->fetch_assoc()):
-                    $avail = $conn->query("SELECT * FROM bikes WHERE model_id={$m['id']} AND status='in_stock' LIMIT 1")->fetch_assoc();
+                    $avail = db_query("SELECT * FROM bikes WHERE model_id = ? AND status='in_stock' LIMIT 1", 'i', [(int) $m['id']])->fetch_assoc();
                     if (!$avail)
                         continue;
                     $elite_rank++;
@@ -947,7 +983,7 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
                     <a class="bike-link" href="<?= sanitize($self_page) ?>?view=bike&id=<?= (int) $avail['id'] ?>">
                         <div class="bike-img">
                             <?php $primary_img = app_img($avail['image'] ?: $m['image']); ?>
-                            <img src="<?= sanitize($primary_img ?: 'x') ?>" alt="<?= sanitize($m['model_name']) ?>" onerror="imageFallback(this, '<?= sanitize(app_img($m['image'])) ?>')">
+                            <img src="<?= sanitize($primary_img ?: 'x') ?>" alt="<?= sanitize($m['model_name']) ?>" onerror="imageFallback(this, <?= js_escape(app_img($m['image'])) ?>)">
                         </div>
                         <div class="bike-title" style="line-height:1.2; padding-bottom:5px;"><?= sanitize($m['model_name']) ?> </div>
                     </a>
@@ -958,7 +994,7 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
                         <div class="feat-item"><i class="fas fa-battery-full"></i> <?= sanitize(format_range($m['max_range'])) ?></div>
                     </div>
                     <div class="price-request"><i class="fab fa-whatsapp"></i> PRICE ON REQUEST</div>
-                    <a href="https://wa.me/<?= $wa_number ?>?text=I'm interested in the <?= urlencode($m['model_name']) ?> " class="wa-action">INQUIRE ON WHATSAPP</a>
+                    <a href="https://wa.me/<?= sanitize($wa_number) ?>?text=I'm interested in the <?= urlencode($m['model_name']) ?> " class="wa-action">INQUIRE ON WHATSAPP</a>
                 </div>
                 <?php endwhile; ?>
             </div>
@@ -1002,10 +1038,10 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
                 $gallery = $conn->query('SELECT * FROM gallery ORDER BY sort_order ASC');
                 while ($g = $gallery->fetch_assoc()):
                     ?>
-                <a href="<?= app_img($g['image']) ?>" class="glightbox gallery-item"
+                <a href="<?= sanitize(app_img($g['image'])) ?>" class="glightbox gallery-item"
                    data-title="<?= sanitize($g['title']) ?>"
                    data-description="<?= sanitize($g['description']) ?>">
-                    <img src="<?= app_img($g['image']) ?>" alt="<?= sanitize($g['title']) ?>" onerror="this.closest('a').remove();">
+                    <img src="<?= sanitize(app_img($g['image'])) ?>" alt="<?= sanitize($g['title']) ?>" onerror="this.closest('a').remove();">
                     <div class="gallery-info">
                         <h4><?= sanitize($g['title']) ?></h4>
                         <p><?= sanitize($g['description']) ?></p>
@@ -1023,7 +1059,7 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
                     ?>
                 <div class="glass leader-card">
                     <div class="leader-avatar-wrap">
-                        <img src="<?= $l['image'] ? app_img($l['image']) : 'https://ui-avatars.com/api/?name=' . urlencode($l['name']) . '&background=6366f1&color=fff&size=200' ?>" class="leader-img" alt="<?= sanitize($l['name']) ?>">
+                        <img src="<?= sanitize($l['image'] ? app_img($l['image']) : 'https://ui-avatars.com/api/?name=' . urlencode($l['name']) . '&background=6366f1&color=fff&size=200') ?>" class="leader-img" alt="<?= sanitize($l['name']) ?>">
                     </div>
                     <div class="leader-name"><?= sanitize($l['name']) ?></div>
                     <div class="leader-position"><?= strtoupper(sanitize($l['position'])) ?></div>
@@ -1049,7 +1085,7 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
                             $cats = $conn->query('SELECT DISTINCT category FROM models WHERE category IS NOT NULL AND category != ""');
                             while ($c = $cats->fetch_assoc()):
                                 ?>
-                            <option value="<?= $c['category'] ?>" <?= ($_GET['category'] ?? '') == $c['category'] ? 'selected' : '' ?>><?= $c['category'] ?></option>
+                            <option value="<?= sanitize($c['category']) ?>" <?= ($_GET['category'] ?? '') == $c['category'] ? 'selected' : '' ?>><?= sanitize($c['category']) ?></option>
                             <?php endwhile; ?>
                         </select>
                     </div>
@@ -1060,7 +1096,7 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
                             $mods = $conn->query('SELECT id, model_name FROM models ORDER BY model_name ASC');
                             while ($m = $mods->fetch_assoc()):
                                 ?>
-                            <option value="<?= $m['id'] ?>" <?= ($_GET['model_id'] ?? '') == $m['id'] ? 'selected' : '' ?>><?= sanitize($m['model_name']) ?></option>
+                            <option value="<?= (int) $m['id'] ?>" <?= ($_GET['model_id'] ?? '') == $m['id'] ? 'selected' : '' ?>><?= sanitize($m['model_name']) ?></option>
                             <?php endwhile; ?>
                         </select>
                     </div>
@@ -1077,7 +1113,7 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
                 </form>
             </div>
             <div style="font-size: 0.85rem; color: var(--text-dim); text-align: center; margin-bottom: 25px; padding: 12px; background: rgba(255,255,255,0.02); border-radius: 12px; border: 1px solid var(--glass-border);">
-                <i class="fas fa-info-circle"></i> <strong>Disclaimer:</strong> Specifications and features shown may vary slightly and might not be 100% exact. For highly accurate details, please <a href="https://wa.me/<?= $wa_number ?>" style="color: var(--primary); text-decoration: none; font-weight: 600;">contact us via WhatsApp</a> or visit our shop via the map below.
+                <i class="fas fa-info-circle"></i> <strong>Disclaimer:</strong> Specifications and features shown may vary slightly and might not be 100% exact. For highly accurate details, please <a href="https://wa.me/<?= sanitize($wa_number) ?>" style="color: var(--primary); text-decoration: none; font-weight: 600;">contact us via WhatsApp</a> or visit our shop via the map below.
             </div>
             <div class="bike-grid">
                 <?php
@@ -1085,27 +1121,40 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
                 $page_num = max(1, (int) ($_GET['pg'] ?? 1));
                 $offset = ($page_num - 1) * $per_page;
                 $where_p = ['1=1'];
+                $wparams = [];
+                $wtypes = '';
                 if (($_GET['stock_status'] ?? 'all') === 'available') {
                     $where_p[] = "b.status IN ('in_stock', 'returned')";
                 }
                 if (!empty($_GET['model_id'])) {
-                    $mid = (int) $_GET['model_id'];
-                    $where_p[] = "b.model_id = $mid";
+                    $where_p[] = "b.model_id = ?";
+                    $wparams[] = (int) $_GET['model_id'];
+                    $wtypes .= 'i';
                 }
                 if (!empty($_GET['search'])) {
-                    $s = mysqli_real_escape_string($conn, $_GET['search']);
-                    $where_p[] = "(m.model_name LIKE '%$s%' OR b.chassis_number LIKE '%$s%')";
+                    $where_p[] = "(m.model_name LIKE ? OR b.chassis_number LIKE ?)";
+                    $like = '%' . $_GET['search'] . '%';
+                    $wparams[] = $like;
+                    $wparams[] = $like;
+                    $wtypes .= 'ss';
                 }
                 if (!empty($_GET['category'])) {
-                    $c = mysqli_real_escape_string($conn, $_GET['category']);
-                    $where_p[] = "m.category = '$c'";
-                }                
+                    $where_p[] = "m.category = ?";
+                    $wparams[] = $_GET['category'];
+                    $wtypes .= 's';
+                }
                 $where_p[] = "b.id IN (SELECT MIN(id) FROM bikes GROUP BY model_id, status, color, image)";
                 $where = implode(' AND ', $where_p);
-                $all_bikes = $conn->query("SELECT b.*, m.model_name, m.category, m.image as model_image, m.top_speed, m.max_range 
-                    FROM bikes b JOIN models m ON b.model_id = m.id WHERE $where ORDER BY b.status IN ('in_stock', 'returned') DESC, b.created_at DESC LIMIT $offset, $per_page");
-                $total_cnt = $conn->query("SELECT COUNT(DISTINCT b.id) FROM bikes b JOIN models m ON b.model_id = m.id WHERE $where")->fetch_row()[0];
-                $total_pages = ceil($total_cnt / $per_page);
+                $cnt_result = db_query("SELECT COUNT(DISTINCT b.id) FROM bikes b JOIN models m ON b.model_id = m.id WHERE $where", $wtypes, $wparams);
+                $total_cnt = $cnt_result ? (int) $cnt_result->fetch_row()[0] : 0;
+                $total_pages = max(1, (int) ceil($total_cnt / $per_page));
+                $lparams = $wparams;
+                $ltypes = $wtypes;
+                $lparams[] = $offset;
+                $lparams[] = $per_page;
+                $ltypes .= 'ii';
+                $all_bikes = db_query("SELECT b.*, m.model_name, m.category, m.image as model_image, m.top_speed, m.max_range 
+                    FROM bikes b JOIN models m ON b.model_id = m.id WHERE $where ORDER BY b.status IN ('in_stock', 'returned') DESC, b.created_at DESC LIMIT ?, ?", $ltypes, $lparams);
                 $badge_data = [];
                 $bd_q = $conn->query("SELECT m.id, COUNT(CASE WHEN b.status='sold' THEN 1 END) as sold_cnt, COUNT(CASE WHEN b.status='in_stock' THEN 1 END) as stk_cnt, MAX(b.created_at) as newest FROM models m LEFT JOIN bikes b ON m.id=b.model_id GROUP BY m.id ORDER BY sold_cnt DESC");
                 $bd_rank = 0;
@@ -1149,7 +1198,7 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
                     <a class="bike-link" href="<?= sanitize($self_page) ?>?view=bike&id=<?= (int) $bike['id'] ?>">
                         <?php $primary_img = app_img($bike['image'] ?: $bike['model_image']); ?>
                         <div class="bike-img">
-                            <img src="<?= sanitize($primary_img ?: 'x') ?>" alt="<?= sanitize($bike['model_name']) ?>" onerror="imageFallback(this, '<?= sanitize(app_img($bike['model_image'])) ?>')">
+                            <img src="<?= sanitize($primary_img ?: 'x') ?>" alt="<?= sanitize($bike['model_name']) ?>" onerror="imageFallback(this, <?= js_escape(app_img($bike['model_image'])) ?>)">
                         </div>
                         <div class="bike-title" style="line-height:1.2; padding-bottom:5px;"><?= sanitize($bike['model_name']) ?> </div>
                     </a>
@@ -1159,11 +1208,11 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
                         <div class="feat-item"><i class="fas fa-battery-full"></i> <?= sanitize(format_range($bike['max_range'])) ?></div>
                     </div>
                     <div style="display:flex; gap:12px;">
-                        <a href="https://wa.me/<?= $wa_number ?>?text=Inquiry for <?= urlencode($bike['model_name']) ?> " class="wa-action" style="flex:1;">INQUIRE</a>
+                        <a href="https://wa.me/<?= sanitize($wa_number) ?>?text=Inquiry for <?= urlencode($bike['model_name']) ?> " class="wa-action" style="flex:1;">INQUIRE</a>
                         <?php if (in_array($bike['status'], ['in_stock', 'returned'])): ?>
-                        <button class="btn btn-outline" onclick="openQuoteModal(<?= $bike['id'] ?>, '<?= sanitize($bike['model_name']) ?>')">QUOTE</button>
+                        <button class="btn btn-outline" onclick="openQuoteModal(<?= (int) $bike['id'] ?>, <?= js_escape($bike['model_name']) ?>)">QUOTE</button>
                         <?php else: ?>
-                        <button class="btn btn-outline" onclick="openRequestModal('<?= sanitize($bike['model_name']) ?>')">REQUEST</button>
+                        <button class="btn btn-outline" onclick="openRequestModal(<?= js_escape($bike['model_name']) ?>)">REQUEST</button>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -1195,7 +1244,7 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
                     <div class="detail-grid">
                         <div class="glass" style="padding:14px;">
                             <?php $primary_img = app_img($bike_detail['bike_image'] ?: $bike_detail['model_image']); ?>
-                            <img class="detail-hero-img" src="<?= sanitize($primary_img ?: 'x') ?>" alt="<?= sanitize($bike_detail['model_name']) ?>" onerror="imageFallback(this, '<?= sanitize(app_img($bike_detail['model_image'])) ?>')">
+                            <img class="detail-hero-img" src="<?= sanitize($primary_img ?: 'x') ?>" alt="<?= sanitize($bike_detail['model_name']) ?>" onerror="imageFallback(this, <?= js_escape(app_img($bike_detail['model_image'])) ?>)">
                         </div>
                         <div class="glass detail-panel">
                             <div class="bike-status badge-default" style="position:static; display:inline-flex; margin-bottom:14px;">
@@ -1212,18 +1261,18 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
                                 <div class="feat-item"><i class="fas fa-headset"></i> 24/7 Support</div>
                             </div>
                             <div style="font-size: 0.85rem; color: var(--text-dim); margin-bottom: 20px; padding: 12px; background: rgba(255,255,255,0.02); border-radius: 12px; border: 1px solid var(--glass-border);">
-                                <i class="fas fa-info-circle"></i> <strong>Disclaimer:</strong> Specifications and features shown may vary slightly and might not be 100% exact. For highly accurate details, please <a href="https://wa.me/<?= $wa_number ?>" style="color: var(--primary); text-decoration: none; font-weight: 600;">contact us via WhatsApp</a> or visit our shop.
+                                <i class="fas fa-info-circle"></i> <strong>Disclaimer:</strong> Specifications and features shown may vary slightly and might not be 100% exact. For highly accurate details, please <a href="https://wa.me/<?= sanitize($wa_number) ?>" style="color: var(--primary); text-decoration: none; font-weight: 600;">contact us via WhatsApp</a> or visit our shop.
                             </div>
                             <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
-                                <a href="https://wa.me/<?= $wa_number ?>?text=Inquiry for <?= urlencode($bike_detail['model_name']) ?> " class="wa-action" style="flex:1;">INQUIRE</a>
+                                <a href="https://wa.me/<?= sanitize($wa_number) ?>?text=Inquiry for <?= urlencode($bike_detail['model_name']) ?> " class="wa-action" style="flex:1;">INQUIRE</a>
                                 <?php if (in_array($bike_detail['status'], ['in_stock', 'returned'])): ?>
-                                <button class="btn btn-outline" style="flex:1; justify-content:center;" onclick="openQuoteModal(<?= (int) $bike_detail['id'] ?>, '<?= sanitize($bike_detail['model_name']) ?>')">QUOTE</button>
+                                <button class="btn btn-outline" style="flex:1; justify-content:center;" onclick="openQuoteModal(<?= (int) $bike_detail['id'] ?>, <?= js_escape($bike_detail['model_name']) ?>)">QUOTE</button>
                                 <?php else: ?>
-                                <button class="btn btn-outline" style="flex:1; justify-content:center;" onclick="openRequestModal('<?= sanitize($bike_detail['model_name']) ?>')">REQUEST THIS BIKE</button>
+                                <button class="btn btn-outline" style="flex:1; justify-content:center;" onclick="openRequestModal(<?= js_escape($bike_detail['model_name']) ?>)">REQUEST THIS BIKE</button>
                                 <?php endif; ?>
                             </div>
                             <div style="display:flex; gap:12px; flex-wrap:wrap;">
-                                <button class="btn btn-outline" style="flex:1; justify-content:center;" onclick="navigator.clipboard.writeText('<?= sanitize($canonical_url) ?>'); this.innerHTML='<i class=&quot;fas fa-check&quot;></i> LINK COPIED';">SHARE LINK</button>
+                                <button class="btn btn-outline" style="flex:1; justify-content:center;" onclick="navigator.clipboard.writeText(<?= js_escape($canonical_url) ?>); this.innerHTML='<i class=&quot;fas fa-check&quot;></i> LINK COPIED';">SHARE LINK</button>
                                 <a href="<?= sanitize($self_page) ?>?view=bikes" class="btn btn-main" style="flex:1; justify-content:center;">MORE BIKES</a>
                             </div>
                         </div>
@@ -1320,9 +1369,10 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
             <h2 style="margin-bottom:25px; background:var(--grad); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">REQUEST A MODEL</h2>
             <form action="<?= sanitize($self_page) ?>" method="POST">
                 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
-                <label>FULL NAME</label><input type="text" name="name" required placeholder="John Doe">
-                <label>WHATSAPP / PHONE</label><input type="text" name="phone" required placeholder="+92 ...">
-                <label>SPECIFICATIONS</label><textarea name="bike_details" rows="4" placeholder="Year, Color, Model, Range..."></textarea>
+                <input type="text" name="website" value="" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;">
+                <label>FULL NAME</label><input type="text" name="name" required maxlength="255" placeholder="John Doe">
+                <label>WHATSAPP / PHONE</label><input type="text" name="phone" required maxlength="50" placeholder="+92 ...">
+                <label>SPECIFICATIONS</label><textarea name="bike_details" rows="4" maxlength="2000" placeholder="Year, Color, Model, Range..."></textarea>
                 <label>SECURITY CHECK</label>
                 <div style="display:flex; gap:15px; margin-bottom:20px;">
                     <img src="<?= $captcha_img_src ?>" alt="Captcha" style="border-radius:10px; border:1px solid var(--glass-border); height:50px;">
@@ -1340,9 +1390,10 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
             <form action="<?= sanitize($self_page) ?>" method="POST">
                 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
                 <input type="hidden" name="bike_id" id="q_id">
-                <label>FULL NAME</label><input type="text" name="name" required placeholder="John Doe">
-                <label>WHATSAPP #</label><input type="text" name="phone" required placeholder="+92 ...">
-                <label>REQUIREMENTS</label><textarea name="details" rows="3" placeholder="Installment details, accessories..."></textarea>
+                <input type="text" name="website" value="" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;">
+                <label>FULL NAME</label><input type="text" name="name" required maxlength="255" placeholder="John Doe">
+                <label>WHATSAPP #</label><input type="text" name="phone" required maxlength="50" placeholder="+92 ...">
+                <label>REQUIREMENTS</label><textarea name="details" rows="3" maxlength="2000" placeholder="Installment details, accessories..."></textarea>
                 <label>SECURITY CHECK</label>
                 <div style="display:flex; gap:15px; margin-bottom:20px;">
                     <img src="<?= $captcha_img_src ?>" alt="Captcha" style="border-radius:10px; border:1px solid var(--glass-border); height:50px;">
