@@ -3628,7 +3628,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
 }
 ?>
 <!DOCTYPE html>
-<html lang="en" data-theme="<?= $db_exists ? (get_setting('theme') ?? 'dark') : 'dark' ?>">
+<html lang="en" data-theme="<?= sanitize($db_exists ? (get_setting('theme') ?? 'dark') : 'dark') ?>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -4877,11 +4877,11 @@ document.addEventListener('DOMContentLoaded', function() {
 var prefillModelId = <?= (int) ($_GET['model_id'] ?? 0) ?>;
 var bikeCount = 0;
 var paymentCount = 0;
-var modelsOptions = `<?php $models_list->data_seek(0);
+var modelsOptions = <?php $models_list->data_seek(0);
         $mo = '';
         while ($m = $models_list->fetch_assoc())
-            $mo .= '<option value="' . $m['id'] . '">' . $m['model_code'] . ' - ' . $m['model_name'] . '</option>';
-        echo $mo; ?>`;
+            $mo .= '<option value="' . (int) $m['id'] . '">' . htmlspecialchars($m['model_code'], ENT_QUOTES, 'UTF-8') . ' - ' . htmlspecialchars($m['model_name'], ENT_QUOTES, 'UTF-8') . '</option>';
+        echo json_encode($mo, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 var allSuppliers = <?= json_encode($conn->query('SELECT id, name FROM suppliers ORDER BY name')->fetch_all(MYSQLI_ASSOC)) ?>;
 function formatPurchaseAmount(amount) {
     return Math.abs(amount).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});

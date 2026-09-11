@@ -2,6 +2,8 @@
 // Prevent MIME-sniffing and UI redressing (Clickjacking)
 header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: DENY');
+// Block script execution in served documents (e.g. SVG) — image bytes are unaffected
+header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'");
 
 // Disable error display to prevent server path leakage
 ini_set('display_errors', '0');
@@ -60,6 +62,9 @@ if (!isset($allowed_types[$ext])) {
 
 // Serve the image securely
 header('Content-Type: ' . $allowed_types[$ext]);
+if ($ext === 'svg') {
+    header('Content-Disposition: attachment; filename="' . basename($real_file) . '"');
+}
 header('Cache-Control: public, max-age=2592000, immutable');
 header('Expires: ' . gmdate('D, d M Y H:i:s', time() + 2592000) . ' GMT');
 readfile($real_file);
