@@ -1,0 +1,1397 @@
+-- BNI Enterprises Full Database Backup
+-- Generated: 2026-09-11 10:56:06
+-- Author: Yasin Ullah
+
+SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+SET FOREIGN_KEY_CHECKS=0;
+SET AUTOCOMMIT=0;
+START TRANSACTION;
+
+-- --------------------------------------------
+-- Table: `accessories`
+-- --------------------------------------------
+DROP TABLE IF EXISTS `accessories`;
+CREATE TABLE `accessories` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) NOT NULL,
+  `sku` varchar(100) DEFAULT NULL,
+  `purchase_price` decimal(15,2) DEFAULT 0.00,
+  `selling_price` decimal(15,2) DEFAULT 0.00,
+  `current_stock` int(11) DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `sku` (`sku`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------
+-- Table: `bank_deposits`
+-- --------------------------------------------
+DROP TABLE IF EXISTS `bank_deposits`;
+CREATE TABLE `bank_deposits` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `destination_id` int(11) NOT NULL,
+  `deposit_date` date NOT NULL,
+  `amount` decimal(15,2) NOT NULL,
+  `deposit_type` enum('cash','cheque','transfer','online','other') NOT NULL DEFAULT 'cash',
+  `reference_no` varchar(100) DEFAULT NULL,
+  `receipt_image` varchar(255) DEFAULT NULL,
+  `deposited_by` varchar(255) DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `created_by` int(11) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `destination_id` (`destination_id`),
+  KEY `created_by` (`created_by`),
+  CONSTRAINT `bank_deposits_ibfk_1` FOREIGN KEY (`destination_id`) REFERENCES `money_destinations` (`id`),
+  CONSTRAINT `bank_deposits_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB AUTO_INCREMENT=59 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('1','2','2026-02-24','478000.00','cash','2293 & 5515 Receipt # 8100589','receipts/301561d14fd9a8cd4b602f4f0c309e39.pdf','Murtaza','E8S 2293 and Trill Pro 5515','1','2026-08-08 22:47:44');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('2','2','2026-03-03','179000.00','cash','6884 - Receipt # 8064938 dt 3-3-2026','receipts/51b102ff5e9e175a2f4d90e1df21b5d3.pdf','Murtaza','T9 Sports Grey 6884','1','2026-08-08 22:54:22');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('3','2','2026-03-11','179000.00','cash','7041 Receipt # 8064992 dt 11-03-2026','receipts/b633a69ac544545337766cd8e1c98e1e.pdf','Murtaza','','1','2026-08-09 19:59:15');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('4','2','2026-03-09','234000.00','cash','0916 - Receipt # 8064977 dt 09-03-2026','receipts/2eb5c7a1653675f3fd5dc2fc6e85ba51.pdf','Murtaza','','1','2026-08-09 20:00:50');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('5','2','2026-03-06','179000.00','cash','6966 Receipt # 8064968 dt 6-3-2026','receipts/15134b0ef9f54c4275b40f4e2797f96d.pdf','Murtaza','','1','2026-08-09 20:03:15');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('6','1','2026-03-19','425000.00','cash','0416 - 8679 Receipt # 3199510 dt 19/03/2026','receipts/b6929bdd9c39c510d699c805220ea2dc.pdf','Murtaza','246000 + 179000','1','2026-08-10 19:55:29');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('8','1','2026-03-16','568000.00','cash','6278-6176-2665 Receipt # 3201691 dt 16-03-2026','receipts/1a16a629d6f4619471504568e43efffe.pdf','Murtaza','6278- 83000+200000 Dr Shabbir Advance, 6176- 2,85,000, 2665- 200000+42000 outstanding','1','2026-08-10 20:09:22');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('9','1','2026-03-26','198000.00','cash','6236 - Receipt 3199596 dt 26/03/2026','receipts/f745902e5d13304794c71f734692b27b.pdf','','198000','1','2026-08-16 12:32:37');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('10','1','2026-03-27','355500.00','cash','8882 - 8478 Receipt # 3202456 dt 27/03/2026','receipts/19c7a441d815ab65e1762d5f1e9a7490.pdf','Murtaza','178000 + 177500','1','2026-08-16 12:50:04');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('11','1','2026-03-30','229000.00','cash','0632 - Receipt # 3202769 dt 30/03/2026','receipts/5fc07b18e6f9cf6e7b820aba02d24537.pdf','Murtaza','2,29,000','1','2026-08-25 20:12:04');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('12','1','2026-04-01','274000.00','cash','0466 - Receipt # 3202301 dt 01/04/2026','receipts/2d820bcbff9c43a393857d2ebe0ab119.pdf','Murtaza','2,74,000','1','2026-08-25 20:14:27');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('13','1','2026-04-02','198000.00','cash','6279 - Receipt # 3202304 dt 02/04/2026','receipts/12a96061356ef7f693f19c2f3dc5b129.pdf','Murtaza','198000','1','2026-08-25 20:46:59');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('14','1','2026-04-03','178000.00','cash','8720 - Receipt # 3200305 dt 03/04/2026','receipts/e735a4e9dde7918a9a821640e5b20911.pdf','Murtaza','178000','1','2026-08-25 20:53:32');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('15','1','2026-04-06','841000.00','cash','0445-8894-8737-0595 Receipt # 3200306 dt 06/04/2026','receipts/7f55d9d2d4530c70a492897f16a7aecb.pdf','Murtaza','250000+178000+178000+235000','1','2026-08-25 20:56:26');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('16','1','2026-04-28','860000.00','cash','2298-7145-2152-0603 Receipt # 3202311 dt 28/04/2026','receipts/ae4b3f01969bbf13b288993dd6fc8594.pdf','Murtaza','252000+200000+230000+178000','1','2026-08-25 21:04:22');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('17','1','2026-05-04','249000.00','cash','2097- Receipt # 3202312 dt 04/05/2026','receipts/bf8517378dd4998fc0e1df7d035d6dc0.pdf','Murtaza','2,49,000','1','2026-08-25 21:06:46');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('18','1','2026-06-01','250000.00','cash','0538 - Online BOK dt 01/06/2026 16.32','receipts/fe29d53c54f024de7a9fb1149e51c86d.pdf','Murtaza','250000','1','2026-08-25 21:09:34');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('19','1','2026-05-30','247000.00','cash','0660 - Online BOK dt 30/05/2026 19.57','receipts/4516965d3557db68aa9edc576cde8c29.pdf','Murtaza','247000','1','2026-08-25 21:12:00');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('20','1','2026-04-09','482000.00','cash','1147 - 1018 Receipt # 3200307 dt 09/04/2026','receipts/684191d80c28df78335b356278f6a9ba.pdf','Murtaza','250000+232000','1','2026-08-25 21:40:58');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('21','1','2026-04-10','760000.00','cash','1156-1157-1172 Receipt # 3200308 dt 10-04-2026','receipts/8317a07cc8f52e3fec1c80a33b6f3322.pdf','Murtaza','264000+250000+246000 out of 265000','1','2026-08-25 21:45:58');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('22','1','2026-05-25','1700000.00','cash','4432-5119-5366-4159-4278-4014-4039     Receipt # 3200315 dt 25/05/2026','receipts/a831371a11579367d198aa4d173cd240.pdf','Murtaza','190000+238000+238000+189000+288000+286000+271000 out 288000','1','2026-08-25 21:50:48');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('23','1','2026-05-06','430000.00','cash','7314 - 2099 Receipt # 3200313 dt 06/05/2026','receipts/5330cc8879543c153eb02a165baee663.pdf','Murtaza','200000+230000','1','2026-08-25 21:54:23');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('24','1','2026-06-09','250000.00','cash','5310 - Online BOK dt 09-06-2026 11.13','receipts/716ce5a5e13b254d9f5fc2b733a9f02c.pdf','Murtaza','','1','2026-08-25 22:01:08');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('25','1','2026-06-07','186500.00','cash','4208 - Online BOK dt 07/06/2026 10.36','receipts/bf505bdd3b432cc85eabe5aff1c05b78.pdf','Murtaza','186500','1','2026-08-25 22:03:14');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('26','1','2026-06-08','250000.00','cash','0463 - Online BOK dt 08/06/2026 18.09','receipts/fd995990a0e74abfdfd43c6a5c147f70.pdf','Murtaza','250000','1','2026-08-25 22:07:22');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('27','1','2026-06-11','13000.00','cash','0747 (2) - Online BOK dt 11/06/2026 15.36','receipts/receipt_6a9bc5a12de7a.jpg','Murtaza','250000 out of 261000','1','2026-08-25 22:17:09');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('28','1','2026-06-10','250000.00','cash','0747 (1) - Online BOK dt 10/06/2026 16.06','receipts/e5e49f3bf273531d1f833e03f39ef6f6.pdf','Murtaza','250000 out of 263000','1','2026-08-25 22:18:56');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('29','1','2026-05-25','239000.00','cash','0567 - Online BOK dt 25/05/2026 10.31','receipts/20e82564665a19b5f4c710453b276bc7.pdf','Murtaza','239000 out of 247000','1','2026-08-25 23:07:42');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('30','1','2026-06-15','250000.00','cash','0520 (1) Online BOK dt 15/06/2026 11.14','receipts/cb50d48d3b66fce6ae82160d2b2f349e.pdf','Murtaza','','1','2026-08-25 23:14:51');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('31','1','2026-06-15','13000.00','cash','0520 (2) Online BOK dt 15/06/2026 20.59','receipts/c230c61e75b628dfb08e27234281a1af.pdf','Murtaza','','1','2026-08-25 23:18:52');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('32','1','2026-06-10','11000.00','cash','1015(1) - Online BOK dt 10/06/2026 16.08','receipts/0f13ca65b5804615ace4923563da04c0.pdf','Murtaza','11000 out of 261000','1','2026-08-25 23:21:13');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('33','1','2026-06-11','250000.00','cash','1015 (2) Online BOK dt 11/06/2026 15.34','receipts/878f556af97666e2967c8a8263f59194.pdf','Murtaza','','1','2026-08-25 23:22:28');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('34','1','2026-06-15','36000.00','cash','2311 (1) Online BOK dt 15/06/2026 11.19','receipts/89dedb3936ee5440819a75d0d48dc797.pdf','Murtaza','36000 out of 286000','1','2026-08-25 23:24:18');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('35','1','2026-06-15','250000.00','cash','2311 (2) Online BOK dt 15/06/2026 20.57','receipts/0d90b7c39f8f1f16d28aca5533e49de7.pdf','Murtaza','250000 out of 286000','1','2026-08-25 23:25:56');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('36','1','2026-04-13','528000.00','cash','1272-0159-1172 Receipt # 3200309 dt 13/04/2026','receipts/f7cc79b50dcabe9a058b5396fb2fda73.pdf','Murtaza','232500+277000+19000 outstanding of 1172 Receipt dt 10-04-2026','1','2026-08-26 00:02:12');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('37','1','2026-07-29','180000.00','cash','11642 - Online BOK 29/07/2026 20.25','receipts/receipt_6a933516b30e2.jpg','Murtaza','','1','2026-08-29 02:46:42');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('38','1','2026-07-27','200000.00','cash','7792 - Online BOK 27/07/2026 16.23','receipts/receipt_6a9280226ec34.jpg','Murtaza','','1','2026-08-29 08:45:54');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('39','1','2026-07-11','201000.00','cash','9288 - Online BOK 11/07/2026 20.24','receipts/receipt_6a92810b330b2.jpg','Murtaza','','1','2026-08-29 08:49:47');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('40','1','2026-07-08','187000.00','cash','4600 - Online BOK 08/07/2026 21.44','receipts/receipt_6a9281ce2dc85.jpg','Murtaza','','1','2026-08-29 08:53:02');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('41','1','2026-07-11','188000.00','cash','4508 - Online BOK 11072026 20:21','receipts/receipt_6a92829535e97.jpg','Murtaza','','1','2026-08-29 08:56:21');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('44','1','2026-07-23','182000.00','cash','12249 - Online BOK dt 23/07/2026 18:03','receipts/receipt_6a9288afe1a51.jpg','Murtaza','Wrong entry 182000 instead of 1795000','1','2026-08-29 09:22:23');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('45','1','2026-07-12','183000.00','cash','12119 - Online BOK dt 12/07/2026 18:57','receipts/receipt_6a92896a92c40.jpg','Murtaza','','1','2026-08-29 09:25:30');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('46','1','2026-07-30','282000.00','cash','2364 - Online BOK dt 30/07/2026 20.59','receipts/receipt_6a928adbd19f8.jpg','Murtaza','','1','2026-08-29 09:31:39');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('47','1','2026-08-04','249000.00','cash','3238 - Online BOK dt 04/08/2026 15:08','receipts/receipt_6a928b6e7617e.jpg','Murtaza','','1','2026-08-29 09:34:06');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('48','1','2026-08-13','187000.00','cash','6323 - Online BOK dt 13/08/2026 15:34','receipts/receipt_6a932c4a95fb3.jpg','Murtaza','','1','2026-08-29 21:00:26');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('49','1','2026-08-13','186000.00','cash','6525 - Online BOK dt 13/08/2026 15:36','receipts/receipt_6a932cc0eeac4.jpg','Murtaza','','1','2026-08-29 21:02:25');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('51','1','2026-08-02','187000.00','cash','4741 - Online BOK 02082026 16:32','receipts/receipt_6a932f03d77a6.jpg','Murtaza','','1','2026-08-29 21:12:03');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('52','1','2026-07-22','183000.00','cash','5401 (1) - Online BOK 22072026 12:37','receipts/receipt_6a93304c525cd.jpg','Murtaza','','1','2026-08-29 21:17:32');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('53','1','2026-08-03','103000.00','cash','5401 (2) - Online BOK 03-08-2026  16:35','receipts/receipt_6a933166b3f1d.jpg','Murtaza','','1','2026-08-29 21:22:14');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('57','1','2026-04-27','300000.00','cash','1539 -  27042026 Online Raast P2P','receipts/receipt_6a986fd25eee1.jpg','Murtaza','','1','2026-09-02 20:49:54');
+INSERT INTO `bank_deposits` (`id`,`destination_id`,`deposit_date`,`amount`,`deposit_type`,`reference_no`,`receipt_image`,`deposited_by`,`notes`,`created_by`,`created_at`) VALUES ('58','1','2026-08-03','165000.00','cash','1154 - Online BOK 03082026 16:38','receipts/receipt_6a98731587f50.jpg','Murtaza','','1','2026-09-02 21:03:49');
+
+-- --------------------------------------------
+-- Table: `bike_requests`
+-- --------------------------------------------
+DROP TABLE IF EXISTS `bike_requests`;
+CREATE TABLE `bike_requests` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `customer_name` varchar(255) NOT NULL,
+  `customer_phone` varchar(50) NOT NULL,
+  `bike_details` text DEFAULT NULL,
+  `status` enum('pending','contacted','fulfilled','cancelled') DEFAULT 'pending',
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------
+-- Table: `bikes`
+-- --------------------------------------------
+DROP TABLE IF EXISTS `bikes`;
+CREATE TABLE `bikes` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `purchase_order_id` int(11) DEFAULT NULL,
+  `order_date` date DEFAULT NULL,
+  `inventory_date` date DEFAULT NULL,
+  `chassis_number` varchar(100) NOT NULL,
+  `motor_number` varchar(100) DEFAULT NULL,
+  `model_id` int(11) DEFAULT NULL,
+  `color` varchar(50) DEFAULT NULL,
+  `purchase_price` decimal(15,2) DEFAULT NULL,
+  `selling_price` decimal(15,2) DEFAULT NULL,
+  `selling_date` date DEFAULT NULL,
+  `customer_id` int(11) DEFAULT NULL,
+  `tax_amount` decimal(15,2) DEFAULT 0.00,
+  `tax_rate_applied` decimal(9,6) DEFAULT NULL,
+  `tax_basis` enum('purchase_price','selling_price') DEFAULT NULL,
+  `margin` decimal(15,2) DEFAULT 0.00,
+  `status` enum('in_stock','sold','returned','returned_to_supplier','reserved','damaged_lost') DEFAULT 'in_stock',
+  `return_date` date DEFAULT NULL,
+  `return_amount` decimal(15,2) DEFAULT NULL,
+  `return_notes` text DEFAULT NULL,
+  `safeguard_notes` text DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `image` varchar(255) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `chassis_number` (`chassis_number`),
+  KEY `purchase_order_id` (`purchase_order_id`),
+  KEY `idx_status` (`status`),
+  KEY `idx_selling_date` (`selling_date`),
+  KEY `idx_model_id` (`model_id`),
+  KEY `idx_customer_id` (`customer_id`),
+  KEY `idx_bikes_status` (`status`),
+  KEY `idx_bikes_model` (`model_id`),
+  KEY `idx_bikes_customer` (`customer_id`),
+  CONSTRAINT `bikes_ibfk_1` FOREIGN KEY (`model_id`) REFERENCES `models` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `bikes_ibfk_2` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `bikes_ibfk_3` FOREIGN KEY (`purchase_order_id`) REFERENCES `purchase_orders` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB AUTO_INCREMENT=105 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('1','1','2026-02-27','2026-03-09','M615L72300006176','XRM672153025D0007536','1','Black','254700.00','285000.00','2026-03-16','2','2850.00','0.010000','selling_price','27450.00','sold',NULL,NULL,NULL,'','',NULL,'2026-07-21 15:06:58','2026-07-21 16:24:18');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('2','1','2026-02-27','2026-03-09','M615L72300006278','XRM672153025D0007499','1','Grey','254700.00','283000.00','2026-03-16','1','2830.00','0.010000','selling_price','25470.00','sold',NULL,NULL,NULL,'','',NULL,'2026-07-21 15:06:58','2026-07-21 16:08:04');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('3','2','2026-02-03','2026-02-05','LY05G48270002304','*XRLY48052125D0002228*','2','Black','125100.00',NULL,NULL,NULL,'0.00','0.010000','selling_price','0.00','in_stock',NULL,NULL,NULL,'','',NULL,'2026-08-08 13:52:53','2026-08-08 13:52:53');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('4','2','2026-02-03','2026-02-05','LY05G48270002202','*XRLY48052125D0002322*','2','Grey','125100.00',NULL,NULL,NULL,'0.00','0.010000','selling_price','0.00','in_stock',NULL,NULL,NULL,'','',NULL,'2026-08-08 13:52:53','2026-08-08 13:52:53');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('5','2','2026-02-03','2026-02-05','DD35G48130001177','*48V350WA8T454708922*','3','Black','94595.00',NULL,NULL,NULL,'0.00','0.010000','selling_price','0.00','in_stock',NULL,NULL,NULL,'','',NULL,'2026-08-08 13:52:53','2026-08-08 13:52:53');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('6','2','2026-02-03','2026-02-05','M615G72380002665','A9A756800994','4','Silver','220500.00','242000.00','2026-03-15','8','2420.00','0.010000','selling_price','19080.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-08 13:52:53','2026-08-10 19:19:48');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('7','2','2026-02-03','2026-02-05','T910G72260006966','*XR9S72102825N0007369*','5','Red','161100.00','179000.00','2026-03-05','5','1790.00','0.010000','selling_price','16110.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-08 13:52:53','2026-08-09 19:36:07');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('8','2','2026-02-03','2026-02-05','T910G72260007041','*XR9S72102825N0007701*','5','Black','161100.00','179000.00','2026-03-11','7','1790.00','0.010000','selling_price','16110.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-08 13:52:53','2026-08-09 19:53:57');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('9','2','2026-02-03','2026-02-05','T910G72260006884','*XR9S72102825N0007393*','5','Grey','161100.00','179000.00','2026-03-02','4','1790.00','0.010000','selling_price','16110.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-08 13:52:53','2026-08-08 22:52:21');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('10','2','2026-02-03','2026-02-05','E820G72380002293','*PJE872203525N0002160*','7','Grey','251100.00','279000.00','2026-02-21','3','2790.00','0.010000','selling_price','25110.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-08 13:52:53','2026-08-08 22:36:57');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('11','2','2026-02-03','2026-02-05','TH12G72260005515','AIMTP721240259005364','8','Grey','179100.00','199000.00','2026-02-22','4','1990.00','0.010000','selling_price','17910.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-08 13:52:53','2026-08-08 22:43:25');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('12','2','2026-02-03','2026-02-05','TH12G72260006004','AIMTP721240259006297','8','Black','179100.00',NULL,NULL,NULL,'0.00','0.010000','selling_price','0.00','in_stock',NULL,NULL,NULL,'','',NULL,'2026-08-08 13:52:53','2026-08-08 13:52:53');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('13','2','2026-02-03','2026-02-05','T910L72300000632','*XR9S7210282500000640*','9','Grey','206100.00','229000.00','2026-03-28','15','2290.00','0.010000','selling_price','20610.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-08 13:52:53','2026-08-21 20:03:25');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('14','2','2026-02-03','2026-02-05','T910L72300000916','*XR9S7210282500000927*','9','Black','206100.00','234000.00','2026-03-07','6','2340.00','0.010000','selling_price','25560.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-08 13:52:53','2026-08-09 19:46:18');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('15','2','2026-02-03','2026-02-05','TH12L72300000445','AIMTP72124025N001005','10','Black','224100.00','250000.00','2026-04-04','19','2500.00','0.010000','selling_price','23400.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-08 13:52:53','2026-08-21 20:50:41');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('16','2','2026-02-03','2026-02-05','TH12L72300000416','AIMTP72124025N001176','10','Grey','224100.00','246000.00','2026-03-18','9','2460.00','0.010000','selling_price','19440.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-08 13:52:53','2026-08-10 19:40:49');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('17','3','2026-03-12','2026-03-16','T910G72260008882','*XR9S72102825D0007890*','5','Red','161100.00','178000.00','2026-03-26','13','1780.00','0.010000','selling_price','15120.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-08 21:13:51','2026-08-16 12:43:56');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('18','3','2026-03-12','2026-03-16','T910G72260008478','*XR9S72102825D0007855*','5','Black','161100.00','177500.00','2026-03-26','14','1775.00','0.010000','selling_price','14625.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-08 21:13:51','2026-08-16 12:48:01');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('19','3','2026-03-12','2026-03-16','T910G72260008679','*XR9S72102825D0007954*','5','Grey','161100.00','179000.00','2026-03-18','10','1790.00','0.010000','selling_price','16110.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-08 21:13:51','2026-08-10 19:48:11');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('20','3','2026-03-12','2026-03-16','TH12G72260006279','AIMTP721240259006047','8','Grey','179100.00','198000.00','2026-04-01','17','1980.00','0.010000','selling_price','16920.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-08 21:13:51','2026-08-21 20:36:43');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('21','3','2026-03-12','2026-03-16','TH12G72260006236','AIMTP721240259006039','8','Black','179100.00','198000.00','2026-03-25','11','1980.00','0.010000','selling_price','16920.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-08 21:13:51','2026-08-16 12:29:48');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('22','4','2026-03-17','2026-03-25','E820G72380000466','12ZW7271327YE*CERR116670C*','13','Blue','247500.00','274000.00','2026-03-30','16','2740.00','0.010000','selling_price','23760.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-08 22:11:20','2026-08-21 20:12:40');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('23','4','2026-03-17','2026-03-25','P308L72300000159','PHPM7208352610000422','14','Ivory (Off White)','246600.00','277000.00','2026-04-13','28','2770.00','0.010000','selling_price','27630.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-08 22:11:20','2026-08-22 11:59:36');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('24','4','2026-03-17','2026-03-25','E810G72380000595','*10ZW7273316YECKTS0000107*','7','Grey','211500.00','235000.00','2026-04-04','20','2350.00','0.010000','selling_price','21150.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-08 22:11:20','2026-08-21 20:54:50');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('25','4','2026-03-17','2026-03-25','T910G72260008720','*XR9S72102825D0007987*','5','Red','161100.00','178000.00','2026-04-02','18','1780.00','0.010000','selling_price','15120.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-08 22:11:20','2026-08-21 20:41:18');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('26','4','2026-03-17','2026-03-25','T910G72260008894','*XR9S72102825D0008251*','5','Grey','161100.00','178000.00','2026-04-04','21','1780.00','0.010000','selling_price','15120.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-08 22:11:20','2026-08-21 20:57:44');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('27','4','2026-03-17','2026-03-25','T910G72260008737','*XR9S72102825D0008003*','5','Grey','161100.00','178000.00','2026-04-04','22','1780.00','0.010000','selling_price','15120.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-08 22:11:20','2026-08-21 21:03:37');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('28','5','2026-03-31','2026-04-04','T912G72380001172','YD2025PAK1924919252','15','Red','238500.00','265000.00','2026-04-05','27','2650.00','0.010000','selling_price','23850.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-09 13:46:27','2026-08-22 11:47:27');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('29','5','2026-03-31','2026-04-04','T912G72380001156','YD2025PAK1924919277','15','Silver','238500.00','264000.00','2026-04-08','25','2640.00','0.010000','selling_price','22860.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-09 13:46:27','2026-08-22 11:39:34');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('30','5','2026-03-31','2026-04-04','T910L72300001272','*XR9S72102825N0001172*','9','Black','206100.00','232500.00','2026-04-13','29','2325.00','0.010000','selling_price','24075.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-09 13:46:27','2026-08-22 12:03:39');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('31','5','2026-03-31','2026-04-04','T910L72300001018','*XR9S72102825N0000885*','9','Black','206100.00','232000.00','2026-04-08','24','2320.00','0.010000','selling_price','23580.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-09 13:46:27','2026-08-22 11:25:33');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('32','5','2026-03-31','2026-04-04','TH12L72300001147','AIMTP72124025N001000','11','Black','179100.00','250000.00','2026-04-08','23','2500.00','0.010000','selling_price','68400.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-09 13:46:27','2026-08-22 11:18:42');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('33','5','2026-03-31','2026-04-04','TH12L72300001157','AIMTP72124025N001248','10','Black','179100.00','250000.00','2026-04-09','26','2500.00','0.010000','selling_price','68400.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-09 13:46:27','2026-08-22 11:42:48');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('34','6','2026-04-02','2026-04-23','T910G72260010603','*XR9S7210282610010246*','6','Grey','165600.00','178000.00','2026-04-28','33','1780.00','0.010000','selling_price','10620.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-09 18:24:57','2026-08-22 12:43:46');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('35','6','2026-04-02','2026-04-23','T910L72300002099','*XR9S72102826100001996*','9','Red','210600.00','230000.00','2026-04-29','35','2300.00','0.010000','selling_price','17100.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-09 18:24:57','2026-08-22 13:00:45');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('36','6','2026-04-02','2026-04-23','T910L72300002152','*XR9S72102826100002009*','9','Grey','210600.00','230000.00','2026-04-28','32','2300.00','0.010000','selling_price','17100.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-09 18:24:57','2026-08-22 12:40:37');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('37','6','2026-04-02','2026-04-23','M615L72300001539','*XRM67215302580003024*','1','Black','259200.00','300000.00','2026-04-27','69','3000.00','0.010000','selling_price','37800.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-09 18:24:57','2026-09-02 20:48:19');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('38','6','2026-04-02','2026-04-23','DB12G72260004432','QSTDB21235262004335','16','Red','171000.00','190000.00','2026-05-24','37','1900.00','0.010000','selling_price','17100.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-09 18:24:57','2026-08-22 13:24:33');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('39','6','2026-04-02','2026-04-23','TH12G72260007145','AIMTP72124025D007486','8','Grey','183600.00','200000.00','2026-04-28','31','2000.00','0.010000','selling_price','14400.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-09 18:24:57','2026-08-22 12:37:17');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('40','6','2026-04-02','2026-04-23','TH12G72260007314','AIMTP72124025D007223','8','Black','183600.00','200000.00','2026-05-05','34','2000.00','0.010000','selling_price','14400.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-09 18:24:57','2026-08-22 12:51:55');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('41','6','2026-04-02','2026-04-23','TH12L72300002298','AIMTP72124025D002319','11','Grey','228600.00','252000.00','2026-04-28','30','2520.00','0.010000','selling_price','20880.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-09 18:24:57','2026-08-22 12:33:56');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('42','6','2026-04-02','2026-04-23','TH12L72300002097','AIMTP72124025D002188','11','Black','228600.00','249000.00','2026-05-02','36','2490.00','0.010000','selling_price','17910.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-09 18:24:57','2026-08-22 13:12:31');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('43','7','2026-05-06','2026-05-20','MX15G72380000538','VQMS72203525N0000554','17','Black','225000.00','250000.00','2026-05-20','46','2500.00','0.010000','selling_price','22500.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-14 04:45:12','2026-08-22 14:17:14');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('44','7','2026-05-06','2026-05-20','MX15G72380000463','VQMS72203525N0000571','17','Black','225000.00','250000.00','2026-06-01','48','2500.00','0.010000','selling_price','22500.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-14 04:45:12','2026-08-22 14:26:27');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('45','7','2026-05-06','2026-05-20','MX15G72380000660','VQMS72203525N0000379','17','Silver','225000.00','247000.00','2026-05-25','44','2470.00','0.010000','selling_price','19530.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-14 04:45:12','2026-08-22 13:58:49');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('46','7','2026-05-06','2026-05-20','MX15G72380000567','VQMS72203525N0000536','17','Silver','225000.00','247000.00','2026-05-25','45','2470.00','0.010000','selling_price','19530.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-14 04:45:12','2026-08-22 14:04:58');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('47','7','2026-05-06','2026-05-20','T912G72380001154','12W725331BYE0000841','15','Silver','238500.00','265000.00','2026-08-03','70','2650.00','0.010000','selling_price','23850.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-14 04:45:12','2026-09-02 21:01:29');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('48','7','2026-05-06','2026-05-20','M615L72300004400','*XRM67215302580001887*','1','Black','259200.00',NULL,NULL,NULL,'0.00','0.010000','selling_price','0.00','in_stock',NULL,NULL,NULL,'','',NULL,'2026-08-14 04:45:12','2026-08-14 04:45:12');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('49','7','2026-05-06','2026-05-20','M615L72300004039','*XRM67215302580002825*','1','Black','259200.00','288000.00','2026-05-24','43','2880.00','0.010000','selling_price','25920.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-14 04:45:12','2026-08-22 13:50:04');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('50','7','2026-05-06','2026-05-20','M615L72300004251','*XRM67215302580002310*','1','Black','259200.00',NULL,NULL,NULL,'0.00','0.010000','selling_price','0.00','in_stock',NULL,NULL,NULL,'','',NULL,'2026-08-14 04:45:12','2026-08-14 04:45:12');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('51','7','2026-05-06','2026-05-20','M615L72300004264','*XRM67215302580001972*','1','Black','259200.00',NULL,NULL,NULL,'0.00','0.010000','selling_price','0.00','in_stock',NULL,NULL,NULL,'','',NULL,'2026-08-14 04:45:12','2026-08-14 04:45:12');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('52','7','2026-05-06','2026-05-20','M615L72300004014','*XRM67215302580004456*','1','Black','259200.00','286000.00','2026-05-24','42','2860.00','0.010000','selling_price','23940.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-14 04:45:12','2026-08-22 13:43:09');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('53','7','2026-05-06','2026-05-20','M615L72300004278','*XRM67215302580002311*','1','Silver','259200.00','288000.00','2026-05-24','41','2880.00','0.010000','selling_price','25920.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-14 04:45:12','2026-08-22 13:40:22');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('54','7','2026-05-06','2026-05-20','M615L72300002106','*XRM67215302580002048*','1','Silver','259200.00',NULL,NULL,NULL,'0.00','0.010000','selling_price','0.00','in_stock',NULL,NULL,NULL,'','',NULL,'2026-08-14 04:45:12','2026-08-14 04:45:12');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('55','7','2026-05-06','2026-05-20','M615L72300002099','*XRM67215302580002363*','1','Silver','259200.00',NULL,NULL,NULL,'0.00','0.010000','selling_price','0.00','in_stock',NULL,NULL,NULL,'','',NULL,'2026-08-14 04:45:12','2026-08-14 04:45:12');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('56','7','2026-05-06','2026-05-20','M615L72300002311','*XRM67215302580001933*','1','Silver','259200.00','286000.00','2026-06-10','53','2860.00','0.010000','selling_price','23940.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-14 04:45:12','2026-08-22 14:56:03');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('57','7','2026-05-06','2026-05-20','DB12G72260004159','QSTDB21235262004452','16','Grey','171000.00','189000.00','2026-05-24','40','1890.00','0.010000','selling_price','16110.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-14 04:45:12','2026-08-22 13:36:56');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('58','7','2026-05-06','2026-05-20','DB12G72260004208','QSTDB21235262004166','16','Red','171000.00','186500.00','2026-05-31','47','1865.00','0.010000','selling_price','13635.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-14 04:45:12','2026-08-22 14:21:50');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('59','7','2026-05-06','2026-05-20','DB12L72300005310','QSTDB721235262005386','18','Red','216000.00','250000.00','2026-06-08','49','2500.00','0.010000','selling_price','31500.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-14 04:45:12','2026-08-22 14:30:27');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('60','7','2026-05-06','2026-05-20','DB12L72300005332','QSTDB7212352625177','18','Red','216000.00',NULL,NULL,NULL,'0.00','0.010000','selling_price','0.00','in_stock',NULL,NULL,NULL,'','',NULL,'2026-08-14 04:45:12','2026-08-14 04:45:12');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('61','7','2026-05-06','2026-05-20','DB12L72300005119','QSTDB721235262005451','18','Grey','216000.00','238000.00','2026-05-24','38','2380.00','0.010000','selling_price','19620.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-14 04:45:12','2026-08-22 13:28:33');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('62','7','2026-05-06','2026-05-20','DB12L72300005366','QSTDB721235262005029','18','Grey','216000.00','238000.00','2026-05-24','39','2380.00','0.010000','selling_price','19620.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-14 04:45:12','2026-08-22 13:32:08');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('63','7','2026-05-06','2026-05-20','TH12L72300000520','AIMTP721240259000577','11','Grey','228600.00','263000.00','2026-06-13','52','2630.00','0.010000','selling_price','31770.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-14 04:45:12','2026-08-22 14:49:41');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('64','7','2026-05-06','2026-05-20','TH12L72300000747','AIMTP721240259000494','11','Grey','228600.00','263000.00','2026-06-09','50','2630.00','0.010000','selling_price','31770.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-14 04:45:12','2026-08-22 14:39:44');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('65','7','2026-05-06','2026-05-20','TH12L72300001015','AIMTP72124025N001102','11','Black','228600.00','261000.00','2026-06-10','51','2610.00','0.010000','selling_price','29790.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-14 04:45:12','2026-08-22 14:45:17');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('66','8','2026-06-26','2026-06-30','T910G72260011701','XR9S7210282610011425','6','Red','165600.00','182000.00','2026-04-07','54','1820.00','0.010000','selling_price','14580.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-16 10:51:20','2026-08-29 02:34:11');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('67','8','2026-06-26','2026-06-30','T910G72260011642','XR9S7210282610011247','6','Red','165600.00','180000.00','2026-07-27','55','1800.00','0.010000','selling_price','12600.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-16 10:51:20','2026-08-29 02:43:26');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('68','8','2026-06-26','2026-06-30','T910G72260011574','XR9S7210282610011598','9','Red','165600.00',NULL,NULL,NULL,'0.00','0.010000','selling_price','0.00','in_stock',NULL,NULL,NULL,'','',NULL,'2026-08-16 10:51:20','2026-08-16 10:51:20');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('69','8','2026-06-26','2026-06-30','TH12G72260007792','AIMTP721240261008669','8','Grey','183600.00','200000.00','2026-07-21','56','2000.00','0.010000','selling_price','14400.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-16 10:51:20','2026-08-29 07:06:17');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('70','8','2026-06-26','2026-06-30','TH12G72260009288','AIMTP721240261008696','8','Black','183600.00','201000.00','2026-07-11','57','2010.00','0.010000','selling_price','15390.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-16 10:51:20','2026-08-29 07:15:20');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('71','8','2026-06-26','2026-06-30','TH12G72260009451','AIMTP721240261008793','8','Black','183600.00',NULL,NULL,NULL,'0.00','0.010000','selling_price','0.00','in_stock',NULL,NULL,NULL,'','',NULL,'2026-08-16 10:51:20','2026-08-16 10:51:20');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('72','8','2026-06-26','2026-06-30','DB12G72260004861','QSTDB721235262004980','16','Grey','171000.00','186000.00','2026-09-05','73','1860.00','0.010000','selling_price','13140.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-16 10:51:20','2026-09-05 20:52:42');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('73','8','2026-06-26','2026-06-30','DB12G72260004600','QSTDB721235262004936','16','Grey','171000.00','187000.00','2026-07-05','58','1870.00','0.010000','selling_price','14130.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-16 10:51:20','2026-08-29 07:22:02');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('74','8','2026-06-26','2026-06-30','DB12G72260004508','QSTDB721235263006319','16','Red','171000.00','188000.00','2026-07-11','59','1880.00','0.010000','selling_price','15120.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-16 10:51:20','2026-08-29 07:27:28');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('75','9','2026-06-26','2026-07-02','T910G72260012197','XR9S7210282620011865','6','Grey','165600.00',NULL,NULL,NULL,'0.00','0.010000','selling_price','0.00','in_stock',NULL,NULL,NULL,'','',NULL,'2026-08-16 11:02:13','2026-08-16 11:02:13');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('76','9','2026-06-26','2026-07-02','T910G72260012249','XR9S7210282620012109','6','Grey','165600.00','182000.00','2026-07-23','60','1820.00','0.010000','selling_price','14580.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-16 11:02:13','2026-08-29 07:35:03');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('77','9','2026-06-26','2026-07-02','T910G72260012119','XR9S7210282620011859','6','Black','165600.00','183000.00','2026-07-12','62','1830.00','0.010000','selling_price','15570.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-16 11:02:13','2026-08-29 07:55:00');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('78','9','2026-06-26','2026-07-02','T910G72260012324','XR9S7210282620011943','6','Black','165600.00',NULL,NULL,NULL,'0.00','0.010000','selling_price','0.00','in_stock',NULL,NULL,NULL,'','',NULL,'2026-08-16 11:02:13','2026-08-16 11:02:13');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('79','9','2026-06-26','2026-07-02','E820G72380002364','JZPE8722035263002372','7','Red','255600.00','282000.00','2026-07-14','63','2820.00','0.010000','selling_price','23580.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-16 11:02:13','2026-08-29 08:02:01');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('80','9','2026-06-26','2026-07-02','E820G72380002334','JZPE8722035263002441','7','Grey','255600.00',NULL,NULL,NULL,'0.00','0.010000','selling_price','0.00','in_stock',NULL,NULL,NULL,'','',NULL,'2026-08-16 11:02:13','2026-08-16 11:02:13');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('81','10','2026-07-17','2026-07-20','T912G72380001139','12ZW7253318YE0000710','15','Red','238500.00',NULL,NULL,NULL,'0.00','0.010000','selling_price','0.00','in_stock',NULL,NULL,NULL,'','',NULL,'2026-08-16 12:09:14','2026-08-16 12:09:14');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('82','10','2026-07-17','2026-07-20','LY05G48270002946','XRLY4805212620002865','2','Grey','129600.00',NULL,NULL,NULL,'0.00','0.010000','selling_price','0.00','in_stock',NULL,NULL,NULL,'','',NULL,'2026-08-16 12:09:14','2026-08-16 12:09:14');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('83','10','2026-07-17','2026-07-20','LY05G48270002128','XRLY4805212620002995','2','Black','129600.00',NULL,NULL,NULL,'0.00','0.010000','selling_price','0.00','in_stock',NULL,NULL,NULL,'','',NULL,'2026-08-16 12:09:14','2026-08-16 12:09:14');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('84','10','2026-07-17','2026-07-20','M615G72380003238','XRM67215302640003146','4','Black','225000.00','249000.00','2026-08-04','64','2490.00','0.010000','selling_price','21510.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-16 12:09:14','2026-08-29 08:07:12');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('85','10','2026-07-17','2026-07-20','M615G72380003273','XRM67215302640003239','4','Black','225000.00',NULL,NULL,NULL,'0.00','0.010000','selling_price','0.00','in_stock',NULL,NULL,NULL,'','',NULL,'2026-08-16 12:09:14','2026-08-16 12:09:14');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('86','10','2026-07-17','2026-07-20','DB12G72260006323','QSTDB721235263006162','16','Grey','171000.00','187000.00','2026-08-13','65','1870.00','0.010000','selling_price','14130.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-16 12:09:14','2026-08-29 08:19:28');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('87','10','2026-07-17','2026-07-20','DB12G72260006525','QSTDB721235263006239','16','Grey','171000.00','186000.00','2026-08-13','66','1860.00','0.010000','selling_price','13140.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-16 12:09:14','2026-08-29 08:23:35');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('88','10','2026-07-17','2026-07-20','DB12G72260006548','QSTDB721235263006400','16','Grey','171000.00','187000.00','2026-08-11','72','1870.00','0.010000','selling_price','14130.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-16 12:09:14','2026-09-05 20:49:18');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('89','10','2026-07-17','2026-07-20','DB12G72260004944','QSTDB721235263006129','16','Red','171000.00',NULL,NULL,NULL,'0.00','0.010000','selling_price','0.00','in_stock',NULL,NULL,NULL,'','',NULL,'2026-08-16 12:09:14','2026-08-16 12:09:14');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('90','10','2026-07-17','2026-07-20','DB12G72260004741','QSTDB721235263006330','16','Red','171000.00','187000.00','2026-08-02','67','1870.00','0.010000','selling_price','14130.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-16 12:09:14','2026-08-29 08:28:02');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('91','10','2026-07-17','2026-07-20','DB12G72260004939','QSTDB721235263006303','16','Red','171000.00','185000.00','2026-08-29','74','1850.00','0.010000','selling_price','12150.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-16 12:09:14','2026-09-05 20:56:51');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('92','10','2026-07-17','2026-07-20','M615L72300005401','XRM67215302580005149','1','Black','259200.00','286000.00','2026-07-30','68','2860.00','0.010000','selling_price','23940.00','sold',NULL,NULL,NULL,'','',NULL,'2026-08-16 12:09:14','2026-08-29 08:39:28');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('93','11','2026-08-20','2026-08-23','TH12G72260008310','AIMTP721240261009068','8','Grey','183800.00',NULL,NULL,NULL,'0.00','0.010000','selling_price','0.00','in_stock',NULL,NULL,NULL,'','',NULL,'2026-09-05 20:10:38','2026-09-05 20:10:38');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('94','11','2026-08-20','2026-08-23','TH12G72260008520','AIMTP721240261008878','8','Grey','183800.00',NULL,NULL,NULL,'0.00','0.010000','selling_price','0.00','in_stock',NULL,NULL,NULL,'','',NULL,'2026-09-05 20:10:38','2026-09-05 20:10:38');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('95','11','2026-08-20','2026-08-23','M615G72380003452','XRM67215302640003236','4','Silver','225250.00','247000.00','2026-09-03','76','2470.00','0.010000','selling_price','19280.00','sold',NULL,NULL,NULL,'','',NULL,'2026-09-05 20:10:38','2026-09-05 21:05:34');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('96','11','2026-08-20','2026-08-23','MX20G72380000970','VQMX722035265000784','17','Silver','225250.00',NULL,NULL,NULL,'0.00','0.010000','selling_price','0.00','in_stock',NULL,NULL,NULL,'','',NULL,'2026-09-05 20:10:38','2026-09-05 20:10:38');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('97','11','2026-08-20','2026-08-23','MX20G72380000948','VQMX7220352650001134','17','Silver','225250.00',NULL,NULL,NULL,'0.00','0.010000','selling_price','0.00','in_stock',NULL,NULL,NULL,'','',NULL,'2026-09-05 20:10:38','2026-09-05 20:10:38');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('98','11','2026-08-20','2026-08-23','MX20G72380001184','VQMX722035265000953','17','Black','225250.00',NULL,NULL,NULL,'0.00','0.010000','selling_price','0.00','in_stock',NULL,NULL,NULL,'','',NULL,'2026-09-05 20:10:38','2026-09-05 20:10:38');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('99','11','2026-08-20','2026-08-23','DB12L72300008920','QSTDB721235263009060','16','Grey','171190.00',NULL,NULL,NULL,'0.00','0.010000','selling_price','0.00','in_stock',NULL,NULL,NULL,'','',NULL,'2026-09-05 20:10:38','2026-09-05 20:10:38');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('100','11','2026-08-20','2026-08-23','DB12L72300008798','QSTDB721235263009050','16','Grey','171190.00','188000.00','2026-08-30','75','1880.00','0.010000','selling_price','14930.00','sold',NULL,NULL,NULL,'','',NULL,'2026-09-05 20:10:38','2026-09-05 21:00:33');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('101','11','2026-08-20','2026-08-23','DB12L72300008621','QSTDB721235263009014','16','Red','171190.00',NULL,NULL,NULL,'0.00','0.010000','selling_price','0.00','in_stock',NULL,NULL,NULL,'','',NULL,'2026-09-05 20:10:38','2026-09-05 20:10:38');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('102','11','2026-08-20','2026-08-23','M615L72300004951','XRM67215302580005444','1','Black','259488.00',NULL,NULL,NULL,'0.00','0.010000','selling_price','0.00','in_stock',NULL,NULL,NULL,'','',NULL,'2026-09-05 20:10:38','2026-09-05 20:10:38');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('103','11','2026-08-20','2026-08-23','M615L72300004884','XRM67215302580005284','1','Black','259488.00',NULL,NULL,NULL,'0.00','0.010000','selling_price','0.00','in_stock',NULL,NULL,NULL,'','',NULL,'2026-09-05 20:10:38','2026-09-05 20:10:38');
+INSERT INTO `bikes` (`id`,`purchase_order_id`,`order_date`,`inventory_date`,`chassis_number`,`motor_number`,`model_id`,`color`,`purchase_price`,`selling_price`,`selling_date`,`customer_id`,`tax_amount`,`tax_rate_applied`,`tax_basis`,`margin`,`status`,`return_date`,`return_amount`,`return_notes`,`safeguard_notes`,`notes`,`image`,`created_at`,`updated_at`) VALUES ('104','11','2026-08-20','2026-08-23','P308L72300000719','PHPM7208352610000264','14','Ivory (White hand corrected to Grey)','265795.00',NULL,NULL,NULL,'0.00','0.010000','selling_price','0.00','in_stock',NULL,NULL,NULL,'','',NULL,'2026-09-05 20:10:38','2026-09-05 20:10:38');
+
+-- --------------------------------------------
+-- Table: `cheque_register`
+-- --------------------------------------------
+DROP TABLE IF EXISTS `cheque_register`;
+CREATE TABLE `cheque_register` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `cheque_number` varchar(50) DEFAULT NULL,
+  `bank_name` varchar(100) DEFAULT NULL,
+  `cheque_date` date DEFAULT NULL,
+  `amount` decimal(15,2) DEFAULT NULL,
+  `type` enum('payment','receipt','refund') DEFAULT NULL,
+  `status` enum('pending','cleared','bounced','cancelled') DEFAULT 'pending',
+  `reference_type` varchar(50) DEFAULT NULL,
+  `reference_id` int(11) DEFAULT NULL,
+  `party_name` varchar(255) DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------
+-- Table: `customers`
+-- --------------------------------------------
+DROP TABLE IF EXISTS `customers`;
+CREATE TABLE `customers` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) NOT NULL,
+  `phone` varchar(50) DEFAULT NULL,
+  `cnic` varchar(20) DEFAULT NULL,
+  `is_filer` tinyint(1) DEFAULT 1,
+  `address` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=77 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('1','Dr Shabir Ahmed','03459838941','12101-4258473-5','1','','2026-07-21 15:25:43');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('2','Hamza Khan','03351838603','12101-6364257-5','1','','2026-07-21 16:22:13');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('3','Essa Khan S/O Ghulam Nabi','03464300982','12101-0923412-3','1','','2026-08-08 22:25:24');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('4','Nauman Akbar S/O Muhammad Ali Akbar','03367595840','12101-9339619-1','1','','2026-08-08 22:42:42');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('5','Burhan Khan S/O Hayat Muhammad','0328-5657562','12101-0687828-9','1','','2026-08-09 19:34:54');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('6','Muhammad Faizan Ali S/O Hassan Qureshi','03459823559','12101-6209013-5','1','','2026-08-09 19:44:51');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('7','Muhammad Tariq S/O Abdul Razzaq','03467873344','12102-9511357-3','1','','2026-08-09 19:52:17');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('8','Muhammad Zain ul Aabideen','0327-9712623','12101-8901035-3','1','Gali Faqirshah Wali, Mohallah Nunaarianwala DIKhan.','2026-08-10 19:10:25');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('9','Muhammad Aatif Majeed S/O Muhammad Majeed Khan','03365567568','12101-1288092-3','1','','2026-08-10 19:37:41');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('10','Fayyaz Masih S/O of Feroz Masih','0341-9609874','12101-8997151-5','1','','2026-08-10 19:45:24');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('11','Muhammad Aamir Mehmood','03339987798','21702-7923847-5','1','','2026-08-16 12:28:18');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('13','Ahmad Din Khan','03419392580','21504','1','21504-8516358-7','2026-08-16 12:43:27');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('14','Ashfaq Ahmad Khan','03347210584','12101-0976625-3','1','','2026-08-16 12:45:40');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('15','Muhammad Kashif','0322-7746061','12101-2912756-9','1','','2026-08-21 20:01:20');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('16','Muhammad Haseeb ur Rehman','0349-5675373','12101-0870963-5','1','','2026-08-21 20:11:11');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('17','Husnain Mehmood','0346-4474523','12101-3004905-5','1','','2026-08-21 20:35:26');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('18','Jery\'s Son','0317-9845077','38312-3593817-1','1','','2026-08-21 20:40:28');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('19','Muzammil Ahmed','0312-7990667','12101-8541384-7','1','','2026-08-21 20:47:38');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('20','Tanveer Khan','0330-6780668','12101-0502400-5','1','','2026-08-21 20:54:20');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('21','Umer Shehzad','0344-9393447','12101-4462495-3','1','','2026-08-21 20:57:05');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('22','Muhammad Jehanzaib','0343-9720135','22601-2036354-3','1','','2026-08-21 21:01:45');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('23','Farid Ullah','0306-4872747','21506-9073312-7','1','','2026-08-22 10:58:58');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('24','Waheed Ullah Khan','0346-6533270','21702-3886916-5','1','','2026-08-22 11:25:18');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('25','Imran Khan','0343-2844803','12101-9073502-9','1','','2026-08-22 11:34:44');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('26','Muhammad Sadiq Khan','0345-9820307','12101-2997880-9','1','','2026-08-22 11:42:10');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('27','Dr Shabir Ahmed','0345-9838941','12101-4258473-5','1','','2026-08-22 11:46:30');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('28','Muhammad Idrees','0312-1936001','12201-8537937-1','1','','2026-08-22 11:58:41');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('29','Muhammad Asif Khan','0341-6963772','12101-2010105-9','1','','2026-08-22 12:03:00');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('30','Abdul Basit Khan','0333-7625006','12101-6826718-5','1','','2026-08-22 12:32:56');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('31','Karim Khan','0342-5139312','12201-1895836-5','1','','2026-08-22 12:36:29');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('32','Muhammad Mujtaba','0345-9770194','12101-0969958-5','1','','2026-08-22 12:39:41');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('33','Rashid Rauf Khan','0344-8024331','12101-9776029-3','1','','2026-08-22 12:42:38');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('34','Muhammad Akhtar','0341-4643688','12101-7192352-3','1','','2026-08-22 12:49:46');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('35','Muhammad Zakir','0335-8001173','21705-5097050-7','1','','2026-08-22 12:59:42');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('36','Qudrat Ullah Khan','0331-5135183','12101-4963705-5','1','','2026-08-22 13:09:35');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('37','Sheikh Qaiser Hayat','0346-7864407','12103-7880818-7','1','','2026-08-22 13:23:01');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('38','Haseeb Bilal','0332-0768144','12101-0793983-9','1','','2026-08-22 13:27:34');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('39','Muhammad Bilal','0342-6445342','12101-6368643-5','1','','2026-08-22 13:30:41');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('40','Ali Amaar Khan','0340-3228748','12101-8395017-9','1','','2026-08-22 13:34:55');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('41','Muhammad Abu Huraira','0344-8368196','12101-1096601-7','1','','2026-08-22 13:39:12');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('42','Tahir Ahmed Wasil','0344-9376090','12101-0905893-3','1','','2026-08-22 13:42:23');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('43','Hashmat Ali','0343-6664277','12103-8886121-3','1','','2026-08-22 13:47:40');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('44','Muhammad Khalid Raza','0335-8426381','12201-3624851-9','1','','2026-08-22 13:55:26');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('45','Muhammad Asif Khan','0345-9888719','12101-2520476-7','1','','2026-08-22 14:02:34');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('46','Fazal ur Rehman Khan','0314-6932678','12101-4057760-5','1','','2026-08-22 14:14:01');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('47','Muhammad Anwaar ul Haq','0333-9980542','12101-8737855-1','1','','2026-08-22 14:20:40');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('48','Muhammad Ali Hasnain','0343-0090137','12101-7180551-7','1','','2026-08-22 14:25:14');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('49','Muhammad Jamil','0300-9094742','12101-5703927-9','1','','2026-08-22 14:29:36');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('50','Yasir Wazir','0336-0716014','12101-6663595-5','1','','2026-08-22 14:37:02');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('51','Malik Muhammd Javed','0334-1634038','12101-3076821-9','1','','2026-08-22 14:43:28');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('52','Abdul Sattar Shah','0333-934300','12101-0966159-7','1','','2026-08-22 14:47:44');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('53','Zahid Khan','0346-7842270','11101-9774366-3','1','','2026-08-22 14:54:07');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('54','Muhammad Sharif Khan','03449275449','12101-8612881-7','1','','2026-08-29 02:30:27');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('55','Muhammad Akram ul Haq','0300-0214245','12104-9556762-7','1','','2026-08-29 02:41:20');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('56','Muhammad Usman Khan','0335-5945607','12101-9805544-9','1','','2026-08-29 07:03:04');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('57','Rasheeda Bibi','0345-9871089','12101-1937372-7','1','','2026-08-29 07:14:27');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('58','Muhammad Ilyas Khan','0336-3350007','12101-8461663-5','1','','2026-08-29 07:17:54');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('59','Naila Naz','0348-8856466','12101-7953233-2','1','','2026-08-29 07:24:40');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('60','Ahmad Ali Khan','0334-6192440','12101-3070347-5','1','','2026-08-29 07:33:06');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('61','Johan Mice','0346-5255388','','1','','2026-08-29 07:50:03');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('62','Johan Michael','0346-5255388','12101-3742360-1','1','','2026-08-29 07:52:14');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('63','Fazal Hussain Khan','0332-1730462','12101-0947873-3','1','','2026-08-29 07:59:36');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('64','Muhammad Shoaib Khan','0343-8968113','12103-8138305-7','1','','2026-08-29 08:06:55');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('65','Shafqat Ullah Khan','0346-9418300','12102-2130848-3','1','','2026-08-29 08:17:27');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('66','Shaukat Ali khan','0345-9837746','12101-1727462-3','1','','2026-08-29 08:21:52');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('67','Sajid Ali Khan','0344-9391551','12101-4505767-9','1','','2026-08-29 08:26:37');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('68','Abu Bakar Sb','0348-9787964','12101-1387848-7','1','','2026-08-29 08:34:32');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('69','Sher Afghan Khan','0315-0110588','21706-0379303-1','1','','2026-09-02 20:47:26');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('70','Munir Javed Khan','0348-4448384','12103-2059022-3','1','','2026-09-02 20:57:17');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('71','Inam Ullah Ka','','','1','','2026-09-05 20:46:18');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('72','Inam Ullah Khan','0334-8279182','12708-6264709-5','1','','2026-09-05 20:47:48');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('73','Naimat ullah Khan','3449373755','12101-9936080-5','1','','2026-09-05 20:51:47');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('74','Maheen Khan','3468991002','12102-0226873-9','1','','2026-09-05 20:56:00');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('75','Muhammad Mudassir Ali','0344-5468833','12101-9501163-5','1','','2026-09-05 20:59:38');
+INSERT INTO `customers` (`id`,`name`,`phone`,`cnic`,`is_filer`,`address`,`created_at`) VALUES ('76','Muhammad Nauman','0344-9272341','12101-1939422-1','1','','2026-09-05 21:04:49');
+
+-- --------------------------------------------
+-- Table: `deposit_allocations`
+-- --------------------------------------------
+DROP TABLE IF EXISTS `deposit_allocations`;
+CREATE TABLE `deposit_allocations` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `deposit_id` int(11) NOT NULL,
+  `allocation_id` int(11) DEFAULT NULL,
+  `bike_id` int(11) NOT NULL,
+  `amount` decimal(15,2) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `deposit_id` (`deposit_id`),
+  KEY `allocation_id` (`allocation_id`),
+  KEY `bike_id` (`bike_id`),
+  CONSTRAINT `deposit_allocations_ibfk_1` FOREIGN KEY (`deposit_id`) REFERENCES `bank_deposits` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `deposit_allocations_ibfk_2` FOREIGN KEY (`allocation_id`) REFERENCES `sale_money_allocations` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `deposit_allocations_ibfk_3` FOREIGN KEY (`bike_id`) REFERENCES `bikes` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=75 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('1','1','3','10','279000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('2','1','4','11','199000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('3','2','5','9','179000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('4','3','8','8','179000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('5','4','7','14','234000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('6','5','6','7','179000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('7','6','10','16','246000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('8','6','11','19','179000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('9','8','1','2','83000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('10','8','2','1','285000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('11','8','9','6','200000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('12','9','12','21','198000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('13','10','13','17','178000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('14','10','14','18','177500.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('15','11','15','13','229000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('16','12','16','22','274000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('17','13','17','20','198000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('18','14','18','25','178000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('19','15','19','15','250000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('20','15','21','26','178000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('21','15','22','27','178000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('22','15','20','24','235000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('23','16','30','41','252000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('24','16','31','39','200000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('25','16','32','36','230000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('26','16','33','34','178000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('27','17','36','42','249000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('28','18','46','43','250000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('29','19','44','45','247000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('30','20','23','32','250000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('31','20','24','31','232000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('32','21','25','29','264000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('33','21','26','33','250000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('34','21','27','28','246000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('35','22','37','38','190000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('36','22','38','61','238000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('37','22','39','62','238000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('38','22','40','57','189000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('39','22','41','53','288000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('40','22','42','52','286000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('41','22','43','49','271000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('42','23','34','40','200000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('43','23','35','35','230000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('44','24','49','59','250000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('45','25','47','58','186500.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('46','26','48','44','250000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('47','27','50','64','13000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('48','28','50','64','237000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('49','28','51','64','13000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('50','29','45','46','239000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('51','30','54','63','250000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('52','31','55','63','13000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('53','32','52','65','11000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('54','33','53','65','250000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('55','34','56','56','36000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('56','35','57','56','250000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('57','36','28','23','277000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('58','36','29','30','232500.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('59','37','59','67','180000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('60','38','60','69','200000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('61','39','61','70','201000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('62','40','62','73','187000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('63','41','63','74','188000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('64','44','64','76','182000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('65','45','65','77','183000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('66','46','66','79','282000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('67','47','67','84','249000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('68','48','68','86','187000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('69','49','69','87','186000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('70','51','70','90','187000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('71','52','71','92','183000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('72','53','72','92','103000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('73','57','73','37','300000.00');
+INSERT INTO `deposit_allocations` (`id`,`deposit_id`,`allocation_id`,`bike_id`,`amount`) VALUES ('74','58','74','47','165000.00');
+
+-- --------------------------------------------
+-- Table: `gallery`
+-- --------------------------------------------
+DROP TABLE IF EXISTS `gallery`;
+CREATE TABLE `gallery` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `title` varchar(255) DEFAULT NULL,
+  `description` text DEFAULT NULL,
+  `image` varchar(255) DEFAULT NULL,
+  `sort_order` int(11) DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------
+-- Table: `income_expenses`
+-- --------------------------------------------
+DROP TABLE IF EXISTS `income_expenses`;
+CREATE TABLE `income_expenses` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `entry_date` date NOT NULL,
+  `type` enum('income','expense') NOT NULL,
+  `category` varchar(100) NOT NULL,
+  `amount` decimal(15,2) NOT NULL,
+  `payment_method` enum('cash','cheque','bank_transfer','online','other') DEFAULT 'cash',
+  `reference` varchar(255) DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `created_by` int(11) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `created_by` (`created_by`),
+  CONSTRAINT `income_expenses_ibfk_1` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB AUTO_INCREMENT=44 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('1','2026-02-10','expense','Shop paint','4000.00','cash','','','1','2026-08-23 09:57:31');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('2','2026-02-10','expense','4 piece sofa set','15500.00','cash','','','1','2026-08-23 09:58:13');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('3','2026-02-10','expense','1 office table','9500.00','cash','','','1','2026-08-23 09:58:47');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('4','2026-02-10','expense','Office chair','5300.00','cash','','','1','2026-08-23 09:59:31');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('5','2026-02-10','expense','Sheet','10500.00','cash','','','1','2026-08-23 10:00:02');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('6','2026-02-10','expense','Grass carpet','13900.00','cash','','','1','2026-08-23 10:00:45');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('7','2026-02-10','expense','3D wallpaper','8800.00','cash','','','1','2026-08-23 10:01:22');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('8','2026-02-10','expense','Electricity connection and wires','6500.00','cash','','','1','2026-08-23 10:02:52');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('9','2026-02-10','expense','Weapon and bullets','19000.00','cash','','','1','2026-08-23 10:03:42');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('10','2026-02-10','expense','Gifts banners etc','2200.00','cash','','','1','2026-08-23 10:04:28');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('11','2026-05-18','expense','Software expense','66650.00','cash','','','1','2026-08-23 10:05:35');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('12','2026-02-10','expense','2 Ceiling fans','18000.00','cash','','','1','2026-08-23 10:06:49');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('13','2026-02-10','expense','2 Solar plates & wires','16000.00','cash','','','1','2026-08-23 10:07:26');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('14','2026-02-10','expense','Printing bill book invoice & Quotation letter book','24000.00','cash','','','1','2026-08-23 10:08:50');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('15','2026-02-10','expense','Shutter Paint','2000.00','cash','','','1','2026-08-23 10:09:29');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('16','2026-04-03','expense','Shop Extention','20900.00','cash','','','1','2026-08-23 10:11:00');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('17','2026-02-10','expense','Meter connection','1000.00','cash','','','1','2026-08-23 10:11:49');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('18','2026-06-11','expense','Driver Inam','4000.00','cash','','','1','2026-08-23 10:12:51');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('19','2026-05-21','expense','Paint after Shop extention','8300.00','cash','','','1','2026-08-23 10:14:14');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('20','2026-05-21','expense','Shutter Paint (2nd time)','2000.00','cash','','','1','2026-08-23 10:14:57');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('21','2026-02-10','expense','Safe locker','12000.00','cash','','','1','2026-08-23 10:15:43');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('22','2026-06-03','expense','Decoration (Shopper 2 pieces)','2800.00','cash','','','1','2026-08-23 10:17:00');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('23','2026-04-01','expense','Electricity bill','4300.00','cash','','','1','2026-08-23 10:18:06');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('24','2026-05-01','expense','Electricity bill','4000.00','cash','','','1','2026-08-23 10:18:29');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('25','2026-06-16','expense','Pak Star documentation office halwa Lahore parcel doc','3000.00','cash','','','1','2026-08-23 10:19:33');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('26','2026-07-09','expense','RSM  combined lunch','4700.00','cash','','','1','2026-08-23 10:21:07');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('27','2026-06-08','expense','RSM lunch','6000.00','cash','','','1','2026-08-23 10:22:19');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('28','2026-02-28','expense','Costumers tea and soft drinks','3000.00','cash','','','1','2026-08-23 10:27:14');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('29','2026-03-31','expense','Costumers tea and drinks','2800.00','cash','','','1','2026-08-23 10:27:49');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('30','2026-04-30','expense','Costumers tea and drinks','2500.00','cash','','','1','2026-08-23 10:28:46');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('31','2026-05-31','expense','Costumers tea and drink','2900.00','cash','','','1','2026-08-23 10:29:46');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('32','2026-06-30','expense','Costumer tea and drinks','3200.00','cash','','','1','2026-08-23 10:34:50');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('33','2026-07-31','expense','Customer tea and drinks','2700.00','cash','','','1','2026-08-23 10:37:06');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('34','2026-03-05','expense','Rent & Security Gaurd','7500.00','cash','','','1','2026-08-23 10:53:23');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('35','2026-04-05','expense','Rent &  Security Guard','7500.00','cash','','','1','2026-08-23 10:53:56');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('36','2026-05-05','expense','Rent &  Security Guard','15000.00','cash','','','1','2026-08-23 10:54:51');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('37','2026-06-05','expense','Rent &  Security Guard','15000.00','cash','','','1','2026-08-23 10:56:49');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('38','2026-07-05','expense','Rent &  Security Guard','15000.00','cash','','','1','2026-08-23 10:57:27');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('39','2026-08-05','expense','Rent &  Security Guard','15000.00','cash','','','1','2026-08-23 10:58:16');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('40','2026-05-05','expense','Part time worker salary','13000.00','cash','','','1','2026-08-23 10:59:57');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('41','2026-06-05','expense','Part time worker','13000.00','cash','','','1','2026-08-23 11:00:35');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('42','2026-07-05','expense','Part time worker','13000.00','cash','','','1','2026-08-23 11:01:04');
+INSERT INTO `income_expenses` (`id`,`entry_date`,`type`,`category`,`amount`,`payment_method`,`reference`,`notes`,`created_by`,`created_at`) VALUES ('43','2026-08-05','expense','Part time worker','13000.00','cash','','','1','2026-08-23 11:01:25');
+
+-- --------------------------------------------
+-- Table: `installment_payment_allocations`
+-- --------------------------------------------
+DROP TABLE IF EXISTS `installment_payment_allocations`;
+CREATE TABLE `installment_payment_allocations` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `payment_id` int(11) NOT NULL,
+  `installment_id` int(11) NOT NULL,
+  `principal_amount` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `penalty_amount` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_installment_payment` (`payment_id`,`installment_id`),
+  KEY `idx_ipa_installment` (`installment_id`),
+  CONSTRAINT `fk_ipa_installment` FOREIGN KEY (`installment_id`) REFERENCES `installments` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_ipa_payment` FOREIGN KEY (`payment_id`) REFERENCES `payments` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------
+-- Table: `installments`
+-- --------------------------------------------
+DROP TABLE IF EXISTS `installments`;
+CREATE TABLE `installments` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `bike_id` int(11) NOT NULL,
+  `customer_id` int(11) NOT NULL,
+  `due_date` date NOT NULL,
+  `installment_amount` decimal(15,2) NOT NULL,
+  `amount_paid` decimal(15,2) DEFAULT 0.00,
+  `penalty_fee` decimal(15,2) DEFAULT 0.00,
+  `penalty_paid` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `status` enum('pending','paid','overdue','cancelled') DEFAULT 'pending',
+  `payment_id` int(11) DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `bike_id` (`bike_id`),
+  KEY `payment_id` (`payment_id`),
+  KEY `idx_due_date` (`due_date`),
+  KEY `idx_status` (`status`),
+  KEY `idx_installments_customer` (`customer_id`),
+  CONSTRAINT `installments_ibfk_1` FOREIGN KEY (`bike_id`) REFERENCES `bikes` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `installments_ibfk_2` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `installments_ibfk_3` FOREIGN KEY (`payment_id`) REFERENCES `payments` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------
+-- Table: `inventory_status_history`
+-- --------------------------------------------
+DROP TABLE IF EXISTS `inventory_status_history`;
+CREATE TABLE `inventory_status_history` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `bike_id` int(11) DEFAULT NULL,
+  `chassis_number` varchar(100) NOT NULL,
+  `old_status` varchar(40) NOT NULL,
+  `new_status` varchar(40) NOT NULL,
+  `changed_by` int(11) DEFAULT NULL,
+  `change_reason` varchar(1000) DEFAULT NULL,
+  `changed_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_ish_bike` (`bike_id`),
+  KEY `idx_ish_changed_at` (`changed_at`),
+  KEY `fk_ish_user` (`changed_by`),
+  CONSTRAINT `fk_ish_bike` FOREIGN KEY (`bike_id`) REFERENCES `bikes` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_ish_user` FOREIGN KEY (`changed_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------
+-- Table: `leadership`
+-- --------------------------------------------
+DROP TABLE IF EXISTS `leadership`;
+CREATE TABLE `leadership` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) NOT NULL,
+  `position` varchar(255) DEFAULT NULL,
+  `image` varchar(255) DEFAULT NULL,
+  `message` text DEFAULT NULL,
+  `sort_order` int(11) DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------
+-- Table: `ledger`
+-- --------------------------------------------
+DROP TABLE IF EXISTS `ledger`;
+CREATE TABLE `ledger` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `entry_date` date DEFAULT NULL,
+  `entry_type` enum('debit','credit') DEFAULT NULL,
+  `amount` decimal(15,2) DEFAULT NULL,
+  `party_type` enum('customer','supplier','other') DEFAULT NULL,
+  `party_id` int(11) DEFAULT NULL,
+  `description` text DEFAULT NULL,
+  `reference_type` varchar(50) DEFAULT NULL,
+  `reference_id` int(11) DEFAULT NULL,
+  `balance` decimal(15,2) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_ledger_party` (`party_type`,`party_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=150 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('1','2026-02-25','debit','200000.00','customer','1','Advance / Loan Given: ','advance_given','2',NULL,'2026-07-21 15:31:44');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('2','2026-02-25','credit','200000.00','customer','1','Payment Received: ','payment','3',NULL,'2026-07-21 15:35:52');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('3','2026-02-25','credit','200000.00','customer','1','Payment Received: Wrong entry of Advance / Loan','payment','4',NULL,'2026-07-21 15:37:52');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('4','2026-03-16','debit','283000.00','customer','1','Sale of Chassis: M615L72300006278','sale','2','283000.00','2026-07-21 16:08:04');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('5','2026-03-16','credit','83000.00','customer','1','Down Payment for Chassis: M615L72300006278','down_payment','2','83000.00','2026-07-21 16:08:04');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('6','2026-03-16','debit','285000.00','customer','2','Sale of Chassis: M615L72300006176','sale','1','285000.00','2026-07-21 16:24:18');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('7','2026-03-16','credit','285000.00','customer','2','Down Payment for Chassis: M615L72300006176','down_payment','1','285000.00','2026-07-21 16:24:18');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('8','2026-02-21','debit','279000.00','customer','3','Sale of Chassis: E820G72380002293','sale','10','279000.00','2026-08-08 22:36:57');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('9','2026-02-21','credit','279000.00','customer','3','Down Payment for Chassis: E820G72380002293','down_payment','10','279000.00','2026-08-08 22:36:57');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('10','2026-02-22','debit','199000.00','customer','4','Sale of Chassis: TH12G72260005515','sale','11','199000.00','2026-08-08 22:43:25');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('11','2026-02-22','credit','199000.00','customer','4','Down Payment for Chassis: TH12G72260005515','down_payment','11','199000.00','2026-08-08 22:43:25');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('12','2026-03-02','debit','179000.00','customer','4','Sale of Chassis: T910G72260006884','sale','9','179000.00','2026-08-08 22:52:21');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('13','2026-03-02','credit','179000.00','customer','4','Down Payment for Chassis: T910G72260006884','down_payment','9','179000.00','2026-08-08 22:52:22');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('14','2026-03-05','debit','179000.00','customer','5','Sale of Chassis: T910G72260006966','sale','7','179000.00','2026-08-09 19:36:07');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('15','2026-03-05','credit','179000.00','customer','5','Down Payment for Chassis: T910G72260006966','down_payment','7','179000.00','2026-08-09 19:36:07');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('16','2026-03-07','debit','234000.00','customer','6','Sale of Chassis: T910L72300000916','sale','14','234000.00','2026-08-09 19:46:18');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('17','2026-03-07','credit','234000.00','customer','6','Down Payment for Chassis: T910L72300000916','down_payment','14','234000.00','2026-08-09 19:46:18');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('18','2026-03-11','debit','179000.00','customer','7','Sale of Chassis: T910G72260007041','sale','8','179000.00','2026-08-09 19:53:57');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('19','2026-03-11','credit','179000.00','customer','7','Down Payment for Chassis: T910G72260007041','down_payment','8','179000.00','2026-08-09 19:53:57');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('20','2026-03-15','debit','242000.00','customer','8','Sale of Chassis: M615G72380002665','sale','6','242000.00','2026-08-10 19:19:48');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('21','2026-03-15','credit','200000.00','customer','8','Down Payment for Chassis: M615G72380002665','down_payment','6','200000.00','2026-08-10 19:19:48');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('22','2026-03-18','debit','246000.00','customer','9','Sale of Chassis: TH12L72300000416','sale','16','246000.00','2026-08-10 19:40:49');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('23','2026-03-18','credit','246000.00','customer','9','Down Payment for Chassis: TH12L72300000416','down_payment','16','246000.00','2026-08-10 19:40:49');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('24','2026-03-18','debit','179000.00','customer','10','Sale of Chassis: T910G72260008679','sale','19','179000.00','2026-08-10 19:48:11');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('25','2026-03-25','debit','198000.00','customer','11','Sale of Chassis: TH12G72260006236','sale','21','198000.00','2026-08-16 12:29:48');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('26','2026-03-25','credit','198000.00','customer','11','Down Payment for Chassis: TH12G72260006236','down_payment','21','198000.00','2026-08-16 12:29:48');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('29','2026-03-26','debit','178000.00','customer','13','Sale of Chassis: T910G72260008882','sale','17','178000.00','2026-08-16 12:43:56');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('30','2026-03-26','credit','178000.00','customer','13','Down Payment for Chassis: T910G72260008882','down_payment','17','178000.00','2026-08-16 12:43:56');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('31','2026-03-26','debit','177500.00','customer','14','Sale of Chassis: T910G72260008478','sale','18','177500.00','2026-08-16 12:48:01');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('32','2026-03-26','credit','177500.00','customer','14','Down Payment for Chassis: T910G72260008478','down_payment','18','177500.00','2026-08-16 12:48:01');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('33','2026-03-28','debit','229000.00','customer','15','Sale of Chassis: T910L72300000632','sale','13','229000.00','2026-08-21 20:03:25');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('34','2026-03-28','credit','229000.00','customer','15','Down Payment for Chassis: T910L72300000632','down_payment','13','229000.00','2026-08-21 20:03:25');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('35','2026-03-30','debit','274000.00','customer','16','Sale of Chassis: E820G72380000466','sale','22','274000.00','2026-08-21 20:12:40');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('36','2026-03-30','credit','274000.00','customer','16','Down Payment for Chassis: E820G72380000466','down_payment','22','274000.00','2026-08-21 20:12:40');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('37','2026-04-01','debit','198000.00','customer','17','Sale of Chassis: TH12G72260006279','sale','20','198000.00','2026-08-21 20:36:43');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('38','2026-04-01','credit','198000.00','customer','17','Down Payment for Chassis: TH12G72260006279','down_payment','20','198000.00','2026-08-21 20:36:43');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('39','2026-04-02','debit','178000.00','customer','18','Sale of Chassis: T910G72260008720','sale','25','178000.00','2026-08-21 20:41:18');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('40','2026-04-02','credit','178000.00','customer','18','Down Payment for Chassis: T910G72260008720','down_payment','25','178000.00','2026-08-21 20:41:18');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('41','2026-04-04','debit','250000.00','customer','19','Sale of Chassis: TH12L72300000445','sale','15','250000.00','2026-08-21 20:50:41');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('42','2026-04-04','credit','250000.00','customer','19','Down Payment for Chassis: TH12L72300000445','down_payment','15','250000.00','2026-08-21 20:50:41');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('43','2026-04-04','debit','235000.00','customer','20','Sale of Chassis: E810G72380000595','sale','24','235000.00','2026-08-21 20:54:50');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('44','2026-04-04','credit','235000.00','customer','20','Down Payment for Chassis: E810G72380000595','down_payment','24','235000.00','2026-08-21 20:54:50');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('45','2026-04-04','debit','178000.00','customer','21','Sale of Chassis: T910G72260008894','sale','26','178000.00','2026-08-21 20:57:44');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('46','2026-04-04','credit','178000.00','customer','21','Down Payment for Chassis: T910G72260008894','down_payment','26','178000.00','2026-08-21 20:57:44');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('47','2026-04-04','debit','178000.00','customer','22','Sale of Chassis: T910G72260008737','sale','27','178000.00','2026-08-21 21:03:37');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('48','2026-04-04','credit','178000.00','customer','22','Down Payment for Chassis: T910G72260008737','down_payment','27','178000.00','2026-08-21 21:03:37');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('49','2026-04-08','debit','250000.00','customer','23','Sale of Chassis: TH12L72300001147','sale','32','250000.00','2026-08-22 11:18:42');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('50','2026-04-08','credit','250000.00','customer','23','Down Payment for Chassis: TH12L72300001147','down_payment','32','250000.00','2026-08-22 11:18:42');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('51','2026-04-08','debit','232000.00','customer','24','Sale of Chassis: T910L72300001018','sale','31','232000.00','2026-08-22 11:25:33');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('52','2026-04-08','credit','232000.00','customer','24','Down Payment for Chassis: T910L72300001018','down_payment','31','232000.00','2026-08-22 11:25:33');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('53','2026-04-08','debit','264000.00','customer','25','Sale of Chassis: T912G72380001156','sale','29','264000.00','2026-08-22 11:39:34');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('54','2026-04-08','credit','264000.00','customer','25','Down Payment for Chassis: T912G72380001156','down_payment','29','264000.00','2026-08-22 11:39:34');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('55','2026-04-09','debit','250000.00','customer','26','Sale of Chassis: TH12L72300001157','sale','33','250000.00','2026-08-22 11:42:48');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('56','2026-04-09','credit','250000.00','customer','26','Down Payment for Chassis: TH12L72300001157','down_payment','33','250000.00','2026-08-22 11:42:48');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('57','2026-04-05','debit','265000.00','customer','27','Sale of Chassis: T912G72380001172','sale','28','265000.00','2026-08-22 11:47:27');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('58','2026-04-05','credit','265000.00','customer','27','Down Payment for Chassis: T912G72380001172','down_payment','28','265000.00','2026-08-22 11:47:27');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('59','2026-04-13','debit','277000.00','customer','28','Sale of Chassis: P308L72300000159','sale','23','277000.00','2026-08-22 11:59:36');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('60','2026-04-13','credit','277000.00','customer','28','Down Payment for Chassis: P308L72300000159','down_payment','23','277000.00','2026-08-22 11:59:36');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('61','2026-04-13','debit','232500.00','customer','29','Sale of Chassis: T910L72300001272','sale','30','232500.00','2026-08-22 12:03:39');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('62','2026-04-13','credit','232500.00','customer','29','Down Payment for Chassis: T910L72300001272','down_payment','30','232500.00','2026-08-22 12:03:39');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('63','2026-04-28','debit','252000.00','customer','30','Sale of Chassis: TH12L72300002298','sale','41','252000.00','2026-08-22 12:33:56');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('64','2026-04-28','credit','252000.00','customer','30','Down Payment for Chassis: TH12L72300002298','down_payment','41','252000.00','2026-08-22 12:33:56');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('65','2026-04-28','debit','200000.00','customer','31','Sale of Chassis: TH12G72260007145','sale','39','200000.00','2026-08-22 12:37:17');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('66','2026-04-28','credit','200000.00','customer','31','Down Payment for Chassis: TH12G72260007145','down_payment','39','200000.00','2026-08-22 12:37:17');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('67','2026-04-28','debit','230000.00','customer','32','Sale of Chassis: T910L72300002152','sale','36','230000.00','2026-08-22 12:40:37');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('68','2026-04-28','credit','230000.00','customer','32','Down Payment for Chassis: T910L72300002152','down_payment','36','230000.00','2026-08-22 12:40:37');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('69','2026-04-28','debit','178000.00','customer','33','Sale of Chassis: T910G72260010603','sale','34','178000.00','2026-08-22 12:43:46');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('70','2026-05-05','debit','200000.00','customer','34','Sale of Chassis: TH12G72260007314','sale','40','200000.00','2026-08-22 12:51:55');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('71','2026-05-05','credit','200000.00','customer','34','Down Payment for Chassis: TH12G72260007314','down_payment','40','200000.00','2026-08-22 12:51:55');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('72','2026-04-29','debit','230000.00','customer','35','Sale of Chassis: T910L72300002099','sale','35','230000.00','2026-08-22 13:00:45');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('73','2026-04-29','credit','230000.00','customer','35','Down Payment for Chassis: T910L72300002099','down_payment','35','230000.00','2026-08-22 13:00:45');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('74','2026-05-02','debit','249000.00','customer','36','Sale of Chassis: TH12L72300002097','sale','42','249000.00','2026-08-22 13:12:31');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('75','2026-05-02','credit','249000.00','customer','36','Down Payment for Chassis: TH12L72300002097','down_payment','42','249000.00','2026-08-22 13:12:31');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('76','2026-05-24','debit','190000.00','customer','37','Sale of Chassis: DB12G72260004432','sale','38','190000.00','2026-08-22 13:24:34');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('77','2026-05-24','credit','190000.00','customer','37','Down Payment for Chassis: DB12G72260004432','down_payment','38','190000.00','2026-08-22 13:24:34');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('78','2026-05-24','debit','238000.00','customer','38','Sale of Chassis: DB12L72300005119','sale','61','238000.00','2026-08-22 13:28:33');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('79','2026-05-24','credit','238000.00','customer','38','Down Payment for Chassis: DB12L72300005119','down_payment','61','238000.00','2026-08-22 13:28:33');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('80','2026-05-24','debit','238000.00','customer','39','Sale of Chassis: DB12L72300005366','sale','62','238000.00','2026-08-22 13:32:08');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('81','2026-05-24','credit','238000.00','customer','39','Down Payment for Chassis: DB12L72300005366','down_payment','62','238000.00','2026-08-22 13:32:08');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('82','2026-05-24','debit','189000.00','customer','40','Sale of Chassis: DB12G72260004159','sale','57','189000.00','2026-08-22 13:36:56');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('83','2026-05-24','credit','189000.00','customer','40','Down Payment for Chassis: DB12G72260004159','down_payment','57','189000.00','2026-08-22 13:36:56');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('84','2026-05-24','debit','288000.00','customer','41','Sale of Chassis: M615L72300004278','sale','53','288000.00','2026-08-22 13:40:22');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('85','2026-05-24','credit','288000.00','customer','41','Down Payment for Chassis: M615L72300004278','down_payment','53','288000.00','2026-08-22 13:40:22');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('86','2026-05-24','debit','286000.00','customer','42','Sale of Chassis: M615L72300004014','sale','52','286000.00','2026-08-22 13:43:09');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('87','2026-05-24','credit','286000.00','customer','42','Down Payment for Chassis: M615L72300004014','down_payment','52','286000.00','2026-08-22 13:43:09');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('88','2026-05-24','debit','288000.00','customer','43','Sale of Chassis: M615L72300004039','sale','49','288000.00','2026-08-22 13:50:04');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('89','2026-05-24','credit','288000.00','customer','43','Down Payment for Chassis: M615L72300004039','down_payment','49','288000.00','2026-08-22 13:50:04');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('90','2026-05-25','debit','247000.00','customer','44','Sale of Chassis: MX15G72380000660','sale','45','247000.00','2026-08-22 13:58:49');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('91','2026-05-25','credit','247000.00','customer','44','Down Payment for Chassis: MX15G72380000660','down_payment','45','247000.00','2026-08-22 13:58:49');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('92','2026-05-25','debit','247000.00','customer','45','Sale of Chassis: MX15G72380000567','sale','46','247000.00','2026-08-22 14:04:58');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('93','2026-05-25','credit','239000.00','customer','45','Down Payment for Chassis: MX15G72380000567','down_payment','46','239000.00','2026-08-22 14:04:58');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('94','2026-05-20','debit','250000.00','customer','46','Sale of Chassis: MX15G72380000538','sale','43','250000.00','2026-08-22 14:17:14');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('95','2026-05-20','credit','250000.00','customer','46','Down Payment for Chassis: MX15G72380000538','down_payment','43','250000.00','2026-08-22 14:17:14');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('96','2026-05-31','debit','186500.00','customer','47','Sale of Chassis: DB12G72260004208','sale','58','186500.00','2026-08-22 14:21:50');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('97','2026-05-31','credit','186500.00','customer','47','Down Payment for Chassis: DB12G72260004208','down_payment','58','186500.00','2026-08-22 14:21:50');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('98','2026-06-01','debit','250000.00','customer','48','Sale of Chassis: MX15G72380000463','sale','44','250000.00','2026-08-22 14:26:27');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('99','2026-06-01','credit','250000.00','customer','48','Down Payment for Chassis: MX15G72380000463','down_payment','44','250000.00','2026-08-22 14:26:27');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('100','2026-06-08','debit','250000.00','customer','49','Sale of Chassis: DB12L72300005310','sale','59','250000.00','2026-08-22 14:30:27');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('101','2026-06-08','credit','250000.00','customer','49','Down Payment for Chassis: DB12L72300005310','down_payment','59','250000.00','2026-08-22 14:30:27');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('102','2026-06-09','debit','263000.00','customer','50','Sale of Chassis: TH12L72300000747','sale','64','263000.00','2026-08-22 14:39:44');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('103','2026-06-09','credit','263000.00','customer','50','Down Payment for Chassis: TH12L72300000747','down_payment','64','263000.00','2026-08-22 14:39:44');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('104','2026-06-10','debit','261000.00','customer','51','Sale of Chassis: TH12L72300001015','sale','65','261000.00','2026-08-22 14:45:17');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('105','2026-06-10','credit','261000.00','customer','51','Down Payment for Chassis: TH12L72300001015','down_payment','65','261000.00','2026-08-22 14:45:17');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('106','2026-06-13','debit','263000.00','customer','52','Sale of Chassis: TH12L72300000520','sale','63','263000.00','2026-08-22 14:49:41');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('107','2026-06-13','credit','263000.00','customer','52','Down Payment for Chassis: TH12L72300000520','down_payment','63','263000.00','2026-08-22 14:49:41');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('108','2026-06-10','debit','286000.00','customer','53','Sale of Chassis: M615L72300002311','sale','56','286000.00','2026-08-22 14:56:03');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('109','2026-06-10','credit','286000.00','customer','53','Down Payment for Chassis: M615L72300002311','down_payment','56','286000.00','2026-08-22 14:56:03');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('110','2026-04-07','debit','182000.00','customer','54','Sale of Chassis: T910G72260011701','sale','66','182000.00','2026-08-29 02:34:11');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('111','2026-04-07','credit','180000.00','customer','54','Down Payment for Chassis: T910G72260011701','down_payment','66','180000.00','2026-08-29 02:34:11');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('112','2026-07-27','debit','180000.00','customer','55','Sale of Chassis: T910G72260011642','sale','67','180000.00','2026-08-29 02:43:26');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('113','2026-07-27','credit','180000.00','customer','55','Down Payment for Chassis: T910G72260011642','down_payment','67','180000.00','2026-08-29 02:43:26');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('114','2026-07-21','debit','200000.00','customer','56','Sale of Chassis: TH12G72260007792','sale','69','200000.00','2026-08-29 07:06:17');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('115','2026-07-11','debit','201000.00','customer','57','Sale of Chassis: TH12G72260009288','sale','70','201000.00','2026-08-29 07:15:20');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('116','2026-07-11','credit','201000.00','customer','57','Down Payment for Chassis: TH12G72260009288','down_payment','70','201000.00','2026-08-29 07:15:20');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('117','2026-07-05','debit','187000.00','customer','58','Sale of Chassis: DB12G72260004600','sale','73','187000.00','2026-08-29 07:22:02');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('118','2026-07-11','debit','188000.00','customer','59','Sale of Chassis: DB12G72260004508','sale','74','188000.00','2026-08-29 07:27:28');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('119','2026-07-11','credit','188000.00','customer','59','Down Payment for Chassis: DB12G72260004508','down_payment','74','188000.00','2026-08-29 07:27:28');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('120','2026-07-23','debit','182000.00','customer','60','Sale of Chassis: T910G72260012249','sale','76','182000.00','2026-08-29 07:35:03');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('121','2026-07-23','credit','182000.00','customer','60','Down Payment for Chassis: T910G72260012249','down_payment','76','182000.00','2026-08-29 07:35:03');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('122','2026-07-12','debit','183000.00','customer','62','Sale of Chassis: T910G72260012119','sale','77','183000.00','2026-08-29 07:55:00');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('123','2026-07-12','credit','183000.00','customer','62','Down Payment for Chassis: T910G72260012119','down_payment','77','183000.00','2026-08-29 07:55:00');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('124','2026-07-14','debit','282000.00','customer','63','Sale of Chassis: E820G72380002364','sale','79','282000.00','2026-08-29 08:02:01');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('125','2026-08-04','debit','249000.00','customer','64','Sale of Chassis: M615G72380003238','sale','84','249000.00','2026-08-29 08:07:12');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('126','2026-08-04','credit','249000.00','customer','64','Down Payment for Chassis: M615G72380003238','down_payment','84','249000.00','2026-08-29 08:07:12');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('127','2026-08-13','debit','187000.00','customer','65','Sale of Chassis: DB12G72260006323','sale','86','187000.00','2026-08-29 08:19:28');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('128','2026-08-13','credit','187000.00','customer','65','Down Payment for Chassis: DB12G72260006323','down_payment','86','187000.00','2026-08-29 08:19:28');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('129','2026-08-13','debit','186000.00','customer','66','Sale of Chassis: DB12G72260006525','sale','87','186000.00','2026-08-29 08:23:35');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('130','2026-08-13','credit','186000.00','customer','66','Down Payment for Chassis: DB12G72260006525','down_payment','87','186000.00','2026-08-29 08:23:35');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('131','2026-08-02','debit','187000.00','customer','67','Sale of Chassis: DB12G72260004741','sale','90','187000.00','2026-08-29 08:28:02');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('132','2026-08-02','credit','187000.00','customer','67','Down Payment for Chassis: DB12G72260004741','down_payment','90','187000.00','2026-08-29 08:28:02');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('133','2026-07-30','debit','286000.00','customer','68','Sale of Chassis: M615L72300005401','sale','92','286000.00','2026-08-29 08:39:28');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('134','2026-07-30','credit','183000.00','customer','68','Down Payment for Chassis: M615L72300005401','down_payment','92','183000.00','2026-08-29 08:39:28');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('135','2026-03-11','credit','179000.00','customer','7','Payment Received: ','payment','80',NULL,'2026-09-01 19:22:09');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('136','2026-04-27','debit','300000.00','customer','69','Sale of Chassis: M615L72300001539','sale','37','300000.00','2026-09-02 20:48:19');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('137','2026-04-27','credit','300000.00','customer','69','Down Payment for Chassis: M615L72300001539','down_payment','37','300000.00','2026-09-02 20:48:19');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('138','2026-08-03','debit','265000.00','customer','70','Sale of Chassis: T912G72380001154','sale','47','265000.00','2026-09-02 21:01:29');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('139','2026-08-03','credit','165000.00','customer','70','Down Payment for Chassis: T912G72380001154','down_payment','47','165000.00','2026-09-02 21:01:29');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('140','2026-08-11','debit','187000.00','customer','72','Sale of Chassis: DB12G72260006548','sale','88','187000.00','2026-09-05 20:49:18');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('141','2026-08-11','credit','187000.00','customer','72','Down Payment for Chassis: DB12G72260006548','down_payment','88','187000.00','2026-09-05 20:49:18');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('142','2026-09-05','debit','186000.00','customer','73','Sale of Chassis: DB12G72260004861','sale','72','186000.00','2026-09-05 20:52:42');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('143','2026-09-05','credit','186000.00','customer','73','Down Payment for Chassis: DB12G72260004861','down_payment','72','186000.00','2026-09-05 20:52:42');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('144','2026-08-29','debit','185000.00','customer','74','Sale of Chassis: DB12G72260004939','sale','91','185000.00','2026-09-05 20:56:51');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('145','2026-08-29','credit','185000.00','customer','74','Down Payment for Chassis: DB12G72260004939','down_payment','91','185000.00','2026-09-05 20:56:51');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('146','2026-08-30','debit','188000.00','customer','75','Sale of Chassis: DB12L72300008798','sale','100','188000.00','2026-09-05 21:00:33');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('147','2026-08-30','credit','188000.00','customer','75','Down Payment for Chassis: DB12L72300008798','down_payment','100','188000.00','2026-09-05 21:00:33');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('148','2026-09-03','debit','247000.00','customer','76','Sale of Chassis: M615G72380003452','sale','95','247000.00','2026-09-05 21:05:34');
+INSERT INTO `ledger` (`id`,`entry_date`,`entry_type`,`amount`,`party_type`,`party_id`,`description`,`reference_type`,`reference_id`,`balance`,`created_at`) VALUES ('149','2026-09-03','credit','247000.00','customer','76','Down Payment for Chassis: M615G72380003452','down_payment','95','247000.00','2026-09-05 21:05:34');
+
+-- --------------------------------------------
+-- Table: `models`
+-- --------------------------------------------
+DROP TABLE IF EXISTS `models`;
+CREATE TABLE `models` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `model_code` varchar(50) NOT NULL,
+  `model_name` varchar(255) NOT NULL,
+  `category` varchar(100) DEFAULT NULL,
+  `short_code` varchar(20) DEFAULT NULL,
+  `image` varchar(255) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `top_speed` varchar(50) DEFAULT NULL,
+  `max_range` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO `models` (`id`,`model_code`,`model_name`,`category`,`short_code`,`image`,`created_at`,`top_speed`,`max_range`) VALUES ('1','M6 Lithium','Metro M6 EMPOWER Lithium','Electric Bike','M6 NPL',NULL,'2026-07-21 15:02:15','','');
+INSERT INTO `models` (`id`,`model_code`,`model_name`,`category`,`short_code`,`image`,`created_at`,`top_speed`,`max_range`) VALUES ('2','LY SI','Metro SUPER BIKE','EV','',NULL,'2026-08-08 12:31:13','','');
+INSERT INTO `models` (`id`,`model_code`,`model_name`,`category`,`short_code`,`image`,`created_at`,`top_speed`,`max_range`) VALUES ('3','W H2','Metro WONDER BIKE','EV','',NULL,'2026-08-08 12:38:48','','');
+INSERT INTO `models` (`id`,`model_code`,`model_name`,`category`,`short_code`,`image`,`created_at`,`top_speed`,`max_range`) VALUES ('4','M6K6','Metro M6 EMPOWER','EV','',NULL,'2026-08-08 12:44:18','','');
+INSERT INTO `models` (`id`,`model_code`,`model_name`,`category`,`short_code`,`image`,`created_at`,`top_speed`,`max_range`) VALUES ('5','T9 Sport','Metro T9 Sport','EV','',NULL,'2026-08-08 13:08:25','','');
+INSERT INTO `models` (`id`,`model_code`,`model_name`,`category`,`short_code`,`image`,`created_at`,`top_speed`,`max_range`) VALUES ('6','T9 Sport','Metro T9 Sport','EV','',NULL,'2026-08-08 13:13:42','','');
+INSERT INTO `models` (`id`,`model_code`,`model_name`,`category`,`short_code`,`image`,`created_at`,`top_speed`,`max_range`) VALUES ('7','E8S M2','Metro E8S Mountain Climber','EV','',NULL,'2026-08-08 13:19:57','','');
+INSERT INTO `models` (`id`,`model_code`,`model_name`,`category`,`short_code`,`image`,`created_at`,`top_speed`,`max_range`) VALUES ('8','Thrill Pro','Metro THRILL PRO','EV','',NULL,'2026-08-08 13:23:47','','');
+INSERT INTO `models` (`id`,`model_code`,`model_name`,`category`,`short_code`,`image`,`created_at`,`top_speed`,`max_range`) VALUES ('9','T9 Sport LFP','Metro T9 Sport LFP','Electric Bike','',NULL,'2026-08-08 13:33:51','','');
+INSERT INTO `models` (`id`,`model_code`,`model_name`,`category`,`short_code`,`image`,`created_at`,`top_speed`,`max_range`) VALUES ('10','Thrill Pro','Metro THRILL PRO LFP','EV','',NULL,'2026-08-08 13:39:22','','');
+INSERT INTO `models` (`id`,`model_code`,`model_name`,`category`,`short_code`,`image`,`created_at`,`top_speed`,`max_range`) VALUES ('11','Thrill Pro','Metro THRILL PRO LFP','EV','',NULL,'2026-08-08 13:39:22','','');
+INSERT INTO `models` (`id`,`model_code`,`model_name`,`category`,`short_code`,`image`,`created_at`,`top_speed`,`max_range`) VALUES ('12','T9 Eco','Metro T9 Eco NC','EV','',NULL,'2026-08-08 21:04:12','','');
+INSERT INTO `models` (`id`,`model_code`,`model_name`,`category`,`short_code`,`image`,`created_at`,`top_speed`,`max_range`) VALUES ('13','E8S Pro','E8S PRO','EV','',NULL,'2026-08-08 21:52:56','','');
+INSERT INTO `models` (`id`,`model_code`,`model_name`,`category`,`short_code`,`image`,`created_at`,`top_speed`,`max_range`) VALUES ('14','Premium','Metro Premium','EV','',NULL,'2026-08-08 21:57:27','','');
+INSERT INTO `models` (`id`,`model_code`,`model_name`,`category`,`short_code`,`image`,`created_at`,`top_speed`,`max_range`) VALUES ('15','T9 Pro','Metro T9 Pr0','EV','',NULL,'2026-08-09 13:24:30','','');
+INSERT INTO `models` (`id`,`model_code`,`model_name`,`category`,`short_code`,`image`,`created_at`,`top_speed`,`max_range`) VALUES ('16','Dabang','Metro Dabang','EV','',NULL,'2026-08-09 18:04:08','','');
+INSERT INTO `models` (`id`,`model_code`,`model_name`,`category`,`short_code`,`image`,`created_at`,`top_speed`,`max_range`) VALUES ('17','Matrix','Metro Matrix','EV','',NULL,'2026-08-14 02:50:33','','');
+INSERT INTO `models` (`id`,`model_code`,`model_name`,`category`,`short_code`,`image`,`created_at`,`top_speed`,`max_range`) VALUES ('18','Dabang LFP','Metro Dabang','EV','',NULL,'2026-08-14 03:58:02','','');
+
+-- --------------------------------------------
+-- Table: `money_destinations`
+-- --------------------------------------------
+DROP TABLE IF EXISTS `money_destinations`;
+CREATE TABLE `money_destinations` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `type` enum('bank','person','wallet') NOT NULL,
+  `name` varchar(255) NOT NULL,
+  `details` text DEFAULT NULL,
+  `account_title` varchar(255) DEFAULT NULL,
+  `account_no` varchar(100) DEFAULT NULL,
+  `branch` varchar(255) DEFAULT NULL,
+  `opening_balance` decimal(15,2) DEFAULT 0.00,
+  `contact_person` varchar(255) DEFAULT NULL,
+  `contact_phone` varchar(50) DEFAULT NULL,
+  `is_active` tinyint(1) DEFAULT 1,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO `money_destinations` (`id`,`type`,`name`,`details`,`account_title`,`account_no`,`branch`,`opening_balance`,`contact_person`,`contact_phone`,`is_active`,`created_at`,`updated_at`) VALUES ('1','bank','Meezan Bank Limited','PK94 MEZN 0007 0801 1437 3300','BNI Enterprises','0708 0114373300','Gulbahar Peshawar','1667600.00','Zahid Aqeel','03149023806','1','2026-07-21 16:02:33','2026-07-21 16:02:33');
+INSERT INTO `money_destinations` (`id`,`type`,`name`,`details`,`account_title`,`account_no`,`branch`,`opening_balance`,`contact_person`,`contact_phone`,`is_active`,`created_at`,`updated_at`) VALUES ('2','bank','HBL MICROFINANCE BANK','','BNI Enterprises','2111-0334-7993-9011','Sana Plaza, China Gate Center, Circular Road, DIKhan.','5000.00','','03335967189','1','2026-08-08 22:33:01','2026-08-08 22:33:01');
+
+-- --------------------------------------------
+-- Table: `payments`
+-- --------------------------------------------
+DROP TABLE IF EXISTS `payments`;
+CREATE TABLE `payments` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `payment_date` date DEFAULT NULL,
+  `payment_type` enum('cash','cheque','bank_transfer','online','other') NOT NULL,
+  `amount` decimal(15,2) DEFAULT NULL,
+  `cheque_number` varchar(50) DEFAULT NULL,
+  `bank_name` varchar(100) DEFAULT NULL,
+  `cheque_date` date DEFAULT NULL,
+  `status` enum('pending','cleared','bounced','cancelled') DEFAULT 'pending',
+  `transaction_type` enum('purchase','sale','installment','expense_payment','supplier_payment','customer_refund','customer_advance','supplier_refund') NOT NULL,
+  `reference_id` int(11) DEFAULT NULL,
+  `customer_id` int(11) DEFAULT NULL,
+  `supplier_id` int(11) DEFAULT NULL,
+  `party_name` varchar(255) DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_payment_date` (`payment_date`),
+  KEY `idx_transaction_type` (`transaction_type`),
+  KEY `idx_payments_ref` (`transaction_type`,`reference_id`),
+  KEY `idx_payments_customer` (`customer_id`),
+  KEY `idx_payments_supplier` (`supplier_id`),
+  CONSTRAINT `fk_payments_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_payments_supplier` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB AUTO_INCREMENT=89 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('1','2026-02-27','cheque','509910.00','03420811','UBL Ameen Hayatabad Branch','2026-02-27','cleared','supplier_payment','1',NULL,'1','Pak Star Automobiles (Pvt) Ltd Lahore','','2026-07-21 15:06:58');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('2','2026-02-25','bank_transfer','200000.00',NULL,NULL,NULL,'cleared','customer_advance',NULL,'1',NULL,'Dr Shabir Ahmed','','2026-07-21 15:31:44');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('3','2026-02-25','bank_transfer','200000.00',NULL,NULL,NULL,'cleared','sale',NULL,'1',NULL,'Dr Shabir Ahmed','','2026-07-21 15:35:52');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('4','2026-02-25','cash','200000.00',NULL,NULL,NULL,'cleared','sale',NULL,'1',NULL,'Dr Shabir Ahmed','Wrong entry of Advance / Loan','2026-07-21 15:37:52');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('5','2026-03-16','cash','83000.00','','',NULL,'cleared','sale','2','1',NULL,'Dr Shabir Ahmed','Down Payment for Chassis: M615L72300006278','2026-07-21 16:08:04');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('6','2026-03-16','cash','285000.00','','',NULL,'cleared','sale','1','2',NULL,'Hamza Khan','Down Payment for Chassis: M615L72300006176','2026-07-21 16:24:18');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('7','2026-02-03','cheque','2535000.00','03420810','UBL Ameen Hayatabad Branch','2026-02-03','cleared','supplier_payment','2',NULL,'1','Pak Star Automobiles (Pvt) Ltd Lahore','','2026-08-08 13:52:53');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('8','2026-03-12','cheque','1002710.00','03420809','UBL Ameen Hayatabad Branch','2026-03-12','cleared','supplier_payment','3',NULL,'1','Pak Star Automobiles (Pvt) Ltd Lahore','','2026-08-08 21:13:51');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('9','2026-03-17','cheque','1241441.00','D-72981756','Meezan Bank Limited, Gulbahar Branch, Peshawar','2026-03-17','cleared','supplier_payment','4',NULL,'1','Pak Star Automobiles (Pvt) Ltd Lahore','','2026-08-08 22:11:20');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('10','2026-02-21','cash','279000.00','','',NULL,'cleared','sale','10','3',NULL,'Essa Khan S/O Ghulam Nabi','Down Payment for Chassis: E820G72380002293','2026-08-08 22:36:57');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('11','2026-02-22','cash','199000.00','','',NULL,'cleared','sale','11','4',NULL,'Nauman Akbar S/O Muhammad Ali Akbar','Down Payment for Chassis: TH12G72260005515','2026-08-08 22:43:25');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('12','2026-03-02','cash','179000.00','','',NULL,'cleared','sale','9','4',NULL,'Nauman Akbar S/O Muhammad Ali Akbar','Down Payment for Chassis: T910G72260006884','2026-08-08 22:52:21');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('13','2026-03-31','cheque','1762500.00','D-72981758','Meezan Bank Limited, Gulbahar Branch, Peshawar','2026-03-31','cleared','supplier_payment','5',NULL,'1','Pak Star Automobiles (Pvt) Ltd Lahore','','2026-08-09 13:46:27');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('14','2026-04-02','cheque','868000.00','D-72981759','Meezan Bank Limited, Gulbahar Branch, Peshawar','2026-04-02','cleared','supplier_payment','6',NULL,'1','Pak Star Automobiles (Pvt) Ltd Lahore','','2026-08-09 18:24:57');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('15','2026-04-02','cheque','2515500.00','D-72981760','Meezan Bank Limited, Gulbahar Branch, Peshawar','2026-04-15','cleared','supplier_payment','6',NULL,'1','Pak Star Automobiles (Pvt) Ltd Lahore','','2026-08-09 18:24:57');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('16','2026-03-05','cash','179000.00','','',NULL,'cleared','sale','7','5',NULL,'Burhan Khan S/O Hayat Muhammad','Down Payment for Chassis: T910G72260006966','2026-08-09 19:36:07');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('17','2026-03-07','cash','234000.00','','',NULL,'cleared','sale','14','6',NULL,'Muhammad Faizan Ali S/O Hassan Qureshi','Down Payment for Chassis: T910L72300000916','2026-08-09 19:46:18');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('18','2026-03-11','cash','179000.00','','',NULL,'cleared','sale','8','7',NULL,'Muhammad Tariq S/O Abdul Razzaq','Down Payment for Chassis: T910G72260007041','2026-08-09 19:53:57');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('19','2026-03-15','cash','200000.00','','',NULL,'cleared','sale','6','8',NULL,'Muhammad Zain ul Aabideen','Down Payment for Chassis: M615G72380002665','2026-08-10 19:19:48');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('20','2026-03-18','cash','246000.00','','',NULL,'cleared','sale','16','9',NULL,'Muhammad Aatif Majeed S/O Muhammad Majeed Khan','Down Payment for Chassis: TH12L72300000416','2026-08-10 19:40:49');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('21','2026-05-06','cheque','3155200.00','D-72981761','Meezan Bank Limited, Gulbahar Branch, Peshawar','2026-05-06','cleared','supplier_payment','7',NULL,'1','Pak Star Automobiles (Pvt) Ltd Lahore','','2026-08-14 04:45:12');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('22','2026-05-06','cheque','2615200.00','D-72981762','Meezan Bank Limited, Gulbahar Branch, Peshawar','2026-05-25','cleared','supplier_payment','7',NULL,'1','Pak Star Automobiles (Pvt) Ltd Lahore','','2026-08-14 04:45:12');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('23','2026-06-26','cheque','1600000.00','D-72981764','Meezan Bank Limited, Gulbahar Branch, Peshawar','2026-06-26','cleared','supplier_payment','8',NULL,'1','Pak Star Automobiles (Pvt) Ltd Lahore','','2026-08-16 10:51:20');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('24','2026-06-26','cash','1600000.00',NULL,NULL,NULL,'cleared','supplier_payment','9',NULL,'1','Pak Star Automobiles (Pvt) Ltd Lahore','','2026-08-16 11:02:13');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('25','2026-07-17','cheque','2300000.00','D-72981765','Meezan Bank Limited, Gulbahar Branch, Peshawar','2026-07-17','cleared','supplier_payment','10',NULL,'1','Pak Star Automobiles (Pvt) Ltd Lahore','','2026-08-16 12:09:14');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('26','2026-03-25','cash','198000.00','','',NULL,'cleared','sale','21','11',NULL,'Muhammad Aamir Mehmood','Down Payment for Chassis: TH12G72260006236','2026-08-16 12:29:48');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('28','2026-03-26','cash','178000.00','','',NULL,'cleared','sale','17','13',NULL,'Ahmad Din Khan','Down Payment for Chassis: T910G72260008882','2026-08-16 12:43:56');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('29','2026-03-26','cash','177500.00','','',NULL,'cleared','sale','18','14',NULL,'Ashfaq Ahmad Khan','Down Payment for Chassis: T910G72260008478','2026-08-16 12:48:01');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('30','2026-06-26','cash','1600000.00',NULL,NULL,NULL,'cleared','supplier_refund','0',NULL,'1','Pak Star Automobiles (Pvt) Ltd Lahore','Erroneous entry made (Double)','2026-08-16 13:04:11');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('31','2026-03-28','cash','229000.00','','',NULL,'cleared','sale','13','15',NULL,'Muhammad Kashif','Down Payment for Chassis: T910L72300000632','2026-08-21 20:03:25');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('32','2026-03-30','cash','274000.00','','',NULL,'cleared','sale','22','16',NULL,'Muhammad Haseeb ur Rehman','Down Payment for Chassis: E820G72380000466','2026-08-21 20:12:40');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('33','2026-04-01','cash','198000.00','','',NULL,'cleared','sale','20','17',NULL,'Husnain Mehmood','Down Payment for Chassis: TH12G72260006279','2026-08-21 20:36:43');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('34','2026-04-02','cash','178000.00','','',NULL,'cleared','sale','25','18',NULL,'Jery\'s Son','Down Payment for Chassis: T910G72260008720','2026-08-21 20:41:18');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('35','2026-04-04','cash','250000.00','','',NULL,'cleared','sale','15','19',NULL,'Muzammil Ahmed','Down Payment for Chassis: TH12L72300000445','2026-08-21 20:50:41');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('36','2026-04-04','cash','235000.00','','',NULL,'cleared','sale','24','20',NULL,'Tanveer Khan','Down Payment for Chassis: E810G72380000595','2026-08-21 20:54:50');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('37','2026-04-04','cash','178000.00','','',NULL,'cleared','sale','26','21',NULL,'Umer Shehzad','Down Payment for Chassis: T910G72260008894','2026-08-21 20:57:44');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('38','2026-04-04','cash','178000.00','','',NULL,'cleared','sale','27','22',NULL,'Muhammad Jehanzaib','Down Payment for Chassis: T910G72260008737','2026-08-21 21:03:37');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('39','2026-04-08','cash','250000.00','','',NULL,'cleared','sale','32','23',NULL,'Farid Ullah','Down Payment for Chassis: TH12L72300001147','2026-08-22 11:18:42');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('40','2026-04-08','cash','232000.00','','',NULL,'cleared','sale','31','24',NULL,'Waheed Ullah Khan','Down Payment for Chassis: T910L72300001018','2026-08-22 11:25:33');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('41','2026-04-08','cash','264000.00','','',NULL,'cleared','sale','29','25',NULL,'Imran Khan','Down Payment for Chassis: T912G72380001156','2026-08-22 11:39:34');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('42','2026-04-09','cash','250000.00','','',NULL,'cleared','sale','33','26',NULL,'Muhammad Sadiq Khan','Down Payment for Chassis: TH12L72300001157','2026-08-22 11:42:48');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('43','2026-04-05','cash','265000.00','','',NULL,'cleared','sale','28','27',NULL,'Dr Shabir Ahmed','Down Payment for Chassis: T912G72380001172','2026-08-22 11:47:27');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('44','2026-04-13','cash','277000.00','','',NULL,'cleared','sale','23','28',NULL,'Muhammad Idrees','Down Payment for Chassis: P308L72300000159','2026-08-22 11:59:36');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('45','2026-04-13','cash','232500.00','','',NULL,'cleared','sale','30','29',NULL,'Muhammad Asif Khan','Down Payment for Chassis: T910L72300001272','2026-08-22 12:03:39');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('46','2026-04-28','cash','252000.00','','',NULL,'cleared','sale','41','30',NULL,'Abdul Basit Khan','Down Payment for Chassis: TH12L72300002298','2026-08-22 12:33:56');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('47','2026-04-28','cash','200000.00','','',NULL,'cleared','sale','39','31',NULL,'Karim Khan','Down Payment for Chassis: TH12G72260007145','2026-08-22 12:37:17');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('48','2026-04-28','cash','230000.00','','',NULL,'cleared','sale','36','32',NULL,'Muhammad Mujtaba','Down Payment for Chassis: T910L72300002152','2026-08-22 12:40:37');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('49','2026-05-05','cash','200000.00','','',NULL,'cleared','sale','40','34',NULL,'Muhammad Akhtar','Down Payment for Chassis: TH12G72260007314','2026-08-22 12:51:55');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('50','2026-04-29','cash','230000.00','','',NULL,'cleared','sale','35','35',NULL,'Muhammad Zakir','Down Payment for Chassis: T910L72300002099','2026-08-22 13:00:45');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('51','2026-05-02','cash','249000.00','','',NULL,'cleared','sale','42','36',NULL,'Qudrat Ullah Khan','Down Payment for Chassis: TH12L72300002097','2026-08-22 13:12:31');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('52','2026-05-24','cash','190000.00','','',NULL,'cleared','sale','38','37',NULL,'Sheikh Qaiser Hayat','Down Payment for Chassis: DB12G72260004432','2026-08-22 13:24:34');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('53','2026-05-24','cash','238000.00','','',NULL,'cleared','sale','61','38',NULL,'Haseeb Bilal','Down Payment for Chassis: DB12L72300005119','2026-08-22 13:28:33');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('54','2026-05-24','cash','238000.00','','',NULL,'cleared','sale','62','39',NULL,'Muhammad Bilal','Down Payment for Chassis: DB12L72300005366','2026-08-22 13:32:08');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('55','2026-05-24','cash','189000.00','','',NULL,'cleared','sale','57','40',NULL,'Ali Amaar Khan','Down Payment for Chassis: DB12G72260004159','2026-08-22 13:36:56');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('56','2026-05-24','cash','288000.00','','',NULL,'cleared','sale','53','41',NULL,'Muhammad Abu Huraira','Down Payment for Chassis: M615L72300004278','2026-08-22 13:40:22');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('57','2026-05-24','cash','286000.00','','',NULL,'cleared','sale','52','42',NULL,'Tahir Ahmed Wasil','Down Payment for Chassis: M615L72300004014','2026-08-22 13:43:09');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('58','2026-05-24','cash','288000.00','','',NULL,'cleared','sale','49','43',NULL,'Hashmat Ali','Down Payment for Chassis: M615L72300004039','2026-08-22 13:50:04');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('59','2026-05-25','cash','247000.00','','',NULL,'cleared','sale','45','44',NULL,'Muhammad Khalid Raza','Down Payment for Chassis: MX15G72380000660','2026-08-22 13:58:49');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('60','2026-05-25','cash','239000.00','','',NULL,'cleared','sale','46','45',NULL,'Muhammad Asif Khan','Down Payment for Chassis: MX15G72380000567','2026-08-22 14:04:58');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('61','2026-05-20','cash','250000.00','','',NULL,'cleared','sale','43','46',NULL,'Fazal ur Rehman Khan','Down Payment for Chassis: MX15G72380000538','2026-08-22 14:17:14');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('62','2026-05-31','cash','186500.00','','',NULL,'cleared','sale','58','47',NULL,'Muhammad Anwaar ul Haq','Down Payment for Chassis: DB12G72260004208','2026-08-22 14:21:50');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('63','2026-06-01','cash','250000.00','','',NULL,'cleared','sale','44','48',NULL,'Muhammad Ali Hasnain','Down Payment for Chassis: MX15G72380000463','2026-08-22 14:26:27');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('64','2026-06-08','cash','250000.00','','',NULL,'cleared','sale','59','49',NULL,'Muhammad Jamil','Down Payment for Chassis: DB12L72300005310','2026-08-22 14:30:27');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('65','2026-06-09','cash','263000.00','','',NULL,'cleared','sale','64','50',NULL,'Yasir Wazir','Down Payment for Chassis: TH12L72300000747','2026-08-22 14:39:44');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('66','2026-06-10','cash','261000.00','','',NULL,'cleared','sale','65','51',NULL,'Malik Muhammd Javed','Down Payment for Chassis: TH12L72300001015','2026-08-22 14:45:17');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('67','2026-06-13','cash','263000.00','','',NULL,'cleared','sale','63','52',NULL,'Abdul Sattar Shah','Down Payment for Chassis: TH12L72300000520','2026-08-22 14:49:41');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('68','2026-06-10','cash','286000.00','','',NULL,'cleared','sale','56','53',NULL,'Zahid Khan','Down Payment for Chassis: M615L72300002311','2026-08-22 14:56:03');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('69','2026-04-07','cash','180000.00','','',NULL,'cleared','sale','66','54',NULL,'Muhammad Sharif Khan','Down Payment for Chassis: T910G72260011701','2026-08-29 02:34:11');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('70','2026-07-27','cash','180000.00','','',NULL,'cleared','sale','67','55',NULL,'Muhammad Akram ul Haq','Down Payment for Chassis: T910G72260011642','2026-08-29 02:43:26');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('71','2026-07-11','cash','201000.00','','',NULL,'cleared','sale','70','57',NULL,'Rasheeda Bibi','Down Payment for Chassis: TH12G72260009288','2026-08-29 07:15:20');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('72','2026-07-11','cash','188000.00','','',NULL,'cleared','sale','74','59',NULL,'Naila Naz','Down Payment for Chassis: DB12G72260004508','2026-08-29 07:27:28');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('73','2026-07-23','cash','182000.00','','',NULL,'cleared','sale','76','60',NULL,'Ahmad Ali Khan','Down Payment for Chassis: T910G72260012249','2026-08-29 07:35:03');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('74','2026-07-12','cash','183000.00','','',NULL,'cleared','sale','77','62',NULL,'Johan Michael','Down Payment for Chassis: T910G72260012119','2026-08-29 07:55:00');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('75','2026-08-04','cash','249000.00','','',NULL,'cleared','sale','84','64',NULL,'Muhammad Shoaib Khan','Down Payment for Chassis: M615G72380003238','2026-08-29 08:07:12');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('76','2026-08-13','cash','187000.00','','',NULL,'cleared','sale','86','65',NULL,'Shafqat Ullah Khan','Down Payment for Chassis: DB12G72260006323','2026-08-29 08:19:28');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('77','2026-08-13','cash','186000.00','','',NULL,'cleared','sale','87','66',NULL,'Shaukat Ali khan','Down Payment for Chassis: DB12G72260006525','2026-08-29 08:23:35');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('78','2026-08-02','cash','187000.00','','',NULL,'cleared','sale','90','67',NULL,'Sajid Ali Khan','Down Payment for Chassis: DB12G72260004741','2026-08-29 08:28:02');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('79','2026-07-30','cash','183000.00','','',NULL,'cleared','sale','92','68',NULL,'Abu Bakar Sb','Down Payment for Chassis: M615L72300005401','2026-08-29 08:39:28');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('80','2026-03-11','cash','179000.00',NULL,NULL,NULL,'cleared','sale',NULL,'7',NULL,'Muhammad Tariq S/O Abdul Razzaq','','2026-09-01 19:22:09');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('81','2026-04-27','cash','300000.00','','',NULL,'cleared','sale','37','69',NULL,'Sher Afghan Khan','Down Payment for Chassis: M615L72300001539','2026-09-02 20:48:19');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('82','2026-08-03','cash','165000.00','','',NULL,'cleared','sale','47','70',NULL,'Munir Javed Khan','Down Payment for Chassis: T912G72380001154','2026-09-02 21:01:29');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('83','2026-08-20','online','2300000.00',NULL,NULL,NULL,'cleared','supplier_payment','0',NULL,'1','Pak Star Automobiles (Pvt) Ltd Lahore','BNI to Pak Star Automobile Limited \r\nRef # STAN 990156','2026-09-05 19:25:58');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('84','2026-08-11','cash','187000.00','','',NULL,'cleared','sale','88','72',NULL,'Inam Ullah Khan','Down Payment for Chassis: DB12G72260006548','2026-09-05 20:49:18');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('85','2026-09-05','cash','186000.00','','',NULL,'cleared','sale','72','73',NULL,'Naimat ullah Khan','Down Payment for Chassis: DB12G72260004861','2026-09-05 20:52:42');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('86','2026-08-29','cash','185000.00','','',NULL,'cleared','sale','91','74',NULL,'Maheen Khan','Down Payment for Chassis: DB12G72260004939','2026-09-05 20:56:51');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('87','2026-08-30','cash','188000.00','','',NULL,'cleared','sale','100','75',NULL,'Muhammad Mudassir Ali','Down Payment for Chassis: DB12L72300008798','2026-09-05 21:00:33');
+INSERT INTO `payments` (`id`,`payment_date`,`payment_type`,`amount`,`cheque_number`,`bank_name`,`cheque_date`,`status`,`transaction_type`,`reference_id`,`customer_id`,`supplier_id`,`party_name`,`notes`,`created_at`) VALUES ('88','2026-09-03','cash','247000.00','','',NULL,'cleared','sale','95','76',NULL,'Muhammad Nauman','Down Payment for Chassis: M615G72380003452','2026-09-05 21:05:34');
+
+-- --------------------------------------------
+-- Table: `purchase_orders`
+-- --------------------------------------------
+DROP TABLE IF EXISTS `purchase_orders`;
+CREATE TABLE `purchase_orders` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `order_date` date DEFAULT NULL,
+  `supplier_id` int(11) DEFAULT NULL,
+  `total_units` int(11) DEFAULT NULL,
+  `total_amount` decimal(15,2) DEFAULT 0.00,
+  `notes` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `supplier_id` (`supplier_id`),
+  CONSTRAINT `purchase_orders_ibfk_1` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO `purchase_orders` (`id`,`order_date`,`supplier_id`,`total_units`,`total_amount`,`notes`,`created_at`) VALUES ('1','2026-02-27','1','2','509400.00','','2026-07-21 15:06:58');
+INSERT INTO `purchase_orders` (`id`,`order_date`,`supplier_id`,`total_units`,`total_amount`,`notes`,`created_at`) VALUES ('2','2026-02-03','1','14','2518295.00','','2026-08-08 13:52:53');
+INSERT INTO `purchase_orders` (`id`,`order_date`,`supplier_id`,`total_units`,`total_amount`,`notes`,`created_at`) VALUES ('3','2026-03-12','1','5','841500.00','','2026-08-08 21:13:51');
+INSERT INTO `purchase_orders` (`id`,`order_date`,`supplier_id`,`total_units`,`total_amount`,`notes`,`created_at`) VALUES ('4','2026-03-17','1','6','1188900.00','','2026-08-08 22:11:20');
+INSERT INTO `purchase_orders` (`id`,`order_date`,`supplier_id`,`total_units`,`total_amount`,`notes`,`created_at`) VALUES ('5','2026-03-31','1','6','1247400.00','','2026-08-09 13:46:27');
+INSERT INTO `purchase_orders` (`id`,`order_date`,`supplier_id`,`total_units`,`total_amount`,`notes`,`created_at`) VALUES ('6','2026-04-02','1','9','1841400.00','','2026-08-09 18:24:57');
+INSERT INTO `purchase_orders` (`id`,`order_date`,`supplier_id`,`total_units`,`total_amount`,`notes`,`created_at`) VALUES ('7','2026-05-06','1','23','5363100.00','','2026-08-14 04:45:12');
+INSERT INTO `purchase_orders` (`id`,`order_date`,`supplier_id`,`total_units`,`total_amount`,`notes`,`created_at`) VALUES ('8','2026-06-26','1','9','1560600.00','','2026-08-16 10:51:20');
+INSERT INTO `purchase_orders` (`id`,`order_date`,`supplier_id`,`total_units`,`total_amount`,`notes`,`created_at`) VALUES ('9','2026-06-26','1','6','1173600.00','','2026-08-16 11:02:13');
+INSERT INTO `purchase_orders` (`id`,`order_date`,`supplier_id`,`total_units`,`total_amount`,`notes`,`created_at`) VALUES ('10','2026-07-17','1','12','2232900.00','','2026-08-16 12:09:14');
+INSERT INTO `purchase_orders` (`id`,`order_date`,`supplier_id`,`total_units`,`total_amount`,`notes`,`created_at`) VALUES ('11','2026-08-20','1','12','2566941.00','','2026-09-05 20:10:38');
+
+-- --------------------------------------------
+-- Table: `quotations`
+-- --------------------------------------------
+DROP TABLE IF EXISTS `quotations`;
+CREATE TABLE `quotations` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `quote_date` date NOT NULL,
+  `customer_id` int(11) DEFAULT NULL,
+  `bike_id` int(11) DEFAULT NULL,
+  `accessories_json` text DEFAULT NULL,
+  `quoted_price` decimal(15,2) NOT NULL,
+  `is_installment` tinyint(1) DEFAULT 0,
+  `down_payment` decimal(15,2) DEFAULT 0.00,
+  `total_installments` int(11) DEFAULT 0,
+  `installment_amount` decimal(15,2) DEFAULT 0.00,
+  `valid_until` date DEFAULT NULL,
+  `status` enum('pending','accepted','rejected','converted') DEFAULT 'pending',
+  `notes` text DEFAULT NULL,
+  `created_by` int(11) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `customer_id` (`customer_id`),
+  KEY `bike_id` (`bike_id`),
+  KEY `created_by` (`created_by`),
+  CONSTRAINT `quotations_ibfk_1` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `quotations_ibfk_2` FOREIGN KEY (`bike_id`) REFERENCES `bikes` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `quotations_ibfk_3` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------
+-- Table: `quote_requests`
+-- --------------------------------------------
+DROP TABLE IF EXISTS `quote_requests`;
+CREATE TABLE `quote_requests` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `customer_name` varchar(255) NOT NULL,
+  `customer_phone` varchar(50) NOT NULL,
+  `bike_id` int(11) DEFAULT NULL,
+  `details` text DEFAULT NULL,
+  `status` enum('pending','sent','accepted','rejected') DEFAULT 'pending',
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `bike_id` (`bike_id`),
+  CONSTRAINT `quote_requests_ibfk_1` FOREIGN KEY (`bike_id`) REFERENCES `bikes` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------
+-- Table: `role_permissions`
+-- --------------------------------------------
+DROP TABLE IF EXISTS `role_permissions`;
+CREATE TABLE `role_permissions` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `role_id` int(11) NOT NULL,
+  `page` varchar(50) NOT NULL,
+  `can_view` tinyint(1) DEFAULT 0,
+  `can_add` tinyint(1) DEFAULT 0,
+  `can_edit` tinyint(1) DEFAULT 0,
+  `can_delete` tinyint(1) DEFAULT 0,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `role_page` (`role_id`,`page`),
+  CONSTRAINT `role_permissions_ibfk_1` FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=142 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('1','3','dashboard','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('2','3','inventory','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('3','3','purchase','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('4','3','sale','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('5','3','customers','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('6','3','suppliers','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('7','3','models','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('8','3','reports','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('9','3','returns','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('10','3','cheques','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('11','3','settings','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('12','3','roles','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('13','3','users','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('14','3','income_expense','1','1','1','1');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('15','4','dashboard','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('16','4','inventory','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('17','4','purchase','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('18','4','sale','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('19','4','customers','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('20','4','suppliers','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('21','4','models','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('22','4','reports','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('23','4','returns','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('24','4','payments','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('25','4','settings','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('26','4','roles','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('27','4','users','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('28','4','income_expense','1','1','1','1');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('29','4','accessories','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('30','4','quotations','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('31','4','installments','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('49','5','dashboard','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('50','5','inventory','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('51','5','purchase','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('52','5','sale','1','1','1','1');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('53','5','customers','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('54','5','suppliers','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('55','5','models','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('56','5','reports','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('57','5','returns','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('58','5','payments','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('59','5','settings','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('60','5','roles','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('61','5','users','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('62','5','income_expense','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('63','5','accessories','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('64','5','quotations','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('65','5','installments','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('88','2','dashboard','1','1','1','1');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('89','2','inventory','1','1','1','1');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('90','2','purchase','1','1','1','1');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('91','2','sale','1','1','1','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('92','2','customers','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('93','2','suppliers','1','1','1','1');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('94','2','models','1','1','1','1');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('95','2','reports','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('96','2','returns','1','1','1','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('97','2','payments','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('98','2','settings','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('99','2','roles','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('100','2','users','1','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('101','2','income_expense','1','1','1','1');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('102','2','accessories','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('103','2','quotations','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('104','2','installments','1','1','1','1');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('105','2','money_destinations','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('106','2','money_tracking','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('107','1','dashboard','1','1','1','1');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('108','1','inventory','1','1','1','1');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('109','1','purchase','1','1','1','1');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('110','1','sale','1','1','1','1');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('111','1','customers','1','1','1','1');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('112','1','suppliers','1','1','1','1');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('113','1','models','1','1','1','1');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('114','1','reports','1','1','1','1');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('115','1','returns','1','1','1','1');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('116','1','payments','1','1','1','1');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('117','1','settings','1','1','1','1');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('118','1','roles','1','1','1','1');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('119','1','users','1','1','1','1');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('120','1','income_expense','1','1','1','1');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('121','1','accessories','1','1','1','1');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('122','1','quotations','1','1','1','1');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('123','1','installments','1','1','1','1');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('124','1','money_destinations','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('125','1','money_tracking','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('126','1','bank_deposits','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('127','1','customer_ledger','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('128','1','supplier_ledger','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('129','1','landing_page','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('130','4','customer_ledger','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('131','4','supplier_ledger','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('132','4','landing_page','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('133','3','customer_ledger','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('134','3','supplier_ledger','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('135','3','landing_page','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('136','2','customer_ledger','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('137','2','supplier_ledger','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('138','2','landing_page','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('139','5','customer_ledger','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('140','5','supplier_ledger','0','0','0','0');
+INSERT INTO `role_permissions` (`id`,`role_id`,`page`,`can_view`,`can_add`,`can_edit`,`can_delete`) VALUES ('141','5','landing_page','0','0','0','0');
+
+-- --------------------------------------------
+-- Table: `roles`
+-- --------------------------------------------
+DROP TABLE IF EXISTS `roles`;
+CREATE TABLE `roles` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) DEFAULT NULL,
+  `description` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `name` (`name`)
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO `roles` (`id`,`name`,`description`,`created_at`) VALUES ('1','Administrator','Full access','2026-04-20 12:50:00');
+INSERT INTO `roles` (`id`,`name`,`description`,`created_at`) VALUES ('2','Manager','Limited access','2026-04-20 12:50:00');
+INSERT INTO `roles` (`id`,`name`,`description`,`created_at`) VALUES ('3','income and expenses guy','only handle income and expenses','2026-04-20 13:19:38');
+INSERT INTO `roles` (`id`,`name`,`description`,`created_at`) VALUES ('4','income and expense','','2026-05-01 09:06:02');
+INSERT INTO `roles` (`id`,`name`,`description`,`created_at`) VALUES ('5','Sales man','','2026-05-07 09:02:14');
+
+-- --------------------------------------------
+-- Table: `sale_accessories`
+-- --------------------------------------------
+DROP TABLE IF EXISTS `sale_accessories`;
+CREATE TABLE `sale_accessories` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `bike_id` int(11) NOT NULL,
+  `accessory_id` int(11) NOT NULL,
+  `quantity` int(11) NOT NULL,
+  `unit_price` decimal(15,2) NOT NULL,
+  `discount_amount` decimal(15,2) DEFAULT 0.00,
+  `final_price` decimal(15,2) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `accessory_id` (`accessory_id`),
+  KEY `idx_sa_bike` (`bike_id`),
+  CONSTRAINT `sale_accessories_ibfk_1` FOREIGN KEY (`bike_id`) REFERENCES `bikes` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `sale_accessories_ibfk_2` FOREIGN KEY (`accessory_id`) REFERENCES `accessories` (`id`) ON DELETE NO ACTION
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------
+-- Table: `sale_money_allocations`
+-- --------------------------------------------
+DROP TABLE IF EXISTS `sale_money_allocations`;
+CREATE TABLE `sale_money_allocations` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `bike_id` int(11) NOT NULL,
+  `destination_id` int(11) NOT NULL,
+  `amount` decimal(15,2) NOT NULL,
+  `allocation_date` date NOT NULL,
+  `notes` text DEFAULT NULL,
+  `created_by` int(11) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `bike_id` (`bike_id`),
+  KEY `destination_id` (`destination_id`),
+  KEY `created_by` (`created_by`),
+  CONSTRAINT `sale_money_allocations_ibfk_1` FOREIGN KEY (`bike_id`) REFERENCES `bikes` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `sale_money_allocations_ibfk_2` FOREIGN KEY (`destination_id`) REFERENCES `money_destinations` (`id`) ON DELETE NO ACTION,
+  CONSTRAINT `sale_money_allocations_ibfk_3` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB AUTO_INCREMENT=81 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('1','2','1','83000.00','2026-03-16','Receipt # 3201691 dt 16/3/2026','1','2026-07-21 16:08:04','2026-07-21 16:08:04');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('2','1','1','285000.00','2026-03-16','Receipt # 3201691 dt 16/3/2026','1','2026-07-21 16:24:18','2026-07-21 16:24:18');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('3','10','2','279000.00','2026-02-21','Receipt # 8100589','1','2026-08-08 22:36:57','2026-08-08 22:36:57');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('4','11','2','199000.00','2026-02-22','Receipt # 8100589','1','2026-08-08 22:43:25','2026-08-08 22:43:25');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('5','9','2','179000.00','2026-03-02','Receipt # 8064938','1','2026-08-08 22:52:22','2026-08-08 22:52:22');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('6','7','2','179000.00','2026-03-05','Receipt # 8064968 dt 6/3/2026','1','2026-08-09 19:36:07','2026-08-09 19:36:07');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('7','14','2','234000.00','2026-03-07','Receipt # 8064977 dt 9/3/2026','1','2026-08-09 19:46:18','2026-08-09 19:46:18');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('8','8','2','179000.00','2026-03-11','Receipt # 8064992 dt 11/3/2026','1','2026-08-09 19:53:57','2026-08-09 19:53:57');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('9','6','1','200000.00','2026-03-15','Receipt # 3201691 dt 16/3/2026','1','2026-08-10 19:19:48','2026-08-10 19:19:48');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('10','16','1','246000.00','2026-03-18','Receipt # 3199510 dt 19/3/2026','1','2026-08-10 19:40:49','2026-08-10 19:40:49');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('11','19','1','179000.00','2026-03-18','Receipt # 3199510 dt 19/3/2026','1','2026-08-10 19:48:11','2026-08-10 19:48:11');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('12','21','1','198000.00','2026-03-25','Receipt # 3199596 dt 26/3/2026','1','2026-08-16 12:29:48','2026-08-16 12:29:48');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('13','17','1','178000.00','2026-03-26','Receipt # 3202456 dt 27/3/2026','1','2026-08-16 12:43:56','2026-08-16 12:43:56');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('14','18','1','177500.00','2026-03-26','Receipt # 3202456 dt 27/3/2026','1','2026-08-16 12:48:01','2026-08-16 12:48:01');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('15','13','1','229000.00','2026-03-28','Receipt # 3202769 dt 30/3/2026','1','2026-08-21 20:03:25','2026-08-21 20:03:25');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('16','22','1','274000.00','2026-03-30','Receipt # 3200301 dt 01/04/2026','1','2026-08-21 20:12:40','2026-08-21 20:12:40');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('17','20','1','198000.00','2026-04-01','Receipt # 3200304 dt 02/04/2026','1','2026-08-21 20:36:43','2026-08-21 20:36:43');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('18','25','1','178000.00','2026-04-02','Receipt # 3200305 dt 03/04/2026','1','2026-08-21 20:41:18','2026-08-21 20:41:18');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('19','15','1','250000.00','2026-04-04','Receipt # 3200306 dt 06/04/2026','1','2026-08-21 20:50:41','2026-08-21 20:50:41');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('20','24','1','235000.00','2026-04-04','Receipt # 3200306 dt 06/04/2026','1','2026-08-21 20:54:50','2026-08-21 20:54:50');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('21','26','1','178000.00','2026-04-04','Receipt # 3200306 dt 06/04/2026','1','2026-08-21 20:57:44','2026-08-21 20:57:44');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('22','27','1','178000.00','2026-04-04','Receipt # 3200306 dt 06/04/2026','1','2026-08-21 21:03:37','2026-08-21 21:03:37');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('23','32','1','250000.00','2026-04-08','Receipt # 3200307 dt 09/04/2026','1','2026-08-22 11:18:42','2026-08-22 11:18:42');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('24','31','1','232000.00','2026-04-08','Receipt # 3200307 dt 09/04/2026','1','2026-08-22 11:25:33','2026-08-22 11:25:33');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('25','29','1','264000.00','2026-04-08','Receipt # 3200308 dt 10/04/2026','1','2026-08-22 11:39:34','2026-08-22 11:39:34');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('26','33','1','250000.00','2026-04-09','Receipt # 3200308 dt 10/04/2026','1','2026-08-22 11:42:48','2026-08-22 11:42:48');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('27','28','1','246000.00','2026-04-05','Receipt # 3200308 dt 10/04/2026','1','2026-08-22 11:47:27','2026-08-22 11:47:27');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('28','23','1','277000.00','2026-04-13','Receipt # 3200309 dt 13/04/2026','1','2026-08-22 11:59:36','2026-08-22 11:59:36');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('29','30','1','232500.00','2026-04-13','Receipt # 3200309 dt 13/04/2026','1','2026-08-22 12:03:39','2026-08-22 12:03:39');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('30','41','1','252000.00','2026-04-28','Receipt # 3200311 dt 28/04/2026','1','2026-08-22 12:33:56','2026-08-22 12:33:56');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('31','39','1','200000.00','2026-04-28','Receipt # 3200311 dt 28/04/2026','1','2026-08-22 12:37:17','2026-08-22 12:37:17');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('32','36','1','230000.00','2026-04-28','Receipt # 3200311 dt 28/04/2026','1','2026-08-22 12:40:37','2026-08-22 12:40:37');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('33','34','1','178000.00','2026-04-28','Receipt # 3200311 dt 28/04/2026','1','2026-08-22 12:43:46','2026-08-22 12:43:46');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('34','40','1','200000.00','2026-05-05','Receipt # 3200313 dt 06/05/2026','1','2026-08-22 12:51:55','2026-08-22 12:51:55');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('35','35','1','230000.00','2026-04-29','Receipt # 3200313 dt 06/05/2026','1','2026-08-22 13:00:45','2026-08-22 13:00:45');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('36','42','1','249000.00','2026-05-02','3200312 dt 04-05-2026','1','2026-08-22 13:12:31','2026-08-22 13:12:31');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('37','38','1','190000.00','2026-05-24','Receipt # 3200315 dt 25/05/2026','1','2026-08-22 13:24:34','2026-08-22 13:24:34');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('38','61','1','238000.00','2026-05-24','Receipt # 3200315 dt 25/05/2026','1','2026-08-22 13:28:33','2026-08-22 13:28:33');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('39','62','1','238000.00','2026-05-24','','1','2026-08-22 13:32:08','2026-08-22 13:32:08');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('40','57','1','189000.00','2026-05-24','Receipt # 3200315 dt 25/05/2026','1','2026-08-22 13:36:56','2026-08-22 13:36:56');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('41','53','1','288000.00','2026-05-24','Receipt # 3200315 dt 25/05/2026','1','2026-08-22 13:40:22','2026-08-22 13:40:22');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('42','52','1','286000.00','2026-05-24','Receipt # 3200315 dt 25/06','1','2026-08-22 13:43:09','2026-08-22 13:43:09');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('43','49','1','271000.00','2026-05-24','Receipt # 3200315 dt 25/05/2026','1','2026-08-22 13:50:04','2026-08-22 13:50:04');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('44','45','1','247000.00','2026-05-25','Online BOK Receipt # 30/05/2026','1','2026-08-22 13:58:49','2026-08-22 13:58:49');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('45','46','1','239000.00','2026-05-25','Online BOK Receipt dt 25/05/2026','1','2026-08-22 14:04:58','2026-08-22 14:04:58');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('46','43','1','250000.00','2026-05-20','Online BOK Receipt dt 01/06/2026','1','2026-08-22 14:17:14','2026-08-22 14:17:14');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('47','58','1','186500.00','2026-05-31','Online BOK Receipt dt 07/06/2026','1','2026-08-22 14:21:50','2026-08-22 14:21:50');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('48','44','1','250000.00','2026-06-01','Online BOK Receipt dt 8/6/2026','1','2026-08-22 14:26:27','2026-08-22 14:26:27');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('49','59','1','250000.00','2026-06-08','Online BOK Receipt dt 09/06/2026','1','2026-08-22 14:30:27','2026-08-22 14:30:27');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('50','64','1','250000.00','2026-06-09','Online BOK Receipt dt 10/06/2026','1','2026-08-22 14:39:44','2026-08-22 14:39:44');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('51','64','1','13000.00','2026-06-09','Online BOK Receipt dt 11/06/2026','1','2026-08-22 14:39:44','2026-08-22 14:39:44');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('52','65','1','11000.00','2026-06-10','Online BOK Receipt dt 10/06/2026','1','2026-08-22 14:45:17','2026-08-22 14:45:17');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('53','65','1','250000.00','2026-06-10','Online BOK Receipt dt 11/06/2026','1','2026-08-22 14:45:17','2026-08-22 14:45:17');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('54','63','1','250000.00','2026-06-13','Online BOK Receipt dt 15/06/2026','1','2026-08-22 14:49:41','2026-08-22 14:49:41');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('55','63','1','13000.00','2026-06-13','Online BOK Receipt dt 15/06/2026','1','2026-08-22 14:49:41','2026-08-22 14:49:41');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('56','56','1','36000.00','2026-06-10','Online BOK Receipt dt 15/06/2026','1','2026-08-22 14:56:03','2026-08-22 14:56:03');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('57','56','1','250000.00','2026-06-10','Online BOK Receipt dt 15/06/2026','1','2026-08-22 14:56:03','2026-08-22 14:56:03');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('58','66','1','180000.00','2026-04-07','BOK Online 18/06/2026 09:06 pm','1','2026-08-29 02:34:11','2026-08-29 02:34:11');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('59','67','1','180000.00','2026-07-27','BOK Online 29/07/2026 20:25','1','2026-08-29 02:43:26','2026-08-29 02:43:26');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('60','69','1','200000.00','2026-07-21','BOK Online 27/07/2026 16:23','1','2026-08-29 07:06:17','2026-08-29 07:06:17');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('61','70','1','201000.00','2026-07-11','BOK Online 11/07/2026 20:24','1','2026-08-29 07:15:20','2026-08-29 07:15:20');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('62','73','1','187000.00','2026-07-05','BOK Online 08/07/2026 21:44','1','2026-08-29 07:22:02','2026-08-29 07:22:02');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('63','74','1','188000.00','2026-07-11','Online BOK 11072026 20:21','1','2026-08-29 07:27:28','2026-08-29 07:27:28');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('64','76','1','182000.00','2026-07-23','Online BOK 23072026 18:03','1','2026-08-29 07:35:03','2026-08-29 07:35:03');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('65','77','1','183000.00','2026-07-12','Online BOK 12072026 18:57','1','2026-08-29 07:55:00','2026-08-29 07:55:00');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('66','79','1','282000.00','2026-07-14','Online BOK 30072026 15:25','1','2026-08-29 08:02:01','2026-08-29 08:02:01');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('67','84','1','249000.00','2026-08-04','Online BOK 04082026 15:08','1','2026-08-29 08:07:12','2026-08-29 08:07:12');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('68','86','1','187000.00','2026-08-13','Online BOK 13082026 15:34','1','2026-08-29 08:19:28','2026-08-29 08:19:28');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('69','87','1','186000.00','2026-08-13','Online BOK 13082026 15:36','1','2026-08-29 08:23:35','2026-08-29 08:23:35');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('70','90','1','187000.00','2026-08-02','Online BOK 02082026 16:32','1','2026-08-29 08:28:02','2026-08-29 08:28:02');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('71','92','1','183000.00','2026-07-30','Online BOK 22072026 12:37','1','2026-08-29 08:39:28','2026-08-29 08:39:28');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('72','92','1','103000.00','2026-07-30','Online BOK 03082026 16:35','1','2026-08-29 08:39:28','2026-08-29 08:39:28');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('73','37','1','300000.00','2026-04-27','Oline Raast P2P 27042026','1','2026-09-02 20:48:19','2026-09-02 20:48:19');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('74','47','1','165000.00','2026-08-03','Online BOK 03082026 16:38','1','2026-09-02 21:01:29','2026-09-02 21:01:29');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('75','47','1','100000.00','2026-08-03','','1','2026-09-02 21:01:29','2026-09-02 21:01:29');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('76','88','1','187000.00','2026-08-11','6548 Dabang','1','2026-09-05 20:49:18','2026-09-05 20:49:18');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('77','72','1','186000.00','2026-09-05','4861 Dabang','1','2026-09-05 20:52:42','2026-09-05 20:52:42');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('78','91','1','185000.00','2026-08-29','4939 Dabang','1','2026-09-05 20:56:51','2026-09-05 20:56:51');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('79','100','1','188000.00','2026-08-30','8798 Dabang','1','2026-09-05 21:00:33','2026-09-05 21:00:33');
+INSERT INTO `sale_money_allocations` (`id`,`bike_id`,`destination_id`,`amount`,`allocation_date`,`notes`,`created_by`,`created_at`,`updated_at`) VALUES ('80','95','1','247000.00','2026-09-03','3452 M6K6','1','2026-09-05 21:05:34','2026-09-05 21:05:34');
+
+-- --------------------------------------------
+-- Table: `schema_migrations`
+-- --------------------------------------------
+DROP TABLE IF EXISTS `schema_migrations`;
+CREATE TABLE `schema_migrations` (
+  `migration_key` varchar(100) NOT NULL,
+  `applied_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `details` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`migration_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------
+-- Table: `settings`
+-- --------------------------------------------
+DROP TABLE IF EXISTS `settings`;
+CREATE TABLE `settings` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `setting_key` varchar(100) NOT NULL,
+  `setting_value` text DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `setting_key` (`setting_key`)
+) ENGINE=InnoDB AUTO_INCREMENT=30 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO `settings` (`id`,`setting_key`,`setting_value`) VALUES ('1','company_name','BNI Enterprises');
+INSERT INTO `settings` (`id`,`setting_key`,`setting_value`) VALUES ('2','branch_name','Dera (Ahmed Metro)');
+INSERT INTO `settings` (`id`,`setting_key`,`setting_value`) VALUES ('3','tax_rate','0.01');
+INSERT INTO `settings` (`id`,`setting_key`,`setting_value`) VALUES ('4','currency','Rs.');
+INSERT INTO `settings` (`id`,`setting_key`,`setting_value`) VALUES ('5','tax_on','selling_price');
+INSERT INTO `settings` (`id`,`setting_key`,`setting_value`) VALUES ('6','theme','light');
+INSERT INTO `settings` (`id`,`setting_key`,`setting_value`) VALUES ('7','admin_password','$2y$10$8348koW6nh9Q5tigyeHj7.P7PMnTxPbWb7hM8P1mtS.k8sfUsguU.');
+INSERT INTO `settings` (`id`,`setting_key`,`setting_value`) VALUES ('8','show_purchase_on_invoice','0');
+INSERT INTO `settings` (`id`,`setting_key`,`setting_value`) VALUES ('17','session_timeout_idle','24000');
+INSERT INTO `settings` (`id`,`setting_key`,`setting_value`) VALUES ('18','session_timeout_absolute','28800');
+INSERT INTO `settings` (`id`,`setting_key`,`setting_value`) VALUES ('19','landing_hero_title','Experience the Future of Mobility');
+INSERT INTO `settings` (`id`,`setting_key`,`setting_value`) VALUES ('20','landing_hero_subtitle','Premium Electric Bikes for a Greener Tomorrow');
+INSERT INTO `settings` (`id`,`setting_key`,`setting_value`) VALUES ('21','company_address','Opposite WENSAM college D.I Khan.');
+INSERT INTO `settings` (`id`,`setting_key`,`setting_value`) VALUES ('22','company_map_iframe','https://www.google.com/maps/embed?pb=!1m17!1m12!1m3!1d2679.7450456256533!2d70.8899272756232!3d31.810894074082274!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m2!1m1!2zMzHCsDQ4JzM5LjIiTiA3MMKwNTMnMzMuMCJF!5e1!3m2!1sen!2s!4v1780484592678!5m2!1sen!2s');
+INSERT INTO `settings` (`id`,`setting_key`,`setting_value`) VALUES ('23','company_whatsapp','923499222411, 923309313131');
+INSERT INTO `settings` (`id`,`setting_key`,`setting_value`) VALUES ('24','company_email','info@gobuykar.com');
+INSERT INTO `settings` (`id`,`setting_key`,`setting_value`) VALUES ('25','social_facebook','https://facebook.com');
+INSERT INTO `settings` (`id`,`setting_key`,`setting_value`) VALUES ('26','social_instagram','https://instagram.com');
+INSERT INTO `settings` (`id`,`setting_key`,`setting_value`) VALUES ('27','social_twitter','https://twitter.com');
+INSERT INTO `settings` (`id`,`setting_key`,`setting_value`) VALUES ('28','vision_statement','To be the leading provider of eco-friendly transportation in the region.');
+INSERT INTO `settings` (`id`,`setting_key`,`setting_value`) VALUES ('29','mission_statement','Providing high-quality electric bikes and exceptional service to our customers.');
+
+-- --------------------------------------------
+-- Table: `suppliers`
+-- --------------------------------------------
+DROP TABLE IF EXISTS `suppliers`;
+CREATE TABLE `suppliers` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) NOT NULL,
+  `contact` varchar(100) DEFAULT NULL,
+  `address` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO `suppliers` (`id`,`name`,`contact`,`address`,`created_at`) VALUES ('1','Pak Star Automobiles (Pvt) Ltd Lahore','(042) 35311758-+92 302-8498942-+92 345 170 8888','contact@metroev.pk\r\n\r\nMailing Address: Metro E-Vehicles, 391, J-3, Johar Town, Lahore.\r\n\r\nFactory : Opposite Nokarian Village\r\nRachna Industrial Park Road, Near Khan Pur Canal, Sheikhupura.','2026-07-21 14:44:55');
+
+-- --------------------------------------------
+-- Table: `users`
+-- --------------------------------------------
+DROP TABLE IF EXISTS `users`;
+CREATE TABLE `users` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `username` varchar(50) NOT NULL,
+  `password_hash` varchar(255) NOT NULL,
+  `full_name` varchar(255) DEFAULT NULL,
+  `role_id` int(11) DEFAULT NULL,
+  `is_active` tinyint(1) DEFAULT 1,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `username` (`username`),
+  KEY `role_id` (`role_id`),
+  CONSTRAINT `users_ibfk_1` FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO `users` (`id`,`username`,`password_hash`,`full_name`,`role_id`,`is_active`,`created_at`) VALUES ('1','admin','$2y$10$r2A4TgWoYu6TojSVaf/Se.PfYop4XzPcjU2q7aO2y5l4L2yXAU9d.','System Administrator','1','1','2026-04-20 12:50:00');
+INSERT INTO `users` (`id`,`username`,`password_hash`,`full_name`,`role_id`,`is_active`,`created_at`) VALUES ('5','Murtaza','$2y$10$rjh0LGWhRC3.r/U1WCe0Xe5ayZcNPRzMrziTJkHeKt1rVU9YfQibS','Murtaza Khan','2','0','2026-07-06 09:05:48');
+
+COMMIT;
+SET FOREIGN_KEY_CHECKS=1;
