@@ -42,7 +42,7 @@ $author = 'Yasin Ullah';
  * | All pricing, payment, and grace period values can be changed below.
  * |
  */
-define('SUBSCRIPTION_ENABLED', false);           // true = licensing ON, false = fully free
+define('SUBSCRIPTION_ENABLED', true);           // true = licensing ON, false = fully free
 define('SUB_MONTHLY_PRICE', 2000);              // Price per month in Rs.
 define('SUB_PAYMENT_PERIOD_MONTHS', 6);         // Payment covers this many months
 define('SUB_GRACE_PERIOD_DAYS', 8);             // Days after expiry before app stops
