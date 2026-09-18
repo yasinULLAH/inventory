@@ -9967,73 +9967,241 @@ if (prefillBikeId > 0) {
     elseif ($page === 'license'):
         require_permission($conn, 'settings', 'view');
         $sub_info = sub_get_status($conn);
+        $status_color = $sub_info['status'] === 'active' ? '#10b981' : ($sub_info['status'] === 'grace' ? '#f59e0b' : '#ef4444');
+        $status_bg = $sub_info['status'] === 'active' ? 'rgba(16,185,129,0.08)' : ($sub_info['status'] === 'grace' ? 'rgba(245,158,11,0.08)' : 'rgba(239,68,68,0.08)');
+        $status_border = $sub_info['status'] === 'active' ? 'rgba(16,185,129,0.25)' : ($sub_info['status'] === 'grace' ? 'rgba(245,158,11,0.25)' : 'rgba(239,68,68,0.25)');
+        $status_icon = $sub_info['status'] === 'active' ? '✅' : ($sub_info['status'] === 'grace' ? '⚠️' : '⛔');
+        $status_text = $sub_info['status'] === 'active' ? 'Active & Verified' : ($sub_info['status'] === 'grace' ? 'Grace Period' : 'Expired');
+        $pct = SUB_PAYMENT_PERIOD_MONTHS > 0 ? max(0, min(100, ($sub_info['days_left'] / (SUB_PAYMENT_PERIOD_MONTHS * 30)) * 100)) : 0;
 ?>
-<div class="animate__animated animate__fadeIn" style="max-width:700px;margin:0 auto;">
-<div class="page-header"><h1>🔑 Subscription & License</h1></div>
-<div class="card" style="padding:24px;margin-bottom:20px;">
-<h3 style="margin-bottom:16px;color:var(--accent)">Subscription Status</h3>
+<style>
+.lic-hero{background:linear-gradient(135deg,var(--bg2) 0%,var(--bg3) 100%);border:2px solid var(--border);border-radius:4px;padding:32px 28px;margin-bottom:20px;text-align:center;position:relative;overflow:hidden}
+.lic-hero::before{content:'';position:absolute;top:-40%;right:-20%;width:300px;height:300px;background:radial-gradient(circle,rgba(74,158,255,0.06) 0%,transparent 70%);pointer-events:none}
+.lic-hero::after{content:'';position:absolute;bottom:-40%;left:-20%;width:250px;height:250px;background:radial-gradient(circle,rgba(16,185,129,0.05) 0%,transparent 70%);pointer-events:none}
+.lic-hero h1{font-size:1.4rem;font-weight:800;color:var(--accent);margin-bottom:4px;position:relative;z-index:1}
+.lic-hero .lic-sub{font-size:0.82rem;color:var(--text2);position:relative;z-index:1}
+.lic-status-ring{width:110px;height:110px;border-radius:50%;border:5px solid <?= $status_color ?>;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;position:relative;background:var(--bg2);box-shadow:0 0 20px <?= $status_color ?>22}
+.lic-status-ring .ring-icon{font-size:2.2rem}
+.lic-status-ring::after{content:'';position:absolute;inset:-8px;border-radius:50%;border:2px dashed <?= $status_color ?>44;animation:licSpin 20s linear infinite}
+@keyframes licSpin{to{transform:rotate(360deg)}}
+.lic-stat-card{background:var(--bg2);border:1px solid var(--border);border-left:3px solid <?= $status_color ?>;padding:14px 16px;border-radius:3px;transition:transform 0.15s,box-shadow 0.15s}
+.lic-stat-card:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,0.15)}
+.lic-stat-card .lic-label{font-size:0.7rem;color:var(--text3);text-transform:uppercase;letter-spacing:0.6px;font-weight:700;margin-bottom:4px}
+.lic-stat-card .lic-value{font-size:1.25rem;font-weight:800}
+.lic-stat-card .lic-subtext{font-size:0.72rem;color:var(--text3);margin-top:2px}
+.lic-progress-wrap{background:var(--bg);border-radius:20px;height:10px;overflow:hidden;margin:10px 0;border:1px solid var(--border)}
+.lic-progress-bar{height:100%;border-radius:20px;background:linear-gradient(90deg,<?= $status_color ?>,<?= $status_color ?>cc);transition:width 1s ease;width:<?= $pct ?>%}
+.lic-pay-card{background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:20px;position:relative;overflow:hidden}
+.lic-pay-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--accent),#10b981)}
+.lic-pay-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)}
+.lic-pay-row:last-child{border-bottom:none}
+.lic-pay-row .lbl{font-size:0.82rem;color:var(--text2)}
+.lic-pay-row .val{font-size:0.9rem;font-weight:700;color:var(--text)}
+.lic-pay-total{background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(16,185,129,0.05));border:1px solid rgba(16,185,129,0.25);border-radius:3px;padding:12px 16px;margin-top:14px;text-align:center}
+.lic-pay-total .total-label{font-size:0.75rem;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px}
+.lic-pay-total .total-val{font-size:1.6rem;font-weight:800;color:var(--success);margin-top:2px}
+.lic-activate-box{background:var(--bg2);border:2px solid var(--border);border-radius:4px;padding:24px;position:relative;overflow:hidden}
+.lic-activate-box::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#6366f1,var(--accent))}
+.lic-key-input{width:100%;background:var(--input-bg);color:var(--input-text);border:2px solid var(--input-border);padding:14px 16px;border-radius:3px;font-family:'Courier New',monospace;font-size:1.15rem;letter-spacing:2px;text-transform:uppercase;text-align:center;outline:none;transition:border-color 0.2s,box-shadow 0.2s}
+.lic-key-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(74,158,255,0.15)}
+.lic-key-input::placeholder{color:var(--text3);letter-spacing:1px;font-size:0.9rem;text-transform:none}
+.lic-activate-btn{width:100%;padding:14px;background:linear-gradient(135deg,var(--accent),#6366f1);border:none;color:#fff;font-size:1rem;font-weight:700;border-radius:3px;cursor:pointer;transition:transform 0.15s,box-shadow 0.15s;letter-spacing:0.5px;margin-top:14px}
+.lic-activate-btn:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(74,158,255,0.3)}
+.lic-activate-btn:active{transform:translateY(0)}
+.lic-disabled-badge{background:linear-gradient(135deg,rgba(16,185,129,0.12),rgba(16,185,129,0.04));border:2px solid rgba(16,185,129,0.3);border-radius:4px;padding:28px;text-align:center;position:relative;overflow:hidden}
+.lic-disabled-badge::before{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:200px;height:200px;background:radial-gradient(circle,rgba(16,185,129,0.08) 0%,transparent 70%);pointer-events:none}
+.lic-disabled-badge .big-icon{font-size:3rem;margin-bottom:12px;position:relative;z-index:1}
+.lic-disabled-badge h2{font-size:1.2rem;color:#6ee7b7;font-weight:800;margin-bottom:6px;position:relative;z-index:1}
+.lic-disabled-badge p{color:#6ee7b799;font-size:0.88rem;position:relative;z-index:1}
+.lic-timeline{display:flex;align-items:center;justify-content:space-between;margin:16px 0;position:relative;padding:0 10px}
+.lic-timeline::before{content:'';position:absolute;top:50%;left:30px;right:30px;height:3px;background:var(--border);transform:translateY(-50%);z-index:0}
+.lic-timeline-dot{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.85rem;font-weight:700;z-index:1;border:2px solid;position:relative}
+.lic-timeline-dot.done{background:var(--success);border-color:var(--success);color:#fff}
+.lic-timeline-dot.current{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 0 12px rgba(74,158,255,0.4)}
+.lic-timeline-dot.pending{background:var(--bg2);border-color:var(--border);color:var(--text3)}
+.lic-timeline-label{text-align:center;font-size:0.68rem;color:var(--text3);margin-top:6px;position:relative;z-index:1;max-width:70px}
+.lic-help-box{background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:14px 16px;margin-top:16px}
+.lic-help-box h5{font-size:0.78rem;color:var(--accent);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px}
+.lic-help-box ol{margin:0;padding-left:18px;font-size:0.82rem;color:var(--text2);line-height:1.8}
+.lic-help-box ol li strong{color:var(--text)}
+@media(max-width:900px){
+    .lic-stat-grid{grid-template-columns:repeat(2,1fr) !important}
+}
+@media(max-width:600px){
+    .lic-hero{padding:20px 16px}
+    .lic-hero h1{font-size:1.15rem}
+    .lic-status-ring{width:90px;height:90px}
+    .lic-status-ring .ring-icon{font-size:1.8rem}
+    .lic-timeline{flex-wrap:wrap;gap:10px;justify-content:center}
+    .lic-timeline::before{display:none}
+    .lic-timeline-label{max-width:80px}
+    .lic-stat-grid{grid-template-columns:1fr 1fr !important}
+}
+</style>
+
+<div class="animate__animated animate__fadeIn" style="max-width:720px;margin:0 auto;">
+
+<div class="lic-hero">
+    <h1>Subscription & License</h1>
+    <div class="lic-sub">Manage your BNI Enterprises subscription and license activation</div>
+</div>
+
 <?php if (!SUBSCRIPTION_ENABLED): ?>
-<div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:16px;color:#6ee7b7;">
-    <strong>✅ Licensing is DISABLED</strong><br>
-    This application is fully free. No subscription required.
+<div class="lic-disabled-badge" style="margin-bottom:20px;">
+    <div class="big-icon">🎉</div>
+    <h2>Licensing is Disabled</h2>
+    <p>This application is fully free and unrestricted. No subscription or license key required.</p>
 </div>
 <?php else: ?>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
-<div style="background:var(--bg3);padding:16px;border-radius:8px;border:1px solid var(--border);">
-    <div style="font-size:0.8rem;color:var(--text3);text-transform:uppercase;margin-bottom:4px;">Status</div>
-    <div style="font-size:1.2rem;font-weight:700;color:<?= $sub_info['status'] === 'active' ? 'var(--success)' : ($sub_info['status'] === 'grace' ? 'var(--warning)' : 'var(--danger)') ?>">
-        <?= strtoupper($sub_info['status']) ?>
+
+<div class="lic-status-ring">
+    <span class="ring-icon"><?= $status_icon ?></span>
+</div>
+<div style="text-align:center;margin-bottom:20px;">
+    <div style="font-size:1.1rem;font-weight:800;color:<?= $status_color ?>;text-transform:uppercase;letter-spacing:1px;"><?= $status_text ?></div>
+    <div style="font-size:0.8rem;color:var(--text3);margin-top:2px;">
+        <?= $sub_info['expires_at'] ? 'Valid until ' . date('d M Y', strtotime($sub_info['expires_at'])) : 'No active license' ?>
     </div>
 </div>
-<div style="background:var(--bg3);padding:16px;border-radius:8px;border:1px solid var(--border);">
-    <div style="font-size:0.8rem;color:var(--text3);text-transform:uppercase;margin-bottom:4px;">Expires</div>
-    <div style="font-size:1.1rem;font-weight:700"><?= $sub_info['expires_at'] ? date('d M Y', strtotime($sub_info['expires_at'])) : 'N/A' ?></div>
-</div>
-<div style="background:var(--bg3);padding:16px;border-radius:8px;border:1px solid var(--border);">
-    <div style="font-size:0.8rem;color:var(--text3);text-transform:uppercase;margin-bottom:4px;">Days Remaining</div>
-    <div style="font-size:1.2rem;font-weight:700;color:<?= $sub_info['days_left'] > 30 ? 'var(--success)' : ($sub_info['days_left'] > 0 ? 'var(--warning)' : 'var(--danger)') ?>">
-        <?= max(0, $sub_info['days_left']) ?> day(s)
+
+<div class="lic-timeline">
+    <div style="text-align:center">
+        <div class="lic-timeline-dot <?= $sub_info['status'] !== 'expired' ? 'done' : 'pending' ?>">1</div>
+        <div class="lic-timeline-label">Payment<br>Sent</div>
+    </div>
+    <div style="text-align:center">
+        <div class="lic-timeline-dot <?= in_array($sub_info['status'], ['active','grace']) ? ($sub_info['status'] === 'active' ? 'done' : 'current') : 'pending' ?>">2</div>
+        <div class="lic-timeline-label">Developer<br>Verifies</div>
+    </div>
+    <div style="text-align:center">
+        <div class="lic-timeline-dot <?= $sub_info['status'] === 'active' ? 'current' : 'pending' ?>">3</div>
+        <div class="lic-timeline-label">License<br>Key Issued</div>
+    </div>
+    <div style="text-align:center">
+        <div class="lic-timeline-dot <?= $sub_info['status'] === 'active' && $pct > 50 ? 'done' : 'pending' ?>">4</div>
+        <div class="lic-timeline-label">App<br>Unlocked</div>
     </div>
 </div>
-<div style="background:var(--bg3);padding:16px;border-radius:8px;border:1px solid var(--border);">
-    <div style="font-size:0.8rem;color:var(--text3);text-transform:uppercase;margin-bottom:4px;">Payment Period</div>
-    <div style="font-size:1.2rem;font-weight:700"><?= SUB_PAYMENT_PERIOD_MONTHS ?> months</div>
+
+<div class="lic-stat-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;">
+<div class="lic-stat-card">
+    <div class="lic-label">Status</div>
+    <div class="lic-value" style="color:<?= $status_color ?>"><?= strtoupper($sub_info['status']) ?></div>
+    <div class="lic-subtext"><?= $status_text ?></div>
+</div>
+<div class="lic-stat-card">
+    <div class="lic-label">Expires On</div>
+    <div class="lic-value"><?= $sub_info['expires_at'] ? date('d M', strtotime($sub_info['expires_at'])) : 'N/A' ?></div>
+    <div class="lic-subtext"><?= $sub_info['expires_at'] ? date('Y', strtotime($sub_info['expires_at'])) : '' ?></div>
+</div>
+<div class="lic-stat-card">
+    <div class="lic-label">Days Left</div>
+    <div class="lic-value" style="color:<?= $sub_info['days_left'] > 30 ? 'var(--success)' : ($sub_info['days_left'] > 0 ? 'var(--warning)' : 'var(--danger)') ?>"><?= max(0, $sub_info['days_left']) ?></div>
+    <div class="lic-subtext">of <?= SUB_PAYMENT_PERIOD_MONTHS * 30 ?> total</div>
+</div>
+<div class="lic-stat-card">
+    <div class="lic-label">Period</div>
+    <div class="lic-value"><?= SUB_PAYMENT_PERIOD_MONTHS ?></div>
+    <div class="lic-subtext">months coverage</div>
 </div>
 </div>
-<div style="background:var(--bg3);padding:20px;border-radius:8px;border:1px solid var(--border);margin-bottom:20px;">
-<h4 style="margin-bottom:12px;color:var(--accent)">Payment Information</h4>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:0.9rem;">
-    <div><strong>Account Title:</strong> <?= SUB_ACCOUNT_TITLE ?></div>
-    <div><strong>Method:</strong> <?= SUB_PAYMENT_METHOD ?></div>
-    <div><strong>Number:</strong> <?= SUB_PAYMENT_NUMBER ?></div>
-    <div><strong>Monthly Price:</strong> Rs. <?= number_format(SUB_MONTHLY_PRICE) ?></div>
-    <div><strong>Period:</strong> <?= SUB_PAYMENT_PERIOD_MONTHS ?> months</div>
-    <div><strong style="color:var(--success);font-size:1.1rem;">Total: Rs. <?= number_format(SUB_TOTAL_AMOUNT) ?></strong></div>
+
+<div class="lic-progress-wrap">
+    <div class="lic-progress-bar"></div>
 </div>
-<div style="margin-top:12px;font-size:0.85rem;color:var(--text3);">
-    <strong>Instructions:</strong> <?= SUB_PAYMENT_INSTRUCTIONS ?>
+<div style="display:flex;justify-content:space-between;font-size:0.7rem;color:var(--text3);margin-bottom:20px;">
+    <span>Activated</span>
+    <span><?= $sub_info['days_left'] > 0 ? max(0, $sub_info['days_left']) . ' days remaining' : 'Expired' ?></span>
+    <span><?= SUB_PAYMENT_PERIOD_MONTHS ?> months</span>
 </div>
-</div>
+
 <?php if ($sub_info['status'] === 'grace'): ?>
-<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:16px;margin-bottom:20px;color:#fca5a5;">
-    <strong>🚨 Grace Period Active:</strong> <?= $sub_info['grace_days_left'] ?> day(s) remaining. Make payment and enter your license key below.
+<div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-left:4px solid #f59e0b;border-radius:3px;padding:16px 18px;margin-bottom:20px;display:flex;align-items:flex-start;gap:12px;">
+    <span style="font-size:1.4rem;flex-shrink:0;">⚠️</span>
+    <div>
+        <div style="font-weight:700;color:#f59e0b;margin-bottom:2px;">Grace Period Active</div>
+        <div style="font-size:0.85rem;color:var(--text2);"><?= $sub_info['grace_days_left'] ?> day(s) remaining. Make payment and enter your license key below to avoid service interruption.</div>
+    </div>
+</div>
+<?php elseif ($sub_info['status'] === 'expired'): ?>
+<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-left:4px solid #ef4444;border-radius:3px;padding:16px 18px;margin-bottom:20px;display:flex;align-items:flex-start;gap:12px;">
+    <span style="font-size:1.4rem;flex-shrink:0;">⛔</span>
+    <div>
+        <div style="font-weight:700;color:#ef4444;margin-bottom:2px;">Subscription Expired</div>
+        <div style="font-size:0.85rem;color:var(--text2);">Your license has expired. Please make a payment and activate with a new license key to restore full access.</div>
+    </div>
 </div>
 <?php endif; ?>
+
+<div class="lic-pay-card" style="margin-bottom:20px;">
+    <h4 style="font-size:0.85rem;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+        <span style="font-size:1.1rem;">💳</span> Payment Details
+    </h4>
+    <div class="lic-pay-row">
+        <span class="lbl">Account Title</span>
+        <span class="val"><?= SUB_ACCOUNT_TITLE ?></span>
+    </div>
+    <div class="lic-pay-row">
+        <span class="lbl">Payment Method</span>
+        <span class="val" style="color:var(--accent)"><?= SUB_PAYMENT_METHOD ?></span>
+    </div>
+    <div class="lic-pay-row">
+        <span class="lbl">Number</span>
+        <span class="val" style="font-family:monospace;letter-spacing:1px;"><?= SUB_PAYMENT_NUMBER ?></span>
+    </div>
+    <div class="lic-pay-row">
+        <span class="lbl">Monthly Rate</span>
+        <span class="val">Rs. <?= number_format(SUB_MONTHLY_PRICE) ?>/mo</span>
+    </div>
+    <div class="lic-pay-row">
+        <span class="lbl">Coverage Period</span>
+        <span class="val"><?= SUB_PAYMENT_PERIOD_MONTHS ?> months</span>
+    </div>
+    <div class="lic-pay-total">
+        <div class="total-label">Total Amount</div>
+        <div class="total-val">Rs. <?= number_format(SUB_TOTAL_AMOUNT) ?></div>
+    </div>
+    <div style="margin-top:12px;font-size:0.8rem;color:var(--text3);background:var(--bg);padding:10px 12px;border-radius:2px;border-left:3px solid var(--accent);">
+        <strong style="color:var(--accent);">Instructions:</strong> <?= SUB_PAYMENT_INSTRUCTIONS ?>
+    </div>
+</div>
+
 <?php endif; ?>
+
+<div class="lic-activate-box">
+    <h4 style="font-size:0.85rem;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;display:flex;align-items:center;gap:8px;">
+        <span style="font-size:1.1rem;">🔐</span> Activate License
+    </h4>
+    <p style="color:var(--text3);font-size:0.83rem;margin-bottom:16px;">Enter the license key provided by the developer after your payment has been verified.</p>
+    <form method="POST" action="index.php?page=license" id="licenseForm">
+    <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+    <input type="text" name="license_key" class="lic-key-input" placeholder="XXXX-XXXX-XXXX-XXXXXXXXXXXXXXXX" required maxlength="50" autocomplete="off" spellcheck="false" id="licenseKeyInput">
+    <button type="submit" name="activate_license" class="lic-activate-btn">Activate License Key</button>
+    </form>
+
+    <div class="lic-help-box">
+        <h5>How to activate?</h5>
+        <ol>
+            <li>Send payment to the account details above</li>
+            <li>Send payment screenshot to <strong><?= SUB_PAYMENT_NUMBER ?></strong> via WhatsApp</li>
+            <li>Developer will verify and send your license key</li>
+            <li>Paste the key above and click <strong>Activate</strong></li>
+        </ol>
+    </div>
 </div>
-<div class="card" style="padding:24px;">
-<h3 style="margin-bottom:16px;color:var(--accent)">Activate License</h3>
-<p style="color:var(--text3);font-size:0.9rem;margin-bottom:16px;">Enter the license key provided by the developer after your payment has been verified.</p>
-<form method="POST" action="index.php?page=license">
-<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
-<div class="form-group" style="margin-bottom:12px;">
-    <label>License Key <span class="req">*</span></label>
-    <input type="text" name="license_key" placeholder="XXXX-XXXX-XXXX-XXXXXXXXXXXXXXXX" required style="font-family:monospace;font-size:1.1rem;letter-spacing:1px;text-transform:uppercase;" maxlength="50">
+
 </div>
-<button type="submit" name="activate_license" class="btn btn-primary">🔓 Activate License</button>
-</form>
-</div>
-</div>
+<script>
+document.getElementById('licenseKeyInput').addEventListener('input', function(e) {
+    let v = this.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    let formatted = '';
+    for (let i = 0; i < v.length && i < 24; i++) {
+        if (i > 0 && i % 4 === 0) formatted += '-';
+        formatted += v[i];
+    }
+    this.value = formatted;
+});
+</script>
 <?php
     elseif ($page === 'settings'):
         $s_company = get_setting('company_name') ?? 'BNI Enterprises';
