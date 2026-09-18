@@ -4906,55 +4906,57 @@ else:
 <?php endforeach; ?>
 </ul>
 </nav>
-<div class="sidebar-footer">
+<div class="sidebar-footer" style="padding:8px 0 10px !important;">
 <?php if (SUBSCRIPTION_ENABLED): ?>
 <?php $sidebar_sub = sub_get_status($conn); ?>
 <style>
-.sub-ind{margin:10px 14px;padding:10px 12px;border-radius:6px;font-size:0.75rem;border:1px solid;border-left:3px solid}
-.sub-ind .sub-ind-title{font-weight:700;text-transform:uppercase;letter-spacing:0.3px}
-.sub-ind .sub-ind-sub{margin-top:3px;font-size:0.72rem}
-.sub-ind .sub-ind-link{margin-top:6px;font-size:0.72rem;font-weight:600;text-decoration:underline}
+.sub-ind{margin:0 10px 6px;padding:6px 8px;border-radius:4px;font-size:0.7rem;border:1px solid;border-left:3px solid;display:flex;align-items:center;gap:6px}
+.sub-ind .sub-ind-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.sub-ind .sub-ind-text{font-weight:700;text-transform:uppercase;letter-spacing:0.3px;font-size:0.68rem}
+.sub-ind .sub-ind-sub{font-size:0.65rem;opacity:0.7;margin-left:auto;white-space:nowrap}
+.sub-ind .sub-ind-link{margin-left:auto;font-size:0.65rem;font-weight:600;text-decoration:underline;white-space:nowrap}
 .sub-ind.active{background:rgba(16,185,129,0.2);border-color:rgba(16,185,129,0.4);border-left-color:#10b981}
-.sub-ind.active .sub-ind-title{color:#fff}
-.sub-ind.active .sub-ind-sub{color:rgba(255,255,255,0.85)}
+.sub-ind.active .sub-ind-dot{background:#10b981}
+.sub-ind.active .sub-ind-text{color:#fff}
+.sub-ind.active .sub-ind-sub{color:rgba(255,255,255,0.7)}
 .sub-ind.grace{background:rgba(245,158,11,0.2);border-color:rgba(245,158,11,0.4);border-left-color:#f59e0b}
-.sub-ind.grace .sub-ind-title{color:#fff}
-.sub-ind.grace .sub-ind-sub{color:rgba(255,255,255,0.85)}
+.sub-ind.grace .sub-ind-dot{background:#f59e0b}
+.sub-ind.grace .sub-ind-text{color:#fff}
+.sub-ind.grace .sub-ind-sub{color:rgba(255,255,255,0.7)}
 .sub-ind.grace .sub-ind-link{color:#fff}
 .sub-ind.expired{background:rgba(239,68,68,0.2);border-color:rgba(239,68,68,0.4);border-left-color:#ef4444}
-.sub-ind.expired .sub-ind-title{color:#fff}
-.sub-ind.expired .sub-ind-sub{color:rgba(255,255,255,0.85)}
+.sub-ind.expired .sub-ind-dot{background:#ef4444}
+.sub-ind.expired .sub-ind-text{color:#fff}
+.sub-ind.expired .sub-ind-sub{color:rgba(255,255,255,0.7)}
 .sub-ind.expired .sub-ind-link{color:#fff}
-[data-theme="light"] .sub-ind.active{background:rgba(16,185,129,0.12);border-color:rgba(16,185,129,0.3);border-left-color:#10b981}
-[data-theme="light"] .sub-ind.active .sub-ind-title{color:#047857}
+[data-theme="light"] .sub-ind.active{background:rgba(16,185,129,0.1);border-color:rgba(16,185,129,0.25);border-left-color:#10b981}
+[data-theme="light"] .sub-ind.active .sub-ind-dot{background:#10b981}
+[data-theme="light"] .sub-ind.active .sub-ind-text{color:#047857}
 [data-theme="light"] .sub-ind.active .sub-ind-sub{color:#059669}
-[data-theme="light"] .sub-ind.grace{background:rgba(245,158,11,0.12);border-color:rgba(245,158,11,0.3);border-left-color:#f59e0b}
-[data-theme="light"] .sub-ind.grace .sub-ind-title{color:#92400e}
+[data-theme="light"] .sub-ind.grace{background:rgba(245,158,11,0.1);border-color:rgba(245,158,11,0.25);border-left-color:#f59e0b}
+[data-theme="light"] .sub-ind.grace .sub-ind-dot{background:#f59e0b}
+[data-theme="light"] .sub-ind.grace .sub-ind-text{color:#92400e}
 [data-theme="light"] .sub-ind.grace .sub-ind-sub{color:#a16207}
 [data-theme="light"] .sub-ind.grace .sub-ind-link{color:#92400e}
-[data-theme="light"] .sub-ind.expired{background:rgba(239,68,68,0.12);border-color:rgba(239,68,68,0.3);border-left-color:#ef4444}
-[data-theme="light"] .sub-ind.expired .sub-ind-title{color:#991b1b}
+[data-theme="light"] .sub-ind.expired{background:rgba(239,68,68,0.1);border-color:rgba(239,68,68,0.25);border-left-color:#ef4444}
+[data-theme="light"] .sub-ind.expired .sub-ind-dot{background:#ef4444}
+[data-theme="light"] .sub-ind.expired .sub-ind-text{color:#991b1b}
 [data-theme="light"] .sub-ind.expired .sub-ind-sub{color:#b91c1c}
 [data-theme="light"] .sub-ind.expired .sub-ind-link{color:#991b1b}
 </style>
 <div class="sub-ind <?= $sidebar_sub['status'] ?>">
-    <div class="sub-ind-title"><?= $sidebar_sub['status'] === 'active' ? '✅ Licensed' : ($sidebar_sub['status'] === 'grace' ? '⚠ Grace Period' : '⛔ Expired') ?></div>
-    <div class="sub-ind-sub">
-        <?php if ($sidebar_sub['status'] === 'active'): ?>
-            <?= $sidebar_sub['days_left'] ?> day(s) remaining
-        <?php elseif ($sidebar_sub['status'] === 'grace'): ?>
-            <?= $sidebar_sub['grace_days_left'] ?> grace day(s) left
-        <?php else: ?>
-            Please renew subscription
-        <?php endif; ?>
-    </div>
-    <?php if ($sidebar_sub['status'] !== 'active'): ?>
-    <div class="sub-ind-link"><a href="index.php?page=license" style="color:inherit;text-decoration:inherit;">Enter License Key →</a></div>
+    <span class="sub-ind-dot"></span>
+    <span class="sub-ind-text"><?= $sidebar_sub['status'] === 'active' ? 'Licensed' : ($sidebar_sub['status'] === 'grace' ? '⚠ Grace' : '⛔ Expired') ?></span>
+    <?php if ($sidebar_sub['status'] === 'active'): ?>
+        <span class="sub-ind-sub"><?= $sidebar_sub['days_left'] ?>d left</span>
+    <?php elseif ($sidebar_sub['status'] === 'grace'): ?>
+        <span class="sub-ind-link"><a href="index.php?page=license" style="color:inherit;text-decoration:inherit;">Renew →</a></span>
+    <?php else: ?>
+        <span class="sub-ind-link"><a href="index.php?page=license" style="color:inherit;text-decoration:inherit;">Renew →</a></span>
     <?php endif; ?>
 </div>
 <?php endif; ?>
-<p style="margin-top:14px;font-size:0.75rem;color:var(--text3);text-align:center">Created by: <?= $author ?><br>WhatsApp: 03361593533</p>
-<form method="POST" action="index.php"><input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>"><button type="submit" name="do_logout" value="1">🚪 Logout</button></form>
+<form method="POST" action="index.php" style="margin:0 10px;"><input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>"><button type="submit" name="do_logout" value="1" style="width:100%;padding:6px;font-size:0.75rem;">🚪 Logout</button></form>
 </div>
 </div>
 <nav class="bottom-nav" id="bottomNav">
