@@ -1801,8 +1801,8 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         $po_notes = clean_text($_POST['po_notes'] ?? '');
         $bikes_data = isset($_POST['bikes']) && is_array($_POST['bikes']) ? $_POST['bikes'] : [];
         $payments_data = isset($_POST['payments']) && is_array($_POST['payments']) ? $_POST['payments'] : [];
-        if (!valid_date($order_date) || !valid_date($inventory_date) || $supplier_id <= 0 || empty($bikes_data)) {
-            $err = 'Purchase order requires date, supplier and at least one bike.';
+        if (!valid_date($order_date) || !valid_date($inventory_date) || $supplier_id <= 0 || empty($po_notes) || empty($bikes_data)) {
+            $err = 'Purchase order requires dates, supplier, order notes, and at least one bike.';
             goto end_purchase_post;
         }
         $conn->begin_transaction();
@@ -1836,8 +1836,8 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $pp = (float) ($b['purchase_price'] ?? 0);
                 $safe_notes = clean_text($b['safeguard_notes'] ?? '');
                 $bnotes = clean_text($b['notes'] ?? '');
-                if (empty($chassis) || $model_id <= 0 || $pp <= 0) {
-                    $errors_list[] = 'Bike entry requires Chassis, Model, and Purchase Price. Skipping incomplete bike.';
+                if (empty($chassis) || empty($motor) || $model_id <= 0 || empty($color) || $pp <= 0 || empty($safe_notes) || empty($bnotes)) {
+                    $errors_list[] = 'All bike fields (Chassis, Motor, Model, Color, Purchase Price, Safeguard Notes, Notes) are required.';
                     continue;
                 }
                 $bike_img = null;
@@ -2036,8 +2036,8 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
                 $img_path = handle_bike_image_upload($_FILES['image']);
             }
-            if (empty($mc) || empty($mn)) {
-                $err = 'Model code and name are required.';
+            if (empty($mc) || empty($mn) || empty($cat) || empty($sc) || empty($top_speed) || empty($max_range)) {
+                $err = 'All model fields (Model Code, Model Name, Category, Short Code, Top Speed, Max Range) are required.';
             } else {
                 $st = $conn->prepare('INSERT INTO models (model_code,model_name,category,short_code,image,top_speed,max_range) VALUES (?,?,?,?,?,?,?)');
                 $st->bind_param('sssssss', $mc, $mn, $cat, $sc, $img_path, $top_speed, $max_range);
@@ -2058,8 +2058,8 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
                 $img_path = handle_bike_image_upload($_FILES['image']);
             }
-            if (empty($mc) || empty($mn) || $mid <= 0) {
-                $err = 'Model ID, code and name are required.';
+            if (empty($mc) || empty($mn) || empty($cat) || empty($sc) || empty($top_speed) || empty($max_range) || $mid <= 0) {
+                $err = 'All model fields (Model Code, Model Name, Category, Short Code, Top Speed, Max Range) are required.';
             } else {
                 if ($img_path) {
                     $st = $conn->prepare('UPDATE models SET model_code=?,model_name=?,category=?,short_code=?,image=?,top_speed=?,max_range=? WHERE id=?');
@@ -3097,8 +3097,8 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     $img_err = 'Upload failed (max size ' . ini_get('upload_max_filesize') . ' exceeded). ';
                 }
             }
-            if ($bid <= 0 || $pp < 0 || $model_id <= 0 || !in_array($status, ['in_stock', 'reserved', 'damaged_lost', 'sold', 'returned', 'returned_to_supplier'], true)) {
-                $err = 'Invalid bike ID, model, or purchase price.';
+            if ($bid <= 0 || $model_id <= 0 || $pp <= 0 || empty($color) || empty($chassis_number) || empty($motor_number) || !valid_date($order_date) || !valid_date($inventory_date) || empty($status) || empty($safe) || empty($notes) || !in_array($status, ['in_stock', 'reserved', 'damaged_lost', 'sold', 'returned', 'returned_to_supplier'], true)) {
+                $err = 'All bike fields (Model, Color, Chassis Number, Motor Number, Order Date, Inventory Date, Purchase Price, Status, Safeguard Notes, Notes) are required.';
             } else {
                 $old_bike_q = $conn->query("SELECT status, chassis_number, selling_price, purchase_order_id, tax_rate_applied, tax_basis FROM bikes WHERE id=$bid");
                 $old_bike = $old_bike_q ? $old_bike_q->fetch_assoc() : null;
@@ -4257,6 +4257,21 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             validator.onSuccess((event) => {
                 const form = event.target;
+                if (form.id === 'purchaseForm') {
+                    let missing = false;
+                    form.querySelectorAll('#bikesList input[required], #bikesList select[required], #bikesList textarea[required]').forEach(function(inp) {
+                        if (!inp.value || !inp.value.trim()) {
+                            missing = true;
+                            inp.classList.add('just-validate-error-field');
+                        } else {
+                            inp.classList.remove('just-validate-error-field');
+                        }
+                    });
+                    if (missing) {
+                        Swal.fire('Error', 'Please fill all required bike fields.', 'error');
+                        return;
+                    }
+                }
                 const btn = form.querySelector('button[type="submit"][name], input[type="submit"][name]');
                 if (btn && btn.name && !form.querySelector('input[name="' + btn.name + '"]')) {
                     const hidden = document.createElement('input');
@@ -4762,7 +4777,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 </div>
 <div class="form-row">
-<div class="form-group"><label>Notes</label><textarea name="po_notes" rows="2" placeholder="Any additional notes..."></textarea></div>
+<div class="form-group"><label>Notes <span class="req">*</span></label><textarea name="po_notes" rows="2" placeholder="Any additional notes..." required></textarea></div>
 </div>
 </fieldset>
 <fieldset class="fieldset"><legend>💵 Payments for this Purchase</legend>
@@ -4889,9 +4904,11 @@ document.addEventListener('DOMContentLoaded', function() {
 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <div class="form-group" style="margin-bottom:8px"><label>Model Code <span class="req">*</span></label><input type="text" name="model_code" required></div>
 <div class="form-group" style="margin-bottom:8px"><label>Model Name <span class="req">*</span></label><input type="text" name="model_name" required></div>
-<div class="form-group" style="margin-bottom:8px"><label>Category</label><input type="text" name="category" value="Electric Bike"></div>
-<div class="form-group" style="margin-bottom:8px"><label>Short Code</label><input type="text" name="short_code"></div>
-<div class="form-group" style="margin-bottom:12px"><label>Image</label><input type="file" name="image" accept="image/*" style="padding:4px"></div>
+<div class="form-group" style="margin-bottom:8px"><label>Category <span class="req">*</span></label><input type="text" name="category" value="Electric Bike" required></div>
+<div class="form-group" style="margin-bottom:8px"><label>Short Code <span class="req">*</span></label><input type="text" name="short_code" required></div>
+<div class="form-group" style="margin-bottom:8px"><label>Top Speed (km/h) <span class="req">*</span></label><input type="text" name="top_speed" placeholder="e.g. 100km/h" required></div>
+<div class="form-group" style="margin-bottom:8px"><label>Max Range (km) <span class="req">*</span></label><input type="text" name="max_range" placeholder="e.g. 80km Range" required></div>
+<div class="form-group" style="margin-bottom:12px"><label>Image (Optional)</label><input type="file" name="image" accept="image/*" style="padding:4px"></div>
 <button type="submit" class="btn btn-primary">Save Model</button>
 </form>
 </div>
@@ -4984,18 +5001,18 @@ function addBikeRow() {
     d.innerHTML = `<div class="bike-row-header"><span class="bike-row-num">🚲 Bike #${bikeCount}</span><button type="button" class="bike-row-del" onclick="removeBikeRow(${bikeCount})">✕ Remove</button></div>
     <div class="form-row">
     <div class="form-group"><label>Chassis Number <span class="req">*</span></label><input type="text" name="bikes[${bikeCount}][chassis]" required placeholder="e.g. KIU-2024-001" onblur="checkChassis(this)"></div>
-    <div class="form-group"><label>Motor Number</label><input type="text" name="bikes[${bikeCount}][motor]" placeholder="e.g. MT-001"></div>
+    <div class="form-group"><label>Motor Number <span class="req">*</span></label><input type="text" name="bikes[${bikeCount}][motor]" required placeholder="e.g. MT-001"></div>
     <div class="form-group"><label>Model <span class="req">*</span></label>
     <div style="display:flex;gap:4px"><select name="bikes[${bikeCount}][model_id]" required class="select2-enable" style="flex:1"><option value="">-- Model --</option>${modelsOptions}</select>
     <button type="button" class="btn btn-default btn-sm" onclick="openModelModal()">+</button></div></div>
     </div>
     <div class="form-row">
-    <div class="form-group"><label>Color</label><input type="text" name="bikes[${bikeCount}][color]" placeholder="Red, Black, White..."></div>
-    <div class="form-group"><label>Purchase Price (Rs.) <span class="req">*</span></label><input type="number" name="bikes[${bikeCount}][purchase_price]" class="bike-price-input" step="0.01" min="0" required placeholder="0.00" oninput="disableAutoDivideAndUpdate()"></div>
-    <div class="form-group"><label>Safeguard Notes</label><input type="text" name="bikes[${bikeCount}][safeguard_notes]" placeholder="Helmet, Tyre, Warranty..."></div>
+    <div class="form-group"><label>Color <span class="req">*</span></label><input type="text" name="bikes[${bikeCount}][color]" required placeholder="Red, Black, White..."></div>
+    <div class="form-group"><label>Purchase Price (Rs.) <span class="req">*</span></label><input type="number" name="bikes[${bikeCount}][purchase_price]" class="bike-price-input" step="0.01" min="0.01" required placeholder="0.00" oninput="disableAutoDivideAndUpdate()"></div>
+    <div class="form-group"><label>Safeguard Notes <span class="req">*</span></label><input type="text" name="bikes[${bikeCount}][safeguard_notes]" required placeholder="Helmet, Tyre, Warranty..."></div>
     </div>
     <div class="form-row">
-    <div class="form-group"><label>Notes</label><input type="text" name="bikes[${bikeCount}][notes]" placeholder="Any notes..."></div>
+    <div class="form-group"><label>Notes <span class="req">*</span></label><input type="text" name="bikes[${bikeCount}][notes]" required placeholder="Any notes..."></div>
     <div class="form-group"><label>Image (Optional)</label><input type="file" name="bikes[${bikeCount}][image]" accept="image/*" style="padding:4px"></div>
     </div>`;
     document.getElementById('bikesList').appendChild(d);
@@ -5493,7 +5510,7 @@ $(document).ready(function() {
 <form id="editBikeForm" method="POST" enctype="multipart/form-data" action="index.php?page=inventory&action=edit">
 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="id" value="<?= $edit_bike['id'] ?>">
-<div class="form-group" style="margin-bottom:8px"><label>Model</label>
+<div class="form-group" style="margin-bottom:8px"><label>Model <span class="req">*</span></label>
 <select name="model_id" required>
 <?php
                 $models_filter_list->data_seek(0);
@@ -5503,18 +5520,18 @@ $(document).ready(function() {
 <?php endwhile; ?>
 </select>
 </div>
-<div class="form-group" style="margin-bottom:8px"><label>Color</label><input type="text" name="color" value="<?= sanitize($edit_bike['color']) ?>"></div>
-<div class="form-group" style="margin-bottom:8px"><label>Chassis Number</label><input type="text" name="chassis_number" value="<?= sanitize($edit_bike['chassis_number']) ?>"></div>
-<div class="form-group" style="margin-bottom:8px"><label>Motor Number</label><input type="text" name="motor_number" value="<?= sanitize($edit_bike['motor_number'] ?? '') ?>"></div>
-<div class="form-group" style="margin-bottom:8px"><label>Order Date</label><input type="date" name="order_date" value="<?= $edit_bike['order_date'] ?? '' ?>"></div>
-<div class="form-group" style="margin-bottom:8px"><label>Inventory Date</label><input type="date" name="inventory_date" value="<?= $edit_bike['inventory_date'] ?? '' ?>"></div>
-<div class="form-group" style="margin-bottom:8px"><label>Purchase Price</label><input type="number" name="purchase_price" step="0.01" value="<?= $edit_bike['purchase_price'] ?>"></div>
+<div class="form-group" style="margin-bottom:8px"><label>Color <span class="req">*</span></label><input type="text" name="color" value="<?= sanitize($edit_bike['color']) ?>" required></div>
+<div class="form-group" style="margin-bottom:8px"><label>Chassis Number <span class="req">*</span></label><input type="text" name="chassis_number" value="<?= sanitize($edit_bike['chassis_number']) ?>" required></div>
+<div class="form-group" style="margin-bottom:8px"><label>Motor Number <span class="req">*</span></label><input type="text" name="motor_number" value="<?= sanitize($edit_bike['motor_number'] ?? '') ?>" required></div>
+<div class="form-group" style="margin-bottom:8px"><label>Order Date <span class="req">*</span></label><input type="date" name="order_date" value="<?= $edit_bike['order_date'] ?? '' ?>" required></div>
+<div class="form-group" style="margin-bottom:8px"><label>Inventory Date <span class="req">*</span></label><input type="date" name="inventory_date" value="<?= $edit_bike['inventory_date'] ?? '' ?>" required></div>
+<div class="form-group" style="margin-bottom:8px"><label>Purchase Price <span class="req">*</span></label><input type="number" name="purchase_price" step="0.01" min="0.01" value="<?= $edit_bike['purchase_price'] ?>" required></div>
 <div class="form-group" style="margin-bottom:8px;font-size:0.85rem">
 <label><input type="checkbox" name="recalc_tax" value="1"> Recalculate tax with current settings (<?= $tax_rate * 100 ?>% on <?= $tax_on ?>)</label>
 <small style="display:block;color:var(--text3)">Stored: <?= $edit_bike['tax_rate_applied'] !== null ? ($edit_bike['tax_rate_applied'] * 100) . '%' : 'N/A' ?> on <?= sanitize($edit_bike['tax_basis'] ?? 'N/A') ?></small>
 </div>
-<div class="form-group" style="margin-bottom:8px"><label>Status</label>
-<select name="status">
+<div class="form-group" style="margin-bottom:8px"><label>Status <span class="req">*</span></label>
+<select name="status" required>
 <?php
 $allowed_statuses = [
     'in_stock' => ['in_stock' => 'In Stock', 'reserved' => 'Reserved', 'damaged_lost' => 'Damaged / Lost'],
@@ -5533,8 +5550,8 @@ foreach ($opts as $val => $label):
 <?php endforeach; ?>
 </select>
 </div>
-<div class="form-group" style="margin-bottom:8px"><label>Safeguard Notes</label><input type="text" name="safeguard_notes" value="<?= sanitize($edit_bike['safeguard_notes'] ?? '') ?>"></div>
-<div class="form-group" style="margin-bottom:8px"><label>Notes</label><textarea name="notes" rows="2"><?= sanitize($edit_bike['notes'] ?? '') ?></textarea></div>
+<div class="form-group" style="margin-bottom:8px"><label>Safeguard Notes <span class="req">*</span></label><input type="text" name="safeguard_notes" value="<?= sanitize($edit_bike['safeguard_notes'] ?? '') ?>" required></div>
+<div class="form-group" style="margin-bottom:8px"><label>Notes <span class="req">*</span></label><textarea name="notes" rows="2" required><?= sanitize($edit_bike['notes'] ?? '') ?></textarea></div>
 <div class="form-group" style="margin-bottom:12px"><label>Image (Optional)</label><input type="file" name="image" accept="image/*" style="padding:4px"></div>
 <button type="submit" class="btn btn-primary">💾 Save Changes</button>
 </form>
@@ -7727,13 +7744,13 @@ while ($d = $dest_q->fetch_assoc()):
 <div class="form-row">
 <div class="form-group"><label>Model Code <span class="req">*</span></label><input type="text" name="model_code" value="<?= sanitize($edit_model['model_code'] ?? '') ?>" required></div>
 <div class="form-group"><label>Model Name <span class="req">*</span></label><input type="text" name="model_name" value="<?= sanitize($edit_model['model_name'] ?? '') ?>" required></div>
-<div class="form-group"><label>Category</label><input type="text" name="category" value="<?= sanitize($edit_model['category'] ?? 'Electric Bike') ?>"></div>
-<div class="form-group"><label>Short Code</label><input type="text" name="short_code" value="<?= sanitize($edit_model['short_code'] ?? '') ?>"></div>
+<div class="form-group"><label>Category <span class="req">*</span></label><input type="text" name="category" value="<?= sanitize($edit_model['category'] ?? 'Electric Bike') ?>" required></div>
+<div class="form-group"><label>Short Code <span class="req">*</span></label><input type="text" name="short_code" value="<?= sanitize($edit_model['short_code'] ?? '') ?>" required></div>
 </div>
 <div class="form-row">
-<div class="form-group"><label>Top Speed (km/h)</label><input type="text" name="top_speed" value="<?= sanitize($edit_model['top_speed'] ?? '') ?>" placeholder="e.g. 100km/h"></div>
-<div class="form-group"><label>Max Range (km)</label><input type="text" name="max_range" value="<?= sanitize($edit_model['max_range'] ?? '') ?>" placeholder="e.g. 80km Range"></div>
-<div class="form-group"><label>Image</label><input type="file" name="image" accept="image/*" style="padding:4px"></div>
+<div class="form-group"><label>Top Speed (km/h) <span class="req">*</span></label><input type="text" name="top_speed" value="<?= sanitize($edit_model['top_speed'] ?? '') ?>" placeholder="e.g. 100km/h" required></div>
+<div class="form-group"><label>Max Range (km) <span class="req">*</span></label><input type="text" name="max_range" value="<?= sanitize($edit_model['max_range'] ?? '') ?>" placeholder="e.g. 80km Range" required></div>
+<div class="form-group"><label>Image (Optional)</label><input type="file" name="image" accept="image/*" style="padding:4px"></div>
 </div>
 <button type="submit" class="btn btn-primary">💾 Save</button>
 <button type="button" class="btn btn-default" onclick="document.getElementById('addModelFormArea').style.display='none'">Cancel</button>

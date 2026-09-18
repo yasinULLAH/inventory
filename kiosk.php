@@ -702,6 +702,28 @@ $conn->close();
                 display: none;
             }
         }
+
+        .nav-edge-btn,
+        #fsToggleBtn,
+        .footer-controls-block {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity 0.35s ease, visibility 0.35s ease, transform 0.35s ease;
+        }
+
+        body.user-active .nav-edge-btn,
+        body.user-active #fsToggleBtn,
+        body.user-active .footer-controls-block {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+        }
+
+        body.user-idle,
+        body.user-idle * {
+            cursor: none !important;
+        }
     </style>
 </head>
 <body>
@@ -1000,6 +1022,25 @@ $conn->close();
                     }
                 }
             }, { passive: true });
+
+            let idleTimer = null;
+            const idleDelay = 3500;
+
+            function activateControls() {
+                document.body.classList.remove('user-idle');
+                document.body.classList.add('user-active');
+                if (idleTimer) clearTimeout(idleTimer);
+                idleTimer = setTimeout(() => {
+                    document.body.classList.remove('user-active');
+                    document.body.classList.add('user-idle');
+                }, idleDelay);
+            }
+
+            ['mousemove', 'mousedown', 'pointerdown', 'touchstart', 'touchmove', 'keydown'].forEach((evt) => {
+                window.addEventListener(evt, activateControls, { passive: true });
+            });
+
+            document.body.classList.add('user-idle');
 
             updateCounter();
             startSlideTimer();
