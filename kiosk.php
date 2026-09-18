@@ -44,7 +44,14 @@ $sql = "
         b.chassis_number, 
         b.color, 
         b.selling_price, 
+        b.purchase_price,
         b.image AS bike_image, 
+        b.is_featured,
+        b.discount_amount,
+        b.discount_type,
+        b.discount_label,
+        b.discount_start,
+        b.discount_end,
         m.model_name, 
         m.top_speed, 
         m.max_range, 
@@ -52,7 +59,7 @@ $sql = "
     FROM bikes b 
     JOIN models m ON b.model_id = m.id 
     WHERE b.status = 'in_stock'
-    ORDER BY b.id DESC
+    ORDER BY b.display_priority DESC, b.id DESC
 ";
 $result = $conn->query($sql);
 $bikes = [];
@@ -75,6 +82,28 @@ if ($result) {
         $row['formatted_speed'] = $speed;
         $row['formatted_range'] = $range;
         $row['formatted_color'] = (!empty($row['color']) && strtolower($row['color']) !== 'unknown') ? $row['color'] : 'Standard';
+
+        $row['has_discount'] = false;
+        $row['promo_price'] = 0;
+        $row['discount_display'] = '';
+        if (!empty($row['is_featured']) && (float) ($row['discount_amount'] ?? 0) > 0) {
+            $d_start = $row['discount_start'] ?? null;
+            $d_end = $row['discount_end'] ?? null;
+            $now = date('Y-m-d');
+            if ((!empty($d_start) && $d_start > $now) || (!empty($d_end) && $d_end < $now)) {
+                // Discount expired or not yet started
+            } else {
+                $row['has_discount'] = true;
+                $orig = (float) ($row['selling_price'] ?: $row['purchase_price'] * 1.15);
+                if ($row['discount_type'] === 'percentage') {
+                    $row['promo_price'] = max(0, $orig * (1 - $row['discount_amount'] / 100));
+                    $row['discount_display'] = $row['discount_amount'] . '% OFF';
+                } else {
+                    $row['promo_price'] = max(0, $orig - $row['discount_amount']);
+                    $row['discount_display'] = 'Rs. ' . number_format($row['discount_amount']) . ' OFF';
+                }
+            }
+        }
 
         $bikes[] = $row;
     }
@@ -318,6 +347,55 @@ $conn->close();
             background: rgba(56, 189, 248, 0.12);
             color: var(--accent-cyan);
             border: 1px solid rgba(56, 189, 248, 0.25);
+        }
+
+        .badge-discount-kiosk {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.35);
+            animation: pulse-kiosk-badge 2s infinite;
+        }
+
+        .badge-featured-kiosk {
+            background: rgba(245, 158, 11, 0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.35);
+        }
+
+        @keyframes pulse-kiosk-badge {
+            0%,100% { box-shadow: 0 0 0 rgba(16,185,129,0); }
+            50% { box-shadow: 0 0 15px rgba(16,185,129,0.3); }
+        }
+
+        .discount-banner-kiosk {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 18px;
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.15) 100%);
+            border: 1px solid rgba(16, 185, 129, 0.35);
+            border-radius: 10px;
+            margin-top: 12px;
+        }
+
+        .price-original-kiosk {
+            font-size: 1rem;
+            color: var(--text-muted);
+            text-decoration: line-through;
+        }
+
+        .price-promo-kiosk {
+            font-size: 1.6rem;
+            font-weight: 900;
+            color: #34d399;
+        }
+
+        .discount-label-kiosk {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #fbbf24;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         .badge-vin {
@@ -772,7 +850,19 @@ $conn->close();
                     <div class="slide-item <?= $index === 0 ? 'active' : '' ?>" data-index="<?= $index ?>">
                         <div class="info-col">
                             <div class="meta-badges">
-                                <span class="badge-pill badge-instock">In Stock & Ready</span>
+                                <span class="badge-pill <?= $bike['has_discount'] ? 'badge-discount-kiosk' : 'badge-instock' ?>">
+                                    <?php if ($bike['has_discount']): ?>
+                                        <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:currentColor;margin-right:4px;vertical-align:middle"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/></svg>
+                                        <?= $bike['discount_display'] ?>
+                                    <?php else: ?>
+                                        In Stock & Ready
+                                    <?php endif; ?>
+                                </span>
+                                <?php if (!empty($bike['discount_label'])): ?>
+                                <span class="badge-pill badge-featured-kiosk">
+                                    <?= htmlspecialchars($bike['discount_label']) ?>
+                                </span>
+                                <?php endif; ?>
                                 <span class="badge-pill badge-vin">CHASSIS # <?= htmlspecialchars($bike['chassis_number']) ?></span>
                             </div>
 
@@ -822,11 +912,24 @@ $conn->close();
                                 </div>
                             </div>
 
-                            <div class="price-banner">
+                            <div class="price-banner" style="<?= $bike['has_discount'] ? 'border-color:rgba(16,185,129,0.4);background:linear-gradient(135deg,rgba(16,185,129,0.12),rgba(5,150,105,0.12))' : '' ?>">
+                                <?php if ($bike['has_discount']): ?>
+                                <div style="display:flex;flex-direction:column;align-items:flex-start;">
+                                    <span class="discount-label-kiosk">🏷 <?= htmlspecialchars($bike['discount_label'] ?: 'DISCOUNTED') ?></span>
+                                    <div style="display:flex;align-items:center;gap:10px;">
+                                        <span class="price-original-kiosk">
+                                            <?= (!empty($bike['selling_price']) && $bike['selling_price'] > 0) ? 'Rs. ' . number_format($bike['selling_price']) : '' ?>
+                                        </span>
+                                        <span class="price-promo-kiosk">Rs. <?= number_format($bike['promo_price']) ?></span>
+                                    </div>
+                                    <span class="price-label" style="color:#34d399"><?= $bike['discount_display'] ?></span>
+                                </div>
+                                <?php else: ?>
                                 <span class="price-label">Official Price</span>
                                 <span class="price-num">
                                     <?= (!empty($bike['selling_price']) && $bike['selling_price'] > 0) ? 'Rs. ' . number_format($bike['selling_price']) : 'Inquire for Price' ?>
                                 </span>
+                                <?php endif; ?>
                             </div>
                         </div>
 

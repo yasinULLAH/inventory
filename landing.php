@@ -192,7 +192,7 @@ $meta_canonical = basename($self_page) . '?view=' . urlencode($view);
 if ($view === 'bike') {
     $bike_id = max(0, (int) ($_GET['id'] ?? 0));
     if ($bike_id > 0) {
-        $bd_stmt = $conn->prepare('SELECT b.id, b.chassis_number, b.model_id, b.color, b.status, b.created_at, b.image as bike_image, m.model_name, m.category, m.image as model_image, m.top_speed, m.max_range
+        $bd_stmt = $conn->prepare('SELECT b.id, b.chassis_number, b.model_id, b.color, b.status, b.created_at, b.image as bike_image, b.selling_price, b.purchase_price, b.is_featured, b.discount_amount, b.discount_type, b.discount_label, b.discount_start, b.discount_end, m.model_name, m.category, m.image as model_image, m.top_speed, m.max_range
             FROM bikes b
             JOIN models m ON m.id = b.model_id
             WHERE b.id = ?
@@ -406,6 +406,8 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
         .badge-lowstock { background: linear-gradient(135deg, #ef4444, #ec4899); color: #fff; animation: pulse-badge 2s infinite; }
         .badge-popular { background: linear-gradient(135deg, #8b5cf6, #a855f7); color: #fff; }
         .badge-default { background: var(--grad); color: #fff; }
+        .badge-discount { background: linear-gradient(135deg, #10b981, #059669); color: #fff; animation: pulse-badge 2s infinite; }
+        .badge-featured { background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; }
         .bike-status i { margin-right: 5px; }
         @keyframes pulse-badge { 0%,100%{box-shadow:0 5px 15px rgba(239,68,68,0.3)} 50%{box-shadow:0 5px 25px rgba(239,68,68,0.6)} }
         .bike-title { font-size: 1.6rem; font-weight: 800; margin-bottom: 10px; }
@@ -416,6 +418,23 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
             background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2);
             padding: 12px; border-radius: 15px; text-align: center; color: var(--primary); font-weight: 700; font-size: 0.9rem; margin-bottom: 20px;
         }
+        .discount-card { position: relative; overflow: hidden; padding: 15px; border: 2px solid rgba(16, 185, 129, 0.3); }
+        .discount-card:hover { border-color: rgba(16, 185, 129, 0.6); }
+        .discount-badge {
+            position: absolute; top: 15px; right: 15px; z-index: 10;
+            background: linear-gradient(135deg, #10b981, #059669); color: #fff;
+            padding: 8px 16px; border-radius: 50px; font-weight: 900; font-size: 0.8rem;
+            box-shadow: 0 5px 20px rgba(16, 185, 129, 0.4); animation: pulse-discount 2s infinite;
+        }
+        @keyframes pulse-discount { 0%,100%{box-shadow:0 5px 20px rgba(16,185,129,0.3)} 50%{box-shadow:0 5px 30px rgba(16,185,129,0.6)} }
+        .discount-label-badge {
+            position: absolute; top: 15px; left: 15px; z-index: 10;
+            background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff;
+            padding: 6px 14px; border-radius: 50px; font-weight: 800; font-size: 0.75rem;
+            text-transform: uppercase; letter-spacing: 1px;
+        }
+        .price-strike { text-decoration: line-through; color: var(--text-dim); font-size: 0.9rem; }
+        .price-promo { color: #10b981; font-weight: 900; font-size: 1.3rem; }
         .wa-action {
             background: #25d366; color: white; padding: 15px; border-radius: 18px; display: flex; align-items: center; justify-content: center; gap: 10px;
             font-weight: 800; text-decoration: none; transition: 0.3s;
@@ -977,8 +996,64 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
                 <a href="<?= sanitize($self_page) ?>?view=bikes" class="btn btn-outline">Explore Full Fleet <i class="fas fa-chevron-right"></i></a>
             </div>
         </section>
+        <?php
+        $discount_bikes = $conn->query("SELECT b.*, m.model_name, m.category, m.image as model_image, m.top_speed, m.max_range
+            FROM bikes b JOIN models m ON b.model_id = m.id
+            WHERE b.status IN ('in_stock','returned')
+              AND b.discount_amount > 0
+              AND (b.discount_start IS NULL OR b.discount_start <= CURDATE())
+              AND (b.discount_end IS NULL OR b.discount_end >= CURDATE())
+            ORDER BY b.display_priority DESC, b.created_at DESC
+            LIMIT 6");
+        if ($discount_bikes && $discount_bikes->num_rows > 0):
+        ?>
         <section class="container">
-            <h2 class="sec-title" data-text="STEPS">YOUR JOURNEY</h2>
+            <h2 class="sec-title" data-text="OFFERS">RUNNING DISCOUNTS</h2>
+            <div class="bike-grid">
+                <?php while ($db = $discount_bikes->fetch_assoc()):
+                    $dimg = app_img($db['image'] ?: $db['model_image']);
+                    $original_price = (float) ($db['selling_price'] ?: $db['purchase_price'] * 1.15);
+                    if ($db['discount_type'] === 'percentage') {
+                        $promo_price = $original_price * (1 - $db['discount_amount'] / 100);
+                        $discount_display = $db['discount_amount'] . '% OFF';
+                    } else {
+                        $promo_price = $original_price - $db['discount_amount'];
+                        $discount_display = 'Rs. ' . number_format($db['discount_amount']) . ' OFF';
+                    }
+                    $promo_price = max(0, $promo_price);
+                ?>
+                <div class="glass bike-card discount-card" data-tilt>
+                    <div class="discount-badge"><i class="fas fa-tags"></i> <?= $discount_display ?></div>
+                    <?php if (!empty($db['discount_label'])): ?>
+                    <div class="discount-label-badge"><?= sanitize($db['discount_label']) ?></div>
+                    <?php endif; ?>
+                    <a class="bike-link" href="<?= sanitize($self_page) ?>?view=bike&id=<?= (int) $db['id'] ?>">
+                        <div class="bike-img">
+                            <img src="<?= sanitize($dimg ?: 'x') ?>" alt="<?= sanitize($db['model_name']) ?>" onerror="imageFallback(this, '<?= sanitize(app_img($db['model_image'])) ?>')">
+                        </div>
+                        <div class="bike-title" style="line-height:1.2; padding-bottom:5px;"><?= sanitize($db['model_name']) ?></div>
+                    </a>
+                    <div class="bike-features">
+                        <div class="feat-item"><i class="fas fa-palette"></i> <?= sanitize($db['color']) ?></div>
+                        <div class="feat-item"><i class="fas fa-tachometer-alt"></i> <?= sanitize(format_speed($db['top_speed'])) ?></div>
+                        <div class="feat-item"><i class="fas fa-battery-full"></i> <?= sanitize(format_range($db['max_range'])) ?></div>
+                        <div class="feat-item"><i class="fas fa-bolt"></i> <?= sanitize($db['category']) ?></div>
+                    </div>
+                    <div style="text-align:center;margin-bottom:15px;">
+                        <span class="price-strike"><?= fmt_money($original_price) ?></span>
+                        <div class="price-promo"><?= fmt_money($promo_price) ?></div>
+                        <small style="color:var(--text-dim)">Discounted Price</small>
+                    </div>
+                    <a href="https://wa.me/<?= $wa_number ?>?text=I'm interested in the <?= urlencode($db['model_name']) ?> at the discounted price!" class="wa-action">GRAB THIS DEAL</a>
+                </div>
+                <?php endwhile; ?>
+            </div>
+            <div style="text-align:center; margin-top:50px;">
+                <a href="<?= sanitize($self_page) ?>?view=bikes" class="btn btn-outline">View All Inventory <i class="fas fa-chevron-right"></i></a>
+            </div>
+        </section>
+        <?php endif; ?>
+        <section class="container">
             <div class="steps">
                 <div class="glass step-card">
                     <div class="step-num">01</div>
@@ -1133,6 +1208,15 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
                             $b_cls = 'badge-lowstock';
                             $b_ico = 'fa-ban';
                             $b_txt = strtoupper(str_replace('_', ' ', $bike['status']));
+                        } elseif (!empty($bike['is_featured']) && (float) ($bike['discount_amount'] ?? 0) > 0) {
+                            $b_cls = 'badge-discount';
+                            $b_ico = 'fa-tags';
+                            $dlabel = !empty($bike['discount_label']) ? sanitize($bike['discount_label']) : 'DISCOUNT';
+                            $b_txt = $dlabel;
+                        } elseif (!empty($bike['is_featured'])) {
+                            $b_cls = 'badge-featured';
+                            $b_ico = 'fa-star';
+                            $b_txt = 'FEATURED';
                         } elseif ($bd && $bd['rank'] === 1 && $bd['sold_cnt'] > 0) {
                             $b_cls = 'badge-bestseller';
                             $b_ico = 'fa-crown';
@@ -1154,6 +1238,9 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
                             $b_ico = 'fa-bolt';
                             $b_txt = 'AVAILABLE';
                         }
+                        $has_discount = !empty($bike['is_featured']) && (float) ($bike['discount_amount'] ?? 0) > 0
+                            && (!empty($bike['discount_start']) ? $bike['discount_start'] <= date('Y-m-d') : true)
+                            && (!empty($bike['discount_end']) ? $bike['discount_end'] >= date('Y-m-d') : true);
                         ?>
                 <div class="glass bike-card" data-tilt>
                     <div class="bike-status <?= $b_cls ?>"><i class="fas <?= $b_ico ?>"></i> <?= $b_txt ?></div>
@@ -1169,6 +1256,23 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
                         <div class="feat-item"><i class="fas fa-tachometer-alt"></i> <?= sanitize(format_speed($bike['top_speed'])) ?></div>
                         <div class="feat-item"><i class="fas fa-battery-full"></i> <?= sanitize(format_range($bike['max_range'])) ?></div>
                     </div>
+                    <?php if ($has_discount):
+                        $orig = (float) ($bike['selling_price'] ?: $bike['purchase_price'] * 1.15);
+                        if ($bike['discount_type'] === 'percentage') {
+                            $promo = $orig * (1 - $bike['discount_amount'] / 100);
+                            $dtext = $bike['discount_amount'] . '% OFF';
+                        } else {
+                            $promo = $orig - $bike['discount_amount'];
+                            $dtext = 'Rs. ' . number_format($bike['discount_amount']) . ' OFF';
+                        }
+                    ?>
+                    <div style="text-align:center;margin-bottom:15px;padding:10px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:12px;">
+                        <span style="color:#10b981;font-weight:900;font-size:0.85rem">🏷 <?= $dtext ?></span>
+                        <div><span class="price-strike"><?= fmt_money($orig) ?></span> <span class="price-promo" style="font-size:1.1rem"><?= fmt_money($promo) ?></span></div>
+                    </div>
+                    <?php else: ?>
+                    <div class="price-request"><i class="fab fa-whatsapp"></i> PRICE ON REQUEST</div>
+                    <?php endif; ?>
                     <div style="display:flex; gap:12px;">
                         <a href="https://wa.me/<?= $wa_number ?>?text=Inquiry for <?= urlencode($bike['model_name']) ?> " class="wa-action" style="flex:1;">INQUIRE</a>
                         <?php if (in_array($bike['status'], ['in_stock', 'returned'])): ?>
@@ -1209,8 +1313,25 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
                             <img class="detail-hero-img" src="<?= sanitize($primary_img ?: 'x') ?>" alt="<?= sanitize($bike_detail['model_name']) ?>" onerror="imageFallback(this, '<?= sanitize(app_img($bike_detail['model_image'])) ?>')">
                         </div>
                         <div class="glass detail-panel">
-                            <div class="bike-status badge-default" style="position:static; display:inline-flex; margin-bottom:14px;">
-                                <i class="fas fa-bolt"></i> <?= strtoupper(in_array($bike_detail['status'], ['in_stock', 'returned']) ? 'AVAILABLE' : sanitize($bike_detail['status'])) ?>
+                            <?php
+                            $detail_has_discount = !empty($bike_detail['is_featured']) && (float) ($bike_detail['discount_amount'] ?? 0) > 0
+                                && (!empty($bike_detail['discount_start']) ? $bike_detail['discount_start'] <= date('Y-m-d') : true)
+                                && (!empty($bike_detail['discount_end']) ? $bike_detail['discount_end'] >= date('Y-m-d') : true);
+                            $detail_badge_cls = 'badge-default';
+                            $detail_badge_ico = 'fa-bolt';
+                            $detail_badge_txt = strtoupper(in_array($bike_detail['status'], ['in_stock', 'returned']) ? 'AVAILABLE' : sanitize($bike_detail['status']));
+                            if ($detail_has_discount) {
+                                $detail_badge_cls = 'badge-discount';
+                                $detail_badge_ico = 'fa-tags';
+                                $detail_badge_txt = $bike_detail['discount_label'] ?: 'DISCOUNTED';
+                            } elseif (!empty($bike_detail['is_featured'])) {
+                                $detail_badge_cls = 'badge-featured';
+                                $detail_badge_ico = 'fa-star';
+                                $detail_badge_txt = 'FEATURED';
+                            }
+                            ?>
+                            <div class="bike-status <?= $detail_badge_cls ?>" style="position:static; display:inline-flex; margin-bottom:14px;">
+                                <i class="fas <?= $detail_badge_ico ?>"></i> <?= $detail_badge_txt ?>
                             </div>
                             <h1 style="font-size:2.2rem; line-height:1.2; margin-bottom:8px;"><?= sanitize($bike_detail['model_name']) ?> </h1>
                             <p style="color:var(--text-dim); margin-bottom:6px;"><?= sanitize($bike_detail['category']) ?></p>
@@ -1222,6 +1343,27 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
                                 <div class="feat-item"><i class="fas fa-shield-alt"></i> Warranty Included</div>
                                 <div class="feat-item"><i class="fas fa-headset"></i> 24/7 Support</div>
                             </div>
+                            <?php if ($detail_has_discount):
+                                $d_orig = (float) ($bike_detail['selling_price'] ?: $bike_detail['purchase_price'] * 1.15);
+                                if ($bike_detail['discount_type'] === 'percentage') {
+                                    $d_promo = $d_orig * (1 - $bike_detail['discount_amount'] / 100);
+                                    $d_text = $bike_detail['discount_amount'] . '% OFF';
+                                } else {
+                                    $d_promo = $d_orig - $bike_detail['discount_amount'];
+                                    $d_text = 'Rs. ' . number_format($bike_detail['discount_amount']) . ' OFF';
+                                }
+                            ?>
+                            <div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);border-radius:14px;padding:16px;margin-bottom:20px;text-align:center;">
+                                <span style="color:#10b981;font-weight:900;font-size:1rem;">🏷 <?= $d_text ?></span>
+                                <div style="margin-top:6px;">
+                                    <span class="price-strike" style="font-size:1.1rem;"><?= fmt_money($d_orig) ?></span>
+                                    <span class="price-promo" style="font-size:1.8rem;"><?= fmt_money($d_promo) ?></span>
+                                </div>
+                                <?php if (!empty($bike_detail['discount_label'])): ?>
+                                <small style="color:#fbbf24;font-weight:700;text-transform:uppercase;letter-spacing:1px;"><?= sanitize($bike_detail['discount_label']) ?></small>
+                                <?php endif; ?>
+                            </div>
+                            <?php endif; ?>
                             <div style="font-size: 0.85rem; color: var(--text-dim); margin-bottom: 20px; padding: 12px; background: rgba(255,255,255,0.02); border-radius: 12px; border: 1px solid var(--glass-border);">
                                 <i class="fas fa-info-circle"></i> <strong>Disclaimer:</strong> Specifications and features shown may vary slightly and might not be 100% exact. For highly accurate details, please <a href="https://wa.me/<?= $wa_number ?>" style="color: var(--primary); text-decoration: none; font-weight: 600;">contact us via WhatsApp</a> or visit our shop.
                             </div>

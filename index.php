@@ -1823,7 +1823,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $po_stmt->execute();
             $po_id = $conn->insert_id;
             $po_stmt->close();
-            $bike_stmt = $conn->prepare("INSERT INTO bikes (purchase_order_id,order_date,inventory_date,chassis_number,motor_number,model_id,color,purchase_price,tax_amount,tax_rate_applied,tax_basis,status,safeguard_notes,notes,image) VALUES (?,?,?,?,?,?,?,?,?,?,?,'in_stock',?,?,?)");
+            $bike_stmt = $conn->prepare("INSERT INTO bikes (purchase_order_id,order_date,inventory_date,chassis_number,motor_number,model_id,color,purchase_price,tax_amount,tax_rate_applied,tax_basis,status,safeguard_notes,notes,image,is_featured,discount_amount,discount_type,discount_label,discount_start,discount_end,display_priority) VALUES (?,?,?,?,?,?,?,?,?,?,?,'in_stock',?,?,?,?,?,?,?,?,?,?,?)");
             $saved_count = 0;
             $saved_total_amount = 0.0;
             $errors_list = [];
@@ -1836,6 +1836,14 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $pp = (float) ($b['purchase_price'] ?? 0);
                 $safe_notes = clean_text($b['safeguard_notes'] ?? '');
                 $bnotes = clean_text($b['notes'] ?? '');
+                $is_featured = !empty($b['is_featured']) ? 1 : 0;
+                $discount_amount = (float) ($b['discount_amount'] ?? 0);
+                $discount_type = clean_text($b['discount_type'] ?? 'flat', 10);
+                if (!in_array($discount_type, ['flat', 'percentage'])) $discount_type = 'flat';
+                $discount_label = clean_text($b['discount_label'] ?? '', 255);
+                $discount_start = clean_text($b['discount_start'] ?? '');
+                $discount_end = clean_text($b['discount_end'] ?? '');
+                $display_priority = (int) ($b['display_priority'] ?? 0);
                 if (empty($chassis) || empty($motor) || $model_id <= 0 || empty($color) || $pp <= 0 || empty($safe_notes) || empty($bnotes)) {
                     $errors_list[] = 'All bike fields (Chassis, Motor, Model, Color, Purchase Price, Safeguard Notes, Notes) are required.';
                     continue;
@@ -1854,7 +1862,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 }
                 $base_tax = ($tax_on === 'selling_price') ? 0 : $pp;
                 $tax = ($base_tax * $tax_rate);
-                $bike_stmt->bind_param('issssisdddssss', $po_id, $order_date, $inventory_date, $chassis, $motor, $model_id, $color, $pp, $tax, $tax_rate, $tax_on, $safe_notes, $bnotes, $bike_img);
+                $bike_stmt->bind_param('issssisdddssssisissssi', $po_id, $order_date, $inventory_date, $chassis, $motor, $model_id, $color, $pp, $tax, $tax_rate, $tax_on, $safe_notes, $bnotes, $bike_img, $is_featured, $discount_amount, $discount_type, $discount_label, $discount_start, $discount_end, $display_priority);
                 if (!$bike_stmt->execute()) {
                     if ($bike_img && is_file($bike_img)) {
                         @unlink($bike_img);
@@ -3086,6 +3094,14 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $inventory_date = clean_text($_POST['inventory_date'] ?? '');
             $chassis_number = clean_text($_POST['chassis_number'] ?? '');
             $motor_number = clean_text($_POST['motor_number'] ?? '');
+            $is_featured = !empty($_POST['is_featured']) ? 1 : 0;
+            $discount_amount = (float) ($_POST['discount_amount'] ?? 0);
+            $discount_type = clean_text($_POST['discount_type'] ?? 'flat', 10);
+            if (!in_array($discount_type, ['flat', 'percentage'])) $discount_type = 'flat';
+            $discount_label = clean_text($_POST['discount_label'] ?? '', 255);
+            $discount_start = clean_text($_POST['discount_start'] ?? '');
+            $discount_end = clean_text($_POST['discount_end'] ?? '');
+            $display_priority = (int) ($_POST['display_priority'] ?? 0);
             $img_path = null;
             $img_err = '';
             if (isset($_FILES['image']) && !empty($_FILES['image']['name'])) {
@@ -3134,18 +3150,18 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $tax_amount = ($base_tax * $use_tax_rate);
                 $margin = (float) $old_bike['selling_price'] > 0 ? ((float) $old_bike['selling_price'] - $pp - $tax_amount) : 0;
                 if ($img_path) {
-                    $stmt = $conn->prepare('UPDATE bikes SET model_id=?, color=?, purchase_price=?, tax_amount=?, margin=?, status=?, notes=?, safeguard_notes=?, image=?, order_date=?, inventory_date=?, chassis_number=?, motor_number=?' . ($recalc_tax ? ', tax_rate_applied=?, tax_basis=?' : '') . ' WHERE id=?');
+                    $stmt = $conn->prepare('UPDATE bikes SET model_id=?, color=?, purchase_price=?, tax_amount=?, margin=?, status=?, notes=?, safeguard_notes=?, image=?, order_date=?, inventory_date=?, chassis_number=?, motor_number=?, is_featured=?, discount_amount=?, discount_type=?, discount_label=?, discount_start=?, discount_end=?, display_priority=?' . ($recalc_tax ? ', tax_rate_applied=?, tax_basis=?' : '') . ' WHERE id=?');
                     if ($recalc_tax) {
-                        $stmt->bind_param('isddssssssssdsi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $img_path, $order_date, $inventory_date, $chassis_number, $motor_number, $use_tax_rate, $use_tax_basis, $bid);
+                        $stmt->bind_param('isddssssssssssiiisssssdsi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $img_path, $order_date, $inventory_date, $chassis_number, $motor_number, $is_featured, $discount_amount, $discount_type, $discount_label, $discount_start, $discount_end, $display_priority, $use_tax_rate, $use_tax_basis, $bid);
                     } else {
-                        $stmt->bind_param('isddssssssssi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $img_path, $order_date, $inventory_date, $chassis_number, $motor_number, $bid);
+                        $stmt->bind_param('isddssssssssssiiisssi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $img_path, $order_date, $inventory_date, $chassis_number, $motor_number, $is_featured, $discount_amount, $discount_type, $discount_label, $discount_start, $discount_end, $display_priority, $bid);
                     }
                 } else {
-                    $stmt = $conn->prepare('UPDATE bikes SET model_id=?, color=?, purchase_price=?, tax_amount=?, margin=?, status=?, notes=?, safeguard_notes=?, order_date=?, inventory_date=?, chassis_number=?, motor_number=?' . ($recalc_tax ? ', tax_rate_applied=?, tax_basis=?' : '') . ' WHERE id=?');
+                    $stmt = $conn->prepare('UPDATE bikes SET model_id=?, color=?, purchase_price=?, tax_amount=?, margin=?, status=?, notes=?, safeguard_notes=?, order_date=?, inventory_date=?, chassis_number=?, motor_number=?, is_featured=?, discount_amount=?, discount_type=?, discount_label=?, discount_start=?, discount_end=?, display_priority=?' . ($recalc_tax ? ', tax_rate_applied=?, tax_basis=?' : '') . ' WHERE id=?');
                     if ($recalc_tax) {
-                        $stmt->bind_param('isddsssssssdsi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $order_date, $inventory_date, $chassis_number, $motor_number, $use_tax_rate, $use_tax_basis, $bid);
+                        $stmt->bind_param('isddssssssssssiiisssdsi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $order_date, $inventory_date, $chassis_number, $motor_number, $is_featured, $discount_amount, $discount_type, $discount_label, $discount_start, $discount_end, $display_priority, $use_tax_rate, $use_tax_basis, $bid);
                     } else {
-                        $stmt->bind_param('isddsssssssi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $order_date, $inventory_date, $chassis_number, $motor_number, $bid);
+                        $stmt->bind_param('isddssssssssssiiisssi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $order_date, $inventory_date, $chassis_number, $motor_number, $is_featured, $discount_amount, $discount_type, $discount_label, $discount_start, $discount_end, $display_priority, $bid);
                     }
                 }
                 $stmt->execute();
@@ -5014,6 +5030,17 @@ function addBikeRow() {
     <div class="form-row">
     <div class="form-group"><label>Notes <span class="req">*</span></label><input type="text" name="bikes[${bikeCount}][notes]" required placeholder="Any notes..."></div>
     <div class="form-group"><label>Image (Optional)</label><input type="file" name="bikes[${bikeCount}][image]" accept="image/*" style="padding:4px"></div>
+    </div>
+    <div class="form-row" style="background:rgba(99,102,241,0.05);padding:10px;border-radius:4px;border:1px dashed rgba(99,102,241,0.3);margin-top:4px">
+    <div class="form-group"><label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" name="bikes[${bikeCount}][is_featured]" value="1" style="width:16px;height:16px"> <span style="font-weight:600;color:var(--accent)">Featured Bike</span></label><small style="display:block;color:var(--text3);margin-top:2px">Show on landing page & kiosk</small></div>
+    <div class="form-group"><label>Discount Type</label><select name="bikes[${bikeCount}][discount_type]"><option value="flat">Flat (Rs.)</option><option value="percentage">Percentage (%)</option></select></div>
+    <div class="form-group"><label>Discount Amount</label><input type="number" name="bikes[${bikeCount}][discount_amount]" step="0.01" min="0" placeholder="0.00"></div>
+    </div>
+    <div class="form-row" style="background:rgba(99,102,241,0.05);padding:10px;border-radius:4px;border:1px dashed rgba(99,102,241,0.3);margin-top:4px">
+    <div class="form-group"><label>Discount Label</label><input type="text" name="bikes[${bikeCount}][discount_label]" placeholder="e.g. Eid Sale, Winter Offer"></div>
+    <div class="form-group"><label>Discount Start</label><input type="date" name="bikes[${bikeCount}][discount_start]"></div>
+    <div class="form-group"><label>Discount End</label><input type="date" name="bikes[${bikeCount}][discount_end]"></div>
+    <div class="form-group"><label>Display Priority</label><input type="number" name="bikes[${bikeCount}][display_priority]" min="0" max="999" placeholder="0" title="Higher = shown first"><small style="display:block;color:var(--text3);margin-top:2px">Higher number = shown first</small></div>
     </div>`;
     document.getElementById('bikesList').appendChild(d);
     if (prefillModelId && bikeCount === 1) {
@@ -5412,6 +5439,7 @@ $(document).ready(function() {
 <th>Purchase Price</th>
 <th>Tax</th>
 <th>Status</th>
+<th>Deal</th>
 <th>Selling Price</th>
 <th>Selling Date</th>
 <th>Margin</th>
@@ -5443,6 +5471,16 @@ $(document).ready(function() {
 <td><?= fmt_money($bike['purchase_price']) ?></td>
 <td><?= $bike['tax_amount'] > 0 ? fmt_money($bike['tax_amount']) : '-' ?></td>
 <td><span class="badge <?= $st_badge ?>"><?= strtoupper($bike['status']) ?></span></td>
+<td><?php
+$deal_parts = [];
+if (!empty($bike['is_featured'])) $deal_parts[] = '<span style="color:var(--accent);font-weight:700">★ Featured</span>';
+if ((float) ($bike['discount_amount'] ?? 0) > 0) {
+    $dlabel = !empty($bike['discount_label']) ? sanitize($bike['discount_label']) : 'Discount';
+    $dval = $bike['discount_type'] === 'percentage' ? $bike['discount_amount'] . '%' : fmt_money($bike['discount_amount']);
+    $deal_parts[] = '<span style="color:var(--success);font-weight:600">🏷 ' . $dlabel . ': -' . $dval . '</span>';
+}
+echo !empty($deal_parts) ? implode('<br>', $deal_parts) : '<span style="color:var(--text3)">—</span>';
+?></td>
 <td><?= $bike['selling_price'] ? fmt_money($bike['selling_price']) : '-' ?></td>
 <td><?= fmt_date($bike['selling_date']) ?></td>
 <td style="color:<?= ($bike['margin'] ?? 0) >= 0 ? 'var(--success)' : 'var(--danger)' ?>"><?= in_array($bike['status'], ['sold','returned']) ? fmt_money($bike['margin']) : '-' ?></td>
@@ -5486,7 +5524,7 @@ $(document).ready(function() {
 </tbody>
 <tfoot>
 <tr>
-<td colspan="7"><strong>PAGE TOTAL</strong></td>
+<td colspan="8"><strong>PAGE TOTAL</strong></td>
 <td style="white-space:nowrap"><strong><?= fmt_money($total_pp) ?></strong></td>
 <td style="white-space:nowrap"><strong><?= fmt_money($total_tax) ?></strong></td>
 <td></td>
@@ -5553,6 +5591,20 @@ foreach ($opts as $val => $label):
 <div class="form-group" style="margin-bottom:8px"><label>Safeguard Notes <span class="req">*</span></label><input type="text" name="safeguard_notes" value="<?= sanitize($edit_bike['safeguard_notes'] ?? '') ?>" required></div>
 <div class="form-group" style="margin-bottom:8px"><label>Notes <span class="req">*</span></label><textarea name="notes" rows="2" required><?= sanitize($edit_bike['notes'] ?? '') ?></textarea></div>
 <div class="form-group" style="margin-bottom:12px"><label>Image (Optional)</label><input type="file" name="image" accept="image/*" style="padding:4px"></div>
+<div style="background:rgba(99,102,241,0.06);padding:12px;border-radius:6px;border:1px dashed rgba(99,102,241,0.3);margin-bottom:12px">
+<strong style="color:var(--accent);font-size:0.85rem;display:block;margin-bottom:8px"><i class="fas fa-star"></i> Featured & Discount Settings</strong>
+<div class="form-group" style="margin-bottom:8px"><label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" name="is_featured" value="1" <?= !empty($edit_bike['is_featured']) ? 'checked' : '' ?> style="width:16px;height:16px"> <span style="font-weight:600">Featured Bike</span></label><small style="display:block;color:var(--text3);margin-top:2px">Show on landing page & kiosk as featured</small></div>
+<div class="form-row" style="gap:8px">
+<div class="form-group" style="margin-bottom:8px;flex:1"><label>Discount Type</label><select name="discount_type"><option value="flat" <?= ($edit_bike['discount_type'] ?? '') === 'flat' ? 'selected' : '' ?>>Flat (Rs.)</option><option value="percentage" <?= ($edit_bike['discount_type'] ?? '') === 'percentage' ? 'selected' : '' ?>>Percentage (%)</option></select></div>
+<div class="form-group" style="margin-bottom:8px;flex:1"><label>Discount Amount</label><input type="number" name="discount_amount" step="0.01" min="0" value="<?= (float) ($edit_bike['discount_amount'] ?? 0) ?>" placeholder="0.00"></div>
+</div>
+<div class="form-group" style="margin-bottom:8px"><label>Discount Label</label><input type="text" name="discount_label" value="<?= sanitize($edit_bike['discount_label'] ?? '') ?>" placeholder="e.g. Eid Sale, Winter Offer"></div>
+<div class="form-row" style="gap:8px">
+<div class="form-group" style="margin-bottom:8px;flex:1"><label>Discount Start</label><input type="date" name="discount_start" value="<?= $edit_bike['discount_start'] ?? '' ?>"></div>
+<div class="form-group" style="margin-bottom:8px;flex:1"><label>Discount End</label><input type="date" name="discount_end" value="<?= $edit_bike['discount_end'] ?? '' ?>"></div>
+<div class="form-group" style="margin-bottom:8px;flex:1"><label>Display Priority</label><input type="number" name="display_priority" min="0" max="999" value="<?= (int) ($edit_bike['display_priority'] ?? 0) ?>" title="Higher = shown first"></div>
+</div>
+</div>
 <button type="submit" class="btn btn-primary">💾 Save Changes</button>
 </form>
 </div>
