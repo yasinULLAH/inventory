@@ -20,16 +20,13 @@ if ($p === '' || strpos($p, 'http') === 0 || strpos($p, "\0") !== false) {
 $clean = preg_replace('#[^a-zA-Z0-9_/\.\-]#', '', $p);
 $clean = ltrim($clean, '/');
 
-// Determine environment
 $request_host = strtolower(preg_replace('/:\d+$/', '', (string) ($_SERVER['HTTP_HOST'] ?? '')));
 $is_local_host = in_array($request_host, ['localhost', '127.0.0.1', '::1', ''], true) || str_ends_with($request_host, '.local');
 
-// Define and verify the absolute base directory
 if ($is_local_host) {
     $base_dir = realpath(__DIR__);
 } else {
     $base_dir = realpath(dirname(__DIR__) . '/myapp.gobuykar.com');
-    // Fallback if the folder structure is different
     if (!$base_dir) {
         $base_dir = realpath(__DIR__);
     }
