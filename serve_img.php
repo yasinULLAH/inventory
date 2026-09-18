@@ -20,8 +20,21 @@ if ($p === '' || strpos($p, 'http') === 0 || strpos($p, "\0") !== false) {
 $clean = preg_replace('#[^a-zA-Z0-9_/\.\-]#', '', $p);
 $clean = ltrim($clean, '/');
 
+// Determine environment
+$request_host = strtolower(preg_replace('/:\d+$/', '', (string) ($_SERVER['HTTP_HOST'] ?? '')));
+$is_local_host = in_array($request_host, ['localhost', '127.0.0.1', '::1', ''], true) || str_ends_with($request_host, '.local');
+
 // Define and verify the absolute base directory
-$base_dir = realpath(dirname(__DIR__) . '/myapp.gobuykar.com');
+if ($is_local_host) {
+    $base_dir = realpath(__DIR__);
+} else {
+    $base_dir = realpath(dirname(__DIR__) . '/myapp.gobuykar.com');
+    // Fallback if the folder structure is different
+    if (!$base_dir) {
+        $base_dir = realpath(__DIR__);
+    }
+}
+
 if (!$base_dir) {
     http_response_code(500); // Server configuration error
     exit;
@@ -36,7 +49,47 @@ $real_file = realpath($requested_file);
 // 1. File must exist
 // 2. Must be a file (not a directory)
 // 3. The resolved path MUST explicitly start with our base directory
-if ($real_file === false || !is_file($real_file) || strpos($real_file, $base_dir) !== 0) {
+$file_is_valid = ($real_file !== false && is_file($real_file) && strpos($real_file, $base_dir) === 0);
+
+if (!$file_is_valid && strpos($clean, 'uploads/bike_') === 0) {
+    if ($is_local_host) {
+        $db_host = 'localhost';
+        $db_user = 'root';
+        $db_pass = 'root';
+        $db_name = 'bni_enterprises2';
+    } else {
+        $db_host = 'localhost:3306';
+        $db_user = 'gobuykar_yasin';
+        $db_pass = 'yasin@1234';
+        $db_name = 'gobuykar_bni';
+    }
+    
+    $conn = @new mysqli($db_host, $db_user, $db_pass, $db_name);
+    if (!$conn->connect_error) {
+        $conn->set_charset('utf8mb4');
+        $stmt = $conn->prepare('SELECT m.image FROM bikes b JOIN models m ON b.model_id = m.id WHERE b.image = ?');
+        if ($stmt) {
+            $stmt->bind_param('s', $clean);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            if ($row = $res->fetch_assoc()) {
+                if (!empty($row['image'])) {
+                    $fallback_clean = preg_replace('#[^a-zA-Z0-9_/\.\-]#', '', ltrim($row['image'], '/'));
+                    $fallback_req = $base_dir . $fallback_clean;
+                    $fallback_real = realpath($fallback_req);
+                    if ($fallback_real !== false && is_file($fallback_real) && strpos($fallback_real, $base_dir) === 0) {
+                        $real_file = $fallback_real;
+                        $file_is_valid = true;
+                    }
+                }
+            }
+            $stmt->close();
+        }
+        $conn->close();
+    }
+}
+
+if (!$file_is_valid) {
     http_response_code(404);
     exit;
 }
