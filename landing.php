@@ -6,8 +6,14 @@ ini_set('session.use_strict_mode', '1');
 $request_is_https = (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off') || (($_SERVER['SERVER_PORT'] ?? null) == 443) || strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
 $request_host = strtolower(preg_replace('/:\d+$/', '', (string) ($_SERVER['HTTP_HOST'] ?? '')));
 $is_local_host = in_array($request_host, ['localhost', '127.0.0.1', '::1', ''], true) || str_ends_with($request_host, '.local');
-if (!$request_is_https && !$is_local_host && preg_match('/^[a-z0-9.-]+$/', $request_host)) { header('Location: https://' . $request_host . ($_SERVER['REQUEST_URI'] ?? '/'), true, 301); exit; }
-if ($request_is_https) { ini_set('session.cookie_secure', '1'); header('Strict-Transport-Security: max-age=300'); }
+if (!$request_is_https && !$is_local_host && preg_match('/^[a-z0-9.-]+$/', $request_host)) {
+    header('Location: https://' . $request_host . ($_SERVER['REQUEST_URI'] ?? '/'), true, 301);
+    exit;
+}
+if ($request_is_https) {
+    ini_set('session.cookie_secure', '1');
+    header('Strict-Transport-Security: max-age=300');
+}
 ini_set('display_errors', '0');
 ini_set('log_errors', '1');
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING & ~E_DEPRECATED);
@@ -69,10 +75,13 @@ function clean_text($val, $max_length = 2000)
 function safe_public_url($value, array $allowed_hosts = [])
 {
     $value = trim((string) $value);
-    if ($value === '' || !filter_var($value, FILTER_VALIDATE_URL)) return '';
+    if ($value === '' || !filter_var($value, FILTER_VALIDATE_URL))
+        return '';
     $parts = parse_url($value);
-    if (($parts['scheme'] ?? '') !== 'https') return '';
-    if ($allowed_hosts && !in_array(strtolower($parts['host'] ?? ''), $allowed_hosts, true)) return '';
+    if (($parts['scheme'] ?? '') !== 'https')
+        return '';
+    if ($allowed_hosts && !in_array(strtolower($parts['host'] ?? ''), $allowed_hosts, true))
+        return '';
     return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
@@ -1101,8 +1110,8 @@ $meta_image_url = (preg_match('/^https?:\/\//', $meta_image)) ? $meta_image : ($
                 if (!empty($_GET['category'])) {
                     $c = mysqli_real_escape_string($conn, $_GET['category']);
                     $where_p[] = "m.category = '$c'";
-                }                
-                $where_p[] = "b.id IN (SELECT MIN(id) FROM bikes GROUP BY model_id, status, color, image)";
+                }
+                $where_p[] = 'b.id IN (SELECT MIN(id) FROM bikes GROUP BY model_id, status, color, image)';
                 $where = implode(' AND ', $where_p);
                 $all_bikes = $conn->query("SELECT b.*, m.model_name, m.category, m.image as model_image, m.top_speed, m.max_range 
                     FROM bikes b JOIN models m ON b.model_id = m.id WHERE $where ORDER BY b.status IN ('in_stock', 'returned') DESC, b.created_at DESC LIMIT $offset, $per_page");
