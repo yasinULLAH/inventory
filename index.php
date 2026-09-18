@@ -4909,10 +4909,47 @@ else:
 <div class="sidebar-footer">
 <?php if (SUBSCRIPTION_ENABLED): ?>
 <?php $sidebar_sub = sub_get_status($conn); ?>
-<div style="margin:10px 14px;padding:8px 12px;border-radius:6px;font-size:0.75rem;background:<?= $sidebar_sub['status'] === 'active' ? 'rgba(16,185,129,0.12)' : ($sidebar_sub['status'] === 'grace' ? 'rgba(245,158,11,0.12)' : 'rgba(239,68,68,0.12)') ?>;border:1px solid <?= $sidebar_sub['status'] === 'active' ? 'rgba(16,185,129,0.25)' : ($sidebar_sub['status'] === 'grace' ? 'rgba(245,158,11,0.25)' : 'rgba(239,68,68,0.25)') ?>;">
-    <div style="font-weight:700;color:<?= $sidebar_sub['status'] === 'active' ? '#6ee7b7' : ($sidebar_sub['status'] === 'grace' ? '#fbbf24' : '#fca5a5') ?>;text-transform:uppercase;"><?= $sidebar_sub['status'] === 'active' ? '✅ Licensed' : ($sidebar_sub['status'] === 'grace' ? '⚠ Grace Period' : '⛔ Expired') ?></div>
+<style>
+.sub-ind{margin:10px 14px;padding:10px 12px;border-radius:6px;font-size:0.75rem;border:1px solid;border-left:3px solid}
+.sub-ind .sub-ind-title{font-weight:700;text-transform:uppercase;letter-spacing:0.3px}
+.sub-ind .sub-ind-sub{margin-top:3px;font-size:0.72rem}
+.sub-ind .sub-ind-link{margin-top:6px;font-size:0.72rem;font-weight:600;text-decoration:underline}
+.sub-ind.active{background:rgba(16,185,129,0.2);border-color:rgba(16,185,129,0.4);border-left-color:#10b981}
+.sub-ind.active .sub-ind-title{color:#fff}
+.sub-ind.active .sub-ind-sub{color:rgba(255,255,255,0.85)}
+.sub-ind.grace{background:rgba(245,158,11,0.2);border-color:rgba(245,158,11,0.4);border-left-color:#f59e0b}
+.sub-ind.grace .sub-ind-title{color:#fff}
+.sub-ind.grace .sub-ind-sub{color:rgba(255,255,255,0.85)}
+.sub-ind.grace .sub-ind-link{color:#fff}
+.sub-ind.expired{background:rgba(239,68,68,0.2);border-color:rgba(239,68,68,0.4);border-left-color:#ef4444}
+.sub-ind.expired .sub-ind-title{color:#fff}
+.sub-ind.expired .sub-ind-sub{color:rgba(255,255,255,0.85)}
+.sub-ind.expired .sub-ind-link{color:#fff}
+[data-theme="light"] .sub-ind.active{background:rgba(16,185,129,0.12);border-color:rgba(16,185,129,0.3);border-left-color:#10b981}
+[data-theme="light"] .sub-ind.active .sub-ind-title{color:#047857}
+[data-theme="light"] .sub-ind.active .sub-ind-sub{color:#059669}
+[data-theme="light"] .sub-ind.grace{background:rgba(245,158,11,0.12);border-color:rgba(245,158,11,0.3);border-left-color:#f59e0b}
+[data-theme="light"] .sub-ind.grace .sub-ind-title{color:#92400e}
+[data-theme="light"] .sub-ind.grace .sub-ind-sub{color:#a16207}
+[data-theme="light"] .sub-ind.grace .sub-ind-link{color:#92400e}
+[data-theme="light"] .sub-ind.expired{background:rgba(239,68,68,0.12);border-color:rgba(239,68,68,0.3);border-left-color:#ef4444}
+[data-theme="light"] .sub-ind.expired .sub-ind-title{color:#991b1b}
+[data-theme="light"] .sub-ind.expired .sub-ind-sub{color:#b91c1c}
+[data-theme="light"] .sub-ind.expired .sub-ind-link{color:#991b1b}
+</style>
+<div class="sub-ind <?= $sidebar_sub['status'] ?>">
+    <div class="sub-ind-title"><?= $sidebar_sub['status'] === 'active' ? '✅ Licensed' : ($sidebar_sub['status'] === 'grace' ? '⚠ Grace Period' : '⛔ Expired') ?></div>
+    <div class="sub-ind-sub">
+        <?php if ($sidebar_sub['status'] === 'active'): ?>
+            <?= $sidebar_sub['days_left'] ?> day(s) remaining
+        <?php elseif ($sidebar_sub['status'] === 'grace'): ?>
+            <?= $sidebar_sub['grace_days_left'] ?> grace day(s) left
+        <?php else: ?>
+            Please renew subscription
+        <?php endif; ?>
+    </div>
     <?php if ($sidebar_sub['status'] !== 'active'): ?>
-    <div style="margin-top:4px;"><a href="index.php?page=license" style="color:inherit;text-decoration:underline">Enter License Key →</a></div>
+    <div class="sub-ind-link"><a href="index.php?page=license" style="color:inherit;text-decoration:inherit;">Enter License Key →</a></div>
     <?php endif; ?>
 </div>
 <?php endif; ?>
