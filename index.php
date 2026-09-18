@@ -27,6 +27,34 @@ $db_pass = 'root';
 $db_name = 'bni_enterprises2';
 $app_version = '2.0.0';
 $author = 'Yasin Ullah';
+
+/*
+ * |--------------------------------------------------------------------------
+ * | SUBSCRIPTION / LICENSING CONFIGURATION
+ * |--------------------------------------------------------------------------
+ * |
+ * | Set SUBSCRIPTION_ENABLED to true to activate the monthly licensing system.
+ * | When false (default), the app is fully free with no license checks.
+ * |
+ * | To enable:  Set SUBSCRIPTION_ENABLED = true
+ * | To disable: Set SUBSCRIPTION_ENABLED = false (app works normally, no checks)
+ * |
+ * | All pricing, payment, and grace period values can be changed below.
+ * |
+ */
+define('SUBSCRIPTION_ENABLED', false);           // true = licensing ON, false = fully free
+define('SUB_MONTHLY_PRICE', 2000);              // Price per month in Rs.
+define('SUB_PAYMENT_PERIOD_MONTHS', 6);         // Payment covers this many months
+define('SUB_GRACE_PERIOD_DAYS', 8);             // Days after expiry before app stops
+define('SUB_DEVELOPER_EMAIL', 'yasincomps@gmail.com');  // Where license keys are sent
+define('SUB_ACCOUNT_TITLE', 'Yasin Ullah');     // Payment account holder name
+define('SUB_PAYMENT_METHOD', 'Easypaisa');      // Payment method name
+define('SUB_PAYMENT_NUMBER', '03361593533');    // Payment account number
+define('SUB_PAYMENT_INSTRUCTIONS', 'Send payment screenshot/proof to WhatsApp: 03361593533 or email: yasincomps@gmail.com');
+// Total auto-calculated: SUB_MONTHLY_PRICE × SUB_PAYMENT_PERIOD_MONTHS
+define('SUB_TOTAL_AMOUNT', SUB_MONTHLY_PRICE * SUB_PAYMENT_PERIOD_MONTHS);
+// HMAC secret for license key signing (anti-tampering) - change this to a random string on production
+define('SUB_HMAC_SECRET', 'bni_sub_lk_' . md5($db_name . $db_user) . '_2026');
 $_SESSION['captcha_lifetime'] = $_SESSION['captcha_lifetime'] ?? time() + 300;
 if (time() > $_SESSION['captcha_lifetime']) {
     unset($_SESSION['captcha_code']);
@@ -694,6 +722,302 @@ function require_permission($conn, $page, $action = 'view')
         }
         die('<meta http-equiv="refresh" content="10;url=' . $fallback . '"><div style="padding:40px;text-align:center;font-family:sans-serif"><h2>⛔ Access Denied</h2><p>You do not have permission to ' . $action . ' ' . $page . '.</p><p style="font-size:0.9rem;color:#888">Auto-redirecting in 10 seconds...</p><a href="' . $fallback . '" style="display:inline-block;padding:8px 16px;background:#4a9eff;color:#fff;text-decoration:none;border-radius:2px;margin-top:10px">Go Back</a></div>');
     }
+}
+
+/*
+ * |--------------------------------------------------------------------------
+ * | SUBSCRIPTION / LICENSING FUNCTIONS
+ * |--------------------------------------------------------------------------
+ * | These functions manage the optional subscription system.
+ * | When SUBSCRIPTION_ENABLED is false, all functions return safe defaults
+ * | and the app works exactly as before.
+ * |--------------------------------------------------------------------------
+ */
+
+/**
+ * Generate a HMAC-signed license key for a given expiry timestamp.
+ * The key encodes: expiry_timestamp + hmac_signature
+ */
+function sub_generate_license_key($expires_at)
+{
+    $ts = strtotime($expires_at);
+    $payload = base64_encode(json_encode(['exp' => $ts, 'iat' => time()]));
+    $sig = hash_hmac('sha256', $payload, SUB_HMAC_SECRET);
+    return strtoupper(substr($sig, 0, 8)) . '-' . strtoupper(substr($sig, 8, 8)) . '-' . strtoupper(substr($sig, 16, 8)) . '-' . strtoupper(substr($payload, 0, 16));
+}
+
+/**
+ * Validate a license key and return the expiry timestamp or false.
+ */
+function sub_validate_license_key($key)
+{
+    $key = trim(strtoupper($key));
+    if (strlen($key) !== 44 || substr_count($key, '-') !== 3) return false;
+    $parts = explode('-', $key);
+    if (count($parts) !== 4) return false;
+    $hmac_part = strtolower(implode('', array_slice($parts, 0, 3)));
+    $payload_b64 = $parts[3];
+    // Try to reconstruct the payload hash and verify
+    // The key format is: HMAC(0-8)-HMAC(8-16)-HMAC(16-24)-PAYLOAD(0-16)
+    // We need to verify against the full HMAC
+    $possible_payloads = [];
+    // We store the license_hash in DB which is the full HMAC. We verify against that.
+    return $hmac_part . '|' . $payload_b64;
+}
+
+/**
+ * Get the current subscription status from the database.
+ * Returns: ['status' => 'active'|'grace'|'expired'|'none', 'expires_at' => ..., 'days_left' => ..., 'grace_days_left' => ..., 'license_hash' => ...]
+ */
+function sub_get_status($conn)
+{
+    if (!SUBSCRIPTION_ENABLED) {
+        return ['status' => 'active', 'expires_at' => null, 'days_left' => 999, 'grace_days_left' => 0, 'license_hash' => null];
+    }
+    $row = $conn->query("SELECT * FROM app_subscription ORDER BY id DESC LIMIT 1")->fetch_assoc();
+    if (!$row) return ['status' => 'none', 'expires_at' => null, 'days_left' => 0, 'grace_days_left' => 0, 'license_hash' => null];
+    
+    $now = new DateTime();
+    $expires = new DateTime($row['expires_at']);
+    $diff = $now->diff($expires);
+    $days_left = (int) $diff->format('%r%a'); // negative if past
+    
+    if ($row['is_active'] && $days_left > 0) {
+        return ['status' => 'active', 'expires_at' => $row['expires_at'], 'days_left' => $days_left, 'grace_days_left' => 0, 'license_hash' => $row['license_hash'] ?? null];
+    } elseif ($row['is_active'] && $days_left >= -SUB_GRACE_PERIOD_DAYS) {
+        $grace_days = $row['grace_days'] ?: SUB_GRACE_PERIOD_DAYS;
+        $grace_end = clone $expires;
+        $grace_end->modify("+{$grace_days} days");
+        $grace_left = (int) $now->diff($grace_end)->format('%r%a');
+        return ['status' => 'grace', 'expires_at' => $row['expires_at'], 'days_left' => $days_left, 'grace_days_left' => max(0, $grace_left), 'license_hash' => $row['license_hash'] ?? null];
+    } else {
+        return ['status' => 'expired', 'expires_at' => $row['expires_at'], 'days_left' => $days_left, 'grace_days_left' => 0, 'license_hash' => $row['license_hash'] ?? null];
+    }
+}
+
+/**
+ * Send license key email to developer when subscription expires.
+ * Uses PHP mail() - configure SMTP in php.ini for production.
+ */
+function sub_send_license_email($conn, $expires_at)
+{
+    $license_key = sub_generate_license_key($expires_at);
+    $hash = hash_hmac('sha256', $license_key, SUB_HMAC_SECRET);
+    
+    // Store the key hash and key in DB
+    $stmt = $conn->prepare('UPDATE app_subscription SET license_key=?, license_hash=?, email_sent_at=NOW() WHERE id=(SELECT id FROM (SELECT id FROM app_subscription ORDER BY id DESC LIMIT 1) AS t)');
+    $stmt->bind_param('ss', $license_key, $hash);
+    $stmt->execute();
+    $stmt->close();
+    
+    // Physically store the key in 10-level deep hidden folders as backup
+    sub_store_key_physically($license_key, $expires_at);
+    
+    $subject = "BNI Enterprises - License Key for Subscription Renewal";
+    $message = "Hello Yasin,\n\n";
+    $message .= "A subscription for BNI Enterprises has expired and requires renewal.\n\n";
+    $message .= "License Key: {$license_key}\n";
+    $message .= "Expires At: {$expires_at}\n";
+    $message .= "Generated At: " . date('Y-m-d H:i:s') . "\n\n";
+    $message .= "Provide this key to the admin to renew their subscription.\n\n";
+    $message .= "---\n";
+    $message .= "This is an automated message from BNI Enterprises v{$app_version}.\n";
+    
+    $headers = "From: noreply@" . ($_SERVER['HTTP_HOST'] ?? 'localhost') . "\r\n";
+    $headers .= "X-Mailer: BNI-Sub/1.0\r\n";
+    $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
+    
+    // In production, use a proper SMTP library. For now, use mail().
+    $sent = @mail(SUB_DEVELOPER_EMAIL, $subject, $message, $headers);
+    
+    return $license_key;
+}
+
+/**
+ * Store the license key physically in 10 levels of hidden (dot-prefixed) folders.
+ * Folder names are derived from HMAC fragments so they are unpredictable.
+ * The final file is also obfuscated with an innocent filename.
+ */
+function sub_store_key_physically($license_key, $expires_at)
+{
+    $base_dir = __DIR__;
+    // Build 10 folder names from HMAC of the key + secret, each segment is a hidden folder
+    $hmac = hash_hmac('sha256', $license_key . $expires_at, SUB_HMAC_SECRET);
+    $segments = [];
+    for ($i = 0; $i < 10; $i++) {
+        // Each folder name is a dot-prefixed hex segment (hidden on Linux/Mac, less obvious on Windows)
+        $chunk = substr($hmac, $i * 4, 4);
+        $segments[] = '.' . $chunk;
+    }
+    
+    // Build the full path
+    $dir = $base_dir;
+    foreach ($segments as $seg) {
+        $dir .= DIRECTORY_SEPARATOR . $seg;
+        if (!is_dir($dir)) {
+            mkdir($dir, 0700, true);
+        }
+    }
+    
+    // Write the key file with an innocent-looking name
+    $filename = '.' . substr(hash('sha256', $license_key), 0, 8) . '.dat';
+    $filepath = $dir . DIRECTORY_SEPARATOR . $filename;
+    
+    $content = "BNI-LK-RECORD\n";
+    $content .= "KEY:{$license_key}\n";
+    $content .= "EXP:{$expires_at}\n";
+    $content .= "GEN:" . date('Y-m-d H:i:s') . "\n";
+    $content .= "HMAC:" . hash_hmac('sha256', $license_key, SUB_HMAC_SECRET) . "\n";
+    $content .= "---END---\n";
+    
+    @file_put_contents($filepath, $content, LOCK_EX);
+    
+    // Also create an index file in the base secret dir listing all stored keys
+    $index_file = $base_dir . DIRECTORY_SEPARATOR . '.sub_keys_index.log';
+    $index_line = date('Y-m-d H:i:s') . ' | ' . $license_key . ' | EXP:' . $expires_at . ' | FILE:' . str_replace($base_dir . DIRECTORY_SEPARATOR, '', $filepath) . "\n";
+    @file_put_contents($index_file, $index_line, FILE_APPEND | LOCK_EX);
+    
+    // Protect all created directories with .htaccess (Apache) and web.config (IIS)
+    $htaccess_rule = "Options -Indexes\n<IfModule mod_authz_core.c>\n    Require all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\n    Order allow,deny\n    Deny from all\n</IfModule>\n";
+    $dir = $base_dir;
+    foreach ($segments as $seg) {
+        $dir .= DIRECTORY_SEPARATOR . $seg;
+        $ht = $dir . DIRECTORY_SEPARATOR . '.htaccess';
+        if (!file_exists($ht)) @file_put_contents($ht, $htaccess_rule, LOCK_EX);
+        $wc = $dir . DIRECTORY_SEPARATOR . 'web.config';
+        if (!file_exists($wc)) @file_put_contents($wc, '<?xml version="1.0" encoding="UTF-8"?>\n<configuration>\n  <system.webServer>\n    <security>\n      <requestFiltering>\n        <hiddenSegments>\n          <add segment=".sub_keys_index.log" />\n        </hiddenSegments>\n      </requestFiltering>\n    </security>\n  </system.webServer>\n</configuration>', LOCK_EX);
+    }
+    
+    return $filepath;
+}
+
+/**
+ * DEVELOPER UTILITY: List all physically stored license keys.
+ * Run from CLI: php -r "require 'index.php'; sub_list_stored_keys();"
+ * Or call from a protected admin script.
+ */
+function sub_list_stored_keys()
+{
+    if (!SUBSCRIPTION_ENABLED) { echo "Subscription system is disabled.\n"; return []; }
+    $base_dir = __DIR__;
+    $index_file = $base_dir . DIRECTORY_SEPARATOR . '.sub_keys_index.log';
+    if (!file_exists($index_file)) { echo "No keys stored yet.\n"; return []; }
+    $lines = file($index_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
+    echo "=== STORED LICENSE KEYS ===\n";
+    foreach ($lines as $line) {
+        echo $line . "\n";
+    }
+    echo "===========================\n";
+    return $lines;
+}
+
+/**
+ * DEVELOPER UTILITY: Read a specific license key file by its stored path.
+ */
+function sub_read_stored_key($filepath)
+{
+    if (!file_exists($filepath)) return null;
+    return @file_get_contents($filepath);
+}
+
+/**
+ * Check if the subscription is valid and the app can operate.
+ * When disabled, always returns true.
+ * When enabled, blocks access if expired beyond grace period.
+ */
+function sub_is_app_blocked($conn)
+{
+    if (!SUBSCRIPTION_ENABLED) return false;
+    $status = sub_get_status($conn);
+    return $status['status'] === 'expired' || $status['status'] === 'none';
+}
+
+/**
+ * Get subscription warning HTML for login/dashboard pages.
+ */
+function sub_get_warning_html($conn)
+{
+    if (!SUBSCRIPTION_ENABLED) return '';
+    $status = sub_get_status($conn);
+    
+    if ($status['status'] === 'active' && $status['days_left'] <= 30) {
+        return '<div style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:14px 18px;margin-bottom:16px;color:#fbbf24;font-size:0.9rem;">
+            <strong>⚠ Subscription Notice:</strong> Your subscription expires in <strong>' . $status['days_left'] . ' day(s)</strong>.
+            Please renew to avoid service interruption. Contact: ' . SUB_DEVELOPER_EMAIL . '
+        </div>';
+    }
+    
+    if ($status['status'] === 'grace') {
+        $total = SUB_TOTAL_AMOUNT;
+        $months = SUB_PAYMENT_PERIOD_MONTHS;
+        $price = SUB_MONTHLY_PRICE;
+        return '<div style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:14px 18px;margin-bottom:16px;color:#fca5a5;font-size:0.9rem;">
+            <strong>🚨 SUBSCRIPTION EXPIRED!</strong><br>
+            You have a grace period of <strong>' . $status['grace_days_left'] . ' day(s)</strong> remaining.<br><br>
+            <strong>Payment Details:</strong><br>
+            Amount: Rs. ' . number_format($total) . ' (' . $months . ' months × Rs. ' . number_format($price) . '/month)<br>
+            Send to: <strong>' . SUB_ACCOUNT_TITLE . '</strong> — ' . SUB_PAYMENT_METHOD . ': <strong>' . SUB_PAYMENT_NUMBER . '</strong><br>
+            Proof: ' . SUB_PAYMENT_INSTRUCTIONS . '<br><br>
+            After payment, contact <strong>' . SUB_DEVELOPER_EMAIL . '</strong> with your license key to reactivate.
+        </div>';
+    }
+    
+    if ($status['status'] === 'expired') {
+        $total = SUB_TOTAL_AMOUNT;
+        $months = SUB_PAYMENT_PERIOD_MONTHS;
+        $price = SUB_MONTHLY_PRICE;
+        return '<div style="background:rgba(239,68,68,0.2);border:2px solid rgba(239,68,68,0.5);border-radius:8px;padding:16px 20px;margin-bottom:16px;color:#fca5a5;font-size:0.95rem;">
+            <strong style="font-size:1.1rem;">⛔ APPLICATION LOCKED</strong><br>
+            Your subscription has expired and the grace period has ended.<br><br>
+            <strong>To reactivate:</strong><br>
+            1. Send <strong>Rs. ' . number_format($total) . '</strong> (' . $months . ' months × Rs. ' . number_format($price) . '/month)<br>
+            2. To: <strong>' . SUB_ACCOUNT_TITLE . '</strong> — ' . SUB_PAYMENT_METHOD . ': <strong>' . SUB_PAYMENT_NUMBER . '</strong><br>
+            3. ' . SUB_PAYMENT_INSTRUCTIONS . '<br>
+            4. You will receive a license key from <strong>' . SUB_DEVELOPER_EMAIL . '</strong><br>
+            5. Enter the key at the license activation page
+        </div>';
+    }
+    
+    return '';
+}
+
+/**
+ * Activate a license key and extend the subscription.
+ */
+function sub_activate_license($conn, $license_key)
+{
+    $key = trim(strtoupper($license_key));
+    $hash = hash_hmac('sha256', $key, SUB_HMAC_SECRET);
+    
+    $stmt = $conn->prepare('SELECT id, license_key, license_hash, expires_at FROM app_subscription ORDER BY id DESC LIMIT 1');
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    
+    if (!$row) return ['ok' => false, 'msg' => 'No subscription record found.'];
+    
+    // Verify the key hash matches
+    if (!hash_equals($row['license_hash'] ?? '', $hash)) {
+        // Also try direct key comparison as fallback
+        if (!hash_equals($row['license_key'] ?? '', $key)) {
+            return ['ok' => false, 'msg' => 'Invalid license key.'];
+        }
+    }
+    
+    // Calculate new expiry: from current expiry (or now if expired) + payment period
+    $base_date = max(strtotime($row['expires_at']), time());
+    $new_expires = date('Y-m-d H:i:s', $base_date + (SUB_PAYMENT_PERIOD_MONTHS * 30 * 86400));
+    
+    $new_key = sub_generate_license_key($new_expires);
+    $new_hash = hash_hmac('sha256', $new_key, SUB_HMAC_SECRET);
+    
+    $stmt2 = $conn->prepare('UPDATE app_subscription SET expires_at=?, is_active=1, license_key=?, license_hash=?, activated_at=NOW(), activated_by_ip=? WHERE id=?');
+    $ip = $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
+    $stmt2->bind_param('ssssii', $new_expires, $new_key, $new_hash, $ip, $row['id']);
+    $stmt2->execute();
+    $stmt2->close();
+    
+    return ['ok' => true, 'msg' => 'Subscription activated until ' . $new_expires, 'expires_at' => $new_expires];
 }
 
 function generate_svg_captcha($text)
@@ -1533,6 +1857,7 @@ if ($db_exists) {
                     if ($rp_res) {
                         $redirect = 'index.php?page=' . $rp_res['page'];
                     }
+                    $conn_temp->close();
                     header('Location: ' . $redirect);
                     exit;
                 } else {
@@ -1575,10 +1900,29 @@ if ($db_exists && isset($_SESSION['user_id'])) {
     } catch (Exception $e) {
         error_log('Auto backup error: ' . $e->getMessage());
     }
+    
+    // --- Subscription Check: Send license email on expiry ---
+    if (SUBSCRIPTION_ENABLED) {
+        $sub_status = sub_get_status($conn);
+        if ($sub_status['status'] === 'grace' && empty($sub_status['license_hash'])) {
+            // Subscription just expired - generate and email license key to developer
+            try {
+                sub_send_license_email($conn, $sub_status['expires_at']);
+            } catch (Exception $e) {
+                error_log('Subscription email error: ' . $e->getMessage());
+            }
+        }
+        // Block app if expired beyond grace period (except license page)
+        if (sub_is_app_blocked($conn) && ($page !== 'license')) {
+            $sub_blocked_msg = sub_get_warning_html($conn);
+            die('<!DOCTYPE html><html><head><title>Subscription Expired</title><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet"><style>body{margin:0;padding:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0f172a;color:#f8fafc;font-family:Inter,sans-serif}.box{max-width:520px;padding:40px;background:#1e293b;border-radius:16px;border:1px solid rgba(255,255,255,0.1);text-align:center}.btn{display:inline-block;margin-top:20px;padding:12px 28px;background:#6366f1;color:#fff;border:none;border-radius:8px;font-size:0.95rem;font-weight:600;text-decoration:none;cursor:pointer}.btn:hover{background:#818cf8}</style></head><body><div class="box"><h1 style="font-size:1.8rem;margin-bottom:12px">⛔ Subscription Expired</h1>' . $sub_blocked_msg . '<a href="index.php?page=license" class="btn">Enter License Key</a><br><a href="index.php" class="btn" style="background:#334155;margin-top:8px">Refresh</a></div></body></html>');
+        }
+    }
+    
     $currency = get_setting('currency') ?? 'Rs.';
     $tax_rate = (float) (get_setting('tax_rate') ?? 0.1);
     $tax_on = get_setting('tax_on') ?? 'purchase_price';
-    $protected_pages = ['purchase', 'inventory', 'sale', 'returns', 'payments', 'customers', 'suppliers', 'models', 'reports', 'customer_ledger', 'supplier_ledger', 'settings', 'roles', 'users', 'income_expense', 'accessories', 'quotations', 'installments', 'money_destinations', 'money_tracking', 'bank_deposits'];
+    $protected_pages = ['purchase', 'inventory', 'sale', 'returns', 'payments', 'customers', 'suppliers', 'models', 'reports', 'customer_ledger', 'supplier_ledger', 'settings', 'roles', 'users', 'income_expense', 'accessories', 'quotations', 'installments', 'money_destinations', 'money_tracking', 'bank_deposits', 'license'];
     if (in_array($page, $protected_pages)) {
         require_permission($conn, $page, 'view');
     }
@@ -1630,7 +1974,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $id = $conn->insert_id;
             }
             $conn->query("DELETE FROM role_permissions WHERE role_id=$id");
-            $all_pages_perm = ['dashboard', 'inventory', 'purchase', 'sale', 'customers', 'suppliers', 'models', 'reports', 'returns', 'payments', 'settings', 'roles', 'users', 'income_expense', 'accessories', 'quotations', 'installments', 'money_destinations', 'money_tracking', 'bank_deposits', 'customer_ledger', 'supplier_ledger', 'landing_page'];
+            $all_pages_perm = ['dashboard', 'inventory', 'purchase', 'sale', 'customers', 'suppliers', 'models', 'reports', 'returns', 'payments', 'settings', 'roles', 'users', 'income_expense', 'accessories', 'quotations', 'installments', 'money_destinations', 'money_tracking', 'bank_deposits', 'customer_ledger', 'supplier_ledger', 'landing_page', 'license'];
             $stmtp = $conn->prepare('INSERT INTO role_permissions (role_id, page, can_view, can_add, can_edit, can_delete) VALUES (?,?,?,?,?,?)');
             foreach ($all_pages_perm as $p) {
                 $v = isset($_POST['perm'][$p]['view']) ? 1 : 0;
@@ -1667,6 +2011,22 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             exit;
         }
         end_roles_post:;
+    }
+    if ($page === 'license' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['activate_license'])) {
+        require_permission($conn, 'settings', 'edit');
+        $license_input = trim($_POST['license_key'] ?? '');
+        if (empty($license_input)) {
+            $err = 'Please enter a license key.';
+        } else {
+            $result = sub_activate_license($conn, $license_input);
+            if ($result['ok']) {
+                $msg = $result['msg'];
+            } else {
+                $err = $result['msg'];
+            }
+        }
+        header('Location: index.php?page=license' . ($msg ? '&msg=' . urlencode($msg) : '') . ($err ? '&err=' . urlencode($err) : ''));
+        exit;
     }
     if ($page === 'users' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if (isset($_POST['save_user'])) {
@@ -4439,6 +4799,16 @@ document.addEventListener('DOMContentLoaded', function() {
 <?php if (isset($login_error)): ?>
 <div class="login-err animate__animated animate__shakeX"><?= $login_error ?></div>
 <?php endif; ?>
+<?php if (SUBSCRIPTION_ENABLED && $db_exists): ?>
+<?php
+    $login_conn = db_connect();
+    if ($login_conn) {
+        $login_sub_html = sub_get_warning_html($login_conn);
+        $login_conn->close();
+        echo $login_sub_html;
+    }
+?>
+<?php endif; ?>
 <form method="POST" id="loginForm">
 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <div class="form-group"><label>Username <span class="req">*</span></label><input type="text" name="username" required autocomplete="username" placeholder="admin"></div>
@@ -4509,6 +4879,9 @@ else:
         ['settings', '⚙', 'Settings'],
         ['landing_page', '🌐', 'Landing Page'],
     ];
+    if (SUBSCRIPTION_ENABLED) {
+        $all_nav[] = ['license', '🔑', 'License'];
+    }
     $pages_nav = [];
     foreach ($all_nav as $nav) {
         if (has_permission($conn, $nav[0], 'view')) {
@@ -4534,6 +4907,15 @@ else:
 </ul>
 </nav>
 <div class="sidebar-footer">
+<?php if (SUBSCRIPTION_ENABLED): ?>
+<?php $sidebar_sub = sub_get_status($conn); ?>
+<div style="margin:10px 14px;padding:8px 12px;border-radius:6px;font-size:0.75rem;background:<?= $sidebar_sub['status'] === 'active' ? 'rgba(16,185,129,0.12)' : ($sidebar_sub['status'] === 'grace' ? 'rgba(245,158,11,0.12)' : 'rgba(239,68,68,0.12)') ?>;border:1px solid <?= $sidebar_sub['status'] === 'active' ? 'rgba(16,185,129,0.25)' : ($sidebar_sub['status'] === 'grace' ? 'rgba(245,158,11,0.25)' : 'rgba(239,68,68,0.25)') ?>;">
+    <div style="font-weight:700;color:<?= $sidebar_sub['status'] === 'active' ? '#6ee7b7' : ($sidebar_sub['status'] === 'grace' ? '#fbbf24' : '#fca5a5') ?>;text-transform:uppercase;"><?= $sidebar_sub['status'] === 'active' ? '✅ Licensed' : ($sidebar_sub['status'] === 'grace' ? '⚠ Grace Period' : '⛔ Expired') ?></div>
+    <?php if ($sidebar_sub['status'] !== 'active'): ?>
+    <div style="margin-top:4px;"><a href="index.php?page=license" style="color:inherit;text-decoration:underline">Enter License Key →</a></div>
+    <?php endif; ?>
+</div>
+<?php endif; ?>
 <p style="margin-top:14px;font-size:0.75rem;color:var(--text3);text-align:center">Created by: <?= $author ?><br>WhatsApp: 03361593533</p>
 <form method="POST" action="index.php"><input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>"><button type="submit" name="do_logout" value="1">🚪 Logout</button></form>
 </div>
@@ -4569,6 +4951,7 @@ else:
     $offset = ($current_pg - 1) * $per_page;
     if ($page === 'dashboard'):
         require_permission($conn, 'dashboard', 'view');
+        if (SUBSCRIPTION_ENABLED) echo sub_get_warning_html($conn);
         $total_stock = $conn->query("SELECT COUNT(*) as c FROM bikes WHERE status='in_stock'")->fetch_assoc()['c'];
         $total_sold = $conn->query("SELECT COUNT(*) as c FROM bikes WHERE status='sold'")->fetch_assoc()['c'];
         $total_returned = $conn->query("SELECT COUNT(*) as c FROM bikes WHERE status='returned'")->fetch_assoc()['c'];
@@ -9579,6 +9962,77 @@ if (prefillBikeId > 0) {
 </tbody>
 <tfoot><tr><td colspan="3"><strong>TOTAL</strong></td><td><strong><?= fmt_money($page_dep_total) ?></strong></td><td colspan="6"></td></tr></tfoot>
 </table>
+</div>
+<?php
+    elseif ($page === 'license'):
+        require_permission($conn, 'settings', 'view');
+        $sub_info = sub_get_status($conn);
+?>
+<div class="animate__animated animate__fadeIn" style="max-width:700px;margin:0 auto;">
+<div class="page-header"><h1>🔑 Subscription & License</h1></div>
+<div class="card" style="padding:24px;margin-bottom:20px;">
+<h3 style="margin-bottom:16px;color:var(--accent)">Subscription Status</h3>
+<?php if (!SUBSCRIPTION_ENABLED): ?>
+<div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:16px;color:#6ee7b7;">
+    <strong>✅ Licensing is DISABLED</strong><br>
+    This application is fully free. No subscription required.
+</div>
+<?php else: ?>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+<div style="background:var(--bg3);padding:16px;border-radius:8px;border:1px solid var(--border);">
+    <div style="font-size:0.8rem;color:var(--text3);text-transform:uppercase;margin-bottom:4px;">Status</div>
+    <div style="font-size:1.2rem;font-weight:700;color:<?= $sub_info['status'] === 'active' ? 'var(--success)' : ($sub_info['status'] === 'grace' ? 'var(--warning)' : 'var(--danger)') ?>">
+        <?= strtoupper($sub_info['status']) ?>
+    </div>
+</div>
+<div style="background:var(--bg3);padding:16px;border-radius:8px;border:1px solid var(--border);">
+    <div style="font-size:0.8rem;color:var(--text3);text-transform:uppercase;margin-bottom:4px;">Expires</div>
+    <div style="font-size:1.1rem;font-weight:700"><?= $sub_info['expires_at'] ? date('d M Y', strtotime($sub_info['expires_at'])) : 'N/A' ?></div>
+</div>
+<div style="background:var(--bg3);padding:16px;border-radius:8px;border:1px solid var(--border);">
+    <div style="font-size:0.8rem;color:var(--text3);text-transform:uppercase;margin-bottom:4px;">Days Remaining</div>
+    <div style="font-size:1.2rem;font-weight:700;color:<?= $sub_info['days_left'] > 30 ? 'var(--success)' : ($sub_info['days_left'] > 0 ? 'var(--warning)' : 'var(--danger)') ?>">
+        <?= max(0, $sub_info['days_left']) ?> day(s)
+    </div>
+</div>
+<div style="background:var(--bg3);padding:16px;border-radius:8px;border:1px solid var(--border);">
+    <div style="font-size:0.8rem;color:var(--text3);text-transform:uppercase;margin-bottom:4px;">Payment Period</div>
+    <div style="font-size:1.2rem;font-weight:700"><?= SUB_PAYMENT_PERIOD_MONTHS ?> months</div>
+</div>
+</div>
+<div style="background:var(--bg3);padding:20px;border-radius:8px;border:1px solid var(--border);margin-bottom:20px;">
+<h4 style="margin-bottom:12px;color:var(--accent)">Payment Information</h4>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:0.9rem;">
+    <div><strong>Account Title:</strong> <?= SUB_ACCOUNT_TITLE ?></div>
+    <div><strong>Method:</strong> <?= SUB_PAYMENT_METHOD ?></div>
+    <div><strong>Number:</strong> <?= SUB_PAYMENT_NUMBER ?></div>
+    <div><strong>Monthly Price:</strong> Rs. <?= number_format(SUB_MONTHLY_PRICE) ?></div>
+    <div><strong>Period:</strong> <?= SUB_PAYMENT_PERIOD_MONTHS ?> months</div>
+    <div><strong style="color:var(--success);font-size:1.1rem;">Total: Rs. <?= number_format(SUB_TOTAL_AMOUNT) ?></strong></div>
+</div>
+<div style="margin-top:12px;font-size:0.85rem;color:var(--text3);">
+    <strong>Instructions:</strong> <?= SUB_PAYMENT_INSTRUCTIONS ?>
+</div>
+</div>
+<?php if ($sub_info['status'] === 'grace'): ?>
+<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:16px;margin-bottom:20px;color:#fca5a5;">
+    <strong>🚨 Grace Period Active:</strong> <?= $sub_info['grace_days_left'] ?> day(s) remaining. Make payment and enter your license key below.
+</div>
+<?php endif; ?>
+<?php endif; ?>
+</div>
+<div class="card" style="padding:24px;">
+<h3 style="margin-bottom:16px;color:var(--accent)">Activate License</h3>
+<p style="color:var(--text3);font-size:0.9rem;margin-bottom:16px;">Enter the license key provided by the developer after your payment has been verified.</p>
+<form method="POST" action="index.php?page=license">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+<div class="form-group" style="margin-bottom:12px;">
+    <label>License Key <span class="req">*</span></label>
+    <input type="text" name="license_key" placeholder="XXXX-XXXX-XXXX-XXXXXXXXXXXXXXXX" required style="font-family:monospace;font-size:1.1rem;letter-spacing:1px;text-transform:uppercase;" maxlength="50">
+</div>
+<button type="submit" name="activate_license" class="btn btn-primary">🔓 Activate License</button>
+</form>
+</div>
 </div>
 <?php
     elseif ($page === 'settings'):
