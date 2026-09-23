@@ -39,13 +39,18 @@
  * =========================================================================*/
 
 // Live database credentials (production).
-$DB_HOST = 'localhost:3306';
+$DB_HOST = 'localhost';
 $DB_USER = 'gobuykar_yasin';
 $DB_PASS = 'yasin@1234';
 $DB_NAME = 'gobuykar_bni';
 
-// Folder (relative to THIS file) where backups are stored.
-$BACKUP_DIR = __DIR__ . '/thedbbackups';
+// Folder where backups are stored.
+// If a sibling folder "myapp.gobuykar.com" exists next to this app's folder,
+// store the backups inside that folder; otherwise fall back to a local
+// "thedbbackups" folder next to this file.
+$PREFERRED_APP_FOLDER = 'myapp.gobuykar.com';
+$sibling_app_dir = dirname(__DIR__) . '/' . $PREFERRED_APP_FOLDER;
+$BACKUP_DIR = (is_dir($sibling_app_dir) ? $sibling_app_dir : __DIR__) . '/thedbbackups';
 
 // Maximum number of backups to keep. Oldest is removed beyond this number.
 $MAX_BACKUPS = 20;
@@ -53,7 +58,7 @@ $MAX_BACKUPS = 20;
 // Secret key required when this script is triggered over HTTP.
 // CHANGE THIS to a long random value (e.g. 40+ random letters/numbers).
 // You only need it if you run the cron job via URL (see instructions below).
-$SECRET_KEY = 'CHANGE_ME_TO_A_LONG_RANDOM_SECRET_STRING';
+$SECRET_KEY = 'yasin134';
 
 // ---------------------------------------------------------------------------
 // EMAIL BACKUP (OPTIONAL)
