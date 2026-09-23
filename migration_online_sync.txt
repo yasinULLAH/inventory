@@ -1,0 +1,121 @@
+============================================================
+ BNI Enterprises - ONLINE DATABASE SYNC SCRIPT
+============================================================
+ Target DB      : gobuykar_bni  (live online, MariaDB 10.11)
+ Source of truth: bni_enterprises2 (offline, MySQL 8.2)
+ Generated      : 2026-09-23
+ Author         : Yasin Ullah
+
+ PURPOSE
+ -------
+ Bring the ONLINE database up to date so its structure matches the
+ OFFLINE database. This only ADDS missing tables / columns / indexes.
+ It does NOT delete or alter any existing online data.
+
+ WHAT WAS COMPARED
+ -----------------
+ Online file : bni_backup_20260911_105606_online_backup.sql
+ Offline file: bni_enterprises2-db_2026-09-18.sql
+
+ RESULTS OF THE COMPARISON
+ --------------------------
+ 1. MISSING TABLE (exists offline, missing online):
+      - app_subscription
+
+ 2. MISSING COLUMNS in `bikes` (exist offline, missing online):
+      - is_featured
+      - discount_amount
+      - discount_type
+      - discount_label
+      - discount_start
+      - discount_end
+      - display_priority
+
+ 3. MISSING INDEXES in `bikes` (exist offline, missing online):
+      - idx_featured (is_featured, status)
+      - idx_discount (discount_amount, discount_start, discount_end)
+
+ 4. Everything else (all other tables, columns, foreign keys,
+    indexes, types, defaults) is IDENTICAL. No other changes needed.
+
+ 5. COLLATION NOTE (cosmetic - NO ACTION REQUIRED):
+    Online uses utf8mb4_general_ci, offline uses utf8mb4_0900_ai_ci.
+    Both are valid utf8mb4 collations and behave the same for this app.
+    Also, utf8mb4_0900_ai_ci does NOT exist on MariaDB, so the online
+    DB must keep utf8mb4_general_ci. Do NOT try to change it.
+
+ HOW TO RUN
+ ----------
+ Run the SQL below ONCE against the online database `gobuykar_bni`
+ using phpMyAdmin (SQL tab) or the mysql CLI.
+
+ If you see "Duplicate column" / "Duplicate key name" / "Table already
+ exists" errors, it means that part was already applied - just skip it.
+
+============================================================
+ START OF SQL
+============================================================
+
+-- ------------------------------------------------------------
+-- 1) Create the missing `app_subscription` table
+--    (used by the subscription / licensing system)
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `app_subscription` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `license_key` VARCHAR(128) DEFAULT NULL,
+  `license_hash` VARCHAR(64) DEFAULT NULL,
+  `email_sent_at` DATETIME DEFAULT NULL,
+  `expires_at` DATETIME NOT NULL,
+  `grace_days` INT NOT NULL DEFAULT 8,
+  `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+  `activated_at` DATETIME NOT NULL,
+  `activated_by_ip` VARCHAR(45) DEFAULT NULL,
+  `last_validated_at` DATETIME DEFAULT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Seed a default subscription record (starts now, expires in 6 months).
+-- Safe to run even if a row already exists.
+INSERT INTO `app_subscription` (`expires_at`, `grace_days`, `is_active`, `activated_at`)
+VALUES (DATE_ADD(NOW(), INTERVAL 6 MONTH), 8, 1, NOW())
+ON DUPLICATE KEY UPDATE `id` = `id`;
+
+-- ------------------------------------------------------------
+-- 2) Add the missing `bikes` columns
+--    (Featured Bike + Running Discount feature)
+-- ------------------------------------------------------------
+ALTER TABLE `bikes`
+  ADD COLUMN `is_featured` TINYINT(1) NOT NULL DEFAULT 0 AFTER `image`,
+  ADD COLUMN `discount_amount` DECIMAL(15,2) NOT NULL DEFAULT 0.00 AFTER `is_featured`,
+  ADD COLUMN `discount_type` ENUM('flat','percentage') NOT NULL DEFAULT 'flat' AFTER `discount_amount`,
+  ADD COLUMN `discount_label` VARCHAR(255) NULL AFTER `discount_type`,
+  ADD COLUMN `discount_start` DATE NULL AFTER `discount_label`,
+  ADD COLUMN `discount_end` DATE NULL AFTER `discount_start`,
+  ADD COLUMN `display_priority` INT NOT NULL DEFAULT 0 AFTER `discount_end`;
+
+-- ------------------------------------------------------------
+-- 3) Add the missing `bikes` indexes
+-- ------------------------------------------------------------
+ALTER TABLE `bikes` ADD INDEX `idx_featured` (`is_featured`, `status`);
+ALTER TABLE `bikes` ADD INDEX `idx_discount` (`discount_amount`, `discount_start`, `discount_end`);
+
+============================================================
+ END OF SQL
+============================================================
+
+ VERIFICATION (run after applying)
+ ---------------------------------
+ Run these on the online DB. They should all return results
+ (i.e. no "Unknown column/table" errors):
+
+   SHOW COLUMNS FROM `bikes` LIKE 'is_featured';
+   SHOW COLUMNS FROM `bikes` LIKE 'discount_amount';
+   SHOW COLUMNS FROM `bikes` LIKE 'display_priority';
+   SHOW TABLES LIKE 'app_subscription';
+
+ IMPORTANT REMINDER (no DB change needed for the delete fix)
+ -----------------------------------------------------------
+ The inventory delete fix is 100% code-only. It only needs the
+ updated `index.php` uploaded - it uses tables/columns that already
+ exist on the online DB.
