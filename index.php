@@ -433,6 +433,115 @@ function sync_purchase_order_totals($conn, $purchase_order_id)
     $stmt->execute();
 }
 
+function delete_bike_cascade($conn, $bike_id)
+{
+    if ($bike_id <= 0) {
+        throw new Exception('Invalid bike id.');
+    }
+
+    // Lock the bike row so no concurrent sale/return can touch it mid-delete.
+    $lock = $conn->prepare("SELECT id, chassis_number, status, purchase_order_id FROM bikes WHERE id=? FOR UPDATE");
+    $lock->bind_param('i', $bike_id);
+    $lock->execute();
+    $bike = $lock->get_result()->fetch_assoc();
+    if (!$bike) {
+        throw new Exception('Bike record not found.');
+    }
+    $chassis = (string) $bike['chassis_number'];
+    $purchase_order_id = (int) ($bike['purchase_order_id'] ?? 0);
+    $bid = (int) $bike_id;
+
+    // Collect installment ids belonging to this bike.
+    $installment_ids = [];
+    $res = $conn->query("SELECT id FROM installments WHERE bike_id=$bid");
+    if ($res) {
+        while ($r = $res->fetch_assoc()) {
+            $installment_ids[] = (int) $r['id'];
+        }
+    }
+
+    // Collect payment ids linked to this bike (sale/refund payments and installment payments).
+    $payment_ids = [];
+    if (!empty($installment_ids)) {
+        $in_list = implode(',', $installment_ids);
+        $res = $conn->query("SELECT id FROM payments WHERE transaction_type='installment' AND reference_id IN ($in_list)");
+        if ($res) {
+            while ($r = $res->fetch_assoc()) {
+                $payment_ids[] = (int) $r['id'];
+            }
+        }
+    }
+    $res = $conn->query("SELECT id FROM payments WHERE transaction_type IN ('sale','customer_refund','supplier_refund') AND reference_id=$bid");
+    if ($res) {
+        while ($r = $res->fetch_assoc()) {
+            $payment_ids[] = (int) $r['id'];
+        }
+    }
+    $payment_ids = array_values(array_unique($payment_ids));
+
+    // Reverse accessory stock before removing sale_accessories rows (skip custom one-off accessories).
+    $restore_stmt = $conn->prepare('UPDATE accessories SET current_stock = current_stock + ? WHERE id=? AND sku NOT LIKE ?');
+    $cst_like = 'CST-%';
+    $acc_res = $conn->query("SELECT sa.accessory_id, sa.quantity FROM sale_accessories sa WHERE sa.bike_id=$bid");
+    if ($acc_res) {
+        while ($ar = $acc_res->fetch_assoc()) {
+            $restore_stmt->bind_param('iis', $ar['quantity'], $ar['accessory_id'], $cst_like);
+            $restore_stmt->execute();
+        }
+    }
+
+    // Delete dependent rows in foreign-key-safe order.
+    $conn->query("DELETE FROM deposit_allocations WHERE bike_id=$bid");
+    $conn->query("DELETE FROM sale_money_allocations WHERE bike_id=$bid");
+
+    if (!empty($installment_ids)) {
+        $conn->query('DELETE FROM installment_payment_allocations WHERE installment_id IN (' . implode(',', $installment_ids) . ')');
+    }
+    if (!empty($payment_ids)) {
+        $conn->query('DELETE FROM installment_payment_allocations WHERE payment_id IN (' . implode(',', $payment_ids) . ')');
+    }
+
+    $conn->query("DELETE FROM installments WHERE bike_id=$bid");
+    $conn->query("DELETE FROM sale_accessories WHERE bike_id=$bid");
+
+    if (!empty($payment_ids)) {
+        $conn->query('DELETE FROM payments WHERE id IN (' . implode(',', $payment_ids) . ')');
+    }
+
+    // Remove ledger entries for the bike sale/down-payment/return and its installments/penalties.
+    $ledger_where = "(reference_type IN ('sale','down_payment','return','return_reversal','purchase_reversal') AND reference_id=$bid)";
+    if (!empty($installment_ids)) {
+        $ledger_where .= " OR (reference_type IN ('installment','penalty') AND reference_id IN (" . implode(',', $installment_ids) . '))';
+    }
+    $conn->query("DELETE FROM ledger WHERE $ledger_where");
+
+    // Remove legacy cheque register rows tied to the bike.
+    $conn->query("DELETE FROM cheque_register WHERE reference_type IN ('sale','return') AND reference_id=$bid");
+
+    // Remove status history, quotations and quote requests.
+    $conn->query("DELETE FROM inventory_status_history WHERE bike_id=$bid");
+    $conn->query("DELETE FROM quotations WHERE bike_id=$bid");
+    $conn->query("DELETE FROM quote_requests WHERE bike_id=$bid");
+
+    // Remove automated inventory-loss expense for damaged/lost bikes.
+    $loss_ref = 'Bike ID: ' . $bid . ' (' . $chassis . ')';
+    $del_loss = $conn->prepare("DELETE FROM income_expenses WHERE category='Inventory Loss' AND reference=?");
+    $del_loss->bind_param('s', $loss_ref);
+    $del_loss->execute();
+
+    // Finally delete the bike itself.
+    $del_bike = $conn->prepare('DELETE FROM bikes WHERE id=?');
+    $del_bike->bind_param('i', $bid);
+    $del_bike->execute();
+    if ($del_bike->affected_rows === 0) {
+        throw new Exception('Bike could not be deleted.');
+    }
+
+    sync_purchase_order_totals($conn, $purchase_order_id);
+
+    return $chassis;
+}
+
 function get_allocated_total_for_bike($conn, $bike_id, $exclude_allocation_id = 0)
 {
     if ($exclude_allocation_id > 0) {
@@ -3206,8 +3315,12 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $chk->bind_param('i', $id);
             $chk->execute();
             $alloc_count = $chk->get_result()->fetch_row()[0];
-            if ($alloc_count > 0) {
-                $err = 'Cannot delete: This destination has ' . $alloc_count . ' allocation(s) linked to it.';
+            $dep_chk = $conn->prepare('SELECT COUNT(*) FROM bank_deposits WHERE destination_id = ?');
+            $dep_chk->bind_param('i', $id);
+            $dep_chk->execute();
+            $deposit_count = $dep_chk->get_result()->fetch_row()[0];
+            if ($alloc_count > 0 || $deposit_count > 0) {
+                $err = 'Cannot delete: This destination has ' . $alloc_count . ' allocation(s) and ' . $deposit_count . ' bank deposit(s) linked to it.';
             } else {
                 $stmt = $conn->prepare('DELETE FROM money_destinations WHERE id=?');
                 $stmt->bind_param('i', $id);
@@ -3429,17 +3542,19 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         if ($action === 'delete') {
             require_permission($conn, 'inventory', 'delete');
             $bid = (int) ($_POST['id'] ?? 0);
-            $stmt_check_sold = $conn->prepare('SELECT status, purchase_order_id FROM bikes WHERE id = ?');
-            $stmt_check_sold->bind_param('i', $bid);
-            $stmt_check_sold->execute();
-            $delete_bike_row = $stmt_check_sold->get_result()->fetch_assoc();
-            $conn->begin_transaction();
-            $stmt = $conn->prepare('DELETE FROM bikes WHERE id=?');
-            $stmt->bind_param('i', $bid);
-            $stmt->execute();
-            sync_purchase_order_totals($conn, (int) ($delete_bike_row['purchase_order_id'] ?? 0));
-            $conn->commit();
-            $msg = 'Bike deleted from inventory.';
+            if ($bid <= 0) {
+                $err = 'Invalid bike id.';
+            } else {
+                $conn->begin_transaction();
+                try {
+                    $chassis = delete_bike_cascade($conn, $bid);
+                    $conn->commit();
+                    $msg = 'Bike deleted and all related records reversed/removed.';
+                } catch (Exception $e) {
+                    $conn->rollback();
+                    $err = 'Bike deletion failed: ' . $e->getMessage();
+                }
+            }
         }
         if ($action === 'edit') {
             require_permission($conn, 'inventory', 'edit');
@@ -3566,26 +3681,26 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         if ($action === 'bulk_delete') {
             require_permission($conn, 'inventory', 'delete');
             $ids = $_POST['selected_bikes'] ?? [];
-            $ids = array_map('intval', $ids);
+            $ids = array_values(array_unique(array_map('intval', $ids)));
+            $ids = array_filter($ids, function ($v) {
+                return $v > 0;
+            });
             if (!empty($ids)) {
                 $conn->begin_transaction();
                 try {
+                    $deleted = 0;
                     foreach ($ids as $id) {
-                        $stmt_check_sold = $conn->prepare('SELECT status, purchase_order_id FROM bikes WHERE id = ?');
-                        $stmt_check_sold->bind_param('i', $id);
-                        $stmt_check_sold->execute();
-                        $bulk_bike_row = $stmt_check_sold->get_result()->fetch_assoc();
-                        $stmt_delete = $conn->prepare('DELETE FROM bikes WHERE id = ?');
-                        $stmt_delete->bind_param('i', $id);
-                        $stmt_delete->execute();
-                        sync_purchase_order_totals($conn, (int) ($bulk_bike_row['purchase_order_id'] ?? 0));
+                        delete_bike_cascade($conn, $id);
+                        $deleted++;
                     }
                     $conn->commit();
-                    $msg = count($ids) . ' bike(s) deleted.';
+                    $msg = $deleted . ' bike(s) deleted and all related records reversed/removed.';
                 } catch (Exception $e) {
                     $conn->rollback();
-                    $err .= 'Bulk deletion failed: ' . $e->getMessage();
+                    $err = 'Bulk deletion failed: ' . $e->getMessage();
                 }
+            } else {
+                $err = 'No bikes selected for deletion.';
             }
         }
         if ($action === 'bulk_export') {
@@ -5936,7 +6051,7 @@ echo !empty($deal_parts) ? implode('<br>', $deal_parts) : '<span style="color:va
 <form method="POST" action="index.php?page=inventory&action=delete" style="display:inline">
 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="id" value="<?= $bike['id'] ?>">
-<button type="submit" class="btn btn-danger btn-sm" title="Delete" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete this bike?', text: 'Are you sure you want to delete this bike? This cannot be undone.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button>
+<button type="submit" class="btn btn-danger btn-sm" title="Delete" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete this bike?', text: 'This will delete the bike and ALL related records (sale, payments, installments, ledger, allocations, accessories). Accessory stock will be restored. This cannot be undone.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button>
 </form>
 <?php endif; ?>
 </div>
