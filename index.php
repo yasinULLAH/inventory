@@ -5046,6 +5046,10 @@ body.sidebar-collapsed nav::-webkit-scrollbar-thumb:hover { background: var(--te
 .filter-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .filter-bar .form-group label{font-size:0.72rem}
 .filter-bar .form-group input,.filter-bar .form-group select{font-size:0.82rem;padding:5px 7px}
+.ie-filter-bar{align-items:flex-end}
+.ie-filter-form{display:flex;flex:1 1 760px;min-width:0;gap:12px;align-items:flex-end;flex-wrap:wrap}
+.ie-filter-form .form-group{flex:1 1 170px;min-width:160px}
+.ie-filter-form .btn{flex:0 0 auto}
 .modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;height:100dvh;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center;}
 .modal-overlay.open{display:flex}
 .modal{background:var(--bg2);border:2px solid var(--border);padding:18px;width:90%;max-width:500px;max-height:85vh;overflow-y:auto;border-radius:2px;position:relative;animation: animate__zoomIn 0.3s;}
@@ -5251,6 +5255,10 @@ body{background:#fff!important;color:#111!important}
 .filter-bar{flex-direction:column;align-items:stretch}
 .filter-bar .form-group{width:100%}
 .filter-bar .btn, .filter-bar button{width:100%;justify-content:center;margin-top:4px}
+.ie-filter-form{width:100%;flex:1 1 auto;flex-direction:column;align-items:stretch;gap:8px}
+.ie-filter-form .form-group{width:100%;min-width:0}
+.ie-filter-form .btn{width:100%;justify-content:center;margin-top:0}
+.ie-filter-bar>.btn{width:100%;justify-content:center}
 .filter-actions{width:100%;display:flex;flex-direction:column;gap:8px}
 .data-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .data-table th,.data-table td{font-size:0.75rem;padding:4px 6px}
@@ -10003,8 +10011,8 @@ function showQuoteBikeDetails(sel) {
             $edit_entry = $ee->fetch_assoc();
         }
 ?>
-<div class="no-print animate__animated animate__fadeInLeft" style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:end">
-    <form method="GET" style="display:flex;gap:6px;align-items:end;flex-wrap:wrap">
+<div class="filter-bar ie-filter-bar no-print animate__animated animate__fadeInLeft">
+    <form method="GET" class="ie-filter-form">
     <input type="hidden" name="page" value="income_expense">
     <div class="form-group"><label>From</label><input type="date" name="from" value="<?= $filter_from ?>"></div>
     <div class="form-group"><label>To</label><input type="date" name="to" value="<?= $filter_to ?>"></div>
