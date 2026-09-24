@@ -264,7 +264,7 @@ function accounting_payment_ledger_ids($conn, $p)
     return array_column($rows, 'id');
 }
 
-function accounting_reverse_allocations($conn, $p)
+function accounting_reverse_allocations($conn, $p, $remove_links = true)
 {
     $pid = (int) $p['id'];
     $rows = $conn->query("SELECT * FROM installment_payment_allocations WHERE payment_id=$pid ORDER BY installment_id FOR UPDATE")->fetch_all(MYSQLI_ASSOC);
@@ -292,7 +292,7 @@ function accounting_reverse_allocations($conn, $p)
         $st->bind_param('ddsi', $principal, $penalty, $status, $id);
         $st->execute();
     }
-    $conn->query("DELETE FROM installment_payment_allocations WHERE payment_id=$pid");
+    if ($remove_links) $conn->query("DELETE FROM installment_payment_allocations WHERE payment_id=$pid");
     $conn->query("UPDATE installments SET payment_id=NULL WHERE payment_id=$pid");
 }
 
@@ -442,7 +442,7 @@ function accounting_cheque_status($conn, $p, $status)
     if (in_array($status, ['bounced','cancelled'], true)) {
         accounting_adjust_down_payment($conn, $p, 0);
         $ids = accounting_payment_ledger_ids($conn, $p);
-        accounting_reverse_allocations($conn, $p);
+        accounting_reverse_allocations($conn, $p, false);
         foreach ($ids as $id) {
             $description = 'Cheque ' . $status . ' (Ref Payment #' . $pid . ')';
             $st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) SELECT CURRENT_DATE,IF(entry_type='credit','debit','credit'),amount,party_type,party_id,?,'cheque_bounce',?,amount FROM ledger WHERE id=?");
@@ -487,7 +487,8 @@ function accounting_customer_buttons($conn, $entry, $customer_id)
     echo '<a class="btn btn-default btn-sm" href="' . sanitize($url . '&account_entry=' . (int) $entry['id']) . '">View receipt</a> ';
     if ($kind === 'sale' && has_permission($conn, 'customer_ledger', 'edit') && has_permission($conn, 'sale', 'edit')) echo '<a class="btn btn-primary btn-sm" href="' . sanitize($url . '&account_entry=' . (int) $entry['id'] . '&edit_sale=1') . '">Edit sale</a> ';
     $bike_id = in_array($kind, ['sale','return','return_reversal','return_refund','down_payment'], true) ? $ref : 0;
-    if (in_array($kind, ['installment','penalty'], true)) {
+    if (in_array($kind, ['installment','penalty','penalty_waiver'], true)) {
+        if (has_permission($conn, 'installments', 'view')) echo '<a class="btn btn-default btn-sm" href="index.php?page=installments&amp;manage_installment=' . $ref . '">History / correct</a> ';
         $bike_id = (int) ($conn->query("SELECT bike_id FROM installments WHERE id=$ref")->fetch_row()[0] ?? 0);
     }
     if ($bike_id) accounting_bike_buttons($conn, $bike_id);
@@ -611,6 +612,321 @@ function accounting_panel($conn, $page, $party_id)
     } catch (Throwable $e) {
         echo '<div class="alert alert-danger">' . sanitize($e->getMessage()) . '</div>';
     }
+}
+
+function record_workflow_history($conn, $bike, $new_status, $reason)
+{
+    $user_id = (int) $_SESSION['user_id'];
+    $st = $conn->prepare('INSERT INTO inventory_status_history (bike_id,chassis_number,old_status,new_status,changed_by,change_reason) VALUES (?,?,?,?,?,?)');
+    $st->bind_param('isssis', $bike['id'], $bike['chassis_number'], $bike['status'], $new_status, $user_id, $reason);
+    $st->execute();
+}
+
+function workflow_button($conn, $page, $action, $id, $label, $message, $permission = 'delete')
+{
+    if (!has_permission($conn, $page, $permission)) return;
+    $confirm_script = htmlspecialchars('return confirm(' . json_encode($message, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ');', ENT_QUOTES, 'UTF-8');
+    echo '<form method="POST" action="index.php?page=' . sanitize($page) . '" data-confirm-message="' . sanitize($message) . '" onsubmit="' . $confirm_script . '" style="display:inline"><input type="hidden" name="csrf_token" value="' . sanitize($_SESSION['csrf_token']) . '"><input type="hidden" name="workflow_action" value="' . sanitize($action) . '"><input type="hidden" name="id" value="' . (int) $id . '"><button type="submit" class="btn btn-danger btn-sm">' . sanitize($label) . '</button></form> ';
+}
+
+function workflow_delete_order($conn, $id)
+{
+    $id = (int) $id;
+    $order = $conn->query("SELECT id FROM purchase_orders WHERE id=$id FOR UPDATE")->fetch_assoc();
+    if (!$order) throw new Exception('Purchase order not found.');
+    $rows = $conn->query("SELECT id FROM bikes WHERE purchase_order_id=$id ORDER BY id FOR UPDATE")->fetch_all(MYSQLI_ASSOC);
+    foreach ($rows as $row) delete_bike_cascade($conn, (int) $row['id']);
+    $rows = $conn->query("SELECT id FROM payments WHERE transaction_type IN ('purchase','supplier_payment') AND reference_id=$id FOR UPDATE")->fetch_all(MYSQLI_ASSOC);
+    foreach ($rows as $row) accounting_change_payment($conn, accounting_payment($conn, $row['id'], true), true);
+    $conn->query("DELETE FROM ledger WHERE party_type='supplier' AND reference_type='purchase' AND reference_id=$id");
+    $conn->query("DELETE FROM cheque_register WHERE reference_type='purchase' AND reference_id=$id");
+    $conn->query("DELETE FROM purchase_orders WHERE id=$id");
+}
+
+function workflow_delete_party($conn, $kind, $id)
+{
+    $id = (int) $id;
+    if (!in_array($kind, ['customer','supplier'], true) || $id <= 0) throw new Exception('Invalid account.');
+    $table = $kind === 'customer' ? 'customers' : 'suppliers';
+    if (!$conn->query("SELECT id FROM $table WHERE id=$id FOR UPDATE")->fetch_assoc()) throw new Exception('Account not found.');
+    $checks = $kind === 'customer'
+        ? ["bikes WHERE customer_id=$id", "installments WHERE customer_id=$id", "quotations WHERE customer_id=$id"]
+        : ["purchase_orders WHERE supplier_id=$id"];
+    $checks[] = "payments WHERE {$kind}_id=$id";
+    $checks[] = "ledger WHERE party_type='$kind' AND party_id=$id";
+    foreach ($checks as $source) {
+        if ((int) $conn->query("SELECT COUNT(*) FROM $source")->fetch_row()[0] > 0) throw new Exception('This account still has transactions, ledger entries or linked records. Remove/reverse those records first; deleting the account would lose their ownership.');
+    }
+    // Unowned legacy payments cannot safely be assigned by a possibly duplicated name.
+    $st = $conn->prepare("SELECT COUNT(*) FROM payments p JOIN $table a ON a.name=p.party_name WHERE a.id=? AND p.{$kind}_id IS NULL AND p.transaction_type IN (" . ($kind === 'customer' ? "'sale','installment','customer_refund','customer_advance'" : "'purchase','supplier_payment','supplier_refund'") . ')');
+    $st->bind_param('i', $id);
+    $st->execute();
+    if ((int) $st->get_result()->fetch_row()[0]) throw new Exception('Legacy payments with this account name need reconciliation before the account can be deleted.');
+    $conn->query("DELETE FROM $table WHERE id=$id");
+}
+
+function workflow_cancel_sale($conn, $id)
+{
+    $id = (int) $id;
+    $bike = $conn->query("SELECT * FROM bikes WHERE id=$id FOR UPDATE")->fetch_assoc();
+    if (!$bike || $bike['status'] !== 'sold') throw new Exception('Only a current sold item can have its sale cancelled. Undo its return first, if applicable.');
+    if ($conn->query("SELECT id FROM ledger WHERE reference_type IN ('return','return_reversal','purchase_reversal') AND reference_id=$id LIMIT 1")->num_rows) throw new Exception('This item has earlier return history. Reconcile that history before cancelling a later sale.');
+    $inst_ids = array_column($conn->query("SELECT id FROM installments WHERE bike_id=$id FOR UPDATE")->fetch_all(MYSQLI_ASSOC), 'id');
+    $inst_list = $inst_ids ? implode(',', array_map('intval', $inst_ids)) : '0';
+    $payments = $conn->query("SELECT id FROM payments WHERE (transaction_type IN ('sale','customer_refund') AND reference_id=$id) OR (transaction_type='installment' AND reference_id IN ($inst_list)) ORDER BY id FOR UPDATE")->fetch_all(MYSQLI_ASSOC);
+    // Resolve legacy receipt ownership before deleting any of its source rows.
+    foreach ($payments as $row) {
+        $p = accounting_payment($conn, $row['id'], true);
+        $ledger_ids = accounting_payment_ledger_ids($conn, $p);
+        if ($ledger_ids) $conn->query('DELETE FROM ledger WHERE id IN (' . implode(',', array_map('intval', $ledger_ids)) . ')');
+        $pid = (int) $p['id'];
+        $conn->query("DELETE FROM ledger WHERE reference_type='cheque_bounce' AND reference_id=$pid");
+        accounting_sync_cheque_register($conn, $p, null);
+        $conn->query("DELETE FROM installment_payment_allocations WHERE payment_id=$pid");
+        $conn->query("DELETE FROM payments WHERE id=$pid");
+    }
+    $conn->query("DELETE FROM installment_payment_allocations WHERE installment_id IN ($inst_list)");
+    $conn->query("DELETE FROM ledger WHERE (party_type='customer' AND reference_type IN ('sale','down_payment','return_refund') AND reference_id=$id) OR (reference_type IN ('installment','penalty','penalty_waiver') AND reference_id IN ($inst_list))");
+    $conn->query("DELETE FROM installments WHERE bike_id=$id");
+    $conn->query("UPDATE accessories a JOIN (SELECT accessory_id,SUM(quantity) AS qty FROM sale_accessories WHERE bike_id=$id GROUP BY accessory_id) sa ON sa.accessory_id=a.id SET a.current_stock=a.current_stock+sa.qty WHERE a.sku NOT LIKE 'CST-%'");
+    $conn->query("DELETE FROM sale_accessories WHERE bike_id=$id");
+    $conn->query("DELETE FROM deposit_allocations WHERE bike_id=$id");
+    $conn->query("DELETE FROM sale_money_allocations WHERE bike_id=$id");
+    $conn->query("DELETE FROM cheque_register WHERE reference_type='sale' AND reference_id=$id");
+    $conn->query("UPDATE quotations SET status='pending' WHERE bike_id=$id AND status='converted'");
+    $tax = 0.0;
+    $st = $conn->prepare("UPDATE bikes SET status='in_stock',selling_price=NULL,selling_date=NULL,customer_id=NULL,tax_amount=?,margin=0,return_date=NULL,return_amount=NULL,return_notes=NULL WHERE id=?");
+    $st->bind_param('di', $tax, $id);
+    $st->execute();
+    $conn->query("DELETE FROM settings WHERE setting_key IN ('workflow_return_sale_$id','workflow_return_purchase_$id')");
+    record_workflow_history($conn, $bike, 'in_stock', 'Sale cancelled; item retained, linked sale records reversed. Independent account payments and bank deposits retained.');
+}
+
+function workflow_return_state($conn, $id)
+{
+    $id = (int) $id;
+    $bike = $conn->query("SELECT * FROM bikes WHERE id=$id FOR UPDATE")->fetch_assoc();
+    if (!$bike) throw new Exception('Inventory item not found.');
+    $installments = $conn->query("SELECT * FROM installments WHERE bike_id=$id ORDER BY id FOR UPDATE")->fetch_all(MYSQLI_ASSOC);
+    $inst_list = $installments ? implode(',', array_map('intval', array_column($installments, 'id'))) : '0';
+    $payments = $conn->query("SELECT * FROM payments WHERE (transaction_type IN ('sale','customer_refund','supplier_refund') AND reference_id=$id) OR (transaction_type='installment' AND reference_id IN ($inst_list)) ORDER BY id FOR UPDATE")->fetch_all(MYSQLI_ASSOC);
+    $payment_list = $payments ? implode(',', array_map('intval', array_column($payments, 'id'))) : '0';
+    $ledger = $conn->query("SELECT * FROM ledger WHERE (reference_type IN ('sale','down_payment','return','return_reversal','return_refund','purchase_reversal','supplier_refund') AND reference_id=$id) OR (reference_type IN ('installment','penalty','penalty_waiver') AND reference_id IN ($inst_list)) OR (reference_type='cheque_bounce' AND reference_id IN ($payment_list)) ORDER BY id FOR UPDATE")->fetch_all(MYSQLI_ASSOC);
+    $accessories = $conn->query("SELECT * FROM sale_accessories WHERE bike_id=$id ORDER BY id FOR UPDATE")->fetch_all(MYSQLI_ASSOC);
+    $allocations = $conn->query("SELECT * FROM sale_money_allocations WHERE bike_id=$id ORDER BY id FOR UPDATE")->fetch_all(MYSQLI_ASSOC);
+    $deposits = $conn->query("SELECT * FROM deposit_allocations WHERE bike_id=$id ORDER BY id FOR UPDATE")->fetch_all(MYSQLI_ASSOC);
+    $deposit_ids = $deposits ? implode(',', array_map('intval', array_column($deposits, 'deposit_id'))) : '0';
+    $deposit_parents = $conn->query("SELECT id,destination_id FROM bank_deposits WHERE id IN ($deposit_ids) ORDER BY id FOR UPDATE")->fetch_all(MYSQLI_ASSOC);
+    return compact('bike','installments','payments','ledger','accessories','allocations','deposits','deposit_parents');
+}
+
+function workflow_store_return_snapshot($conn, $id, $kind, $before)
+{
+    // Internal transactional snapshots in the existing settings table keep deployment single-file,
+    // without a schema migration. Never overwrite a prior return of the other kind.
+    $key = 'workflow_return_' . $kind . '_' . (int) $id;
+    $payload = json_encode(['version'=>1, 'before'=>$before, 'after'=>workflow_return_state($conn, $id)], JSON_THROW_ON_ERROR);
+    if (strlen($payload) > 65000) throw new Exception('This return has too many linked records for its undo snapshot. No changes were saved.');
+    $st = $conn->prepare('INSERT INTO settings (setting_key,setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)');
+    $st->bind_param('ss', $key, $payload);
+    $st->execute();
+}
+
+function workflow_restore_allocation($conn, $table, $row)
+{
+    $columns = $table === 'sale_money_allocations'
+        ? ['id','bike_id','destination_id','amount','allocation_date','notes','created_by','created_at','updated_at']
+        : ['id','deposit_id','allocation_id','bike_id','amount'];
+    if (!in_array($table, ['sale_money_allocations','deposit_allocations'], true)) throw new Exception('Invalid allocation snapshot.');
+    if ($table === 'sale_money_allocations' && !empty($row['created_by']) && !$conn->query('SELECT id FROM users WHERE id=' . (int) $row['created_by'])->fetch_assoc()) $row['created_by'] = null;
+    $values = [];
+    foreach ($columns as $col) $values[] = $row[$col] ?? null;
+    $st = $conn->prepare('INSERT INTO ' . $table . ' (`' . implode('`,`', $columns) . '`) VALUES (' . implode(',', array_fill(0, count($columns), '?')) . ')');
+    $types = str_repeat('s', count($values));
+    $refs = [];
+    foreach ($values as $i => &$value) $refs[$i] = &$value;
+    $st->bind_param($types, ...$refs);
+    unset($value);
+    $st->execute();
+}
+
+function workflow_undo_return($conn, $id)
+{
+    $id = (int) $id;
+    $current = workflow_return_state($conn, $id);
+    $kind = $current['bike']['status'] === 'returned' ? 'sale' : ($current['bike']['status'] === 'returned_to_supplier' ? 'purchase' : '');
+    if (!$kind) throw new Exception('This item is not currently returned.');
+    $key = "workflow_return_{$kind}_$id";
+    $st = $conn->prepare('SELECT setting_value FROM settings WHERE setting_key=? FOR UPDATE');
+    $st->bind_param('s', $key);
+    $st->execute();
+    $snapshot = json_decode($st->get_result()->fetch_row()[0] ?? 'null', true);
+    if (!$snapshot || ($snapshot['version'] ?? 0) !== 1) throw new Exception('This older return has no undo snapshot. Its deleted allocations and previous state cannot be recovered automatically. Use the original backup to reconcile it; nothing was changed.');
+    // updated_at alone may change from an otherwise identical save; compare business fields.
+    $expected = $snapshot['after'];
+    foreach (['bike','installments','allocations'] as $section) {
+        if ($section === 'bike') { unset($current[$section]['updated_at'], $expected[$section]['updated_at']); }
+        else { foreach ($current[$section] as &$r) unset($r['updated_at']); unset($r); foreach ($expected[$section] as &$r) unset($r['updated_at']); unset($r); }
+    }
+    if ($current != $expected) throw new Exception('Related records changed after this return. Automatic undo would overwrite newer work; reconcile those changes first.');
+    $before = $snapshot['before'];
+    if ($kind === 'sale') {
+        foreach ($before['accessories'] as $row) {
+            $st = $conn->prepare('UPDATE accessories SET current_stock=current_stock-? WHERE id=? AND current_stock>=?');
+            $st->bind_param('iii', $row['quantity'], $row['accessory_id'], $row['quantity']);
+            $st->execute();
+            if ($st->affected_rows !== 1) throw new Exception('Accessory stock is no longer sufficient to undo this return.');
+        }
+        foreach ($before['allocations'] as $row) {
+            $dest = (int) $row['destination_id'];
+            if (!$conn->query("SELECT id FROM money_destinations WHERE id=$dest FOR UPDATE")->fetch_assoc()) throw new Exception('An original money destination no longer exists.');
+            workflow_restore_allocation($conn, 'sale_money_allocations', $row);
+        }
+        foreach ($before['deposits'] as $row) {
+            $did = (int) $row['deposit_id'];
+            $deposit = $conn->query("SELECT amount,destination_id FROM bank_deposits WHERE id=$did FOR UPDATE")->fetch_assoc();
+            if (!$deposit) throw new Exception('An original bank deposit no longer exists.');
+            $original_deposit = array_column($before['deposit_parents'], 'destination_id', 'id');
+            if (!isset($original_deposit[$did]) || $original_deposit[$did] != $deposit['destination_id']) throw new Exception('An original bank deposit destination has changed.');
+            $used = (float) $conn->query("SELECT COALESCE(SUM(amount),0) FROM deposit_allocations WHERE deposit_id=$did")->fetch_row()[0];
+            if ($used + $row['amount'] > $deposit['amount'] + 0.001) throw new Exception('A bank deposit has been reallocated; undo cannot restore its original links.');
+            if ($row['allocation_id']) {
+                $aid = (int) $row['allocation_id'];
+                $allocation = $conn->query("SELECT destination_id FROM sale_money_allocations WHERE id=$aid")->fetch_assoc();
+                if (!$allocation || $allocation['destination_id'] != $deposit['destination_id']) throw new Exception('A bank deposit destination has changed.');
+            }
+            workflow_restore_allocation($conn, 'deposit_allocations', $row);
+        }
+    }
+    foreach (['ledger','payments'] as $table) {
+        $old_ids = array_map('intval', array_column($before[$table], 'id'));
+        $new_ids = array_diff(array_map('intval', array_column($snapshot['after'][$table], 'id')), $old_ids);
+        if ($new_ids) $conn->query('DELETE FROM ' . $table . ' WHERE id IN (' . implode(',', $new_ids) . ')');
+    }
+    foreach ($before['installments'] as $inst) {
+        $st = $conn->prepare('UPDATE installments SET status=?,notes=? WHERE id=?');
+        $st->bind_param('ssi', $inst['status'], $inst['notes'], $inst['id']);
+        $st->execute();
+    }
+    $b = $before['bike'];
+    $st = $conn->prepare('UPDATE bikes SET status=?,tax_amount=?,margin=?,return_date=?,return_amount=?,return_notes=? WHERE id=?');
+    $st->bind_param('sddsdsi', $b['status'], $b['tax_amount'], $b['margin'], $b['return_date'], $b['return_amount'], $b['return_notes'], $id);
+    $st->execute();
+    $st = $conn->prepare('DELETE FROM settings WHERE setting_key=?');
+    $st->bind_param('s', $key);
+    $st->execute();
+    record_workflow_history($conn, $current['bike'], $b['status'], ucfirst($kind) . ' return undone; original financial and stock state restored.');
+}
+
+function workflow_installment_change($conn, $id, $action, $input)
+{
+    $id = (int) $id;
+    $inst = $conn->query("SELECT i.*,b.status AS bike_status FROM installments i JOIN bikes b ON b.id=i.bike_id WHERE i.id=$id FOR UPDATE")->fetch_assoc();
+    if (!$inst || $inst['bike_status'] !== 'sold' || $inst['status'] === 'cancelled') throw new Exception('Only an active sale installment can be corrected.');
+    if ($action === 'waive_penalty') {
+        $amount = round((float) ($input['waive_amount'] ?? 0), 2);
+        $reason = clean_text($input['reason'] ?? '');
+        if (!is_finite($amount) || $amount <= 0 || $amount > $inst['penalty_fee'] - $inst['penalty_paid'] + 0.001 || !$reason) throw new Exception('Enter a reason and an amount no greater than the unpaid penalty.');
+        $assessed = (float) $conn->query("SELECT COALESCE(SUM(CASE WHEN entry_type='debit' THEN amount ELSE -amount END),0) FROM ledger WHERE reference_type IN ('penalty','penalty_waiver') AND reference_id=$id AND party_type='customer' AND party_id=" . (int) $inst['customer_id'])->fetch_row()[0];
+        if (abs($assessed - $inst['penalty_fee']) > 0.01) throw new Exception('The legacy penalty ledger does not match this installment. Reconcile it before waiving a charge.');
+        $fee = round($inst['penalty_fee'] - $amount, 2);
+        $st = $conn->prepare('UPDATE installments SET penalty_fee=? WHERE id=?');
+        $st->bind_param('di', $fee, $id);
+        $st->execute();
+        $description = 'Penalty waived: ' . $reason;
+        $st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (CURRENT_DATE,'credit',?,'customer',?,?,'penalty_waiver',?,?)");
+        $st->bind_param('disid', $amount, $inst['customer_id'], $description, $id, $amount);
+        $st->execute();
+    } else {
+        $delete = $action === 'delete_installment';
+        $amount = $delete ? 0 : round((float) ($input['installment_amount'] ?? 0), 2);
+        $date = $input['due_date'] ?? $inst['due_date'];
+        if (!is_finite($amount) || (!$delete && $amount <= 0) || $amount < $inst['amount_paid'] || !valid_date($date)) throw new Exception('The installment must have a valid date and cannot be reduced below its paid principal.');
+        if ($delete && ($inst['amount_paid'] > 0 || $inst['penalty_fee'] > 0 || $conn->query("SELECT id FROM payments WHERE transaction_type='installment' AND reference_id=$id LIMIT 1")->num_rows || $conn->query("SELECT id FROM installment_payment_allocations WHERE installment_id=$id LIMIT 1")->num_rows || $conn->query("SELECT id FROM ledger WHERE reference_type IN ('installment','penalty','penalty_waiver') AND reference_id=$id LIMIT 1")->num_rows)) throw new Exception('An installment with payment or penalty history cannot be deleted. Reverse its payments or correct its schedule instead.');
+        $difference = round($inst['installment_amount'] - $amount, 2);
+        if (abs($difference) > 0.001) {
+            $target_id = (int) ($input['transfer_to'] ?? 0);
+            $bike_id = (int) $inst['bike_id'];
+            $target = $conn->query("SELECT * FROM installments WHERE id=$target_id AND bike_id=$bike_id AND id!=$id AND status!='cancelled' FOR UPDATE")->fetch_assoc();
+            if (!$target || $target['installment_amount'] + $difference < $target['amount_paid']) throw new Exception('Choose another installment of this sale to receive the balance change without reducing it below its paid principal. Sale debt must remain unchanged.');
+            $new_amount = round($target['installment_amount'] + $difference, 2);
+            $st = $conn->prepare('UPDATE installments SET installment_amount=? WHERE id=?');
+            $st->bind_param('di', $new_amount, $target_id);
+            $st->execute();
+        }
+        if ($delete) $conn->query("DELETE FROM installments WHERE id=$id");
+        else {
+            $st = $conn->prepare('UPDATE installments SET installment_amount=?,due_date=? WHERE id=?');
+            $st->bind_param('dsi', $amount, $date, $id);
+            $st->execute();
+        }
+    }
+    $bid = (int) $inst['bike_id'];
+    $conn->query("UPDATE installments SET status=CASE WHEN amount_paid>=installment_amount AND penalty_paid>=penalty_fee THEN 'paid' WHEN due_date<CURRENT_DATE THEN 'overdue' ELSE 'pending' END WHERE bike_id=$bid AND status!='cancelled'");
+}
+
+function workflow_management_panel($conn, $page)
+{
+    if ($page === 'sale') {
+        $rows = $conn->query("SELECT b.id,b.chassis_number,b.selling_date,c.name FROM bikes b LEFT JOIN customers c ON c.id=b.customer_id WHERE b.status='sold' ORDER BY b.selling_date DESC,b.id DESC");
+        echo '<details class="fieldset no-print"><summary>Manage recorded sales</summary><p>Cancel sale retains the inventory item and reverses its sale, item-linked payments, installments and allocations. Independent customer receipts remain as account credit; actual bank deposits stay recorded.</p><div class="data-table-wrap"><table class="data-table"><thead><tr><th>Item</th><th>Customer</th><th>Date</th><th>Actions</th></tr></thead><tbody>';
+        foreach ($rows as $row) {
+            echo '<tr><td>' . sanitize($row['chassis_number']) . '</td><td>' . sanitize($row['name'] ?? '-') . '</td><td>' . fmt_date($row['selling_date']) . '</td><td>';
+            echo '<a class="btn btn-default btn-sm" href="index.php?page=sale&amp;print_invoice=' . (int) $row['id'] . '&amp;format=a4">Receipt</a> ';
+            if (has_permission($conn, 'inventory', 'edit')) workflow_button($conn, 'sale', 'cancel_sale', $row['id'], 'Cancel sale', 'Cancel this sale and remove its item-linked receipts, installments and allocation links? The item returns to stock. Independent account payments and actual bank deposits remain. This cannot be undone.');
+            echo '</td></tr>';
+        }
+        echo '</tbody></table></div></details>';
+    } elseif ($page === 'purchase') {
+        $rows = $conn->query('SELECT po.id,po.order_date,po.total_amount,s.name FROM purchase_orders po LEFT JOIN suppliers s ON s.id=po.supplier_id ORDER BY po.order_date DESC,po.id DESC');
+        echo '<details class="fieldset no-print"><summary>Manage purchase orders</summary><div class="data-table-wrap"><table class="data-table"><thead><tr><th>Order</th><th>Supplier</th><th>Date</th><th>Amount</th><th>Actions</th></tr></thead><tbody>';
+        foreach ($rows as $row) {
+            echo '<tr><td>#' . (int) $row['id'] . '</td><td>' . sanitize($row['name'] ?? '-') . '</td><td>' . fmt_date($row['order_date']) . '</td><td>' . fmt_money($row['total_amount']) . '</td><td><a class="btn btn-default btn-sm" href="index.php?page=purchase&amp;print_po=' . (int) $row['id'] . '&amp;format=a4">Receipt</a> ';
+            if (has_permission($conn, 'inventory', 'delete')) workflow_button($conn, 'purchase', 'delete_order', $row['id'], 'Delete order and records', 'Delete this purchase order, ALL its inventory items, their sales, installments and linked payments? Independent supplier-account payments and bank deposits remain. This cannot be undone.');
+            echo '</td></tr>';
+        }
+        echo '</tbody></table></div></details>';
+    } elseif ($page === 'returns') {
+        $rows = $conn->query("SELECT b.id,b.chassis_number,b.status,b.return_date,b.return_amount,EXISTS(SELECT 1 FROM settings s WHERE s.setting_key=CONCAT('workflow_return_',IF(b.status='returned','sale','purchase'),'_',b.id)) AS can_undo FROM bikes b WHERE b.status IN ('returned','returned_to_supplier') ORDER BY b.return_date DESC,b.id DESC");
+        echo '<details class="fieldset no-print"><summary>Manage recorded returns</summary><p>Undo restores the original status, ledger, installments and allocation links. New returns save an undo snapshot. Older returns without one need reconciliation from their original backup.</p><div class="data-table-wrap"><table class="data-table"><thead><tr><th>Item</th><th>Return</th><th>Date</th><th>Refund</th><th>Actions</th></tr></thead><tbody>';
+        foreach ($rows as $row) {
+            echo '<tr><td>' . sanitize($row['chassis_number']) . '</td><td>' . ($row['status'] === 'returned' ? 'Customer return' : 'Supplier return') . '</td><td>' . fmt_date($row['return_date']) . '</td><td>' . fmt_money($row['return_amount']) . '</td><td>';
+            if ($row['can_undo']) workflow_button($conn, 'returns', 'undo_return', $row['id'], 'Undo return', 'Undo this return and remove its refund records? Original stock, customer/supplier balances, installments and deposit links will be restored. Confirm only if the recorded refund is being reversed.');
+            else echo '<span>Legacy return — no undo snapshot</span>';
+            echo '</td></tr>';
+        }
+        echo '</tbody></table></div></details>';
+    }
+}
+
+function workflow_installment_panel($conn)
+{
+    $id = (int) ($_GET['manage_installment'] ?? 0);
+    if (!$id) return;
+    $inst = $conn->query("SELECT i.*,b.chassis_number,b.status AS bike_status FROM installments i JOIN bikes b ON b.id=i.bike_id WHERE i.id=$id")->fetch_assoc();
+    if (!$inst) { echo '<div class="alert alert-danger">Installment not found.</div>'; return; }
+    echo '<fieldset class="fieldset"><legend>Installment #' . $id . ' — ' . sanitize($inst['chassis_number']) . '</legend>';
+    $bid = (int) $inst['bike_id'];
+    $targets = $conn->query("SELECT id,due_date,installment_amount,amount_paid FROM installments WHERE bike_id=$bid AND id!=$id AND status!='cancelled' ORDER BY due_date,id")->fetch_all(MYSQLI_ASSOC);
+    $options = '<option value="0">Select another installment for amount changes</option>';
+    foreach ($targets as $target) $options .= '<option value="' . (int) $target['id'] . '">#' . (int) $target['id'] . ' — ' . fmt_date($target['due_date']) . ' — ' . fmt_money($target['installment_amount']) . '</option>';
+    $hidden = '<input type="hidden" name="csrf_token" value="' . sanitize($_SESSION['csrf_token']) . '"><input type="hidden" name="id" value="' . $id . '">';
+    $active = $inst['bike_status'] === 'sold' && $inst['status'] !== 'cancelled';
+    if ($active && has_permission($conn, 'installments', 'edit')) {
+        echo '<form method="POST" action="index.php?page=installments" class="no-print">' . $hidden . '<input type="hidden" name="workflow_action" value="edit_installment"><p>Changing an amount transfers the difference to another installment of this sale. The total sale debt stays unchanged.</p><div class="form-group"><label for="schedule_date">Due date</label><input id="schedule_date" name="due_date" type="date" value="' . sanitize($inst['due_date']) . '" required></div><div class="form-group"><label for="schedule_amount">Principal amount</label><input id="schedule_amount" name="installment_amount" type="number" min="0.01" step="0.01" value="' . sanitize($inst['installment_amount']) . '" required></div><div class="form-group"><label for="schedule_target">Balance transfer installment</label><select id="schedule_target" name="transfer_to">' . $options . '</select></div><button type="submit" class="btn btn-primary">Save schedule correction</button></form>';
+        $unpaid = max(0, $inst['penalty_fee'] - $inst['penalty_paid']);
+        if ($unpaid > 0) echo '<form method="POST" action="index.php?page=installments" class="no-print" data-confirm-message="Waive this unpaid penalty and reduce the customer balance?">' . $hidden . '<input type="hidden" name="workflow_action" value="waive_penalty"><div class="form-group"><label for="waive_amount">Unpaid penalty to waive</label><input id="waive_amount" name="waive_amount" type="number" min="0.01" max="' . $unpaid . '" step="0.01" required></div><div class="form-group"><label for="waive_reason">Reason</label><input id="waive_reason" name="reason" required></div><button type="submit" class="btn btn-warning">Waive penalty</button></form>';
+    }
+    if ($active && has_permission($conn, 'installments', 'delete')) echo '<form method="POST" action="index.php?page=installments" class="no-print" data-confirm-message="Remove this unpaid installment and move its principal to the selected installment? Sale debt is not forgiven. Installments with payment or penalty history cannot be removed.">' . $hidden . '<input type="hidden" name="workflow_action" value="delete_installment"><div class="form-group"><label for="delete_schedule_target">Transfer principal before removing installment</label><select id="delete_schedule_target" name="transfer_to" required>' . $options . '</select></div><button type="submit" class="btn btn-danger">Remove installment and transfer principal</button></form>';
+    $payments = $conn->query("SELECT p.* FROM payments p WHERE (p.transaction_type='installment' AND p.reference_id=$id) OR EXISTS(SELECT 1 FROM installment_payment_allocations a WHERE a.payment_id=p.id AND a.installment_id=$id) ORDER BY p.payment_date,p.id");
+    echo '<h4>Payment history</h4><p>Account-wide receipts may also cover other installments. Editing or deleting those receipts affects all their allocations.</p><div class="data-table-wrap"><table class="data-table"><thead><tr><th>Receipt</th><th>Date</th><th>Amount</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+    foreach ($payments as $pay) {
+        echo '<tr><td>#' . (int) $pay['id'] . '</td><td>' . fmt_date($pay['payment_date']) . '</td><td>' . fmt_money($pay['amount']) . '</td><td>' . sanitize($pay['status']) . '</td><td>';
+        if (has_permission($conn, 'payments', 'view')) accounting_payment_buttons($conn, 'payments', 0, $pay['id']);
+        elseif (has_permission($conn, 'customer_ledger', 'view')) accounting_payment_buttons($conn, 'customer_ledger', (int) $inst['customer_id'], $pay['id']);
+        echo '</td></tr>';
+    }
+    echo '</tbody></table></div><a class="btn btn-default no-print" href="index.php?page=installments">Back to installments</a></fieldset>';
 }
 
 function db_connect($create_db = false)
@@ -953,6 +1269,12 @@ function delete_bike_cascade($conn, $bike_id)
         }
     }
     $payment_ids = array_values(array_unique($payment_ids));
+    $payment_ledger_ids = [];
+    foreach ($payment_ids as $payment_id) {
+        $payment = accounting_payment($conn, $payment_id, true);
+        $payment_ledger_ids = array_merge($payment_ledger_ids, accounting_payment_ledger_ids($conn, $payment));
+        accounting_sync_cheque_register($conn, $payment, null);
+    }
 
     // Reverse accessory stock before removing sale_accessories rows (skip custom one-off accessories).
     $restore_stmt = $conn->prepare('UPDATE accessories SET current_stock = current_stock + ? WHERE id=? AND sku NOT LIKE ?');
@@ -980,7 +1302,8 @@ function delete_bike_cascade($conn, $bike_id)
     $conn->query("DELETE FROM sale_accessories WHERE bike_id=$bid");
 
     if (!empty($payment_ids)) {
-        $conn->query("DELETE FROM ledger WHERE reference_type IN ('payment','advance_given','cheque_bounce') AND reference_id IN (" . implode(',', $payment_ids) . ')');
+        if ($payment_ledger_ids) $conn->query('DELETE FROM ledger WHERE id IN (' . implode(',', array_map('intval', $payment_ledger_ids)) . ')');
+        $conn->query("DELETE FROM ledger WHERE reference_type='cheque_bounce' AND reference_id IN (" . implode(',', $payment_ids) . ')');
         $conn->query("DELETE FROM cheque_register WHERE reference_type='payment' AND reference_id IN (" . implode(',', $payment_ids) . ')');
         $conn->query('DELETE FROM payments WHERE id IN (' . implode(',', $payment_ids) . ')');
     }
@@ -988,7 +1311,7 @@ function delete_bike_cascade($conn, $bike_id)
     // Remove ledger entries for the bike sale/down-payment/return and its installments/penalties.
     $ledger_where = "(reference_type IN ('sale','down_payment','return','return_reversal','return_refund','supplier_refund','purchase_reversal') AND reference_id=$bid)";
     if (!empty($installment_ids)) {
-        $ledger_where .= " OR (reference_type IN ('installment','penalty') AND reference_id IN (" . implode(',', $installment_ids) . '))';
+        $ledger_where .= " OR (reference_type IN ('installment','penalty','penalty_waiver') AND reference_id IN (" . implode(',', $installment_ids) . '))';
     }
     $conn->query("DELETE FROM ledger WHERE $ledger_where");
 
@@ -999,10 +1322,11 @@ function delete_bike_cascade($conn, $bike_id)
     $conn->query("DELETE FROM inventory_status_history WHERE bike_id=$bid");
     $conn->query("DELETE FROM quotations WHERE bike_id=$bid");
     $conn->query("DELETE FROM quote_requests WHERE bike_id=$bid");
+    $conn->query("DELETE FROM settings WHERE setting_key IN ('workflow_return_sale_$bid','workflow_return_purchase_$bid')");
 
     // Remove automated inventory-loss expense for damaged/lost bikes.
-    $loss_ref = 'Bike ID: ' . $bid . ' (' . $chassis . ')';
-    $del_loss = $conn->prepare("DELETE FROM income_expenses WHERE category='Inventory Loss' AND reference=?");
+    $loss_ref = 'Bike ID: ' . $bid . ' (%';
+    $del_loss = $conn->prepare("DELETE FROM income_expenses WHERE category='Inventory Loss' AND reference LIKE ?");
     $del_loss->bind_param('s', $loss_ref);
     $del_loss->execute();
 
@@ -2512,6 +2836,58 @@ if ($db_exists && isset($_SESSION['user_id'])) {
     if (in_array($page, $protected_pages)) {
         require_permission($conn, $page, 'view');
     }
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['workflow_action'])) {
+        $work = (string) $_POST['workflow_action'];
+        $routes = [
+            'cancel_sale'=>['sale','delete'], 'undo_return'=>['returns','delete'],
+            'delete_order'=>['purchase','delete'], 'edit_installment'=>['installments','edit'],
+            'delete_installment'=>['installments','delete'], 'waive_penalty'=>['installments','edit'],
+            'unlink_allocation'=>['money_tracking','edit'],
+            'delete_bike_request'=>['landing_page','delete'], 'delete_quote_request'=>['landing_page','delete']
+        ];
+        if (!isset($routes[$work]) || $routes[$work][0] !== $page) {
+            http_response_code(400);
+            exit('Invalid action for this page.');
+        }
+        require_permission($conn, $page, $routes[$work][1]);
+        if ($work === 'cancel_sale') require_permission($conn, 'inventory', 'edit');
+        if ($work === 'delete_order') require_permission($conn, 'inventory', 'delete');
+        if ($work === 'unlink_allocation') require_permission($conn, 'bank_deposits', 'edit');
+        $id = (int) ($_POST['id'] ?? 0);
+        $conn->begin_transaction();
+        try {
+            if ($id <= 0) throw new Exception('Invalid record id.');
+            switch ($work) {
+                case 'cancel_sale': workflow_cancel_sale($conn, $id); $msg = 'Sale cancelled; item restored to stock. Independent account payments and bank deposits remain recorded.'; break;
+                case 'undo_return': workflow_undo_return($conn, $id); $msg = 'Return undone; original stock, ledger, installments and allocation links restored.'; break;
+                case 'delete_order': workflow_delete_order($conn, $id); $msg = 'Purchase order and its linked item/transaction records deleted.'; break;
+                case 'edit_installment':
+                case 'delete_installment':
+                case 'waive_penalty': workflow_installment_change($conn, $id, $work, $_POST); $msg = 'Installment and customer balances updated.'; break;
+                case 'unlink_allocation':
+                    if (!$conn->query("SELECT id FROM sale_money_allocations WHERE id=$id FOR UPDATE")->fetch_assoc()) throw new Exception('Allocation not found.');
+                    $conn->query("DELETE FROM deposit_allocations WHERE allocation_id=$id");
+                    $msg = 'Deposit links removed. The bank deposits and money allocation remain recorded.';
+                    break;
+                case 'delete_bike_request':
+                case 'delete_quote_request':
+                    $table = $work === 'delete_bike_request' ? 'bike_requests' : 'quote_requests';
+                    $conn->query("DELETE FROM $table WHERE id=$id");
+                    if (!$conn->affected_rows) throw new Exception('Request no longer exists.');
+                    $msg = 'Request deleted. Inventory, quotations and financial records were not changed.';
+                    break;
+            }
+            $conn->commit();
+        } catch (Throwable $e) {
+            $conn->rollback();
+            $err = $e->getMessage();
+        }
+        $back = 'index.php?page=' . $page;
+        if ($page === 'landing_page') $back .= '&sub=requests';
+        if ($page === 'installments' && $work !== 'delete_installment') $back .= '&manage_installment=' . $id;
+        header('Location: ' . $back . '&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+        exit;
+    }
     if (in_array($page, ['customer_ledger', 'supplier_ledger', 'payments'], true) && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['account_action'])) {
         $account_action = $_POST['account_action'];
         $party_id = (int) ($_GET[$page === 'customer_ledger' ? 'cust_id' : 'sup_id'] ?? 0);
@@ -2529,13 +2905,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $order_id = (int) ($_POST['order_id'] ?? 0);
                 $order = $conn->query("SELECT * FROM purchase_orders WHERE id=$order_id FOR UPDATE")->fetch_assoc();
                 if ($page !== 'supplier_ledger' || !$order || (int) $order['supplier_id'] !== $party_id) throw new Exception('Purchase order does not belong to this supplier.');
-                $bikes = $conn->query("SELECT id FROM bikes WHERE purchase_order_id=$order_id ORDER BY id FOR UPDATE")->fetch_all(MYSQLI_ASSOC);
-                foreach ($bikes as $bike) delete_bike_cascade($conn, (int) $bike['id']);
-                $payments = $conn->query("SELECT id FROM payments WHERE transaction_type IN ('purchase','supplier_payment') AND reference_id=$order_id FOR UPDATE")->fetch_all(MYSQLI_ASSOC);
-                foreach ($payments as $payment) accounting_change_payment($conn, accounting_payment($conn, $payment['id'], true), true);
-                $conn->query("DELETE FROM ledger WHERE reference_type='purchase' AND reference_id=$order_id");
-                $conn->query("DELETE FROM cheque_register WHERE reference_type='purchase' AND reference_id=$order_id");
-                $conn->query("DELETE FROM purchase_orders WHERE id=$order_id");
+                workflow_delete_order($conn, $order_id);
             } else {
                 $payment = accounting_payment($conn, (int) ($_POST['payment_id'] ?? 0), true);
                 accounting_check_party($payment, $page, $party_id);
@@ -2732,6 +3102,13 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         if (isset($_POST['save_entry'])) {
             $id = (int) ($_POST['id'] ?? 0);
             require_permission($conn, 'income_expense', $id > 0 ? 'edit' : 'add');
+            if ($id > 0) {
+                $source_entry = $conn->query("SELECT category,reference FROM income_expenses WHERE id=$id")->fetch_assoc();
+                if ($source_entry && $source_entry['category'] === 'Inventory Loss' && preg_match('/^Bike ID: (\d+) /', $source_entry['reference'] ?? '')) {
+                    $err = 'Edit or restore this inventory loss through its item in Inventory so stock and expense stay consistent.';
+                    goto end_income_expense_post;
+                }
+            }
             $entry_date = clean_text($_POST['entry_date'] ?? date('Y-m-d'));
             $type = clean_text($_POST['type'] ?? 'expense');
             $category = clean_text($_POST['category'] ?? '');
@@ -2758,11 +3135,25 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         }
         if (isset($_POST['delete_entry'])) {
             require_permission($conn, 'income_expense', 'delete');
-            $id = (int) $_POST['id'];
-            $stmt = $conn->prepare('DELETE FROM income_expenses WHERE id=?');
-            $stmt->bind_param('i', $id);
-            $stmt->execute();
-            $msg = 'Entry deleted successfully.';
+            $id = (int) ($_POST['id'] ?? 0);
+            $conn->begin_transaction();
+            try {
+                $entry = $conn->query("SELECT * FROM income_expenses WHERE id=$id FOR UPDATE")->fetch_assoc();
+                if (!$entry) throw new Exception('Entry not found.');
+                if ($entry['category'] === 'Inventory Loss' && preg_match('/^Bike ID: (\d+) /', $entry['reference'] ?? '', $loss_match)) {
+                    throw new Exception('This expense belongs to inventory item #' . $loss_match[1] . '. Restore its status through Inventory > Edit item; that reverses the loss expense together with stock.');
+                }
+                $payments = $conn->query("SELECT id FROM payments WHERE transaction_type='expense_payment' AND reference_id=$id FOR UPDATE")->fetch_all(MYSQLI_ASSOC);
+                if ($payments) require_permission($conn, 'payments', 'delete');
+                foreach ($payments as $payment) accounting_change_payment($conn, accounting_payment($conn, $payment['id'], true), true);
+                $conn->query("DELETE FROM cheque_register WHERE reference_type='expense' AND reference_id=$id");
+                $conn->query("DELETE FROM income_expenses WHERE id=$id");
+                $conn->commit();
+                $msg = 'Entry and linked payment records deleted.';
+            } catch (Throwable $e) {
+                $conn->rollback();
+                $err = $e->getMessage();
+            }
             header('Location: index.php?page=income_expense&msg=' . urlencode($msg) . '&err=' . urlencode($err));
             exit;
         }
@@ -2937,19 +3328,14 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             }
         } elseif ($action === 'delete') {
             require_permission($conn, 'suppliers', 'delete');
-            $sid = (int) ($_POST['id'] ?? 0);
-            $stmt_check = $conn->prepare('SELECT COUNT(*) FROM purchase_orders WHERE supplier_id = ?');
-            $stmt_check->bind_param('i', $sid);
-            $stmt_check->execute();
-            $order_count = $stmt_check->get_result()->fetch_row()[0];
-            if ($order_count > 0) {
-                $err = 'Cannot delete supplier: There are associated purchase orders.';
-            } else {
-                $st = $conn->prepare('DELETE FROM suppliers WHERE id=?');
-                $st->bind_param('i', $sid);
-                $st->execute();
-                $st->close();
-                $msg = 'Supplier deleted.';
+            $conn->begin_transaction();
+            try {
+                workflow_delete_party($conn, 'supplier', (int) ($_POST['id'] ?? 0));
+                $conn->commit();
+                $msg = 'Account deleted.';
+            } catch (Throwable $e) {
+                $conn->rollback();
+                $err = $e->getMessage();
             }
         }
         header('Location: index.php?page=suppliers&msg=' . urlencode($msg) . '&err=' . urlencode($err));
@@ -2997,19 +3383,14 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             }
         } elseif ($action === 'delete') {
             require_permission($conn, 'customers', 'delete');
-            $cid = (int) ($_POST['id'] ?? 0);
-            $stmt_check = $conn->prepare('SELECT COUNT(*) FROM bikes WHERE customer_id = ?');
-            $stmt_check->bind_param('i', $cid);
-            $stmt_check->execute();
-            $bike_count = $stmt_check->get_result()->fetch_row()[0];
-            if ($bike_count > 0) {
-                $err = 'Cannot delete customer: There are associated bike sales.';
-            } else {
-                $st = $conn->prepare('DELETE FROM customers WHERE id=?');
-                $st->bind_param('i', $cid);
-                $st->execute();
-                $st->close();
-                $msg = 'Customer deleted.';
+            $conn->begin_transaction();
+            try {
+                workflow_delete_party($conn, 'customer', (int) ($_POST['id'] ?? 0));
+                $conn->commit();
+                $msg = 'Account deleted.';
+            } catch (Throwable $e) {
+                $conn->rollback();
+                $err = $e->getMessage();
             }
         }
         header('Location: index.php?page=customers&msg=' . urlencode($msg) . '&err=' . urlencode($err));
@@ -3453,6 +3834,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 if (!$bike_info) {
                     throw new Exception('Bike not found for return.');
                 }
+                $return_before = workflow_return_state($conn, $bike_id);
                 $full_reversal_amount = $bike_info['purchase_price'];
                 if ($return_amount - $full_reversal_amount > 0.0001) {
                     throw new Exception('Supplier refund cannot exceed the original bike purchase value.');
@@ -3496,9 +3878,10 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     $led_st2->execute();
                     $led_st2->close();
                 }
+                workflow_store_return_snapshot($conn, $bike_id, 'purchase', $return_before);
                 $conn->commit();
                 $msg = 'Purchase Return processed successfully.';
-            } catch (Exception $e) {
+            } catch (Throwable $e) {
                 $conn->rollback();
                 $err = 'Return transaction failed: ' . $e->getMessage();
             }
@@ -3528,6 +3911,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             if (!$bike_info) {
                 throw new Exception('Bike not found for return.');
             }
+            $return_before = workflow_return_state($conn, $bike_id);
             $acc_q = $conn->query("SELECT SUM(final_price) as total_acc FROM sale_accessories WHERE bike_id=$bike_id");
             $acc_total = $acc_q ? (float) ($acc_q->fetch_assoc()['total_acc'] ?? 0) : 0;
             $full_reversal_amount = $bike_info['selling_price'] + $acc_total;
@@ -3581,9 +3965,10 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             }
             $conn->query("DELETE FROM deposit_allocations WHERE bike_id=$bike_id");
             $conn->query("DELETE FROM sale_money_allocations WHERE bike_id=$bike_id");
+            workflow_store_return_snapshot($conn, $bike_id, 'sale', $return_before);
             $conn->commit();
             $msg = 'Return processed successfully. Installments cancelled, accessory stock restored, allocations cleared.';
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             $conn->rollback();
             $err = 'Return transaction failed: ' . $e->getMessage();
         }
@@ -3968,7 +4353,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     $chassis = delete_bike_cascade($conn, $bid);
                     $conn->commit();
                     $msg = 'Bike deleted and all related records reversed/removed.';
-                } catch (Exception $e) {
+                } catch (Throwable $e) {
                     $conn->rollback();
                     $err = 'Bike deletion failed: ' . $e->getMessage();
                 }
@@ -4025,7 +4410,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $old_status = $old_bike['status'] ?? '';
                 try {
                     assert_valid_bike_status_transition($old_status, $status);
-                } catch (Exception $e) {
+                } catch (Throwable $e) {
                     $err = $e->getMessage();
                     goto end_inventory_post;
                 }
@@ -4069,28 +4454,29 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 if ($old_status !== 'damaged_lost' && $status === 'damaged_lost') {
                     $entry_date = date('Y-m-d');
                     $category = 'Inventory Loss';
-                    $reference = 'Bike ID: ' . $bid . ' (' . $old_bike['chassis_number'] . ')';
+                    $reference = 'Bike ID: ' . $bid . ' (' . $chassis_number . ')';
                     $exp_notes = 'Automated expense for Damaged/Lost bike.';
                     $created_by = $_SESSION['user_id'];
                     $exp_stmt = $conn->prepare("INSERT INTO income_expenses (entry_date, type, category, amount, payment_method, reference, notes, created_by) VALUES (?,'expense',?,?, 'other', ?, ?, ?)");
                     $exp_stmt->bind_param('ssdssi', $entry_date, $category, $pp, $reference, $exp_notes, $created_by);
                     $exp_stmt->execute();
                 } elseif ($old_status === 'damaged_lost' && $status !== 'damaged_lost') {
-                    $reference = 'Bike ID: ' . $bid . ' (' . $old_bike['chassis_number'] . ')';
-                    $del_exp = $conn->prepare("DELETE FROM income_expenses WHERE category='Inventory Loss' AND reference=?");
+                    $reference = 'Bike ID: ' . $bid . ' (%';
+                    $del_exp = $conn->prepare("DELETE FROM income_expenses WHERE category='Inventory Loss' AND reference LIKE ?");
                     $del_exp->bind_param('s', $reference);
                     $del_exp->execute();
                 } elseif ($old_status === 'damaged_lost' && $status === 'damaged_lost') {
-                    $reference = 'Bike ID: ' . $bid . ' (' . $old_bike['chassis_number'] . ')';
-                    $upd_exp = $conn->prepare("UPDATE income_expenses SET amount=? WHERE category='Inventory Loss' AND reference=?");
-                    $upd_exp->bind_param('ds', $pp, $reference);
+                    $reference = 'Bike ID: ' . $bid . ' (%';
+                    $new_reference = 'Bike ID: ' . $bid . ' (' . $chassis_number . ')';
+                    $upd_exp = $conn->prepare("UPDATE income_expenses SET amount=?,reference=? WHERE category='Inventory Loss' AND reference LIKE ?");
+                    $upd_exp->bind_param('dss', $pp, $new_reference, $reference);
                     $upd_exp->execute();
                 }
                 $msg = 'Bike updated. ' . $img_err;
                 if ($img_err)
                     $err = trim($img_err);
                     $conn->commit();
-                } catch (Exception $e) {
+                } catch (Throwable $e) {
                     $conn->rollback();
                     $err = 'Bike update failed: ' . $e->getMessage();
                 }
@@ -4113,7 +4499,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     }
                     $conn->commit();
                     $msg = $deleted . ' bike(s) deleted and all related records reversed/removed.';
-                } catch (Exception $e) {
+                } catch (Throwable $e) {
                     $conn->rollback();
                     $err = 'Bulk deletion failed: ' . $e->getMessage();
                 }
@@ -5164,9 +5550,12 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     // Confirmation owns the initial submit event. Validation must not submit while
     // an asynchronous dialog is open (preventDefault alone does not stop listeners).
-    document.querySelectorAll('form[onsubmit*="confirm"]').forEach(form => {
-        const match = form.getAttribute('onsubmit').match(/confirm\(['"]([^'"]+)['"]\)/);
-        form.dataset.confirmMessage = match ? match[1] : 'Are you sure?';
+    document.querySelectorAll('form[onsubmit*="confirm"], form[data-confirm-message]').forEach(form => {
+        if (!form.dataset.confirmMessage) {
+            const attr = form.getAttribute('onsubmit') || '';
+            const match = attr.match(/confirm\(['"]([^'"]+)['"]\)/);
+            form.dataset.confirmMessage = match ? match[1] : 'Are you sure?';
+        }
         form.removeAttribute('onsubmit');
     });
     const pendingConfirmations = new WeakSet();
@@ -5628,6 +6017,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </fieldset>
 </div>
 <?php elseif ($page === 'purchase'): ?>
+<?php workflow_management_panel($conn, 'purchase'); ?>
 <?php
         $suppliers_list = get_suppliers_with_balances($conn);
         $models_list = $conn->query('SELECT id, model_code, model_name FROM models ORDER BY model_name');
@@ -6490,6 +6880,7 @@ document.getElementById('bulkExportForm').addEventListener('submit', function(){
 <?php endif; ?>
 <?php
     elseif ($page === 'sale'):
+        workflow_management_panel($conn, 'sale');
         $prefill_bike_id = (int) ($_GET['bike_id'] ?? 0);
         $prefill_bike = null;
         if ($prefill_bike_id) {
@@ -6964,6 +7355,7 @@ window.onload = function() {
 </script>
 <?php
     elseif ($page === 'returns'):
+        workflow_management_panel($conn, 'returns');
         $sub = sanitize($_GET['sub'] ?? 'sale');
         $prefill_ret_id = (int) ($_GET['bike_id'] ?? 0);
 ?>
@@ -7224,6 +7616,7 @@ $(document).ready(function() {
 </div>
 <?php
     elseif ($page === 'installments'):
+        workflow_installment_panel($conn);
         $status_f = sanitize($_GET['status_f'] ?? '');
         $customer_f = (int) ($_GET['customer_f'] ?? 0);
         $due_from = valid_date($_GET['due_from'] ?? '', true) ? ($_GET['due_from'] ?? '') : '';
@@ -7312,6 +7705,7 @@ $(document).ready(function() {
 <td><span class="badge <?= $status_badge ?>"><?= strtoupper($inst['status']) ?></span></td>
 <td class="no-print">
 <div class="actions-col">
+<a class="btn btn-default btn-sm" href="index.php?page=installments&amp;manage_installment=<?= (int) $inst['id'] ?>">History / correct</a>
 <?php if (($inst['status'] === 'pending' || $inst['status'] === 'overdue') && has_permission($conn, 'installments', 'edit')): ?>
 <button type="button" class="btn btn-success btn-sm" onclick="openPayInstallmentModal(<?= $inst['id'] ?>, '<?= fmt_date($inst['due_date']) ?>', <?= $inst['installment_amount'] ?>, <?= $inst['amount_paid'] ?>, <?= $inst['penalty_fee'] ?>, <?= $inst['penalty_paid'] ?? 0 ?>)">💵 Pay</button>
 <?php endif; ?>
@@ -7418,7 +7812,7 @@ $(document).ready(function() {
             $ledger_entries = $conn->query("SELECT * FROM ledger WHERE party_type='customer' AND party_id=$sel_cust ORDER BY entry_date ASC, id ASC");
             $running_bal = 0;
             $sums = $conn->query("SELECT 
-                SUM(CASE WHEN reference_type IN ('sale', 'penalty') THEN amount ELSE 0 END) - SUM(CASE WHEN reference_type='return_reversal' THEN amount ELSE 0 END) as total_billed, 
+                SUM(CASE WHEN reference_type IN ('sale', 'penalty') THEN amount ELSE 0 END) - SUM(CASE WHEN reference_type IN ('return_reversal','penalty_waiver') THEN amount ELSE 0 END) as total_billed,
                 SUM(CASE WHEN reference_type IN ('payment','down_payment','installment','return_refund','cheque_bounce') AND NOT (reference_type='cheque_bounce' AND reference_id IN (SELECT id FROM payments WHERE transaction_type='customer_advance')) THEN CASE WHEN entry_type='credit' THEN amount ELSE -amount END ELSE 0 END) as total_paid,
                 SUM(CASE WHEN entry_type='debit' THEN amount ELSE 0 END) as total_dr, 
                 SUM(CASE WHEN entry_type='credit' THEN amount ELSE 0 END) as total_cr 
@@ -8966,7 +9360,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="id" value="<?= $quote['id'] ?>">
 <input type="hidden" name="delete_quote" value="1">
-<button type="submit" class="btn btn-danger btn-sm" title="Delete" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete this quotation?', text: 'Are you sure you want to delete this quotation?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button>
+<button type="submit" class="btn btn-danger btn-sm" title="Delete" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete this quotation?', text: 'Delete only this quotation? Any sale already created from it, and its payments, will remain. To reverse the sale use Cancel sale.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button>
 </form>
 <?php endif; ?>
 </div>
@@ -9716,7 +10110,9 @@ document.addEventListener('DOMContentLoaded', function() {
 <td><?= sanitize($e['full_name'] ?? '-') ?></td>
 <td class="no-print">
 <?php if (has_permission($conn, 'income_expense', 'edit')): ?><a href="index.php?page=income_expense&edit_id=<?= $e['id'] ?>&from=<?= $filter_from ?>&to=<?= $filter_to ?>" class="btn btn-primary btn-sm">✏</a><?php endif; ?>
-<?php if (has_permission($conn, 'income_expense', 'delete')): ?><form method="POST" style="display:inline"><input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>"><input type="hidden" name="id" value="<?= $e['id'] ?>"><button name="delete_entry" class="btn btn-danger btn-sm" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete this entry?', text: 'Are you sure you want to delete this income/expense entry?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button></form><?php endif; ?>
+<?php if ($e['category'] === 'Inventory Loss' && preg_match('/^Bike ID: (\d+) /', $e['reference'] ?? '', $loss_item)): ?>
+<?php if (has_permission($conn, 'inventory', 'edit')): ?><a class="btn btn-warning btn-sm" href="index.php?page=inventory&amp;edit_id=<?= (int) $loss_item[1] ?>">Edit / restore item</a><?php endif; ?>
+<?php else: ?><?php if (has_permission($conn, 'income_expense', 'delete')): ?><form method="POST" style="display:inline"><input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>"><input type="hidden" name="id" value="<?= $e['id'] ?>"><button name="delete_entry" class="btn btn-danger btn-sm" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete this entry?', text: 'Are you sure you want to delete this income/expense entry?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button></form><?php endif; ?><?php endif; ?>
 </td>
 </tr>
 <?php endwhile; ?>
@@ -9883,6 +10279,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <td><span class="badge badge-<?= ($r['status'] === 'fulfilled') ? 'success' : (($r['status'] === 'cancelled') ? 'danger' : 'warning') ?>"><?= strtoupper($r['status']) ?></span></td>
 <td>
 <form method="POST" style="display:inline"><input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>"><input type="hidden" name="update_request_status" value="1"><input type="hidden" name="id" value="<?= $r['id'] ?>"><input type="hidden" name="type" value="bike"><input type="hidden" name="sub" value="requests"><select name="status" onchange="this.form.submit()"><option value="pending" <?= $r['status'] === 'pending' ? 'selected' : '' ?>>Pending</option><option value="contacted" <?= $r['status'] === 'contacted' ? 'selected' : '' ?>>Contacted</option><option value="fulfilled" <?= $r['status'] === 'fulfilled' ? 'selected' : '' ?>>Fulfilled</option><option value="cancelled" <?= $r['status'] === 'cancelled' ? 'selected' : '' ?>>Cancelled</option></select></form>
+<?php workflow_button($conn, 'landing_page', 'delete_bike_request', $r['id'], 'Delete request', 'Delete only this bike request? Inventory and financial records will remain.'); ?>
 </td>
 </tr>
 <?php endwhile; ?>
@@ -9905,6 +10302,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <td><span class="badge badge-<?= ($r['status'] === 'accepted') ? 'success' : (($r['status'] === 'rejected') ? 'danger' : 'warning') ?>"><?= strtoupper($r['status']) ?></span></td>
 <td>
 <form method="POST" style="display:inline"><input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>"><input type="hidden" name="update_request_status" value="1"><input type="hidden" name="id" value="<?= $r['id'] ?>"><input type="hidden" name="type" value="quote"><input type="hidden" name="sub" value="requests"><select name="status" onchange="this.form.submit()"><option value="pending" <?= $r['status'] === 'pending' ? 'selected' : '' ?>>Pending</option><option value="sent" <?= $r['status'] === 'sent' ? 'selected' : '' ?>>Sent</option><option value="accepted" <?= $r['status'] === 'accepted' ? 'selected' : '' ?>>Accepted</option><option value="rejected" <?= $r['status'] === 'rejected' ? 'selected' : '' ?>>Rejected</option></select></form>
+<?php workflow_button($conn, 'landing_page', 'delete_quote_request', $r['id'], 'Delete request', 'Delete only this quote request? Quotations, sales and payments will remain.'); ?>
 </td>
 </tr>
 <?php endwhile; ?>
@@ -10185,6 +10583,7 @@ updateAllocRemaining();
 <div class="actions-col">
 <?php if (has_permission($conn, 'money_tracking', 'edit')): ?><a href="index.php?page=money_tracking&edit_id=<?= $al['id'] ?>" class="btn btn-primary btn-sm">✏</a><?php endif; ?>
 <?php if (has_permission($conn, 'bank_deposits', 'add') && $al['dest_type'] === 'bank'): ?><a href="index.php?page=bank_deposits&amp;prefill_alloc=<?= $al['id'] ?>" class="btn btn-success btn-sm" title="Create bank deposit from this allocation">🏦</a><?php endif; ?>
+<?php if (has_permission($conn, 'bank_deposits', 'edit')) workflow_button($conn, 'money_tracking', 'unlink_allocation', $al['id'], 'Unlink deposits', 'Unlink all bank deposits from this allocation? Deposit records and amounts remain intact and become available for reassignment.', 'edit'); ?>
 <?php if (has_permission($conn, 'money_tracking', 'delete')): ?>
 <form method="POST" style="display:inline"><input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>"><input type="hidden" name="id" value="<?= $al['id'] ?>">
 <button name="delete_allocation" class="btn btn-danger btn-sm" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete this allocation?', text: 'This will remove the money tracking record.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button>
