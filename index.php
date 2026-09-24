@@ -42,7 +42,7 @@ $author = 'Yasin Ullah';
  * | All pricing, payment, and grace period values can be changed below.
  * |
  */
-define('SUBSCRIPTION_ENABLED', true);           // true = licensing ON, false = fully free
+define('SUBSCRIPTION_ENABLED', false);           // true = licensing ON, false = fully free
 define('SUB_MONTHLY_PRICE', 2000);              // Price per month in Rs.
 define('SUB_PAYMENT_PERIOD_MONTHS', 6);         // Payment covers this many months
 define('SUB_GRACE_PERIOD_DAYS', 8);             // Days after expiry before app stops
@@ -138,6 +138,481 @@ function reset_attempts()
     fclose($handle);
 }
 
+// Shared by both ledgers and the payment register. Call mutations inside a transaction.
+function accounting_payment($conn, $id, $lock = false)
+{
+    $id = (int) $id;
+    $p = $conn->query("SELECT * FROM payments WHERE id=$id" . ($lock ? ' FOR UPDATE' : ''))->fetch_assoc();
+    if (!$p) throw new Exception('Payment not found.');
+    if (empty($p['customer_id']) && $p['transaction_type'] === 'installment') {
+        $p['customer_id'] = $conn->query('SELECT customer_id FROM installments WHERE id=' . (int) $p['reference_id'])->fetch_row()[0] ?? 0;
+    } elseif (empty($p['customer_id']) && in_array($p['transaction_type'], ['sale', 'customer_refund'], true)) {
+        $p['customer_id'] = $conn->query('SELECT customer_id FROM bikes WHERE id=' . (int) $p['reference_id'])->fetch_row()[0] ?? 0;
+    }
+    if (empty($p['supplier_id']) && $p['transaction_type'] === 'supplier_payment') {
+        $p['supplier_id'] = $conn->query('SELECT supplier_id FROM purchase_orders WHERE id=' . (int) $p['reference_id'])->fetch_row()[0] ?? 0;
+    } elseif (empty($p['supplier_id']) && $p['transaction_type'] === 'supplier_refund') {
+        $p['supplier_id'] = $conn->query('SELECT po.supplier_id FROM bikes b JOIN purchase_orders po ON po.id=b.purchase_order_id WHERE b.id=' . (int) $p['reference_id'])->fetch_row()[0] ?? 0;
+    }
+    return $p;
+}
+
+function accounting_check_party($p, $page, $party_id)
+{
+    $column = $page === 'customer_ledger' ? 'customer_id' : 'supplier_id';
+    if ($page !== 'payments' && ($party_id <= 0 || (int) $p[$column] !== $party_id)) {
+        throw new Exception('This payment does not belong to the selected account.');
+    }
+}
+
+function accounting_create_payment($conn, $page, $party_id, $outgoing, $input)
+{
+    $amount = round((float) ($input['amount'] ?? 0), 2);
+    $date = $input['payment_date'] ?? '';
+    $method = $input['payment_method'] ?? '';
+    $notes = clean_text($input['notes'] ?? '');
+    $number = clean_text($input['cheque_number'] ?? '');
+    $bank = clean_text($input['bank_name'] ?? '');
+    $cheque_date = ($input['cheque_date'] ?? '') ?: null;
+    if ($party_id <= 0 || !is_finite($amount) || $amount <= 0 || !valid_date($date)) throw new Exception('Select an account and enter a positive amount and valid date.');
+    assert_valid_payment_method($method);
+    if ($method === 'cheque' && (!$number || !$bank || !$cheque_date || !valid_date($cheque_date))) throw new Exception('Cheque number, bank and valid cheque date are required.');
+    if ($method !== 'cheque') { $number = ''; $bank = ''; $cheque_date = null; }
+    $customer = $page === 'customer_ledger';
+    $table = $customer ? 'customers' : 'suppliers';
+    $party = $conn->query("SELECT name FROM $table WHERE id=$party_id FOR UPDATE")->fetch_assoc();
+    if (!$party) throw new Exception('Account not found.');
+    $customer_id = $customer ? $party_id : null;
+    $supplier_id = $customer ? null : $party_id;
+    $type = $customer ? ($outgoing ? 'customer_advance' : 'sale') : ($outgoing ? 'supplier_payment' : 'supplier_refund');
+    $status = $method === 'cheque' ? 'pending' : 'cleared';
+    $st = $conn->prepare('INSERT INTO payments (payment_date,payment_type,amount,cheque_number,bank_name,cheque_date,transaction_type,reference_id,customer_id,supplier_id,party_name,notes,status) VALUES (?,?,?,?,?,?,?,0,?,?,?,?,?)');
+    $st->bind_param('ssdssssiisss', $date, $method, $amount, $number, $bank, $cheque_date, $type, $customer_id, $supplier_id, $party['name'], $notes, $status);
+    $st->execute();
+    $pid = $conn->insert_id;
+    if ($customer) {
+        $entry_type = $outgoing ? 'debit' : 'credit';
+        $reference = $outgoing ? 'advance_given' : 'payment';
+        $description = ($outgoing ? 'Advance / Loan Given: ' : 'Payment Received: ') . $notes;
+        $st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,?,?,'customer',?,?,?,?,?)");
+        $st->bind_param('ssdissid', $date, $entry_type, $amount, $party_id, $description, $reference, $pid, $amount);
+        $st->execute();
+        if (!$outgoing) accounting_allocate_payment($conn, accounting_payment($conn, $pid), $amount);
+    }
+}
+
+function accounting_cheque_fields($prefix)
+{
+    foreach (['cheque_number'=>['Cheque number (for cheques)','text'], 'bank_name'=>['Bank (for cheques)','text'], 'cheque_date'=>['Cheque date (for cheques)','date']] as $name=>$field) {
+        echo '<div class="form-group"><label for="' . $prefix . '_' . $name . '">' . $field[0] . '</label><input id="' . $prefix . '_' . $name . '" type="' . $field[1] . '" name="' . $name . '"></div>';
+    }
+}
+
+function accounting_resolve_payment_entry($conn, $entry, $lock = false)
+{
+    // Older customer receipts stored NULL or a bike id instead of the payment id.
+    // Resolve by account, receipt kind, date and amount; never by id alone.
+    if ($entry['party_type'] !== 'customer' || !in_array($entry['reference_type'], ['payment','advance_given'], true)) return 0;
+    $type = $entry['reference_type'] === 'advance_given' ? 'customer_advance' : 'sale';
+    $ref = (int) $entry['reference_id'];
+    $suffix = $lock ? ' FOR UPDATE' : '';
+    $st = $conn->prepare("SELECT p.id,p.reference_id FROM payments p
+        LEFT JOIN bikes b ON p.transaction_type='sale' AND b.id=p.reference_id
+        WHERE p.transaction_type=? AND COALESCE(p.customer_id,b.customer_id)=?
+          AND p.payment_date=? AND p.amount=?
+        ORDER BY p.id" . $suffix);
+    $st->bind_param('sisd', $type, $entry['party_id'], $entry['entry_date'], $entry['amount']);
+    $st->execute();
+    $candidates = [];
+    foreach ($st->get_result() as $p) {
+        if ($ref > 0 && (int) $p['id'] === $ref) return $ref;
+        if (($ref === 0 && empty($p['reference_id'])) || ($ref > 0 && (int) $p['reference_id'] === $ref)) $candidates[] = (int) $p['id'];
+    }
+    return count($candidates) === 1 ? $candidates[0] : 0;
+}
+
+function accounting_payment_ledger_ids($conn, $p)
+{
+    $pid = (int) $p['id'];
+    $ref = (int) $p['reference_id'];
+    $type = $p['transaction_type'];
+    if (in_array($type, ['sale','customer_advance'], true)) {
+        $st = $conn->prepare("SELECT * FROM ledger WHERE party_type='customer' AND party_id=? AND reference_type IN ('payment','advance_given') AND entry_date=? AND amount=? ORDER BY id FOR UPDATE");
+        $st->bind_param('isd', $p['customer_id'], $p['payment_date'], $p['amount']);
+        $st->execute();
+        $direct = [];
+        foreach ($st->get_result() as $entry) {
+            if (accounting_resolve_payment_entry($conn, $entry, true) === $pid) $direct[] = (int) $entry['id'];
+        }
+        if (count($direct) > 1) throw new Exception('Multiple customer ledger receipts match this payment. Reconcile the duplicate receipts before changing it.');
+        if ($direct) {
+            // Persist the recovered link only as part of the explicit payment mutation.
+            $conn->query('UPDATE ledger SET reference_id=' . $pid . ' WHERE id=' . $direct[0]);
+            return $direct;
+        }
+    }
+    $refs = ['sale' => 'down_payment', 'installment' => 'installment', 'customer_refund' => 'return_refund', 'supplier_refund' => 'supplier_refund'];
+    if (!$ref || !isset($refs[$type])) return [];
+    $party_type = $type === 'supplier_refund' ? 'supplier' : 'customer';
+    $party_id = (int) $p[$party_type . '_id'];
+    // Legacy entries reference a bike/installment, not a payment. Never remove every receipt for that source.
+    $stmt = $conn->prepare('SELECT id FROM ledger WHERE reference_type=? AND reference_id=? AND party_type=? AND party_id=? AND entry_date=? AND amount=? ORDER BY id FOR UPDATE');
+    $stmt->bind_param('sisisd', $refs[$type], $ref, $party_type, $party_id, $p['payment_date'], $p['amount']);
+    $stmt->execute();
+    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    if (count($rows) > 1) throw new Exception('Multiple legacy ledger entries match this payment. Resolve the duplicate entries before changing it.');
+    return array_column($rows, 'id');
+}
+
+function accounting_reverse_allocations($conn, $p)
+{
+    $pid = (int) $p['id'];
+    $rows = $conn->query("SELECT * FROM installment_payment_allocations WHERE payment_id=$pid ORDER BY installment_id FOR UPDATE")->fetch_all(MYSQLI_ASSOC);
+    if (!$rows && $p['transaction_type'] === 'installment' && !in_array($p['status'], ['bounced', 'cancelled'], true)) {
+        $iid = (int) $p['reference_id'];
+        $inst = $conn->query("SELECT * FROM installments WHERE id=$iid FOR UPDATE")->fetch_assoc();
+        if (!$inst) throw new Exception('The linked installment no longer exists.');
+        $known = $conn->query("SELECT COALESCE(SUM(a.principal_amount),0) AS principal,COALESCE(SUM(a.penalty_amount),0) AS penalty FROM installment_payment_allocations a JOIN payments p ON p.id=a.payment_id WHERE a.installment_id=$iid AND COALESCE(p.status,'cleared') NOT IN ('bounced','cancelled')")->fetch_assoc();
+        $principal = round($inst['amount_paid'] - $known['principal'], 2);
+        $penalty = round($inst['penalty_paid'] - $known['penalty'], 2);
+        $legacy = $conn->query("SELECT COUNT(*) AS count,COALESCE(SUM(p.amount),0) AS total FROM payments p WHERE p.transaction_type='installment' AND p.reference_id=$iid AND COALESCE(p.status,'cleared') NOT IN ('bounced','cancelled') AND NOT EXISTS (SELECT 1 FROM installment_payment_allocations a WHERE a.payment_id=p.id)")->fetch_assoc();
+        if ($principal < 0 || $penalty < 0 || abs($principal + $penalty - $legacy['total']) > 0.01 || ((int) $legacy['count'] > 1 && $penalty > 0)) {
+            throw new Exception('Legacy installment totals do not identify this payment\'s principal/penalty split. Reconcile the installment before changing this payment.');
+        }
+        $rows = [['installment_id'=>$iid, 'principal_amount'=>(int) $legacy['count'] === 1 ? $principal : (float) $p['amount'], 'penalty_amount'=>$penalty]];
+    }
+    foreach ($rows as $row) {
+        $id = (int) $row['installment_id'];
+        $inst = $conn->query("SELECT * FROM installments WHERE id=$id FOR UPDATE")->fetch_assoc();
+        if (!$inst || in_array($p['status'], ['bounced', 'cancelled'], true)) continue;
+        $principal = max(0, round($inst['amount_paid'] - $row['principal_amount'], 2));
+        $penalty = max(0, round($inst['penalty_paid'] - $row['penalty_amount'], 2));
+        $status = $inst['status'] === 'cancelled' ? 'cancelled' : (($principal >= $inst['installment_amount'] && $penalty >= $inst['penalty_fee']) ? 'paid' : ($inst['due_date'] < date('Y-m-d') ? 'overdue' : 'pending'));
+        $st = $conn->prepare('UPDATE installments SET amount_paid=?, penalty_paid=?, status=? WHERE id=?');
+        $st->bind_param('ddsi', $principal, $penalty, $status, $id);
+        $st->execute();
+    }
+    $conn->query("DELETE FROM installment_payment_allocations WHERE payment_id=$pid");
+    $conn->query("UPDATE installments SET payment_id=NULL WHERE payment_id=$pid");
+}
+
+function accounting_allocate_payment($conn, $p, $amount)
+{
+    $pid = (int) $p['id'];
+    $cid = (int) $p['customer_id'];
+    if ($p['transaction_type'] === 'installment') {
+        $where = 'id=' . (int) $p['reference_id'];
+    } elseif ($p['transaction_type'] === 'sale' && empty($p['reference_id'])) {
+        $where = "customer_id=$cid AND status!='cancelled'";
+    } else return;
+    $rows = $conn->query("SELECT * FROM installments WHERE $where ORDER BY due_date,id FOR UPDATE");
+    foreach ($rows as $inst) {
+        if ($amount <= 0) break;
+        if ($inst['status'] === 'cancelled') throw new Exception('Cannot edit a payment on a cancelled installment.');
+        $penalty = min($amount, max(0, $inst['penalty_fee'] - $inst['penalty_paid']));
+        $principal = min($amount - $penalty, max(0, $inst['installment_amount'] - $inst['amount_paid']));
+        if ($principal + $penalty <= 0) continue;
+        $new_principal = $inst['amount_paid'] + $principal;
+        $new_penalty = $inst['penalty_paid'] + $penalty;
+        $status = ($new_principal >= $inst['installment_amount'] && $new_penalty >= $inst['penalty_fee']) ? 'paid' : ($inst['due_date'] < date('Y-m-d') ? 'overdue' : 'pending');
+        $st = $conn->prepare('UPDATE installments SET amount_paid=?, penalty_paid=?, status=?, payment_id=? WHERE id=?');
+        $st->bind_param('ddsii', $new_principal, $new_penalty, $status, $pid, $inst['id']);
+        $st->execute();
+        $st = $conn->prepare('INSERT INTO installment_payment_allocations (payment_id,installment_id,principal_amount,penalty_amount) VALUES (?,?,?,?)');
+        $st->bind_param('iidd', $pid, $inst['id'], $principal, $penalty);
+        $st->execute();
+        $amount = round($amount - $principal - $penalty, 2);
+    }
+    if ($p['transaction_type'] === 'installment' && $amount > 0.001) throw new Exception('Payment exceeds the remaining principal and assessed penalty.');
+}
+
+function accounting_change_payment($conn, $p, $delete, $input = [])
+{
+    $pid = (int) $p['id'];
+    $ledger_ids = accounting_payment_ledger_ids($conn, $p);
+    accounting_reverse_allocations($conn, $p);
+    if ($delete) {
+        accounting_adjust_down_payment($conn, $p, 0);
+        if ($ledger_ids) $conn->query('DELETE FROM ledger WHERE id IN (' . implode(',', array_map('intval', $ledger_ids)) . ')');
+        $conn->query("DELETE FROM ledger WHERE reference_type='cheque_bounce' AND reference_id=$pid");
+        $conn->query("DELETE FROM cheque_register WHERE reference_type='payment' AND reference_id=$pid");
+        $conn->query("DELETE FROM payments WHERE id=$pid");
+        accounting_sync_cheque_register($conn, $p, null);
+        accounting_sync_refund($conn, $p);
+        return;
+    }
+    if (in_array($p['status'], ['bounced', 'cancelled'], true)) throw new Exception('Delete this inactive payment and record a new payment instead of editing it.');
+    $amount = round((float) ($input['amount'] ?? 0), 2);
+    $date = $input['payment_date'] ?? '';
+    $method = $input['payment_type'] ?? '';
+    $notes = clean_text($input['notes'] ?? '');
+    $number = clean_text($input['cheque_number'] ?? '');
+    $bank = clean_text($input['bank_name'] ?? '');
+    $cheque_date = ($input['cheque_date'] ?? '') ?: null;
+    if (!is_finite($amount) || $amount <= 0 || !valid_date($date)) throw new Exception('Enter a positive amount and valid payment date.');
+    assert_valid_payment_method($method);
+    if (in_array($p['transaction_type'], ['customer_refund','supplier_refund'], true) && (int) $p['reference_id'] > 0) {
+        $bid = (int) $p['reference_id'];
+        $bike = $conn->query("SELECT * FROM bikes WHERE id=$bid FOR UPDATE")->fetch_assoc();
+        if (!$bike) throw new Exception('Refund inventory record was not found.');
+        if ($p['transaction_type'] === 'customer_refund') {
+            $paid = (float) $conn->query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE COALESCE(status,'cleared') NOT IN ('bounced','cancelled') AND ((transaction_type='sale' AND reference_id=$bid) OR (transaction_type='installment' AND reference_id IN (SELECT id FROM installments WHERE bike_id=$bid)))")->fetch_row()[0];
+            $cap = min(get_sale_total_for_bike($conn, $bid), $paid);
+        } else {
+            $sid = (int) $p['supplier_id'];
+            $paid = (float) $conn->query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE transaction_type IN ('supplier_payment','purchase') AND COALESCE(status,'cleared') NOT IN ('bounced','cancelled') AND (supplier_id=$sid OR reference_id IN (SELECT id FROM purchase_orders WHERE supplier_id=$sid))")->fetch_row()[0];
+            $cap = min((float) $bike['purchase_price'], $paid);
+        }
+        $type = $p['transaction_type'];
+        $other_refunds = (float) $conn->query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE transaction_type='$type' AND reference_id=$bid AND id!=$pid AND COALESCE(status,'cleared') NOT IN ('bounced','cancelled')")->fetch_row()[0];
+        if ($amount + $other_refunds > $cap + 0.001) throw new Exception('Refund exceeds the amount eligible for refund on this item.');
+    }
+    if ($method === 'cheque' && (!$number || !$bank || !$cheque_date || !valid_date($cheque_date))) throw new Exception('Cheque number, bank and valid cheque date are required.');
+    if ($method !== 'cheque') { $number = ''; $bank = ''; $cheque_date = null; }
+    $status = $method === 'cheque' ? ($p['payment_type'] === 'cheque' ? $p['status'] : 'pending') : 'cleared';
+    accounting_adjust_down_payment($conn, $p, $amount);
+    $st = $conn->prepare('UPDATE payments SET payment_date=?,payment_type=?,amount=?,cheque_number=?,bank_name=?,cheque_date=?,notes=?,status=? WHERE id=?');
+    $st->bind_param('ssdsssssi', $date, $method, $amount, $number, $bank, $cheque_date, $notes, $status, $pid);
+    $st->execute();
+    accounting_sync_cheque_register($conn, $p, compact('date','method','amount','number','bank','cheque_date','notes','status'));
+    foreach ($ledger_ids as $lid) {
+        $st = $conn->prepare('UPDATE ledger SET entry_date=?,amount=?,balance=? WHERE id=?');
+        $st->bind_param('sddi', $date, $amount, $amount, $lid);
+        $st->execute();
+    }
+    accounting_allocate_payment($conn, $p, $amount);
+    accounting_sync_refund($conn, $p);
+}
+
+function accounting_adjust_down_payment($conn, $p, $new_amount)
+{
+    if ($p['transaction_type'] !== 'sale' || empty($p['reference_id']) || in_array($p['status'], ['bounced','cancelled'], true)) return;
+    $bid = (int) $p['reference_id'];
+    $delta = round($p['amount'] - $new_amount, 2);
+    if (abs($delta) < 0.001) return;
+    $rows = $conn->query("SELECT * FROM installments WHERE bike_id=$bid AND status!='cancelled' ORDER BY due_date DESC,id DESC FOR UPDATE");
+    foreach ($rows as $inst) {
+        $change = $delta > 0 ? $delta : -min(-$delta, max(0, $inst['installment_amount'] - $inst['amount_paid']));
+        $due = round($inst['installment_amount'] + $change, 2);
+        $status = ($inst['amount_paid'] >= $due && $inst['penalty_paid'] >= $inst['penalty_fee']) ? 'paid' : ($inst['due_date'] < date('Y-m-d') ? 'overdue' : 'pending');
+        $st = $conn->prepare('UPDATE installments SET installment_amount=?,status=? WHERE id=?');
+        $st->bind_param('dsi', $due, $status, $inst['id']);
+        $st->execute();
+        $delta = round($delta - $change, 2);
+        if (abs($delta) < 0.001) break;
+    }
+}
+
+function accounting_sync_cheque_register($conn, $p, $replacement)
+{
+    if ($p['payment_type'] !== 'cheque' || empty($p['cheque_number'])) return;
+    $map = ['sale'=>'sale','installment'=>'installment','supplier_payment'=>'purchase','purchase'=>'purchase','customer_refund'=>'return','supplier_refund'=>'return'];
+    $source_type = $map[$p['transaction_type']] ?? 'payment';
+    $source_id = $source_type === 'payment' ? (int) $p['id'] : (int) $p['reference_id'];
+    $st = $conn->prepare("SELECT id FROM cheque_register WHERE cheque_number=? AND bank_name=? AND amount=? AND ((reference_type='payment' AND reference_id=?) OR (reference_type=? AND reference_id=?)) FOR UPDATE");
+    $st->bind_param('ssdisi', $p['cheque_number'], $p['bank_name'], $p['amount'], $p['id'], $source_type, $source_id);
+    $st->execute();
+    foreach ($st->get_result() as $row) {
+        $id = (int) $row['id'];
+        if (!$replacement || $replacement['method'] !== 'cheque') {
+            $conn->query("DELETE FROM cheque_register WHERE id=$id");
+        } else {
+            $update = $conn->prepare('UPDATE cheque_register SET cheque_number=?,bank_name=?,cheque_date=?,amount=?,notes=?,status=? WHERE id=?');
+            $update->bind_param('sssdssi', $replacement['number'], $replacement['bank'], $replacement['cheque_date'], $replacement['amount'], $replacement['notes'], $replacement['status'], $id);
+            $update->execute();
+        }
+    }
+}
+
+function accounting_sync_refund($conn, $p)
+{
+    if (in_array($p['transaction_type'], ['customer_refund', 'supplier_refund'], true) && (int) $p['reference_id'] > 0) {
+        $ref = (int) $p['reference_id'];
+        $type = $p['transaction_type'];
+        $conn->query("UPDATE bikes SET return_amount=(SELECT COALESCE(SUM(amount),0) FROM payments WHERE transaction_type='$type' AND reference_id=$ref AND status NOT IN ('bounced','cancelled')) WHERE id=$ref");
+    }
+}
+
+function accounting_cheque_status($conn, $p, $status)
+{
+    if ($p['payment_type'] !== 'cheque' || !in_array($status, ['pending','cleared','bounced','cancelled'], true)) throw new Exception('Invalid cheque or status.');
+    if ($p['status'] === $status) return;
+    if (in_array($p['status'], ['bounced','cancelled'], true)) throw new Exception('An inactive cheque cannot be reactivated. Record a new payment.');
+    $pid = (int) $p['id'];
+    if (in_array($status, ['bounced','cancelled'], true)) {
+        accounting_adjust_down_payment($conn, $p, 0);
+        $ids = accounting_payment_ledger_ids($conn, $p);
+        accounting_reverse_allocations($conn, $p);
+        foreach ($ids as $id) {
+            $description = 'Cheque ' . $status . ' (Ref Payment #' . $pid . ')';
+            $st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) SELECT CURRENT_DATE,IF(entry_type='credit','debit','credit'),amount,party_type,party_id,?,'cheque_bounce',?,amount FROM ledger WHERE id=?");
+            $st->bind_param('sii', $description, $pid, $id);
+            $st->execute();
+        }
+    }
+    $st = $conn->prepare('UPDATE payments SET status=? WHERE id=?');
+    $st->bind_param('si', $status, $pid);
+    $st->execute();
+    $st = $conn->prepare("UPDATE cheque_register SET status=? WHERE reference_type='payment' AND reference_id=?");
+    $st->bind_param('si', $status, $pid);
+    $st->execute();
+    accounting_sync_cheque_register($conn, $p, ['method'=>'cheque','number'=>$p['cheque_number'],'bank'=>$p['bank_name'],'cheque_date'=>$p['cheque_date'],'amount'=>$p['amount'],'notes'=>$p['notes'],'status'=>$status]);
+    accounting_sync_refund($conn, $p);
+}
+
+function accounting_customer_buttons($conn, $entry, $customer_id)
+{
+    $ref = (int) $entry['reference_id'];
+    $kind = $entry['reference_type'];
+    $pid = 0;
+    if (in_array($kind, ['payment','advance_given'], true)) {
+        $pid = accounting_resolve_payment_entry($conn, $entry);
+    } elseif ($kind === 'cheque_bounce') {
+        $pid = $ref;
+    } else {
+        $map = ['down_payment'=>'sale', 'installment'=>'installment', 'return_refund'=>'customer_refund'];
+        if (isset($map[$kind])) {
+            $st = $conn->prepare('SELECT id FROM payments WHERE transaction_type=? AND reference_id=? AND payment_date=? AND amount=? ORDER BY id');
+            $st->bind_param('sisd', $map[$kind], $ref, $entry['entry_date'], $entry['amount']);
+            $st->execute();
+            $rows = $st->get_result()->fetch_all(MYSQLI_ASSOC);
+            if (count($rows) === 1) $pid = (int) $rows[0]['id'];
+        }
+    }
+    if ($pid) {
+        accounting_payment_buttons($conn, 'customer_ledger', $customer_id, $pid);
+        return;
+    }
+    $url = accounting_url('customer_ledger', $customer_id);
+    echo '<a class="btn btn-default btn-sm" href="' . sanitize($url . '&account_entry=' . (int) $entry['id']) . '">View receipt</a> ';
+    if ($kind === 'sale' && has_permission($conn, 'customer_ledger', 'edit') && has_permission($conn, 'sale', 'edit')) echo '<a class="btn btn-primary btn-sm" href="' . sanitize($url . '&account_entry=' . (int) $entry['id'] . '&edit_sale=1') . '">Edit sale</a> ';
+    $bike_id = in_array($kind, ['sale','return','return_reversal','return_refund','down_payment'], true) ? $ref : 0;
+    if (in_array($kind, ['installment','penalty'], true)) {
+        $bike_id = (int) ($conn->query("SELECT bike_id FROM installments WHERE id=$ref")->fetch_row()[0] ?? 0);
+    }
+    if ($bike_id) accounting_bike_buttons($conn, $bike_id);
+}
+
+function accounting_edit_sale($conn, $customer_id, $input)
+{
+    $entry_id = (int) ($input['entry_id'] ?? 0);
+    $entry = $conn->query("SELECT * FROM ledger WHERE id=$entry_id AND party_type='customer' AND party_id=$customer_id AND reference_type='sale' FOR UPDATE")->fetch_assoc();
+    if (!$entry) throw new Exception('Sale entry not found for this customer.');
+    $bid = (int) $entry['reference_id'];
+    $bike = $conn->query("SELECT * FROM bikes WHERE id=$bid FOR UPDATE")->fetch_assoc();
+    if (!$bike || $bike['status'] !== 'sold' || (int) $bike['customer_id'] !== $customer_id || abs(get_sale_total_for_bike($conn, $bid) - $entry['amount']) > 0.01) throw new Exception('Only the current active sale can be edited. Returned or historical sales must be handled through their source records.');
+    $price = round((float) ($input['selling_price'] ?? 0), 2);
+    $date = $input['selling_date'] ?? '';
+    if (!is_finite($price) || $price <= 0 || !valid_date($date)) throw new Exception('Enter a positive selling price and valid sale date.');
+    $accessories = (float) $conn->query("SELECT COALESCE(SUM(final_price),0) FROM sale_accessories WHERE bike_id=$bid")->fetch_row()[0];
+    $total = $price + $accessories;
+    if (get_allocated_total_for_bike($conn, $bid) > $total + 0.001) throw new Exception('Reduce this sale\'s money-destination allocations before reducing its total below the allocated amount.');
+    $basis = $bike['tax_basis'] ?: (get_setting('tax_on') ?? 'purchase_price');
+    $rate = $bike['tax_rate_applied'] !== null ? (float) $bike['tax_rate_applied'] : (float) (get_setting('tax_rate') ?? 0.1);
+    $tax = round(($basis === 'selling_price' ? $price : $bike['purchase_price']) * $rate, 2);
+    $margin = round($total - $bike['purchase_price'] - get_sale_accessory_cost_for_bike($conn, $bid) - $tax, 2);
+    $st = $conn->prepare('UPDATE bikes SET selling_price=?,selling_date=?,tax_amount=?,margin=?,tax_rate_applied=?,tax_basis=? WHERE id=?');
+    $st->bind_param('dsdddsi', $price, $date, $tax, $margin, $rate, $basis, $bid);
+    $st->execute();
+    $st = $conn->prepare('UPDATE ledger SET entry_date=?,amount=?,balance=? WHERE id=?');
+    $st->bind_param('sddi', $date, $total, $total, $entry_id);
+    $st->execute();
+    accounting_adjust_down_payment($conn, ['transaction_type'=>'sale','reference_id'=>$bid,'status'=>'cleared','amount'=>$total - $entry['amount']], 0);
+}
+
+function accounting_bike_buttons($conn, $bike_id)
+{
+    $bike_id = (int) $bike_id;
+    if (has_permission($conn, 'inventory', 'edit')) echo '<a class="btn btn-primary btn-sm" href="index.php?page=inventory&amp;edit_id=' . $bike_id . '">Edit item</a> ';
+    if (has_permission($conn, 'inventory', 'delete')) echo '<form method="POST" action="index.php?page=inventory&amp;action=delete" style="display:inline" onsubmit="return confirm(\'Delete the entire inventory item, its sale, refunds, installments and linked records? This cannot be undone.\')"><input type="hidden" name="csrf_token" value="' . sanitize($_SESSION['csrf_token']) . '"><input type="hidden" name="id" value="' . $bike_id . '"><button type="submit" class="btn btn-danger btn-sm">Delete item and records</button></form>';
+}
+
+function accounting_source_panel($conn, $page, $party_id)
+{
+    $entry_id = (int) ($_GET['account_entry'] ?? 0);
+    if ($page === 'customer_ledger' && $entry_id) {
+        $row = $conn->query("SELECT * FROM ledger WHERE id=$entry_id AND party_type='customer' AND party_id=" . (int) $party_id)->fetch_assoc();
+        if (!$row) { echo '<div class="alert alert-danger">Ledger entry not found for this customer.</div>'; return; }
+        echo '<fieldset class="fieldset" id="receiptArea"><legend>Ledger receipt #' . $entry_id . '</legend><p>' . fmt_date($row['entry_date']) . '</p><p>' . sanitize($row['description']) . '</p><p><strong>' . fmt_money($row['amount']) . ' ' . sanitize($row['entry_type']) . '</strong></p>';
+        echo '<style>@media print{.content>*:not(#receiptArea){display:none!important}#receiptArea{display:block!important}}</style>';
+        if ($row['reference_type'] === 'sale' && has_permission($conn, 'sale', 'view')) echo '<a class="btn btn-default no-print" href="index.php?page=sale&amp;print_invoice=' . (int) $row['reference_id'] . '&amp;format=a4">Full sale invoice</a> ';
+        if (!empty($_GET['edit_sale']) && $row['reference_type'] === 'sale' && has_permission($conn, 'customer_ledger', 'edit') && has_permission($conn, 'sale', 'edit')) {
+            $bike = $conn->query('SELECT selling_price,selling_date FROM bikes WHERE id=' . (int) $row['reference_id'])->fetch_assoc();
+            if ($bike) echo '<form method="POST" action="' . sanitize(accounting_url($page, $party_id)) . '"><input type="hidden" name="csrf_token" value="' . sanitize($_SESSION['csrf_token']) . '"><input type="hidden" name="account_action" value="edit_sale"><input type="hidden" name="entry_id" value="' . $entry_id . '"><div class="form-group"><label for="account_sale_price">Bike selling price (accessories unchanged)</label><input id="account_sale_price" type="number" step="0.01" min="0.01" name="selling_price" value="' . sanitize($bike['selling_price']) . '" required></div><div class="form-group"><label for="account_sale_date">Sale date</label><input id="account_sale_date" type="date" name="selling_date" value="' . sanitize($bike['selling_date']) . '" required></div><button type="submit" class="btn btn-primary">Save sale changes</button></form>';
+        }
+        echo '<button type="button" class="btn btn-default no-print" onclick="window.print()">Print receipt</button></fieldset>';
+    }
+    $order_id = (int) ($_GET['account_order'] ?? 0);
+    if ($page === 'supplier_ledger' && $order_id) {
+        $row = $conn->query("SELECT id FROM purchase_orders WHERE id=$order_id AND supplier_id=" . (int) $party_id)->fetch_assoc();
+        if (!$row) { echo '<div class="alert alert-danger">Purchase order not found for this supplier.</div>'; return; }
+        echo '<fieldset class="fieldset"><legend>Edit purchase order #' . $order_id . '</legend><p>Edit the items below; purchase totals are recalculated when saved.</p>';
+        $rows = $conn->query("SELECT id,chassis_number FROM bikes WHERE purchase_order_id=$order_id ORDER BY id");
+        foreach ($rows as $bike) {
+            echo '<p>' . sanitize($bike['chassis_number']) . ' ';
+            accounting_bike_buttons($conn, $bike['id']);
+            echo '</p>';
+        }
+        echo '</fieldset>';
+    }
+}
+
+function accounting_order_buttons($conn, $supplier_id, $order_id)
+{
+    $url = accounting_url('supplier_ledger', $supplier_id);
+    if (has_permission($conn, 'supplier_ledger', 'edit') && has_permission($conn, 'inventory', 'edit')) echo '<a class="btn btn-primary btn-sm" href="' . sanitize($url . '&account_order=' . (int) $order_id) . '">Edit items</a> ';
+    if (has_permission($conn, 'supplier_ledger', 'delete') && has_permission($conn, 'purchase', 'delete') && has_permission($conn, 'inventory', 'delete')) echo '<form method="POST" action="' . sanitize($url) . '" style="display:inline" onsubmit="return confirm(\'Delete this entire purchase order and ALL its inventory items, sales, payments and linked records? This cannot be undone.\')"><input type="hidden" name="csrf_token" value="' . sanitize($_SESSION['csrf_token']) . '"><input type="hidden" name="account_action" value="delete_order"><input type="hidden" name="order_id" value="' . (int) $order_id . '"><button type="submit" class="btn btn-danger btn-sm">Delete order and records</button></form>';
+}
+
+function accounting_url($page, $party_id)
+{
+    return 'index.php?page=' . $page . ($page === 'customer_ledger' ? '&cust_id=' . $party_id : ($page === 'supplier_ledger' ? '&sup_id=' . $party_id : ''));
+}
+
+function accounting_payment_buttons($conn, $page, $party_id, $payment_id)
+{
+    $url = accounting_url($page, $party_id);
+    echo '<a class="btn btn-default btn-sm" href="' . sanitize($url . '&account_payment=' . (int) $payment_id) . '">View receipt</a> ';
+    if (has_permission($conn, $page, 'edit')) echo '<a class="btn btn-primary btn-sm" href="' . sanitize($url . '&account_payment=' . (int) $payment_id . '&edit_payment=1') . '">Edit</a> ';
+    if (has_permission($conn, $page, 'delete')) {
+        echo '<form method="POST" action="' . sanitize($url) . '" style="display:inline" onsubmit="return confirm(\'Delete this payment and reverse its ledger and installment effects? This cannot be undone.\')"><input type="hidden" name="csrf_token" value="' . sanitize($_SESSION['csrf_token']) . '"><input type="hidden" name="account_action" value="delete_payment"><input type="hidden" name="payment_id" value="' . (int) $payment_id . '"><button type="submit" class="btn btn-danger btn-sm">Delete payment</button></form>';
+    }
+}
+
+function accounting_panel($conn, $page, $party_id)
+{
+    accounting_source_panel($conn, $page, $party_id);
+    $id = (int) ($_GET['account_payment'] ?? 0);
+    if (!$id) return;
+    try {
+        $p = accounting_payment($conn, $id);
+        accounting_check_party($p, $page, $party_id);
+        $edit = !empty($_GET['edit_payment']);
+        if ($edit && !has_permission($conn, $page, 'edit')) throw new Exception('You do not have permission to edit payments.');
+        $url = accounting_url($page, $party_id);
+        echo '<fieldset class="fieldset" id="receiptArea"><legend>Payment receipt #' . $id . '</legend>';
+        if (!$edit) echo '<style>@media print{.content>*:not(#receiptArea){display:none!important}#receiptArea{display:block!important}}</style>';
+        echo '<p><strong>' . sanitize($p['party_name']) . '</strong> — ' . sanitize(str_replace('_', ' ', $p['transaction_type'])) . ' — ' . sanitize($p['status']) . '</p>';
+        if ($edit) {
+            echo '<form method="POST" action="' . sanitize($url) . '"><input type="hidden" name="csrf_token" value="' . sanitize($_SESSION['csrf_token']) . '"><input type="hidden" name="account_action" value="edit_payment"><input type="hidden" name="payment_id" value="' . $id . '">';
+            foreach (['payment_date' => ['Date', 'date'], 'amount' => ['Amount', 'number'], 'cheque_number' => ['Cheque number', 'text'], 'bank_name' => ['Bank', 'text'], 'cheque_date' => ['Cheque date', 'date']] as $key => $field) {
+                echo '<div class="form-group"><label for="account_' . $key . '">' . $field[0] . '</label><input id="account_' . $key . '" name="' . $key . '" type="' . $field[1] . '" value="' . sanitize($p[$key] ?? '') . '"' . ($key === 'amount' ? ' min="0.01" step="0.01" required' : ($key === 'payment_date' ? ' required' : '')) . '></div>';
+            }
+            echo '<div class="form-group"><label for="account_method">Method</label><select id="account_method" name="payment_type">';
+            foreach (['cash','cheque','bank_transfer','online','other'] as $method) echo '<option value="' . $method . '"' . ($p['payment_type'] === $method ? ' selected' : '') . '>' . sanitize(str_replace('_', ' ', $method)) . '</option>';
+            echo '</select></div><div class="form-group"><label for="account_notes">Notes</label><textarea id="account_notes" name="notes">' . sanitize($p['notes'] ?? '') . '</textarea></div><button type="submit" class="btn btn-primary">Save changes</button></form>';
+        } else {
+            foreach (['payment_date'=>'Date','amount'=>'Amount','payment_type'=>'Method','cheque_number'=>'Cheque number','bank_name'=>'Bank','cheque_date'=>'Cheque date','reference_id'=>'Source record','notes'=>'Notes'] as $key=>$label) {
+                echo '<p><strong>' . $label . ':</strong> ' . ($key === 'amount' ? fmt_money($p[$key]) : nl2br(sanitize($p[$key] ?? '-'))) . '</p>';
+            }
+            echo '<button type="button" class="btn btn-default no-print" onclick="window.print()">Print receipt</button> ';
+        }
+        echo '<a class="btn btn-default no-print" href="' . sanitize($url) . '">Back</a></fieldset>';
+    } catch (Throwable $e) {
+        echo '<div class="alert alert-danger">' . sanitize($e->getMessage()) . '</div>';
+    }
+}
+
 function db_connect($create_db = false)
 {
     global $db_host, $db_user, $db_pass, $db_name;
@@ -166,7 +641,7 @@ function get_suppliers_with_balances($conn)
             SELECT SUM(CASE WHEN p.transaction_type='supplier_refund' THEN -p.amount ELSE p.amount END)
             FROM payments p
             WHERE p.transaction_type IN ('supplier_payment','supplier_refund')
-              AND COALESCE(p.status,'cleared') != 'bounced'
+              AND COALESCE(p.status,'cleared') NOT IN ('bounced','cancelled')
               AND (
                   p.supplier_id=s.id
                   OR (p.transaction_type='supplier_payment' AND p.reference_id IN (SELECT po2.id FROM purchase_orders po2 WHERE po2.supplier_id=s.id))
@@ -482,7 +957,7 @@ function delete_bike_cascade($conn, $bike_id)
     // Reverse accessory stock before removing sale_accessories rows (skip custom one-off accessories).
     $restore_stmt = $conn->prepare('UPDATE accessories SET current_stock = current_stock + ? WHERE id=? AND sku NOT LIKE ?');
     $cst_like = 'CST-%';
-    $acc_res = $conn->query("SELECT sa.accessory_id, sa.quantity FROM sale_accessories sa WHERE sa.bike_id=$bid");
+    $acc_res = $conn->query("SELECT sa.accessory_id, sa.quantity FROM sale_accessories sa WHERE sa.bike_id=$bid AND " . ($bike['status'] === 'sold' ? '1=1' : '1=0'));
     if ($acc_res) {
         while ($ar = $acc_res->fetch_assoc()) {
             $restore_stmt->bind_param('iis', $ar['quantity'], $ar['accessory_id'], $cst_like);
@@ -505,11 +980,13 @@ function delete_bike_cascade($conn, $bike_id)
     $conn->query("DELETE FROM sale_accessories WHERE bike_id=$bid");
 
     if (!empty($payment_ids)) {
+        $conn->query("DELETE FROM ledger WHERE reference_type IN ('payment','advance_given','cheque_bounce') AND reference_id IN (" . implode(',', $payment_ids) . ')');
+        $conn->query("DELETE FROM cheque_register WHERE reference_type='payment' AND reference_id IN (" . implode(',', $payment_ids) . ')');
         $conn->query('DELETE FROM payments WHERE id IN (' . implode(',', $payment_ids) . ')');
     }
 
     // Remove ledger entries for the bike sale/down-payment/return and its installments/penalties.
-    $ledger_where = "(reference_type IN ('sale','down_payment','return','return_reversal','purchase_reversal') AND reference_id=$bid)";
+    $ledger_where = "(reference_type IN ('sale','down_payment','return','return_reversal','return_refund','supplier_refund','purchase_reversal') AND reference_id=$bid)";
     if (!empty($installment_ids)) {
         $ledger_where .= " OR (reference_type IN ('installment','penalty') AND reference_id IN (" . implode(',', $installment_ids) . '))';
     }
@@ -1122,7 +1599,7 @@ function sub_activate_license($conn, $license_key)
     
     $stmt2 = $conn->prepare('UPDATE app_subscription SET expires_at=?, is_active=1, license_key=?, license_hash=?, activated_at=NOW(), activated_by_ip=? WHERE id=?');
     $ip = $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
-    $stmt2->bind_param('ssssii', $new_expires, $new_key, $new_hash, $ip, $row['id']);
+    $stmt2->bind_param('ssssi', $new_expires, $new_key, $new_hash, $ip, $row['id']);
     $stmt2->execute();
     $stmt2->close();
     
@@ -2035,6 +2512,44 @@ if ($db_exists && isset($_SESSION['user_id'])) {
     if (in_array($page, $protected_pages)) {
         require_permission($conn, $page, 'view');
     }
+    if (in_array($page, ['customer_ledger', 'supplier_ledger', 'payments'], true) && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['account_action'])) {
+        $account_action = $_POST['account_action'];
+        $party_id = (int) ($_GET[$page === 'customer_ledger' ? 'cust_id' : 'sup_id'] ?? 0);
+        require_permission($conn, $page, in_array($account_action, ['edit_payment','edit_sale'], true) ? 'edit' : 'delete');
+        $conn->begin_transaction();
+        try {
+            if (!in_array($account_action, ['edit_payment','edit_sale','delete_payment','delete_order'], true)) throw new Exception('Invalid accounting action.');
+            if ($account_action === 'edit_sale') {
+                require_permission($conn, 'sale', 'edit');
+                if ($page !== 'customer_ledger') throw new Exception('Open the customer ledger to edit a sale.');
+                accounting_edit_sale($conn, $party_id, $_POST);
+            } elseif ($account_action === 'delete_order') {
+                require_permission($conn, 'purchase', 'delete');
+                require_permission($conn, 'inventory', 'delete');
+                $order_id = (int) ($_POST['order_id'] ?? 0);
+                $order = $conn->query("SELECT * FROM purchase_orders WHERE id=$order_id FOR UPDATE")->fetch_assoc();
+                if ($page !== 'supplier_ledger' || !$order || (int) $order['supplier_id'] !== $party_id) throw new Exception('Purchase order does not belong to this supplier.');
+                $bikes = $conn->query("SELECT id FROM bikes WHERE purchase_order_id=$order_id ORDER BY id FOR UPDATE")->fetch_all(MYSQLI_ASSOC);
+                foreach ($bikes as $bike) delete_bike_cascade($conn, (int) $bike['id']);
+                $payments = $conn->query("SELECT id FROM payments WHERE transaction_type IN ('purchase','supplier_payment') AND reference_id=$order_id FOR UPDATE")->fetch_all(MYSQLI_ASSOC);
+                foreach ($payments as $payment) accounting_change_payment($conn, accounting_payment($conn, $payment['id'], true), true);
+                $conn->query("DELETE FROM ledger WHERE reference_type='purchase' AND reference_id=$order_id");
+                $conn->query("DELETE FROM cheque_register WHERE reference_type='purchase' AND reference_id=$order_id");
+                $conn->query("DELETE FROM purchase_orders WHERE id=$order_id");
+            } else {
+                $payment = accounting_payment($conn, (int) ($_POST['payment_id'] ?? 0), true);
+                accounting_check_party($payment, $page, $party_id);
+                accounting_change_payment($conn, $payment, $account_action === 'delete_payment', $_POST);
+            }
+            $conn->commit();
+            $msg = in_array($account_action, ['edit_payment','edit_sale'], true) ? 'Record updated, including ledger and installment balances.' : 'Record deleted and its linked accounting effects reversed.';
+        } catch (Throwable $e) {
+            $conn->rollback();
+            $err = $e->getMessage();
+        }
+        header('Location: ' . accounting_url($page, $party_id) . '&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+        exit;
+    }
     if (isset($_GET['receipt_id'])) {
         require_permission($conn, 'bank_deposits', 'view');
         $receipt_id = (int) $_GET['receipt_id'];
@@ -2331,7 +2846,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 }
                 $base_tax = ($tax_on === 'selling_price') ? 0 : $pp;
                 $tax = ($base_tax * $tax_rate);
-                $bike_stmt->bind_param('issssisdddssssisissssi', $po_id, $order_date, $inventory_date, $chassis, $motor, $model_id, $color, $pp, $tax, $tax_rate, $tax_on, $safe_notes, $bnotes, $bike_img, $is_featured, $discount_amount, $discount_type, $discount_label, $discount_start, $discount_end, $display_priority);
+                $bike_stmt->bind_param('issssisdddssssidssssi', $po_id, $order_date, $inventory_date, $chassis, $motor, $model_id, $color, $pp, $tax, $tax_rate, $tax_on, $safe_notes, $bnotes, $bike_img, $is_featured, $discount_amount, $discount_type, $discount_label, $discount_start, $discount_end, $display_priority);
                 if (!$bike_stmt->execute()) {
                     if ($bike_img && is_file($bike_img)) {
                         @unlink($bike_img);
@@ -2942,7 +3457,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 if ($return_amount - $full_reversal_amount > 0.0001) {
                     throw new Exception('Supplier refund cannot exceed the original bike purchase value.');
                 }
-                $paid_to_supplier = $conn->query("SELECT COALESCE(SUM(p.amount),0) FROM payments p JOIN purchase_orders po ON po.id=p.reference_id WHERE p.transaction_type='supplier_payment' AND po.supplier_id={$bike_info['supplier_id']} AND p.status!='bounced'")->fetch_row()[0];
+                $paid_to_supplier = $conn->query("SELECT COALESCE(SUM(p.amount),0) FROM payments p JOIN purchase_orders po ON po.id=p.reference_id WHERE p.transaction_type='supplier_payment' AND po.supplier_id={$bike_info['supplier_id']} AND COALESCE(p.status,'cleared') NOT IN ('bounced','cancelled')")->fetch_row()[0];
                 $actual_refundable = min($full_reversal_amount, (float) $paid_to_supplier);
                 if ($return_amount - $actual_refundable > 0.0001) {
                     throw new Exception('Supplier refund cannot exceed the amount actually paid for this purchase.');
@@ -2965,7 +3480,8 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 }
                 $history_stmt = $conn->prepare('INSERT INTO inventory_status_history (bike_id, chassis_number, old_status, new_status, changed_by, change_reason) VALUES (?,?,?,?,?,?)');
                 $change_reason = $return_notes ?: 'Purchase return processed';
-                $history_stmt->bind_param('isssis', $bike_id, $bike_info['chassis_number'], $bike_info['status'], 'returned_to_supplier', $_SESSION['user_id'], $change_reason);
+                $history_new_status = 'returned_to_supplier';
+                $history_stmt->bind_param('isssis', $bike_id, $bike_info['chassis_number'], $bike_info['status'], $history_new_status, $_SESSION['user_id'], $change_reason);
                 $history_stmt->execute();
                 $history_stmt->close();
                 $led_st1 = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'debit',?,'supplier',?,?,'purchase_reversal',?,?)");
@@ -3015,7 +3531,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $acc_q = $conn->query("SELECT SUM(final_price) as total_acc FROM sale_accessories WHERE bike_id=$bike_id");
             $acc_total = $acc_q ? (float) ($acc_q->fetch_assoc()['total_acc'] ?? 0) : 0;
             $full_reversal_amount = $bike_info['selling_price'] + $acc_total;
-            $paid_q = $conn->query("SELECT COALESCE(SUM(p.amount),0) AS paid_total FROM payments p WHERE p.status!='bounced' AND ((p.transaction_type='sale' AND p.reference_id=$bike_id) OR (p.transaction_type='installment' AND p.reference_id IN (SELECT id FROM installments WHERE bike_id=$bike_id)))");
+            $paid_q = $conn->query("SELECT COALESCE(SUM(p.amount),0) AS paid_total FROM payments p WHERE COALESCE(p.status,'cleared') NOT IN ('bounced','cancelled') AND ((p.transaction_type='sale' AND p.reference_id=$bike_id) OR (p.transaction_type='installment' AND p.reference_id IN (SELECT id FROM installments WHERE bike_id=$bike_id)))");
             $paid_total = (float) ($paid_q->fetch_assoc()['paid_total'] ?? 0);
             if ($return_amount - min($full_reversal_amount, $paid_total) > 0.0001) {
                 throw new Exception('Customer refund cannot exceed the amount actually collected for this sale.');
@@ -3029,7 +3545,9 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $st->close();
             $history_stmt = $conn->prepare('INSERT INTO inventory_status_history (bike_id, chassis_number, old_status, new_status, changed_by, change_reason) VALUES (?,?,?,?,?,?)');
             $change_reason = $return_notes ?: 'Sales return processed';
-            $history_stmt->bind_param('isssis', $bike_id, $bike_info['chassis_number'], 'sold', 'returned', $_SESSION['user_id'], $change_reason);
+            $history_old_status = 'sold';
+            $history_new_status = 'returned';
+            $history_stmt->bind_param('isssis', $bike_id, $bike_info['chassis_number'], $history_old_status, $history_new_status, $_SESSION['user_id'], $change_reason);
             $history_stmt->execute();
             $history_stmt->close();
             $party_name = $bike_info['cust_name'] ?? 'Unknown Customer';
@@ -3074,130 +3592,30 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         end_returns_post:;
     }
     if ($page === 'payments' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        require_permission($conn, 'payments', 'edit');
         if ($action === 'status') {
-            $pid = (int) ($_POST['id'] ?? 0);
-            $new_status = clean_text($_POST['status'] ?? '');
-            if (!in_array($new_status, ['pending', 'cleared', 'bounced', 'cancelled'])) {
-                $err = 'Invalid status.';
-                goto end_payments_post;
-            }
-            $pay_q = $conn->query("SELECT * FROM payments WHERE id=$pid AND payment_type='cheque'");
-            $pay = $pay_q ? $pay_q->fetch_assoc() : null;
-            if ($pay) {
-                $old_status = $pay['status'] ?? 'pending';
-                if ($old_status === 'bounced' && $new_status !== 'bounced') {
-                    $err = 'A bounced cheque is an accounting event and cannot be reactivated. Post a correcting payment instead.';
-                    goto end_payments_post;
-                }
-                if ($old_status === 'cancelled' && $new_status !== 'cancelled') {
-                    $err = 'A cancelled cheque cannot be reactivated. Post a new payment instead.';
-                    goto end_payments_post;
-                }
-                if ($old_status === $new_status) {
-                    $msg = 'Payment status is already up to date.';
-                    goto end_payments_post;
-                }
-                if ($old_status !== 'bounced' && $new_status === 'bounced') {
-                    $conn->begin_transaction();
-                    try {
-                        $stmt = $conn->prepare('UPDATE payments SET status=? WHERE id=?');
-                        $stmt->bind_param('si', $new_status, $pid);
-                        $stmt->execute();
-                        $bounced_date = date('Y-m-d');
-                        if (in_array($pay['transaction_type'], ['sale', 'installment'])) {
-                            $cust_id = (int) ($pay['customer_id'] ?? 0);
-                            if ($cust_id === 0 && $pay['transaction_type'] === 'sale') {
-                                $br = $conn->query('SELECT customer_id FROM bikes WHERE id=' . (int) $pay['reference_id']);
-                                $cust_id = $br && $br->num_rows > 0 ? (int) $br->fetch_assoc()['customer_id'] : 0;
-                            } elseif ($cust_id === 0) {
-                                $ir = $conn->query('SELECT customer_id FROM installments WHERE id=' . (int) $pay['reference_id']);
-                                $cust_id = $ir && $ir->num_rows > 0 ? (int) $ir->fetch_assoc()['customer_id'] : 0;
-                            }
-                            if ($cust_id === 0 && !empty($pay['party_name'])) {
-                                $cr = $conn->query("SELECT id FROM customers WHERE name='" . mysqli_real_escape_string($conn, $pay['party_name']) . "' LIMIT 1");
-                                $cust_id = $cr && $cr->num_rows > 0 ? (int) $cr->fetch_assoc()['id'] : 0;
-                            }
-                            if ($cust_id > 0) {
-                                $led_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,'debit',?,'customer',?,?,'cheque_bounce',?,?)");
-                                $desc = 'Cheque Bounced (Ref Payment #' . $pid . ')';
-                                $led_st->bind_param('sdisid', $bounced_date, $pay['amount'], $cust_id, $desc, $pid, $pay['amount']);
-                                $led_st->execute();
-                            }
-                        } elseif (in_array($pay['transaction_type'], ['supplier_payment', 'supplier_refund'])) {
-                            $sup_id = (int) ($pay['supplier_id'] ?? 0);
-                            if ($sup_id === 0 && $pay['reference_id'] > 0 && $pay['transaction_type'] === 'supplier_payment') {
-                                $sr = $conn->query('SELECT supplier_id FROM purchase_orders WHERE id=' . (int) $pay['reference_id']);
-                                $sup_id = $sr && $sr->num_rows > 0 ? (int) $sr->fetch_assoc()['supplier_id'] : 0;
-                            }
-                            if ($sup_id === 0 && !empty($pay['party_name'])) {
-                                $sr2 = $conn->query("SELECT id FROM suppliers WHERE name='" . mysqli_real_escape_string($conn, $pay['party_name']) . "' LIMIT 1");
-                                $sup_id = $sr2 && $sr2->num_rows > 0 ? (int) $sr2->fetch_assoc()['id'] : 0;
-                            }
-                            if ($sup_id > 0) {
-                                $entry_type = $pay['transaction_type'] === 'supplier_payment' ? 'credit' : 'debit';
-                                $led_st = $conn->prepare("INSERT INTO ledger (entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,?,?,'supplier',?,?,'cheque_bounce',?,?)");
-                                $desc = 'Supplier Cheque Bounced (Ref Payment #' . $pid . ')';
-                                $led_st->bind_param('ssdisid', $bounced_date, $entry_type, $pay['amount'], $sup_id, $desc, $pid, $pay['amount']);
-                                $led_st->execute();
-                            }
-                        }
-                        if ($pay['transaction_type'] === 'installment') {
-                            $inst_id = (int) $pay['reference_id'];
-                            $inst_q = $conn->query("SELECT amount_paid, penalty_fee, COALESCE(penalty_paid,0) AS penalty_paid, installment_amount FROM installments WHERE id=$inst_id FOR UPDATE");
-                            if ($inst_q && $inst_q->num_rows > 0) {
-                                $inst = $inst_q->fetch_assoc();
-                                $pa_stmt = $conn->prepare('SELECT principal_amount, penalty_amount FROM installment_payment_allocations WHERE payment_id=? AND installment_id=? LIMIT 1');
-                                $pa_stmt->bind_param('ii', $pid, $inst_id);
-                                $pa_stmt->execute();
-                                $payment_allocation = $pa_stmt->get_result()->fetch_assoc();
-                                $principal_deduct = $payment_allocation ? (float) $payment_allocation['principal_amount'] : min((float) $pay['amount'], (float) $inst['amount_paid']);
-                                $penalty_deduct = $payment_allocation ? (float) $payment_allocation['penalty_amount'] : max(0, (float) $pay['amount'] - $principal_deduct);
-                                $new_amount_paid = max(0, (float) $inst['amount_paid'] - $principal_deduct);
-                                $new_penalty_paid = max(0, (float) $inst['penalty_paid'] - $penalty_deduct);
-                                $new_inst_status = ($new_amount_paid >= $inst['installment_amount'] && $new_penalty_paid >= $inst['penalty_fee']) ? 'paid' : 'pending';
-                                $reverse_stmt = $conn->prepare('UPDATE installments SET amount_paid=?, penalty_paid=?, status=? WHERE id=?');
-                                $reverse_stmt->bind_param('ddsi', $new_amount_paid, $new_penalty_paid, $new_inst_status, $inst_id);
-                                $reverse_stmt->execute();
-                            }
-                        }
-                        if ($pay['transaction_type'] !== 'installment') {
-                            $mapped_stmt = $conn->prepare('SELECT installment_id, principal_amount, penalty_amount FROM installment_payment_allocations WHERE payment_id=?');
-                            $mapped_stmt->bind_param('i', $pid);
-                            $mapped_stmt->execute();
-                            $mapped_rows = $mapped_stmt->get_result();
-                            while ($mapped = $mapped_rows->fetch_assoc()) {
-                                $mapped_inst_id = (int) $mapped['installment_id'];
-                                $mapped_inst_q = $conn->query("SELECT installment_amount, amount_paid, penalty_fee, COALESCE(penalty_paid,0) AS penalty_paid FROM installments WHERE id=$mapped_inst_id FOR UPDATE");
-                                $mapped_inst = $mapped_inst_q ? $mapped_inst_q->fetch_assoc() : null;
-                                if (!$mapped_inst) continue;
-                                $mapped_principal = max(0, (float) $mapped_inst['amount_paid'] - (float) $mapped['principal_amount']);
-                                $mapped_penalty = max(0, (float) $mapped_inst['penalty_paid'] - (float) $mapped['penalty_amount']);
-                                $mapped_status = ($mapped_principal >= $mapped_inst['installment_amount'] && $mapped_penalty >= $mapped_inst['penalty_fee']) ? 'paid' : 'pending';
-                                $mapped_update = $conn->prepare('UPDATE installments SET amount_paid=?, penalty_paid=?, status=? WHERE id=?');
-                                $mapped_update->bind_param('ddsi', $mapped_principal, $mapped_penalty, $mapped_status, $mapped_inst_id);
-                                $mapped_update->execute();
-                            }
-                        }
-                        $conn->commit();
-                        $msg = 'Cheque marked as bounced. Accounting & installments reversed successfully.';
-                    } catch (Exception $e) {
-                        $conn->rollback();
-                        $err = 'Failed to process bounced cheque: ' . $e->getMessage();
-                    }
-                } else {
-                    $stmt = $conn->prepare('UPDATE payments SET status=? WHERE id=?');
-                    $stmt->bind_param('si', $new_status, $pid);
-                    $stmt->execute();
-                    $msg = 'Payment status updated.';
-                }
-            } else {
-                $err = 'Payment not found or not a cheque.';
+            require_permission($conn, 'payments', 'edit');
+            $conn->begin_transaction();
+            try {
+                $pay = accounting_payment($conn, (int) ($_POST['id'] ?? 0), true);
+                accounting_cheque_status($conn, $pay, clean_text($_POST['status'] ?? ''));
+                $conn->commit();
+                $msg = 'Cheque status and linked accounting records updated.';
+            } catch (Throwable $e) {
+                $conn->rollback();
+                $err = $e->getMessage();
             }
         }
         if ($action === 'delete') {
             require_permission($conn, 'payments', 'delete');
-            $err = 'Payment deletion is disabled to protect accounting integrity. Use cheque status updates or post a correcting entry instead.';
+            $conn->begin_transaction();
+            try {
+                accounting_change_payment($conn, accounting_payment($conn, (int) ($_POST['id'] ?? 0), true), true);
+                $conn->commit();
+                $msg = 'Payment deleted and ledger/installment effects reversed.';
+            } catch (Throwable $e) {
+                $conn->rollback();
+                $err = $e->getMessage();
+            }
         }
         header('Location: index.php?page=payments&msg=' . urlencode($msg) . '&err=' . urlencode($err));
         exit;
@@ -3623,20 +4041,20 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 }
                 $base_tax = ($use_tax_basis === 'selling_price') ? (float) ($old_bike['selling_price'] ?: $pp) : $pp;
                 $tax_amount = ($base_tax * $use_tax_rate);
-                $margin = (float) $old_bike['selling_price'] > 0 ? ((float) $old_bike['selling_price'] - $pp - $tax_amount) : 0;
+                $margin = $old_bike['status'] === 'sold' ? (get_sale_total_for_bike($conn, $bid) - $pp - get_sale_accessory_cost_for_bike($conn, $bid) - $tax_amount) : 0;
                 if ($img_path) {
                     $stmt = $conn->prepare('UPDATE bikes SET model_id=?, color=?, purchase_price=?, tax_amount=?, margin=?, status=?, notes=?, safeguard_notes=?, image=?, order_date=?, inventory_date=?, chassis_number=?, motor_number=?, is_featured=?, discount_amount=?, discount_type=?, discount_label=?, discount_start=?, discount_end=?, display_priority=?' . ($recalc_tax ? ', tax_rate_applied=?, tax_basis=?' : '') . ' WHERE id=?');
                     if ($recalc_tax) {
-                        $stmt->bind_param('isddssssssssssiiisssssdsi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $img_path, $order_date, $inventory_date, $chassis_number, $motor_number, $is_featured, $discount_amount, $discount_type, $discount_label, $discount_start, $discount_end, $display_priority, $use_tax_rate, $use_tax_basis, $bid);
+                        $stmt->bind_param('isdddssssssssidssssidsi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $img_path, $order_date, $inventory_date, $chassis_number, $motor_number, $is_featured, $discount_amount, $discount_type, $discount_label, $discount_start, $discount_end, $display_priority, $use_tax_rate, $use_tax_basis, $bid);
                     } else {
-                        $stmt->bind_param('isddssssssssssiiisssi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $img_path, $order_date, $inventory_date, $chassis_number, $motor_number, $is_featured, $discount_amount, $discount_type, $discount_label, $discount_start, $discount_end, $display_priority, $bid);
+                        $stmt->bind_param('isdddssssssssidssssii', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $img_path, $order_date, $inventory_date, $chassis_number, $motor_number, $is_featured, $discount_amount, $discount_type, $discount_label, $discount_start, $discount_end, $display_priority, $bid);
                     }
                 } else {
                     $stmt = $conn->prepare('UPDATE bikes SET model_id=?, color=?, purchase_price=?, tax_amount=?, margin=?, status=?, notes=?, safeguard_notes=?, order_date=?, inventory_date=?, chassis_number=?, motor_number=?, is_featured=?, discount_amount=?, discount_type=?, discount_label=?, discount_start=?, discount_end=?, display_priority=?' . ($recalc_tax ? ', tax_rate_applied=?, tax_basis=?' : '') . ' WHERE id=?');
                     if ($recalc_tax) {
-                        $stmt->bind_param('isddssssssssssiiisssdsi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $order_date, $inventory_date, $chassis_number, $motor_number, $is_featured, $discount_amount, $discount_type, $discount_label, $discount_start, $discount_end, $display_priority, $use_tax_rate, $use_tax_basis, $bid);
+                        $stmt->bind_param('isdddsssssssidssssidsi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $order_date, $inventory_date, $chassis_number, $motor_number, $is_featured, $discount_amount, $discount_type, $discount_label, $discount_start, $discount_end, $display_priority, $use_tax_rate, $use_tax_basis, $bid);
                     } else {
-                        $stmt->bind_param('isddssssssssssiiisssi', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $order_date, $inventory_date, $chassis_number, $motor_number, $is_featured, $discount_amount, $discount_type, $discount_label, $discount_start, $discount_end, $display_priority, $bid);
+                        $stmt->bind_param('isdddsssssssidssssii', $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $order_date, $inventory_date, $chassis_number, $motor_number, $is_featured, $discount_amount, $discount_type, $discount_label, $discount_start, $discount_end, $display_priority, $bid);
                     }
                 }
                 $stmt->execute();
@@ -3844,125 +4262,24 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         header('Location: index.php?page=settings&msg=' . urlencode($msg) . '&err=' . urlencode($err));
         exit;
     }
-    if ($page === 'customer_ledger' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_payment'])) {
-        require_permission($conn, 'customer_ledger', 'add');
-        $sel_cust = (int) ($_GET['cust_id'] ?? 0);
-        $amount = (float) $_POST['amount'];
-        $pay_date = clean_text($_POST['payment_date']);
-        $pay_method = clean_text($_POST['payment_method']);
-        $notes = clean_text($_POST['notes']);
-        if ($amount > 0 && $sel_cust > 0 && valid_date($pay_date) && in_array($pay_method, ['cash', 'cheque', 'bank_transfer', 'online', 'other'], true)) {
-            $conn->begin_transaction();
-            try {
-                $party_name = $conn->query("SELECT name FROM customers WHERE id=$sel_cust")->fetch_assoc()['name'] ?? 'Unknown';
-                $st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, transaction_type, customer_id, party_name, notes, status) VALUES (?, ?, ?, 'sale', ?, ?, ?, ?)");
-                $payment_status = $pay_method === 'cheque' ? 'pending' : 'cleared';
-                $st->bind_param('ssdisss', $pay_date, $pay_method, $amount, $sel_cust, $party_name, $notes, $payment_status);
-                $st->execute();
-                $payment_id = $conn->insert_id;
-                $led = $conn->prepare("INSERT INTO ledger (entry_date, entry_type, amount, party_type, party_id, description, reference_type, reference_id) VALUES (?, 'credit', ?, 'customer', ?, ?, 'payment', ?)");
-                $desc = 'Payment Received: ' . $notes;
-                $led->bind_param('sdisi', $pay_date, $amount, $sel_cust, $desc, $payment_id);
-                $led->execute();
-                $rem_amount = $amount;
-                $inst_q = $conn->query("SELECT id, installment_amount, amount_paid, penalty_fee, COALESCE(penalty_paid,0) AS penalty_paid FROM installments WHERE customer_id=$sel_cust AND status IN ('pending', 'overdue') ORDER BY due_date ASC FOR UPDATE");
-                $inst_alloc_stmt = $conn->prepare('INSERT INTO installment_payment_allocations (payment_id, installment_id, principal_amount, penalty_amount) VALUES (?,?,?,?)');
-                while ($inst = $inst_q->fetch_assoc()) {
-                    if ($rem_amount <= 0)
-                        break;
-                    $principal_due = max(0, (float) $inst['installment_amount'] - (float) $inst['amount_paid']);
-                    $penalty_due = max(0, (float) $inst['penalty_fee'] - (float) $inst['penalty_paid']);
-                    $due = $principal_due + $penalty_due;
-                    if ($due > 0) {
-                        $pay_to_inst = min($due, $rem_amount);
-                        $penalty_payment = min($penalty_due, $pay_to_inst);
-                        $principal_payment = $pay_to_inst - $penalty_payment;
-                        $new_paid = (float) $inst['amount_paid'] + $principal_payment;
-                        $new_penalty_paid = (float) $inst['penalty_paid'] + $penalty_payment;
-                        $new_status = ($new_paid >= $inst['installment_amount'] && $new_penalty_paid >= $inst['penalty_fee']) ? 'paid' : 'pending';
-                        $inst_update = $conn->prepare('UPDATE installments SET amount_paid=?, penalty_paid=?, status=?, payment_id=? WHERE id=?');
-                        $inst_update->bind_param('ddsii', $new_paid, $new_penalty_paid, $new_status, $payment_id, $inst['id']);
-                        $inst_update->execute();
-                        $inst_alloc_stmt->bind_param('iidd', $payment_id, $inst['id'], $principal_payment, $penalty_payment);
-                        $inst_alloc_stmt->execute();
-                        $rem_amount -= $pay_to_inst;
-                    }
-                }
-                $conn->commit();
-                $msg = 'Payment recorded and distributed to installments successfully.';
-            } catch (Exception $e) {
-                $conn->rollback();
-                $err = 'Error: ' . $e->getMessage();
-            }
-        } else {
-            $err = 'Invalid payment amount or customer.';
+    if (in_array($page, ['customer_ledger','supplier_ledger'], true) && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        require_permission($conn, $page, 'add');
+        $party_id = (int) ($_GET[$page === 'customer_ledger' ? 'cust_id' : 'sup_id'] ?? 0);
+        $valid_form = $page === 'customer_ledger'
+            ? (isset($_POST['add_payment']) || isset($_POST['make_payment_cust']))
+            : (isset($_POST['add_sup_payment']) || isset($_POST['receive_sup_payment']));
+        $conn->begin_transaction();
+        try {
+            if (!$valid_form) throw new Exception('Invalid payment form.');
+            $outgoing = $page === 'customer_ledger' ? isset($_POST['make_payment_cust']) : isset($_POST['add_sup_payment']);
+            accounting_create_payment($conn, $page, $party_id, $outgoing, $_POST);
+            $conn->commit();
+            $msg = 'Payment recorded and linked balances updated.';
+        } catch (Throwable $e) {
+            $conn->rollback();
+            $err = $e->getMessage();
         }
-        header("Location: index.php?page=customer_ledger&cust_id=$sel_cust&msg=" . urlencode($msg) . '&err=' . urlencode($err));
-        exit;
-    }
-    if ($page === 'customer_ledger' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['make_payment_cust'])) {
-        require_permission($conn, 'customer_ledger', 'add');
-        $sel_cust = (int) ($_GET['cust_id'] ?? 0);
-        $amount = (float) $_POST['amount'];
-        $pay_date = clean_text($_POST['payment_date']);
-        $pay_method = clean_text($_POST['payment_method']);
-        $notes = clean_text($_POST['notes']);
-        if ($amount > 0 && $sel_cust > 0 && valid_date($pay_date) && in_array($pay_method, ['cash', 'cheque', 'bank_transfer', 'online', 'other'], true)) {
-            $party_name = $conn->query("SELECT name FROM customers WHERE id=$sel_cust")->fetch_assoc()['name'] ?? 'Unknown';
-            $st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, transaction_type, customer_id, party_name, notes, status) VALUES (?, ?, ?, 'customer_advance', ?, ?, ?, ?)");
-            $payment_status = $pay_method === 'cheque' ? 'pending' : 'cleared';
-            $st->bind_param('ssdisss', $pay_date, $pay_method, $amount, $sel_cust, $party_name, $notes, $payment_status);
-            $st->execute();
-            $payment_id = $conn->insert_id;
-            $led = $conn->prepare("INSERT INTO ledger (entry_date, entry_type, amount, party_type, party_id, description, reference_type, reference_id) VALUES (?, 'debit', ?, 'customer', ?, ?, 'advance_given', ?)");
-            $desc = 'Advance / Loan Given: ' . $notes;
-            $led->bind_param('sdisi', $pay_date, $amount, $sel_cust, $desc, $payment_id);
-            $led->execute();
-            $msg = 'Advance payment recorded successfully.';
-        } else {
-            $err = 'Invalid payment amount or customer.';
-        }
-        header("Location: index.php?page=customer_ledger&cust_id=$sel_cust&msg=" . urlencode($msg) . '&err=' . urlencode($err));
-        exit;
-    }
-    if ($page === 'supplier_ledger' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_sup_payment'])) {
-        require_permission($conn, 'supplier_ledger', 'add');
-        $sel_sup = (int) ($_GET['sup_id'] ?? 0);
-        $amount = (float) $_POST['amount'];
-        $pay_date = clean_text($_POST['payment_date']);
-        $pay_method = clean_text($_POST['payment_method']);
-        $notes = clean_text($_POST['notes']);
-        if ($amount > 0 && $sel_sup > 0 && valid_date($pay_date) && in_array($pay_method, ['cash', 'cheque', 'bank_transfer', 'online', 'other'], true)) {
-            $party_name = $conn->query("SELECT name FROM suppliers WHERE id=$sel_sup")->fetch_assoc()['name'] ?? 'Unknown';
-            $st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, transaction_type, reference_id, supplier_id, party_name, notes, status) VALUES (?, ?, ?, 'supplier_payment', 0, ?, ?, ?, ?)");
-            $payment_status = $pay_method === 'cheque' ? 'pending' : 'cleared';
-            $st->bind_param('ssdisss', $pay_date, $pay_method, $amount, $sel_sup, $party_name, $notes, $payment_status);
-            $st->execute();
-            $msg = 'Supplier payment recorded successfully.';
-        } else {
-            $err = 'Invalid payment amount or supplier.';
-        }
-        header("Location: index.php?page=supplier_ledger&sup_id=$sel_sup&msg=" . urlencode($msg) . '&err=' . urlencode($err));
-        exit;
-    }
-    if ($page === 'supplier_ledger' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['receive_sup_payment'])) {
-        require_permission($conn, 'supplier_ledger', 'add');
-        $sel_sup = (int) ($_GET['sup_id'] ?? 0);
-        $amount = (float) $_POST['amount'];
-        $pay_date = clean_text($_POST['payment_date']);
-        $pay_method = clean_text($_POST['payment_method']);
-        $notes = clean_text($_POST['notes']);
-        if ($amount > 0 && $sel_sup > 0 && valid_date($pay_date) && in_array($pay_method, ['cash', 'cheque', 'bank_transfer', 'online', 'other'], true)) {
-            $party_name = $conn->query("SELECT name FROM suppliers WHERE id=$sel_sup")->fetch_assoc()['name'] ?? 'Unknown';
-            $st = $conn->prepare("INSERT INTO payments (payment_date, payment_type, amount, transaction_type, reference_id, supplier_id, party_name, notes, status) VALUES (?, ?, ?, 'supplier_refund', 0, ?, ?, ?, ?)");
-            $payment_status = $pay_method === 'cheque' ? 'pending' : 'cleared';
-            $st->bind_param('ssdisss', $pay_date, $pay_method, $amount, $sel_sup, $party_name, $notes, $payment_status);
-            $st->execute();
-            $msg = 'Supplier refund recorded successfully.';
-        } else {
-            $err = 'Invalid payment amount or supplier.';
-        }
-        header("Location: index.php?page=supplier_ledger&sup_id=$sel_sup&msg=" . urlencode($msg) . '&err=' . urlencode($err));
+        header('Location: ' . accounting_url($page, $party_id) . '&msg=' . urlencode($msg) . '&err=' . urlencode($err));
         exit;
     }
     if ($page === 'landing_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -4763,7 +5080,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         return;
                     }
                 }
-                const btn = form.querySelector('button[type="submit"][name], input[type="submit"][name]');
+                const btn = event.submitter;
                 if (btn && btn.name && !form.querySelector('input[name="' + btn.name + '"]')) {
                     const hidden = document.createElement('input');
                     hidden.type = 'hidden';
@@ -4845,45 +5162,53 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     });
+    // Confirmation owns the initial submit event. Validation must not submit while
+    // an asynchronous dialog is open (preventDefault alone does not stop listeners).
     document.querySelectorAll('form[onsubmit*="confirm"]').forEach(form => {
-        let match = form.getAttribute('onsubmit').match(/confirm\(['"]([^'"]+)['"]\)/);
-        let message = match ? match[1] : 'Are you sure?';
-        form.removeAttribute('onsubmit'); 
-        form.addEventListener('submit', function(e) {
-            if (this.hasAttribute('data-swal-passed')) return;
-            e.preventDefault();
-            const submitter = e.submitter;
-            Swal.fire({
+        const match = form.getAttribute('onsubmit').match(/confirm\(['"]([^'"]+)['"]\)/);
+        form.dataset.confirmMessage = match ? match[1] : 'Are you sure?';
+        form.removeAttribute('onsubmit');
+    });
+    const pendingConfirmations = new WeakSet();
+    const confirmedSubmissions = new WeakSet();
+    document.addEventListener('submit', function(e) {
+        const form = e.target;
+        if (!(form instanceof HTMLFormElement) || !form.dataset.confirmMessage) return;
+        if (confirmedSubmissions.has(form)) {
+            confirmedSubmissions.delete(form);
+            return;
+        }
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if (pendingConfirmations.has(form)) return;
+        pendingConfirmations.add(form);
+        const submitter = e.submitter;
+        const decision = typeof Swal !== 'undefined'
+            ? Swal.fire({
                 title: 'Confirm Action',
-                text: message,
+                text: form.dataset.confirmMessage,
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonColor: '#d33',
                 cancelButtonColor: '#3085d6',
-                confirmButtonText: 'Yes, proceed!',
-                customClass: { popup: 'animate__animated animate__shakeX animate__faster' }
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    this.setAttribute('data-swal-passed', 'true');
-                    if (submitter && submitter.name) {
-                        let hidden = document.createElement('input');
-                        hidden.type = 'hidden';
-                        hidden.name = submitter.name;
-                        hidden.value = submitter.value || '1';
-                        this.appendChild(hidden);
-                    }
-                    if (!this.querySelector('input[name="csrf_token"]')) {
-                        let csrfInput = document.createElement('input');
-                        csrfInput.type = 'hidden';
-                        csrfInput.name = 'csrf_token';
-                        csrfInput.value = csrfToken;
-                        this.appendChild(csrfInput);
-                    }
-                    this.submit();
-                }
-            });
+                confirmButtonText: 'Yes, proceed!'
+            })
+            : Promise.resolve({isConfirmed: window.confirm(form.dataset.confirmMessage)});
+        decision.then(result => {
+            if (!result.isConfirmed || !form.isConnected || !form.reportValidity()) return;
+            confirmedSubmissions.add(form);
+            try {
+                if (submitter && submitter.form === form) form.requestSubmit(submitter);
+                else form.requestSubmit();
+            } finally {
+                confirmedSubmissions.delete(form);
+            }
+        }).catch(error => {
+            console.error('Confirmation failed; form was not submitted.', error);
+        }).finally(() => {
+            pendingConfirmations.delete(form);
         });
-    });
+    }, true);
 });
 </script>
 <?php if (!$db_exists): ?>
@@ -6760,6 +7085,7 @@ $(document).ready(function() {
 </script>
 <?php
     elseif ($page === 'payments'):
+        accounting_panel($conn, $page, 0);
         $chq_status_f = sanitize($_GET['chq_status'] ?? '');
         $chq_type_f = sanitize($_GET['chq_type'] ?? '');
         $chq_bank_f = sanitize($_GET['chq_bank'] ?? '');
@@ -6872,6 +7198,7 @@ $(document).ready(function() {
 <td><?= sanitize($pay['reference_id'] ?? '-') ?></td>
 <td class="no-print">
 <div class="actions-col">
+<?php accounting_payment_buttons($conn, 'payments', 0, $pay['id']); ?>
 <?php if ($pay['payment_type'] === 'cheque' && $pay['status_display'] === 'pending' && has_permission($conn, 'payments', 'edit')): ?>
 <form method="POST" action="index.php?page=payments&action=status" style="display:inline">
 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
@@ -6886,13 +7213,7 @@ $(document).ready(function() {
 <button type="submit" class="btn btn-danger btn-sm" title="Mark Bounced" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Mark as Bounced?', text: 'Are you sure you want to mark this cheque as bounced?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, mark bounced!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">✗ Bounce</button>
 </form>
 <?php endif; ?>
-<?php if (has_permission($conn, 'payments', 'delete')): ?>
-<form method="POST" action="index.php?page=payments&action=delete" style="display:inline">
-<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
-<input type="hidden" name="id" value="<?= $pay['id'] ?>">
-<button type="submit" class="btn btn-danger btn-sm" title="Delete" onclick="event.preventDefault(); let btn = this; let f = btn.closest('form'); Swal.fire({title: 'Delete this payment?', text: 'Are you sure you want to delete this payment entry? This cannot be undone.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!'}).then((result) => { if(result.isConfirmed) { if(btn.name) { let h = document.createElement('input'); h.type = 'hidden'; h.name = btn.name; h.value = btn.value || '1'; f.appendChild(h); } f.submit(); } })">🗑</button>
-</form>
-<?php endif; ?>
+
 </div>
 </td>
 </tr>
@@ -7074,6 +7395,7 @@ $(document).ready(function() {
 </script>
 <?php
     elseif ($page === 'customer_ledger'):
+        accounting_panel($conn, $page, (int) ($_GET['cust_id'] ?? 0));
         $sel_cust = (int) ($_GET['cust_id'] ?? 0);
         $customers_for_led = $conn->query('SELECT id, name, phone FROM customers ORDER BY name');
 ?>
@@ -7097,7 +7419,7 @@ $(document).ready(function() {
             $running_bal = 0;
             $sums = $conn->query("SELECT 
                 SUM(CASE WHEN reference_type IN ('sale', 'penalty') THEN amount ELSE 0 END) - SUM(CASE WHEN reference_type='return_reversal' THEN amount ELSE 0 END) as total_billed, 
-                SUM(CASE WHEN reference_type IN ('payment','down_payment','installment') THEN amount ELSE 0 END) - SUM(CASE WHEN reference_type IN ('return_refund', 'cheque_bounce') THEN amount ELSE 0 END) as total_paid,
+                SUM(CASE WHEN reference_type IN ('payment','down_payment','installment','return_refund','cheque_bounce') AND NOT (reference_type='cheque_bounce' AND reference_id IN (SELECT id FROM payments WHERE transaction_type='customer_advance')) THEN CASE WHEN entry_type='credit' THEN amount ELSE -amount END ELSE 0 END) as total_paid,
                 SUM(CASE WHEN entry_type='debit' THEN amount ELSE 0 END) as total_dr, 
                 SUM(CASE WHEN entry_type='credit' THEN amount ELSE 0 END) as total_cr 
                 FROM ledger WHERE party_type='customer' AND party_id=$sel_cust")->fetch_assoc();
@@ -7122,6 +7444,7 @@ $(document).ready(function() {
 <form method="POST">
 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="add_payment" value="1">
+<?php accounting_cheque_fields('add_payment'); ?>
 <div class="form-group" style="margin-bottom:8px"><label>Date <span class="req">*</span></label><input type="date" name="payment_date" value="<?= date('Y-m-d') ?>" required></div>
 <div class="form-group" style="margin-bottom:8px"><label>Amount <span class="req">*</span></label><input type="number" name="amount" step="0.01" min="0.01" required value="<?= $bal_summary > 0 ? $bal_summary : '' ?>"></div>
 <div class="form-group" style="margin-bottom:8px"><label>Method</label><select name="payment_method"><option value="cash">Cash</option><option value="bank_transfer">Bank Transfer</option><option value="cheque">Cheque</option><option value="online">Online</option></select></div>
@@ -7136,6 +7459,7 @@ $(document).ready(function() {
 <form method="POST">
 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="make_payment_cust" value="1">
+<?php accounting_cheque_fields('make_payment_cust'); ?>
 <div class="form-group" style="margin-bottom:8px"><label>Date <span class="req">*</span></label><input type="date" name="payment_date" value="<?= date('Y-m-d') ?>" required></div>
 <div class="form-group" style="margin-bottom:8px"><label>Amount <span class="req">*</span></label><input type="number" name="amount" step="0.01" min="0.01" required></div>
 <div class="form-group" style="margin-bottom:8px"><label>Method</label><select name="payment_method"><option value="cash">Cash</option><option value="bank_transfer">Bank Transfer</option><option value="cheque">Cheque</option><option value="online">Online</option></select></div>
@@ -7153,7 +7477,7 @@ $(document).ready(function() {
 </div>
 <div class="data-table-wrap">
 <table class="data-table">
-<thead><tr><th>Sr#</th><th>Date</th><th>Description</th><th>Debit</th><th>Credit</th><th>Balance</th></tr></thead>
+<thead><tr><th>Sr#</th><th>Date</th><th>Description</th><th>Debit</th><th>Credit</th><th>Balance</th><th class="no-print">Actions</th></tr></thead>
 <tbody>
 <?php
             $sr = 1;
@@ -7175,6 +7499,7 @@ $(document).ready(function() {
 <td><?= $le['entry_type'] === 'debit' ? fmt_money($le['amount']) : '-' ?></td>
 <td><?= $le['entry_type'] === 'credit' ? fmt_money($le['amount']) : '-' ?></td>
 <td style="color:<?= $running_bal >= 0 ? 'var(--success)' : 'var(--danger)' ?>;font-weight:700"><?= fmt_money(abs($running_bal)) ?> <?= $running_bal >= 0 ? 'Cr' : 'Dr' ?></td>
+<td class="no-print"><?php accounting_customer_buttons($conn, $le, $sel_cust); ?></td>
 </tr>
 <?php endwhile; ?>
 </tbody>
@@ -7183,7 +7508,7 @@ $(document).ready(function() {
 <td colspan="3"><strong>TOTAL</strong></td>
 <td><strong><?= fmt_money($total_dr) ?></strong></td>
 <td><strong><?= fmt_money($total_cr) ?></strong></td>
-<td style="color:<?= $running_bal >= 0 ? 'var(--success)' : 'var(--danger)' ?>;font-weight:700"><strong><?= fmt_money(abs($running_bal)) ?> <?= $running_bal >= 0 ? 'Cr' : 'Dr' ?></strong></td>
+<td style="color:<?= $running_bal >= 0 ? 'var(--success)' : 'var(--danger)' ?>;font-weight:700"><strong><?= fmt_money(abs($running_bal)) ?> <?= $running_bal >= 0 ? 'Cr' : 'Dr' ?></strong></td><td class="no-print"></td>
 </tr>
 </tfoot>
 </table>
@@ -7223,6 +7548,7 @@ $(document).ready(function() {
 <?php endif; ?>
 <?php
     elseif ($page === 'supplier_ledger'):
+        accounting_panel($conn, $page, (int) ($_GET['sup_id'] ?? 0));
         $sel_sup = (int) ($_GET['sup_id'] ?? 0);
         $suppliers_for_led = $conn->query('SELECT id, name FROM suppliers ORDER BY name');
 ?>
@@ -7243,13 +7569,14 @@ $(document).ready(function() {
         if ($sel_sup > 0):
             $sup_info = $conn->query("SELECT * FROM suppliers WHERE id=$sel_sup")->fetch_assoc();
             $sup_orders = $conn->query("SELECT po.*, COALESCE(SUM(CASE WHEN b.status!='returned_to_supplier' THEN b.purchase_price ELSE 0 END), po.total_amount) as bikes_total, SUM(CASE WHEN b.status!='returned_to_supplier' THEN 1 ELSE 0 END) as bike_count FROM purchase_orders po LEFT JOIN bikes b ON po.id=b.purchase_order_id WHERE po.supplier_id=$sel_sup GROUP BY po.id ORDER BY po.order_date ASC");
-            $supplier_payments = $conn->query("SELECT * FROM payments WHERE transaction_type IN ('supplier_payment', 'supplier_refund') AND COALESCE(status,'cleared')!='bounced' AND ((transaction_type='supplier_payment' AND reference_id IN (SELECT id FROM purchase_orders WHERE supplier_id=$sel_sup)) OR (transaction_type='supplier_refund' AND reference_id IN (SELECT b.id FROM bikes b JOIN purchase_orders po2 ON po2.id=b.purchase_order_id WHERE po2.supplier_id=$sel_sup)) OR (reference_id=0 AND supplier_id=$sel_sup)) ORDER BY payment_date ASC");
+            $supplier_payments = $conn->query("SELECT * FROM payments WHERE transaction_type IN ('supplier_payment', 'supplier_refund') AND ((transaction_type='supplier_payment' AND reference_id IN (SELECT id FROM purchase_orders WHERE supplier_id=$sel_sup)) OR (transaction_type='supplier_refund' AND reference_id IN (SELECT b.id FROM bikes b JOIN purchase_orders po2 ON po2.id=b.purchase_order_id WHERE po2.supplier_id=$sel_sup)) OR supplier_id=$sel_sup) ORDER BY payment_date ASC,id ASC");
             $running_bal = 0;
             $purchase_total_sum = 0;
             $payment_total_sum = 0;
             while ($order = $sup_orders->fetch_assoc())
                 $purchase_total_sum += $order['bikes_total'];
             while ($payment = $supplier_payments->fetch_assoc()) {
+                if (in_array($payment['status'], ['bounced','cancelled'], true)) continue;
                 if ($payment['transaction_type'] === 'supplier_refund') {
                     $payment_total_sum -= $payment['amount'];
                 } else {
@@ -7346,6 +7673,7 @@ $(document).ready(function() {
 <form method="POST">
 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="add_sup_payment" value="1">
+<?php accounting_cheque_fields('add_sup_payment'); ?>
 <div class="form-group" style="margin-bottom:8px"><label>Date <span class="req">*</span></label><input type="date" name="payment_date" value="<?= date('Y-m-d') ?>" required></div>
 <div class="form-group" style="margin-bottom:8px"><label>Amount <span class="req">*</span></label><input type="number" name="amount" step="0.01" min="0.01" required value="<?= $bal_summary > 0 ? $bal_summary : '' ?>"></div>
 <div class="form-group" style="margin-bottom:8px"><label>Method</label><select name="payment_method"><option value="cash">Cash</option><option value="bank_transfer">Bank Transfer</option><option value="cheque">Cheque</option><option value="online">Online</option></select></div>
@@ -7360,6 +7688,7 @@ $(document).ready(function() {
 <form method="POST">
 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="receive_sup_payment" value="1">
+<?php accounting_cheque_fields('receive_sup_payment'); ?>
 <div class="form-group" style="margin-bottom:8px"><label>Date <span class="req">*</span></label><input type="date" name="payment_date" value="<?= date('Y-m-d') ?>" required></div>
 <div class="form-group" style="margin-bottom:8px"><label>Amount <span class="req">*</span></label><input type="number" name="amount" step="0.01" min="0.01" required></div>
 <div class="form-group" style="margin-bottom:8px"><label>Method</label><select name="payment_method"><option value="cash">Cash</option><option value="bank_transfer">Bank Transfer</option><option value="cheque">Cheque</option><option value="online">Online</option></select></div>
@@ -7375,7 +7704,7 @@ $(document).ready(function() {
 <div class="data-table-wrap">
 <table class="data-table">
 <caption style="text-align:left;padding:8px 0;color:var(--text2)">Select a transaction description or View button to open its full receipt.</caption>
-<thead><tr><th scope="col">Sr#</th><th scope="col">Date</th><th scope="col">Description</th><th scope="col">Debit (Dr)</th><th scope="col">Credit (Cr)</th><th scope="col">Balance</th><th scope="col" class="no-print">Receipt</th></tr></thead>
+<thead><tr><th scope="col">Sr#</th><th scope="col">Date</th><th scope="col">Description</th><th scope="col">Debit (Dr)</th><th scope="col">Credit (Cr)</th><th scope="col">Balance</th><th scope="col" class="no-print">Actions</th></tr></thead>
 <tbody>
 <?php
             $sr = 1;
@@ -7395,12 +7724,13 @@ $(document).ready(function() {
             }
             $supplier_payments->data_seek(0);
             while ($payment = $supplier_payments->fetch_assoc()) {
+                $inactive_payment = in_array($payment['status'], ['bounced','cancelled'], true);
                 if ($payment['transaction_type'] === 'supplier_refund') {
                     $transactions[] = [
                         'date' => $payment['payment_date'],
                         'type' => 'refund',
-                        'amount' => $payment['amount'],
-                        'description' => "Refund Received #{$payment['id']} ({$payment['payment_type']} - " . ($payment['cheque_number'] ?? '-') . ')',
+                        'amount' => $inactive_payment ? 0 : $payment['amount'],
+                        'description' => ($inactive_payment ? strtoupper($payment['status']) . ' — ' : '') . "Refund Received #{$payment['id']} ({$payment['payment_type']} - " . ($payment['cheque_number'] ?? '-') . ')',
                         'id' => $payment['id'],
                         'view_url' => 'index.php?page=supplier_ledger&sup_id=' . $sel_sup . '&view_payment=' . $payment['id']
                     ];
@@ -7408,8 +7738,8 @@ $(document).ready(function() {
                     $transactions[] = [
                         'date' => $payment['payment_date'],
                         'type' => 'payment',
-                        'amount' => $payment['amount'],
-                        'description' => "Payment #{$payment['id']} ({$payment['payment_type']} - " . ($payment['cheque_number'] ?? '-') . ')',
+                        'amount' => $inactive_payment ? 0 : $payment['amount'],
+                        'description' => ($inactive_payment ? strtoupper($payment['status']) . ' — ' : '') . "Payment #{$payment['id']} ({$payment['payment_type']} - " . ($payment['cheque_number'] ?? '-') . ')',
                         'id' => $payment['id'],
                         'view_url' => 'index.php?page=supplier_ledger&sup_id=' . $sel_sup . '&view_payment=' . $payment['id']
                     ];
@@ -7444,7 +7774,9 @@ $(document).ready(function() {
 <td><?= $debit > 0 ? fmt_money($debit) : '-' ?></td>
 <td><?= $credit > 0 ? fmt_money($credit) : '-' ?></td>
 <td style="color:<?= $running_bal >= 0 ? 'var(--success)' : 'var(--danger)' ?>;font-weight:700"><?= fmt_money(abs($running_bal)) ?> <?= $running_bal >= 0 ? 'Cr' : 'Dr' ?></td>
-<td class="no-print"><a href="<?= sanitize($trans['view_url']) ?>" target="_blank" rel="noopener" class="btn btn-default btn-sm" aria-label="View receipt for <?= sanitize($trans['description']) ?>">View</a></td>
+<td class="no-print"><?php if ($trans['type'] === 'purchase'): ?>
+<a href="<?= sanitize($trans['view_url']) ?>" target="_blank" rel="noopener" class="btn btn-default btn-sm">View receipt</a>
+<?php accounting_order_buttons($conn, $sel_sup, $trans['id']); else: accounting_payment_buttons($conn, 'supplier_ledger', $sel_sup, $trans['id']); endif; ?></td>
 </tr>
 <?php endforeach; ?>
 </tbody>
