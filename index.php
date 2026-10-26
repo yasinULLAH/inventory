@@ -9942,6 +9942,7 @@ function showQuoteBikeDetails(sel) {
         $filter_from = valid_date($_GET['from'] ?? '', true) ? ($_GET['from'] ?? '') : '';
         $filter_to = valid_date($_GET['to'] ?? '', true) ? ($_GET['to'] ?? '') : '';
         $filter_cat = clean_text($_GET['category'] ?? '', 255);
+        $include_sales = ($_GET['include_sales'] ?? '') === '1';
         $where = 'WHERE 1=1';
         if ($filter_from && $filter_to)
             $where .= " AND entry_date BETWEEN '$filter_from' AND '$filter_to'";
@@ -9953,6 +9954,35 @@ function showQuoteBikeDetails(sel) {
             $where .= " AND type='$filter_type'";
         if ($filter_cat)
             $where .= " AND category='" . mysqli_real_escape_string($conn, $filter_cat) . "'";
+        $sales_income_total = 0.0;
+        $sales_income_count = 0;
+        $purchase_expense_total = 0.0;
+        $purchase_expense_count = 0;
+        $include_sales_income = $include_sales && ($filter_type === '' || $filter_type === 'income');
+        $include_purchase_expense = $include_sales && ($filter_type === '' || $filter_type === 'expense');
+        if ($include_sales) {
+            $sales_date_where = '1=1';
+            if ($filter_from && $filter_to)
+                $sales_date_where .= " AND b.selling_date BETWEEN '$filter_from' AND '$filter_to'";
+            elseif ($filter_from)
+                $sales_date_where .= " AND b.selling_date >= '$filter_from'";
+            elseif ($filter_to)
+                $sales_date_where .= " AND b.selling_date <= '$filter_to'";
+            $sales_row = $conn->query("SELECT COALESCE(SUM(b.selling_price + COALESCE((SELECT SUM(sa.final_price) FROM sale_accessories sa WHERE sa.bike_id=b.id),0)),0) AS total, COUNT(*) AS cnt FROM bikes b WHERE b.status='sold' AND $sales_date_where")->fetch_assoc();
+            $sales_income_total = (float) ($sales_row['total'] ?? 0);
+            $sales_income_count = (int) ($sales_row['cnt'] ?? 0);
+
+            $purchase_date_where = '1=1';
+            if ($filter_from && $filter_to)
+                $purchase_date_where .= " AND order_date BETWEEN '$filter_from' AND '$filter_to'";
+            elseif ($filter_from)
+                $purchase_date_where .= " AND order_date >= '$filter_from'";
+            elseif ($filter_to)
+                $purchase_date_where .= " AND order_date <= '$filter_to'";
+            $purchase_row = $conn->query("SELECT COALESCE(SUM(purchase_price),0) AS total, COUNT(*) AS cnt FROM bikes WHERE $purchase_date_where")->fetch_assoc();
+            $purchase_expense_total = (float) ($purchase_row['total'] ?? 0);
+            $purchase_expense_count = (int) ($purchase_row['cnt'] ?? 0);
+        }
         $entries = $conn->query("SELECT ie.*, u.full_name FROM income_expenses ie LEFT JOIN users u ON ie.created_by=u.id $where ORDER BY entry_date DESC, id DESC");
         $cats = $conn->query('SELECT DISTINCT category FROM income_expenses ORDER BY category');
         $totals = $conn->query("SELECT type, COUNT(*) as cnt, SUM(amount) total FROM income_expenses $where GROUP BY type");
@@ -9968,6 +9998,14 @@ function showQuoteBikeDetails(sel) {
                 $sum_expense = $t['total'];
                 $cnt_expense = $t['cnt'];
             }
+        }
+        if ($include_sales_income) {
+            $sum_income += $sales_income_total;
+            $cnt_income += $sales_income_count;
+        }
+        if ($include_purchase_expense) {
+            $sum_expense += $purchase_expense_total;
+            $cnt_expense += $purchase_expense_count;
         }
         $cat_stats = $conn->query("SELECT type, category, SUM(amount) as total FROM income_expenses $where GROUP BY type, category ORDER BY total DESC");
         $inc_cats = [];
@@ -9985,6 +10023,16 @@ function showQuoteBikeDetails(sel) {
                     $top_exp_cat = ['name' => $cs['category'], 'amount' => $cs['total']];
             }
         }
+        if ($include_sales_income && $sales_income_total > 0) {
+            $inc_cats[] = ['type' => 'income', 'category' => 'Sales (Bikes)', 'total' => $sales_income_total];
+            if ($sales_income_total > $top_inc_cat['amount'])
+                $top_inc_cat = ['name' => 'Sales (Bikes)', 'amount' => $sales_income_total];
+        }
+        if ($include_purchase_expense && $purchase_expense_total > 0) {
+            $exp_cats[] = ['type' => 'expense', 'category' => 'Purchases (Bikes)', 'total' => $purchase_expense_total];
+            if ($purchase_expense_total > $top_exp_cat['amount'])
+                $top_exp_cat = ['name' => 'Purchases (Bikes)', 'amount' => $purchase_expense_total];
+        }
         $trend_stats = $conn->query("SELECT entry_date, type, SUM(amount) as total FROM income_expenses $where GROUP BY entry_date, type ORDER BY entry_date ASC");
         $trend_labels = [];
         $trend_inc = [];
@@ -9999,6 +10047,23 @@ function showQuoteBikeDetails(sel) {
             else
                 $trend_map[$date]['exp'] = $ts['total'];
         }
+        if ($include_sales_income) {
+            $sales_trend = $conn->query("SELECT selling_date AS d, SUM(b.selling_price + COALESCE((SELECT SUM(sa.final_price) FROM sale_accessories sa WHERE sa.bike_id=b.id),0)) AS total FROM bikes b WHERE b.status='sold' AND " . $sales_date_where . " GROUP BY selling_date");
+            while ($r = $sales_trend->fetch_assoc()) {
+                if (!isset($trend_map[$r['d']]))
+                    $trend_map[$r['d']] = ['inc' => 0, 'exp' => 0];
+                $trend_map[$r['d']]['inc'] += $r['total'];
+            }
+        }
+        if ($include_purchase_expense) {
+            $purchase_trend = $conn->query("SELECT order_date AS d, SUM(purchase_price) AS total FROM bikes WHERE " . $purchase_date_where . " GROUP BY order_date");
+            while ($r = $purchase_trend->fetch_assoc()) {
+                if (!isset($trend_map[$r['d']]))
+                    $trend_map[$r['d']] = ['inc' => 0, 'exp' => 0];
+                $trend_map[$r['d']]['exp'] += $r['total'];
+            }
+        }
+        ksort($trend_map);
         foreach ($trend_map as $d => $v) {
             $trend_labels[] = date('d M', strtotime($d));
             $trend_inc[] = $v['inc'];
@@ -10021,6 +10086,12 @@ function showQuoteBikeDetails(sel) {
     <div class="form-group"><label>Category</label>
     <select name="category"><option value="">All</option><?php $cats2 = $conn->query('SELECT DISTINCT category FROM income_expenses ORDER BY category');
         while ($c = $cats2->fetch_assoc()): ?><option value="<?= sanitize($c['category']) ?>" <?= $filter_cat == $c['category'] ? 'selected' : '' ?>><?= sanitize($c['category']) ?></option><?php endwhile; ?></select></div>
+    <div class="form-group" style="justify-content:flex-end;min-width:180px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:700;font-size:0.85rem;color:<?= $include_sales ? 'var(--accent)' : 'var(--text2)' ?>" title="Add bike sales income and bike purchase expenses to the totals">
+            <input type="checkbox" id="includeSalesCb" name="include_sales" value="1" <?= $include_sales ? 'checked' : '' ?> style="width:17px;height:17px;cursor:pointer">
+            <span>Include Sales &amp; Purchases</span>
+        </label>
+    </div>
     <button class="btn btn-default">Filter</button>
     <a href="index.php?page=income_expense" class="btn btn-default">Reset</a>
     </form>
@@ -10028,6 +10099,14 @@ function showQuoteBikeDetails(sel) {
     <button class="btn btn-success" onclick="document.getElementById('ieForm').style.display='block';document.getElementById('ieForm').scrollIntoView()">+ Add Entry</button>
     <?php endif; ?>
 </div>
+<?php if ($include_sales): ?>
+<div style="background:rgba(74,158,255,0.08);border:1px solid var(--accent);border-left:4px solid var(--accent);padding:10px 14px;margin-bottom:12px;border-radius:2px;font-size:0.85rem;color:var(--text)" class="animate__animated animate__fadeIn">
+    <strong style="color:var(--accent)">Included from bike records:</strong>
+    <?php if ($include_sales_income): ?>Sales Income <strong style="color:var(--success)"><?= fmt_money($sales_income_total) ?></strong> (<?= $sales_income_count ?> sale<?= $sales_income_count === 1 ? '' : 's' ?>)<?php endif; ?>
+    <?php if ($include_sales_income && $include_purchase_expense): ?> &nbsp;•&nbsp; <?php endif; ?>
+    <?php if ($include_purchase_expense): ?>Purchase Expenses <strong style="color:var(--danger)"><?= fmt_money($purchase_expense_total) ?></strong> (<?= $purchase_expense_count ?> bike<?= $purchase_expense_count === 1 ? '' : 's' ?>)<?php endif; ?>
+</div>
+<?php endif; ?>
 <div class="card-grid animate__animated animate__fadeInDown" style="margin-bottom:12px">
     <div class="card success"><div class="card-icon">💰</div><div class="card-body"><div class="card-label">Total Income</div><div class="card-value" style="font-size:1.1rem"><?= fmt_money($sum_income) ?></div><div class="card-sub"><?= $cnt_income ?> transactions</div></div></div>
     <div class="card danger"><div class="card-icon">💸</div><div class="card-body"><div class="card-label">Total Expense</div><div class="card-value" style="font-size:1.1rem"><?= fmt_money($sum_expense) ?></div><div class="card-sub"><?= $cnt_expense ?> transactions</div></div></div>
@@ -10127,6 +10206,38 @@ document.addEventListener('DOMContentLoaded', function() {
 </tbody>
 </table>
 </div>
+<script>
+(function() {
+    var cb = document.getElementById('includeSalesCb');
+    if (!cb) return;
+    var params = new URLSearchParams(window.location.search);
+    var inUrl = params.get('include_sales') === '1';
+    var stored = null;
+    try { stored = localStorage.getItem('ie_include_sales'); } catch (e) {}
+    if (inUrl) {
+        try { localStorage.setItem('ie_include_sales', '1'); } catch (e) {}
+    } else if (stored === '1') {
+        var url = new URL(window.location.href);
+        url.searchParams.set('include_sales', '1');
+        window.location.replace(url.toString());
+        return;
+    } else {
+        try { localStorage.setItem('ie_include_sales', '0'); } catch (e) {}
+    }
+    cb.checked = inUrl || stored === '1';
+    cb.addEventListener('change', function() {
+        try { localStorage.setItem('ie_include_sales', cb.checked ? '1' : '0'); } catch (e) {}
+        var form = cb.closest('form');
+        if (form) { form.submit(); }
+        else {
+            var url = new URL(window.location.href);
+            if (cb.checked) { url.searchParams.set('include_sales', '1'); }
+            else { url.searchParams.delete('include_sales'); }
+            window.location.href = url.toString();
+        }
+    });
+})();
+</script>
 <?php
     elseif ($page === 'landing_page'):
         require_permission($conn, 'landing_page', 'view');
