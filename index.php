@@ -166,6 +166,12 @@ function reset_attempts()
     fclose($handle);
 }
 
+// NOTE (commented out): ensure_multibranch_schema() was the one-time database
+// migration/seed. It created the multi-branch tables (branches,
+// branch_transfers, branch_cash_transfers, user_themes), added branch_id
+// columns to legacy tables and seeded the default branches. The database is
+// now live in production, so this is disabled. Re-enable only for a fresh DB.
+/*
 function ensure_multibranch_schema($conn)
 {
     static $checked = false;
@@ -291,6 +297,7 @@ function ensure_multibranch_schema($conn)
     $conn->query("INSERT IGNORE INTO role_permissions (role_id, page, can_view, can_add, can_edit, can_delete) VALUES (1, 'branches', 1, 1, 1, 1), (1, 'branch_transfers', 1, 1, 1, 1)");
     $conn->query("INSERT IGNORE INTO settings (setting_key, setting_value) VALUES ('auto_backup_schedule', 'daily'), ('auto_backup_days', '4')");
 }
+*/
 
 function get_all_branches($conn, $only_active = false)
 {
@@ -1176,19 +1183,27 @@ function workflow_installment_panel($conn)
 function db_connect($create_db = false)
 {
     global $db_host, $db_user, $db_pass, $db_name;
+    // NOTE: The $create_db branch (connecting without a database for the
+    // one-time installer) is commented out — the database is live in production.
+    /*
     if ($create_db) {
         $conn = new mysqli($db_host, $db_user, $db_pass);
     } else {
         $conn = new mysqli($db_host, $db_user, $db_pass, $db_name);
     }
+    */
+    $conn = new mysqli($db_host, $db_user, $db_pass, $db_name);
     if ($conn->connect_error) {
         error_log('DB Connection Error: ' . $conn->connect_error);
         return null;
     }
     $conn->set_charset('utf8mb4');
+    // NOTE: ensure_multibranch_schema() (one-time migration/seed) is disabled.
+    /*
     if (!$create_db) {
         ensure_multibranch_schema($conn);
     }
+    */
     return $conn;
 }
 
@@ -1892,6 +1907,8 @@ function sub_generate_license_key($expires_at)
     return strtoupper(substr($sig, 0, 8)) . '-' . strtoupper(substr($sig, 8, 8)) . '-' . strtoupper(substr($sig, 16, 8)) . '-' . strtoupper(substr($payload, 0, 16));
 }
 
+// NOTE (commented out): unused helper from the (disabled) subscription system.
+/*
 function sub_validate_license_key($key)
 {
     $key = trim(strtoupper($key));
@@ -1902,6 +1919,7 @@ function sub_validate_license_key($key)
     $payload_b64 = $parts[3];
     return $hmac_part . '|' . $payload_b64;
 }
+*/
 
 function sub_get_status($conn)
 {
@@ -2008,6 +2026,8 @@ function sub_store_key_physically($license_key, $expires_at)
     return $filepath;
 }
 
+// NOTE (commented out): unused CLI helpers from the (disabled) subscription system.
+/*
 function sub_list_stored_keys()
 {
     if (!SUBSCRIPTION_ENABLED) { echo "Subscription system is disabled.\n"; return []; }
@@ -2028,6 +2048,7 @@ function sub_read_stored_key($filepath)
     if (!file_exists($filepath)) return null;
     return @file_get_contents($filepath);
 }
+*/
 
 function sub_is_app_blocked($conn)
 {
@@ -2157,10 +2178,14 @@ if (isset($_GET['captcha'])) {
     generate_svg_captcha($equation);
 }
 
+// NOTE (commented out): install_database() was the one-time installer stub.
+// The database is already live in production, so it is no longer needed.
+/*
 function install_database()
 {
     return true;
 }
+*/
 
 function get_setting($key)
 {
@@ -2258,6 +2283,8 @@ function require_enum($value, array $allowed, $label)
     return $value;
 }
 
+// NOTE (commented out): unused validation helper.
+/*
 function require_positive_money($value, $label, $allow_zero = false)
 {
     if (!is_numeric($value) || !is_finite((float) $value)) {
@@ -2269,6 +2296,7 @@ function require_positive_money($value, $label, $allow_zero = false)
     }
     return $amount;
 }
+*/
 
 function csv_safe($value)
 {
@@ -5902,7 +5930,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }, true);
 });
 </script>
-<?php if (!$db_exists): ?>
+<?php if (false): // Installer UI disabled — database is live in production. (was: if (!$db_exists)) ?>
 <div class="install-wrap">
 <div class="install-box animate__animated animate__fadeInDown">
 <div style="font-size:2.5rem;margin-bottom:10px">⚡</div>
