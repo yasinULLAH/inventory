@@ -1116,6 +1116,7 @@ function workflow_installment_change($conn, $id, $action, $input)
 
 function workflow_management_panel($conn, $page)
 {
+    if (!empty($_GET['print_invoice']) || !empty($_GET['print_po'])) return;
     $b_filter_b = branch_and($conn, 'b');
     $b_filter_po = branch_and($conn, 'po');
     if ($page === 'sale') {
@@ -6570,7 +6571,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         $print_tr_id = (int) ($_GET['print_transfer'] ?? 0);
         if ($print_tr_id > 0):
-            echo '<style>.sidebar, .topbar { display: none !important; } .main-wrap { margin-left: 0 !important; } .content > *:not(#receiptArea):not(.no-print) { display: none !important; } .content { padding: 40px !important; background: #333 !important; } body { background: #333 !important; } @media print { .content, body { padding: 0 !important; background: #fff !important; } }</style>';
+            echo '<style>.sidebar, .topbar { display: none !important; } .main-wrap { margin-left: 0 !important; } .content > *:not(#receiptArea) { display: none !important; } #receiptArea + .no-print { display: flex !important; gap: 8px; } .content { padding: 40px !important; background: #333 !important; } body { background: #333 !important; } @media print { .content, body { padding: 0 !important; background: #fff !important; } #receiptArea + .no-print { display: none !important; } }</style>';
             $tr_row = $conn->query("SELECT bt.*, fb.name AS from_name, fb.branch_code AS from_code, fb.address AS from_addr, fb.phone AS from_phone, tb.name AS to_name, tb.branch_code AS to_code, tb.address AS to_addr, tb.phone AS to_phone, b.chassis_number, b.motor_number, b.color, b.purchase_price, m.model_name, m.model_code, a.name AS acc_name, a.sku AS acc_sku, u1.full_name AS init_user, u2.full_name AS rec_user FROM branch_transfers bt LEFT JOIN branches fb ON bt.from_branch_id=fb.id LEFT JOIN branches tb ON bt.to_branch_id=tb.id LEFT JOIN bikes b ON bt.bike_id=b.id LEFT JOIN models m ON b.model_id=m.id LEFT JOIN accessories a ON bt.accessory_id=a.id LEFT JOIN users u1 ON bt.initiated_by=u1.id LEFT JOIN users u2 ON bt.received_by=u2.id WHERE bt.id=$print_tr_id")->fetch_assoc();
             if ($tr_row):
 ?>
@@ -7693,9 +7694,9 @@ echo !empty($deal_parts) ? implode('<br>', $deal_parts) : '<span style="color:va
 <?php if ($bike['status'] === 'sold' && has_permission($conn, 'money_tracking', 'view')): ?>
 <a href="index.php?page=money_tracking&filter_bike=<?= $bike['id'] ?>" class="btn btn-default btn-sm" title="Track Money Destination" style="background:var(--bg3)">💸</a>
 <?php endif; ?>
-<?php if ($bike['purchase_order_id'] && has_permission($conn, 'purchase', 'view')): ?>
+<?php if ($bike['purchase_order_id'] && !in_array($bike['status'], ['sold','returned']) && has_permission($conn, 'purchase', 'view')): ?>
 <a href="index.php?page=purchase&print_po=<?= $bike['purchase_order_id'] ?>&format=a4" class="btn btn-primary btn-sm" title="A4 Purchase Receipt" target="_blank">📄</a>
-<a href="index.php?page=purchase&print_po=<?= $bike['purchase_order_id'] ?>&format=thermal" class="btn btn-default btn-sm" title="Thermal Purchase Receipt" target="_blank">📦</a>
+<a href="index.php?page=purchase&print_po=<?= $bike['purchase_order_id'] ?>&format=thermal" class="btn btn-warning btn-sm" title="Thermal Purchase Receipt" target="_blank">🧾</a>
 <?php endif; ?>
 <?php if (has_permission($conn, 'inventory', 'edit')): ?>
 <a href="index.php?page=inventory&edit_id=<?= $bike['id'] ?>" class="btn btn-primary btn-sm" title="Edit">✏</a>
@@ -7980,7 +7981,7 @@ function addMoneyAllocRow() {
 <?php
         $print_inv_id = (int) ($_GET['print_invoice'] ?? 0);
         if ($print_inv_id):
-            echo '<style>.sidebar, .topbar { display: none !important; } .main-wrap { margin-left: 0 !important; } .content > *:not(#receiptArea):not(.no-print) { display: none !important; } .content { padding: 40px !important; background: #333 !important; } body { background: #333 !important; } @media print { .content, body { padding: 0 !important; background: #fff !important; } }</style>';
+            echo '<style>.sidebar, .topbar { display: none !important; } .main-wrap { margin-left: 0 !important; } .content > *:not(#receiptArea) { display: none !important; } #receiptArea + .no-print { display: flex !important; gap: 8px; } .content { padding: 40px !important; background: #333 !important; } body { background: #333 !important; } @media print { .content, body { padding: 0 !important; background: #fff !important; } #receiptArea + .no-print { display: none !important; } }</style>';
             $inv_r = $conn->query("SELECT b.*, m.model_name, m.model_code, m.category, c.name as cust_name, c.phone as cust_phone, c.cnic as cust_cnic, c.address as cust_addr, c.is_filer, br.name as br_name, br.branch_code as br_code, br.phone as br_phone, br.address as br_addr FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id LEFT JOIN branches br ON b.branch_id=br.id WHERE b.id=$print_inv_id");
             $inv = $inv_r ? $inv_r->fetch_assoc() : null;
             $show_pp = get_setting('show_purchase_on_invoice') == '1';
