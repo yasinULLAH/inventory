@@ -838,7 +838,7 @@ function accounting_source_panel($conn, $page, $party_id)
     if ($page === 'supplier_ledger' && $order_id) {
         $row = $conn->query("SELECT id FROM purchase_orders WHERE id=$order_id AND supplier_id=" . (int) $party_id)->fetch_assoc();
         if (!$row) { echo '<div class="alert alert-danger">Purchase order not found for this supplier.</div>'; return; }
-        echo '<fieldset class="fieldset"><legend>Edit purchase order #' . $order_id . '</legend><p>Edit the items below; purchase totals are recalculated when saved.</p>';
+        echo '<fieldset class="fieldset"><legend>Installment #' . $id . ' — ' . sanitize($inst['chassis_number']) . '</legend>';
         $rows = $conn->query("SELECT id,chassis_number FROM bikes WHERE purchase_order_id=$order_id ORDER BY id");
         foreach ($rows as $bike) {
             echo '<p>' . sanitize($bike['chassis_number']) . ' ';
@@ -5850,7 +5850,7 @@ body.sidebar-collapsed nav { overflow-y: auto; overflow-x: hidden; }
 [data-theme="light"] .toast.success{background:#d4f4d4;border-color:var(--success);color:#1a4d1a}
 [data-theme="light"] .toast.error{background:#f4d4d4;border-color:var(--danger);color:#4d1a1a}
 @keyframes fadeIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
-.fieldset{border:2px solid var(--border);padding:12px 14px;margin-bottom:14px;border-radius:2px;min-width:0;max-width:100%;animation: animate__fadeInUp 0.15s;}
+.fieldset{border:2px solid var(--border);padding:12px 14px;margin-bottom:14px;border-radius:2px;min-width:0;max-width:100%;animation: animate__fadeInUp 0.15s;scroll-margin-top:calc(var(--topbar-h) + 16px);}
 .fieldset legend{font-size:0.8rem;font-weight:700;padding:0 6px;color:var(--accent);text-transform:uppercase;letter-spacing:0.5px}
 .form-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px}
 .form-group{display:flex;flex-direction:column;gap:3px;flex:1;min-width:140px}
@@ -6279,6 +6279,37 @@ document.addEventListener('DOMContentLoaded', function() {
         placeholder: '-- Select --',
         allowClear: false,
         theme: 'default'
+    });
+    window.scrollFormToCenter = function(el) {
+        if (!el) return;
+        setTimeout(function() {
+            var rect = el.getBoundingClientRect();
+            var topbar = document.querySelector('.topbar');
+            var topbarH = topbar ? topbar.offsetHeight : 48;
+            var availH = window.innerHeight - topbarH;
+            var targetY = rect.height < availH * 0.85
+                ? window.pageYOffset + rect.top - topbarH - Math.max(16, (availH - rect.height) / 2)
+                : window.pageYOffset + rect.top - topbarH - 16;
+            window.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' });
+            var firstInput = el.querySelector('input:not([type="hidden"]):not([readonly]):not([disabled]), select:not([disabled]), textarea:not([readonly]):not([disabled])');
+            if (firstInput && !firstInput.classList.contains('select2-hidden-accessible')) {
+                try { firstInput.focus({ preventScroll: true }); } catch (e) {}
+            }
+        }, 80);
+    };
+    var formAreaSelector = '#branchFormBox, #addModelFormArea, #addAccFormArea, #addQuoteFormArea, #addCustFormArea, #addSupFormArea, #roleForm, #userForm, #ieForm, #leadershipFormArea, #galleryFormArea, #addDestFormArea, #addAllocFormArea, #addDepFormArea, #receiptArea, #orderEditArea, #installmentManageArea';
+    var editQueryKeys = ['edit_id', 'edit_lid', 'edit_gid', 'edit_payment', 'edit_sale', 'account_payment', 'account_entry', 'account_order', 'manage_installment', 'prefill_alloc'];
+    var hasEditParam = editQueryKeys.some(function(k) { return urlParams.has(k); });
+    document.querySelectorAll(formAreaSelector).forEach(function(area) {
+        if (hasEditParam && window.getComputedStyle(area).display !== 'none') {
+            window.scrollFormToCenter(area);
+        }
+        var obs = new MutationObserver(function() {
+            if (window.getComputedStyle(area).display !== 'none') {
+                window.scrollFormToCenter(area);
+            }
+        });
+        obs.observe(area, { attributes: true, attributeFilter: ['style'] });
     });
     var csrfToken = "<?= $_SESSION['csrf_token'] ?? '' ?>";
     const originalSubmit = HTMLFormElement.prototype.submit;
@@ -7105,7 +7136,7 @@ document.addEventListener('DOMContentLoaded', function() {
 ?>
 <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap" class="no-print animate__animated animate__fadeInLeft">
     <?php if (has_permission($conn, 'branches', 'add')): ?>
-    <button class="btn btn-success" onclick="<?= $edit_br ? "window.location.href='index.php?page=branches'" : "document.getElementById('branchFormBox').style.display='block';document.getElementById('branchFormBox').scrollIntoView()" ?>">+ Add New Branch</button>
+    <button class="btn btn-success" onclick="<?= $edit_br ? "window.location.href='index.php?page=branches'" : "document.getElementById('branchFormBox').style.display='block';document.getElementById('branchFormBox').scrollIntoView({behavior:'smooth',block:'center'})" ?>">+ Add New Branch</button>
     <?php endif; ?>
     <?php if (has_permission($conn, 'branch_transfers', 'view')): ?>
     <a href="index.php?page=branch_transfers" class="btn btn-primary">🔄 Inter-Branch Stock & Fund Transfers</a>
@@ -10735,7 +10766,7 @@ while ($d = $dest_q->fetch_assoc()):
         ?>
 <div style="display:flex;gap:8px;margin-bottom:10px" class="no-print animate__animated animate__fadeInLeft">
 <?php if (has_permission($conn, 'models', 'add')): ?>
-<button class="btn btn-success" onclick="<?= $edit_model ? "window.location.href='index.php?page=models'" : "document.getElementById('addModelFormArea').style.display='block';document.getElementById('addModelFormArea').scrollIntoView()" ?>">+ Add Model</button>
+<button class="btn btn-success" onclick="<?= $edit_model ? "window.location.href='index.php?page=models'" : "document.getElementById('addModelFormArea').style.display='block';document.getElementById('addModelFormArea').scrollIntoView({behavior:'smooth',block:'center'})" ?>">+ Add Model</button>
 <?php endif; ?>
 </div>
 <div id="addModelFormArea" style="display:<?= $edit_model ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
@@ -10849,7 +10880,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 <div style="display:flex;gap:8px;margin-bottom:10px" class="no-print animate__animated animate__fadeInLeft">
 <?php if (has_permission($conn, 'accessories', 'add')): ?>
-<button class="btn btn-success" onclick="<?= $edit_acc ? "window.location.href='index.php?page=accessories'" : "document.getElementById('addAccFormArea').style.display='block';document.getElementById('addAccFormArea').scrollIntoView()" ?>">+ Add Accessory</button>
+<button class="btn btn-success" onclick="<?= $edit_acc ? "window.location.href='index.php?page=accessories'" : "document.getElementById('addAccFormArea').style.display='block';document.getElementById('addAccFormArea').scrollIntoView({behavior:'smooth',block:'center'})" ?>">+ Add Accessory</button>
 <?php endif; ?>
 <?php if (has_permission($conn, 'branch_transfers', 'add')): ?>
 <a href="index.php?page=branch_transfers&sub=accessories" class="btn btn-info">🔄 Transfer Accessory Stock</a>
@@ -10929,7 +10960,7 @@ document.addEventListener('DOMContentLoaded', function() {
 ?>
 <div style="display:flex;gap:8px;margin-bottom:10px" class="no-print animate__animated animate__fadeInLeft">
 <?php if (has_permission($conn, 'quotations', 'add')): ?>
-<button class="btn btn-success" onclick="<?= $edit_quote ? "window.location.href='index.php?page=quotations'" : "document.getElementById('addQuoteFormArea').style.display='block';document.getElementById('addQuoteFormArea').scrollIntoView()" ?>">+ Create Quotation</button>
+<button class="btn btn-success" onclick="<?= $edit_quote ? "window.location.href='index.php?page=quotations'" : "document.getElementById('addQuoteFormArea').style.display='block';document.getElementById('addQuoteFormArea').scrollIntoView({behavior:'smooth',block:'center'})" ?>">+ Create Quotation</button>
 <?php endif; ?>
 </div>
 <div id="addQuoteFormArea" style="display:<?= $edit_quote ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
@@ -11365,7 +11396,7 @@ function showQuoteBikeDetails(sel) {
 <button type="submit" class="btn btn-default btn-sm">🔍</button>
 </form>
 <?php if (has_permission($conn, 'customers', 'add')): ?>
-<button class="btn btn-success" onclick="<?= $edit_cust ? "window.location.href='index.php?page=customers'" : "document.getElementById('addCustFormArea').style.display='block';document.getElementById('addCustFormArea').scrollIntoView()" ?>">+ Add Customer</button>
+<button class="btn btn-success" onclick="<?= $edit_cust ? "window.location.href='index.php?page=customers'" : "document.getElementById('addCustFormArea').style.display='block';document.getElementById('addCustFormArea').scrollIntoView({behavior:'smooth',block:'center'})" ?>">+ Add Customer</button>
 <?php endif; ?>
 </div>
 <div id="addCustFormArea" style="display:<?= $edit_cust ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
@@ -11443,7 +11474,7 @@ function showQuoteBikeDetails(sel) {
 ?>
 <div style="display:flex;gap:8px;margin-bottom:10px" class="no-print animate__animated animate__fadeInLeft">
 <?php if (has_permission($conn, 'suppliers', 'add')): ?>
-<button class="btn btn-success" onclick="<?= $edit_sup ? "window.location.href='index.php?page=suppliers'" : "document.getElementById('addSupFormArea').style.display='block';document.getElementById('addSupFormArea').scrollIntoView()" ?>">+ Add Supplier</button>
+<button class="btn btn-success" onclick="<?= $edit_sup ? "window.location.href='index.php?page=suppliers'" : "document.getElementById('addSupFormArea').style.display='block';document.getElementById('addSupFormArea').scrollIntoView({behavior:'smooth',block:'center'})" ?>">+ Add Supplier</button>
 <?php endif; ?>
 </div>
 <div id="addSupFormArea" style="display:<?= $edit_sup ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
@@ -11529,7 +11560,7 @@ function showQuoteBikeDetails(sel) {
 ?>
 <div style="display:flex;gap:8px;margin-bottom:10px" class="no-print animate__animated animate__fadeInLeft">
     <?php if (has_permission($conn, 'roles', 'add')): ?>
-    <button class="btn btn-success" onclick="<?= $edit_role ? "window.location.href='index.php?page=roles'" : "document.getElementById('roleForm').style.display='block';document.getElementById('roleForm').scrollIntoView()" ?>">+ Add Role</button>
+    <button class="btn btn-success" onclick="<?= $edit_role ? "window.location.href='index.php?page=roles'" : "document.getElementById('roleForm').style.display='block';document.getElementById('roleForm').scrollIntoView({behavior:'smooth',block:'center'})" ?>">+ Add Role</button>
     <?php endif; ?>
 </div>
 <div id="roleForm" style="display:<?= $edit_role ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
@@ -11607,7 +11638,7 @@ function showQuoteBikeDetails(sel) {
 ?>
 <div style="display:flex;gap:8px;margin-bottom:10px" class="no-print animate__animated animate__fadeInLeft">
     <?php if (has_permission($conn, 'users', 'add')): ?>
-    <button class="btn btn-success" onclick="<?= $edit_user ? "window.location.href='index.php?page=users'" : "document.getElementById('userForm').style.display='block';document.getElementById('userForm').scrollIntoView()" ?>">+ Add User</button>
+    <button class="btn btn-success" onclick="<?= $edit_user ? "window.location.href='index.php?page=users'" : "document.getElementById('userForm').style.display='block';document.getElementById('userForm').scrollIntoView({behavior:'smooth',block:'center'})" ?>">+ Add User</button>
     <?php endif; ?>
 </div>
 <div id="userForm" style="display:<?= $edit_user ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
@@ -11840,7 +11871,7 @@ function showQuoteBikeDetails(sel) {
     <a href="index.php?page=income_expense" class="btn btn-default">Reset</a>
     </form>
     <?php if (has_permission($conn, 'income_expense', 'add')): ?>
-    <button class="btn btn-success" onclick="<?= $edit_entry ? "window.location.href='index.php?page=income_expense'" : "document.getElementById('ieForm').style.display='block';document.getElementById('ieForm').scrollIntoView()" ?>">+ Add Entry</button>
+    <button class="btn btn-success" onclick="<?= $edit_entry ? "window.location.href='index.php?page=income_expense'" : "document.getElementById('ieForm').style.display='block';document.getElementById('ieForm').scrollIntoView({behavior:'smooth',block:'center'})" ?>">+ Add Entry</button>
     <?php endif; ?>
 </div>
 <?php if ($include_sales): ?>
@@ -12206,7 +12237,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 <div style="display:flex;gap:8px;margin-bottom:10px" class="no-print animate__animated animate__fadeInLeft">
 <?php if (has_permission($conn, 'money_destinations', 'add')): ?>
-<button class="btn btn-success" onclick="<?= $edit_dest ? "window.location.href='index.php?page=money_destinations'" : "document.getElementById('addDestFormArea').style.display='block';document.getElementById('addDestFormArea').scrollIntoView()" ?>">+ Add Destination</button>
+<button class="btn btn-success" onclick="<?= $edit_dest ? "window.location.href='index.php?page=money_destinations'" : "document.getElementById('addDestFormArea').style.display='block';document.getElementById('addDestFormArea').scrollIntoView({behavior:'smooth',block:'center'})" ?>">+ Add Destination</button>
 <?php endif; ?>
 </div>
 <div id="addDestFormArea" style="display:<?= $edit_dest ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
@@ -12355,7 +12386,7 @@ function toggleBankFields(sel) {
 </div>
 <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap" class="no-print animate__animated animate__fadeInLeft">
 <?php if (has_permission($conn, 'money_tracking', 'add')): ?>
-<button class="btn btn-success" onclick="<?= $edit_alloc ? "window.location.href='index.php?page=money_tracking'" : "document.getElementById('addAllocFormArea').style.display='block';document.getElementById('addAllocFormArea').scrollIntoView()" ?>">+ Add Allocation</button>
+<button class="btn btn-success" onclick="<?= $edit_alloc ? "window.location.href='index.php?page=money_tracking'" : "document.getElementById('addAllocFormArea').style.display='block';document.getElementById('addAllocFormArea').scrollIntoView({behavior:'smooth',block:'center'})" ?>">+ Add Allocation</button>
 <?php endif; ?>
 </div>
 <div class="filter-bar no-print animate__animated animate__fadeInLeft" style="margin-bottom:10px">
@@ -12556,7 +12587,7 @@ updateAllocRemaining(false);
 </div>
 <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap" class="no-print animate__animated animate__fadeInLeft">
 <?php if (has_permission($conn, 'bank_deposits', 'add')): ?>
-<button class="btn btn-success" onclick="<?= $edit_dep ? "window.location.href='index.php?page=bank_deposits'" : "document.getElementById('addDepFormArea').style.display='block';document.getElementById('addDepFormArea').scrollIntoView()" ?>">+ New Bank Deposit</button>
+<button class="btn btn-success" onclick="<?= $edit_dep ? "window.location.href='index.php?page=bank_deposits'" : "document.getElementById('addDepFormArea').style.display='block';document.getElementById('addDepFormArea').scrollIntoView({behavior:'smooth',block:'center'})" ?>">+ New Bank Deposit</button>
 <?php endif; ?>
 </div>
 <div class="filter-bar no-print animate__animated animate__fadeInLeft" style="margin-bottom:10px">
