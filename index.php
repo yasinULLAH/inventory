@@ -9,7 +9,7 @@ $APP_CONFIG = [
     'db_user' => getenv('DB_USER') ?: 'root',
     'db_pass' => getenv('DB_PASS') ?: 'root',
     'db_name' => getenv('DB_NAME') ?: 'bni_enterprises2',
-    'app_version' => '3.0.0',
+    'app_version' => '4.0.0',
     'author' => 'Yasin Ullah',
     'author_linkedin' => 'https://www.linkedin.com/in/yasin-ullah-029229232/',
     'author_whatsapp' => '03361593533',
@@ -95,7 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $params = [];
         if (!empty($_GET['page'])) {
             $params[] = 'page=' . urlencode($_GET['page']);
-            foreach (['edit_id', 'edit_lid', 'edit_gid', 'sub', 'cust_id', 'sup_id', 'manage_installment', 'account_payment', 'account_entry', 'account_order', 'edit_payment', 'edit_sale'] as $ctx_key) {
+            foreach (['edit_id', 'edit_lid', 'edit_gid', 'sub', 'cust_id', 'sup_id', 'manage_installment', 'account_payment', 'account_entry', 'account_order', 'edit_payment', 'edit_sale', 'audit_id', 'bike_id', 'job_id', 'pos_id', 'staff_id', 'month', 'book_date', 'branch_id', 'edit_job'] as $ctx_key) {
                 if (!empty($_GET[$ctx_key])) {
                     $params[] = $ctx_key . '=' . urlencode((string) $_GET[$ctx_key]);
                 }
@@ -983,6 +983,16 @@ function workflow_cancel_sale($conn, $id)
     $conn->query("DELETE FROM sale_money_allocations WHERE bike_id=$id");
     $conn->query("DELETE FROM cheque_register WHERE reference_type='sale' AND reference_id=$id");
     $conn->query("UPDATE quotations SET status='pending' WHERE bike_id=$id AND status='converted'");
+    $conn->query("UPDATE sales_commissions SET status='cancelled' WHERE bike_id=$id AND status!='paid'");
+    $conn->query("DELETE FROM ledger WHERE party_type='customer' AND reference_type='trade_in' AND reference_id=$id");
+    $ti_cancel = $conn->query("SELECT id, stock_bike_id FROM bike_trade_ins WHERE sold_bike_id=$id LIMIT 1")->fetch_assoc();
+    if ($ti_cancel) {
+        $st_bid = (int) ($ti_cancel['stock_bike_id'] ?? 0);
+        if ($st_bid > 0) {
+            $conn->query("DELETE FROM bikes WHERE id=$st_bid AND status='in_stock' AND is_trade_in_unit=1");
+        }
+        $conn->query("DELETE FROM bike_trade_ins WHERE id=" . (int) $ti_cancel['id']);
+    }
     $basis = $bike['tax_basis'] ?: (get_setting('tax_on') ?? 'purchase_price');
     $rate = $bike['tax_rate_applied'] !== null ? (float) $bike['tax_rate_applied'] : (float) (get_setting('tax_rate') ?? 0.1);
     $tax = ($basis === 'selling_price') ? 0.0 : round((float) $bike['purchase_price'] * $rate, 2);
@@ -1236,30 +1246,890 @@ function workflow_installment_panel($conn)
     echo '</tbody></table></div><a class="btn btn-default no-print" href="index.php?page=installments">Back to installments</a></fieldset>';
 }
 
+// ============================================================================
+// BNI ENTERPRISES ERP v4.0 — 10 NEW ENTERPRISE MODULES SCHEMA & CORE HELPERS
+// ============================================================================
+
+function ensure_erp_v4_schema($conn)
+{
+    static $v4_checked = false;
+    if ($v4_checked || !$conn) return;
+    $v4_checked = true;
+
+    // 1. Guarantor & Installment KYC Document Vault
+    $conn->query("CREATE TABLE IF NOT EXISTS `sale_guarantors` (
+        `id` INT AUTO_INCREMENT PRIMARY KEY,
+        `branch_id` INT NOT NULL DEFAULT 1,
+        `bike_id` INT NOT NULL,
+        `customer_id` INT NULL,
+        `guarantor_no` TINYINT NOT NULL DEFAULT 1,
+        `name` VARCHAR(255) NOT NULL,
+        `cnic` VARCHAR(40) NOT NULL,
+        `phone` VARCHAR(60) NOT NULL,
+        `relation` VARCHAR(100) DEFAULT '',
+        `occupation` VARCHAR(150) DEFAULT '',
+        `monthly_income` DECIMAL(15,2) DEFAULT 0.00,
+        `address` TEXT,
+        `security_cheque_no` VARCHAR(100) DEFAULT '',
+        `security_bank_name` VARCHAR(150) DEFAULT '',
+        `security_cheque_amount` DECIMAL(15,2) DEFAULT 0.00,
+        `cnic_front_file` VARCHAR(255) DEFAULT '',
+        `cnic_back_file` VARCHAR(255) DEFAULT '',
+        `stamp_paper_file` VARCHAR(255) DEFAULT '',
+        `security_cheque_file` VARCHAR(255) DEFAULT '',
+        `notes` TEXT,
+        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX `idx_sg_bike` (`bike_id`),
+        INDEX `idx_sg_cust` (`customer_id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    $conn->query("CREATE TABLE IF NOT EXISTS `kyc_documents` (
+        `id` INT AUTO_INCREMENT PRIMARY KEY,
+        `branch_id` INT NOT NULL DEFAULT 1,
+        `bike_id` INT NOT NULL,
+        `customer_id` INT NULL,
+        `guarantor_id` INT NULL,
+        `doc_type` ENUM('customer_cnic','guarantor_cnic','stamp_paper','security_cheque','utility_bill','photo','other') NOT NULL DEFAULT 'other',
+        `doc_title` VARCHAR(255) NOT NULL,
+        `doc_number` VARCHAR(100) DEFAULT '',
+        `file_path` VARCHAR(255) NOT NULL,
+        `verified_status` ENUM('pending','verified','rejected') DEFAULT 'verified',
+        `uploaded_by` INT NULL,
+        `notes` TEXT,
+        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX `idx_kyc_bike` (`bike_id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    // 2. Battery Warranty & Workshop / Service Job Cards
+    $conn->query("CREATE TABLE IF NOT EXISTS `warranties` (
+        `id` INT AUTO_INCREMENT PRIMARY KEY,
+        `branch_id` INT NOT NULL DEFAULT 1,
+        `bike_id` INT NOT NULL,
+        `customer_id` INT NULL,
+        `warranty_card_no` VARCHAR(60) DEFAULT '',
+        `battery_serial` VARCHAR(120) DEFAULT '',
+        `motor_serial` VARCHAR(120) DEFAULT '',
+        `controller_serial` VARCHAR(120) DEFAULT '',
+        `charger_serial` VARCHAR(120) DEFAULT '',
+        `warranty_start_date` DATE NOT NULL,
+        `battery_warranty_months` INT NOT NULL DEFAULT 12,
+        `motor_warranty_months` INT NOT NULL DEFAULT 18,
+        `controller_warranty_months` INT NOT NULL DEFAULT 12,
+        `battery_expiry_date` DATE NOT NULL,
+        `motor_expiry_date` DATE NOT NULL,
+        `status` ENUM('active','expired','void') DEFAULT 'active',
+        `notes` TEXT,
+        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX `idx_war_bike` (`bike_id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    $conn->query("CREATE TABLE IF NOT EXISTS `warranty_claims` (
+        `id` INT AUTO_INCREMENT PRIMARY KEY,
+        `claim_no` VARCHAR(50) UNIQUE NOT NULL,
+        `branch_id` INT NOT NULL DEFAULT 1,
+        `warranty_id` INT NULL,
+        `bike_id` INT NOT NULL,
+        `customer_id` INT NULL,
+        `claim_date` DATE NOT NULL,
+        `component` ENUM('battery','motor','controller','charger','frame','other') NOT NULL DEFAULT 'battery',
+        `old_serial` VARCHAR(120) DEFAULT '',
+        `new_serial` VARCHAR(120) DEFAULT '',
+        `issue_description` TEXT NOT NULL,
+        `claim_status` ENUM('pending','sent_to_vendor','approved','replaced','repaired','rejected') DEFAULT 'pending',
+        `technician_id` INT NULL,
+        `vendor_reference` VARCHAR(150) DEFAULT '',
+        `resolved_date` DATE NULL,
+        `resolution_notes` TEXT,
+        `created_by` INT NULL,
+        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    $conn->query("CREATE TABLE IF NOT EXISTS `service_job_cards` (
+        `id` INT AUTO_INCREMENT PRIMARY KEY,
+        `job_no` VARCHAR(50) UNIQUE NOT NULL,
+        `branch_id` INT NOT NULL DEFAULT 1,
+        `job_date` DATE NOT NULL,
+        `bike_id` INT NULL,
+        `customer_id` INT NULL,
+        `walkin_customer_name` VARCHAR(255) DEFAULT '',
+        `walkin_customer_phone` VARCHAR(60) DEFAULT '',
+        `chassis_number` VARCHAR(100) DEFAULT '',
+        `model_name` VARCHAR(150) DEFAULT '',
+        `service_type` ENUM('free_service','warranty_repair','paid_repair','battery_diagnostic','accident_repair') NOT NULL DEFAULT 'paid_repair',
+        `technician_id` INT NULL,
+        `technician_name` VARCHAR(150) DEFAULT '',
+        `odometer_km` INT DEFAULT 0,
+        `complaint_details` TEXT NOT NULL,
+        `work_performed` TEXT,
+        `parts_json` TEXT,
+        `labor_charges` DECIMAL(15,2) DEFAULT 0.00,
+        `parts_charges` DECIMAL(15,2) DEFAULT 0.00,
+        `discount_amount` DECIMAL(15,2) DEFAULT 0.00,
+        `total_amount` DECIMAL(15,2) DEFAULT 0.00,
+        `payment_status` ENUM('paid','unpaid','free_warranty') DEFAULT 'paid',
+        `payment_method` VARCHAR(30) DEFAULT 'cash',
+        `job_status` ENUM('open','in_progress','ready','delivered','cancelled') DEFAULT 'open',
+        `delivered_date` DATETIME NULL,
+        `created_by` INT NULL,
+        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    // 3. Standalone Accessory & Spare Parts POS (Walk-in Counter Sales)
+    $conn->query("CREATE TABLE IF NOT EXISTS `pos_accessory_sales` (
+        `id` INT AUTO_INCREMENT PRIMARY KEY,
+        `invoice_no` VARCHAR(50) UNIQUE NOT NULL,
+        `branch_id` INT NOT NULL DEFAULT 1,
+        `sale_date` DATE NOT NULL,
+        `customer_id` INT NULL,
+        `customer_name` VARCHAR(255) DEFAULT 'Walk-in Customer',
+        `customer_phone` VARCHAR(60) DEFAULT '',
+        `salesperson_id` INT NULL,
+        `subtotal` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `discount_total` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `net_total` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `total_cost` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `total_profit` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `amount_paid` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `payment_method` VARCHAR(30) DEFAULT 'cash',
+        `payment_id` INT NULL,
+        `status` ENUM('completed','returned') DEFAULT 'completed',
+        `notes` TEXT,
+        `created_by` INT NULL,
+        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    $conn->query("CREATE TABLE IF NOT EXISTS `pos_accessory_sale_items` (
+        `id` INT AUTO_INCREMENT PRIMARY KEY,
+        `pos_sale_id` INT NOT NULL,
+        `accessory_id` INT NOT NULL,
+        `item_name` VARCHAR(255) NOT NULL,
+        `sku` VARCHAR(100) DEFAULT '',
+        `quantity` INT NOT NULL DEFAULT 1,
+        `purchase_price` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `unit_price` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `discount_amount` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `final_price` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        INDEX `idx_pos_items_sale` (`pos_sale_id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    // 4. Excise Registration, Number Plate & Smart Card Tracker
+    $conn->query("CREATE TABLE IF NOT EXISTS `excise_registrations` (
+        `id` INT AUTO_INCREMENT PRIMARY KEY,
+        `branch_id` INT NOT NULL DEFAULT 1,
+        `bike_id` INT NOT NULL,
+        `customer_id` INT NULL,
+        `fee_collected` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `fee_paid_to_excise` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `agent_name` VARCHAR(150) DEFAULT '',
+        `agent_phone` VARCHAR(60) DEFAULT '',
+        `docs_submitted` VARCHAR(255) DEFAULT '',
+        `submission_date` DATE NULL,
+        `registration_no` VARCHAR(60) DEFAULT '',
+        `smart_card_no` VARCHAR(80) DEFAULT '',
+        `plate_status` ENUM('Pending','Applied','Received at Branch','Delivered to Customer') NOT NULL DEFAULT 'Pending',
+        `smart_card_status` ENUM('Pending','Applied','Received at Branch','Delivered to Customer') NOT NULL DEFAULT 'Pending',
+        `received_at_branch_date` DATE NULL,
+        `delivered_to_customer_date` DATE NULL,
+        `received_by_person` VARCHAR(150) DEFAULT '',
+        `received_by_cnic` VARCHAR(40) DEFAULT '',
+        `notes` TEXT,
+        `created_by` INT NULL,
+        `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX `idx_exc_bike` (`bike_id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    // 5. Daily Cash Book / Roznamcha & Drawer Closing
+    $conn->query("CREATE TABLE IF NOT EXISTS `daily_cash_books` (
+        `id` INT AUTO_INCREMENT PRIMARY KEY,
+        `branch_id` INT NOT NULL DEFAULT 1,
+        `book_date` DATE NOT NULL,
+        `opening_balance` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `system_inflows` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `system_outflows` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `expected_closing` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `physical_cash` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `variance` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `denominations_json` TEXT,
+        `status` ENUM('open','closed') NOT NULL DEFAULT 'open',
+        `closed_by` INT NULL,
+        `closed_at` DATETIME NULL,
+        `closing_notes` TEXT,
+        UNIQUE KEY `uniq_branch_date` (`branch_id`, `book_date`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    $conn->query("CREATE TABLE IF NOT EXISTS `cash_book_entries` (
+        `id` INT AUTO_INCREMENT PRIMARY KEY,
+        `branch_id` INT NOT NULL DEFAULT 1,
+        `entry_date` DATE NOT NULL,
+        `voucher_no` VARCHAR(50) DEFAULT '',
+        `direction` ENUM('inflow','outflow') NOT NULL DEFAULT 'inflow',
+        `category` VARCHAR(120) NOT NULL,
+        `party_name` VARCHAR(255) DEFAULT '',
+        `amount` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `narration` TEXT,
+        `created_by` INT NULL,
+        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX `idx_cbe_date` (`branch_id`, `entry_date`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    // 6. WhatsApp / SMS Installment Reminders & Digital Receipts
+    $conn->query("CREATE TABLE IF NOT EXISTS `notification_templates` (
+        `id` INT AUTO_INCREMENT PRIMARY KEY,
+        `template_key` VARCHAR(60) UNIQUE NOT NULL,
+        `template_name` VARCHAR(150) NOT NULL,
+        `channel` ENUM('whatsapp','sms','both') DEFAULT 'whatsapp',
+        `message_body` TEXT NOT NULL,
+        `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    $conn->query("CREATE TABLE IF NOT EXISTS `notification_logs` (
+        `id` INT AUTO_INCREMENT PRIMARY KEY,
+        `branch_id` INT NOT NULL DEFAULT 1,
+        `customer_id` INT NULL,
+        `recipient_name` VARCHAR(150) DEFAULT '',
+        `recipient_phone` VARCHAR(60) NOT NULL,
+        `template_key` VARCHAR(60) DEFAULT '',
+        `reference_type` VARCHAR(50) DEFAULT '',
+        `reference_id` INT NULL,
+        `channel` VARCHAR(20) DEFAULT 'whatsapp',
+        `message_text` TEXT,
+        `sent_by` INT NULL,
+        `sent_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    // 7. Salesperson Commission, Staff HR & Payroll Module
+    $conn->query("CREATE TABLE IF NOT EXISTS `staff_members` (
+        `id` INT AUTO_INCREMENT PRIMARY KEY,
+        `staff_code` VARCHAR(40) UNIQUE NOT NULL,
+        `branch_id` INT NOT NULL DEFAULT 1,
+        `user_id` INT NULL,
+        `name` VARCHAR(255) NOT NULL,
+        `cnic` VARCHAR(40) DEFAULT '',
+        `phone` VARCHAR(60) DEFAULT '',
+        `designation` VARCHAR(100) NOT NULL DEFAULT 'Sales Executive',
+        `department` ENUM('Sales','Workshop','Management','Accounts','Support') DEFAULT 'Sales',
+        `base_salary` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `commission_type` ENUM('fixed','percentage_price','percentage_margin') NOT NULL DEFAULT 'fixed',
+        `commission_rate` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `joining_date` DATE NULL,
+        `address` TEXT,
+        `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    $conn->query("CREATE TABLE IF NOT EXISTS `sales_commissions` (
+        `id` INT AUTO_INCREMENT PRIMARY KEY,
+        `branch_id` INT NOT NULL DEFAULT 1,
+        `staff_id` INT NOT NULL,
+        `bike_id` INT NULL,
+        `pos_sale_id` INT NULL,
+        `sale_date` DATE NOT NULL,
+        `sale_amount` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `commission_amount` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `status` ENUM('pending','approved','paid','cancelled') NOT NULL DEFAULT 'approved',
+        `payroll_id` INT NULL,
+        `notes` VARCHAR(255) DEFAULT '',
+        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX `idx_sc_staff` (`staff_id`),
+        INDEX `idx_sc_bike` (`bike_id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    $conn->query("CREATE TABLE IF NOT EXISTS `staff_advances` (
+        `id` INT AUTO_INCREMENT PRIMARY KEY,
+        `branch_id` INT NOT NULL DEFAULT 1,
+        `staff_id` INT NOT NULL,
+        `advance_date` DATE NOT NULL,
+        `amount` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `recovered_amount` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `payment_method` VARCHAR(30) DEFAULT 'cash',
+        `status` ENUM('active','recovered') NOT NULL DEFAULT 'active',
+        `notes` TEXT,
+        `created_by` INT NULL,
+        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    $conn->query("CREATE TABLE IF NOT EXISTS `staff_payroll` (
+        `id` INT AUTO_INCREMENT PRIMARY KEY,
+        `branch_id` INT NOT NULL DEFAULT 1,
+        `staff_id` INT NOT NULL,
+        `salary_month` VARCHAR(7) NOT NULL,
+        `base_salary` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `commission_total` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `bonus_amount` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `advance_deduction` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `other_deduction` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `net_salary` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `payment_status` ENUM('unpaid','paid') NOT NULL DEFAULT 'unpaid',
+        `payment_date` DATE NULL,
+        `payment_method` VARCHAR(30) DEFAULT 'cash',
+        `notes` TEXT,
+        `created_by` INT NULL,
+        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY `uniq_staff_month` (`staff_id`, `salary_month`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    // 8. Bike Trade-In / Exchange Workflow
+    $conn->query("CREATE TABLE IF NOT EXISTS `bike_trade_ins` (
+        `id` INT AUTO_INCREMENT PRIMARY KEY,
+        `trade_in_no` VARCHAR(50) UNIQUE NOT NULL,
+        `branch_id` INT NOT NULL DEFAULT 1,
+        `trade_in_date` DATE NOT NULL,
+        `customer_id` INT NULL,
+        `customer_name` VARCHAR(255) DEFAULT '',
+        `customer_phone` VARCHAR(60) DEFAULT '',
+        `customer_cnic` VARCHAR(40) DEFAULT '',
+        `sold_bike_id` INT NULL,
+        `stock_bike_id` INT NULL,
+        `old_make_model` VARCHAR(150) NOT NULL,
+        `old_chassis` VARCHAR(100) NOT NULL,
+        `old_motor` VARCHAR(100) NOT NULL,
+        `old_reg_no` VARCHAR(60) DEFAULT '',
+        `old_color` VARCHAR(50) DEFAULT '',
+        `condition_grade` ENUM('Excellent','Good','Fair','Needs Repair') DEFAULT 'Good',
+        `agreed_trade_value` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `estimated_resale_price` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `notes` TEXT,
+        `created_by` INT NULL,
+        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX `idx_ti_sold` (`sold_bike_id`),
+        INDEX `idx_ti_stock` (`stock_bike_id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    // 9. Full System Audit Log (Security & Edit History)
+    $conn->query("CREATE TABLE IF NOT EXISTS `system_audit_logs` (
+        `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+        `branch_id` INT NULL,
+        `user_id` INT NULL,
+        `username` VARCHAR(100) DEFAULT '',
+        `user_role` VARCHAR(100) DEFAULT '',
+        `ip_address` VARCHAR(60) DEFAULT '',
+        `module` VARCHAR(60) NOT NULL,
+        `action_type` VARCHAR(40) NOT NULL,
+        `record_id` VARCHAR(60) DEFAULT '',
+        `description` TEXT NOT NULL,
+        `before_data` LONGTEXT NULL,
+        `after_data` LONGTEXT NULL,
+        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX `idx_audit_mod` (`module`, `action_type`),
+        INDEX `idx_audit_created` (`created_at`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    // 10. QR / Barcode Label Generator & Stock Opener/Audit
+    $conn->query("CREATE TABLE IF NOT EXISTS `stock_audits` (
+        `id` INT AUTO_INCREMENT PRIMARY KEY,
+        `audit_no` VARCHAR(50) UNIQUE NOT NULL,
+        `branch_id` INT NOT NULL DEFAULT 1,
+        `audit_date` DATE NOT NULL,
+        `audit_scope` ENUM('all','bikes','accessories') NOT NULL DEFAULT 'all',
+        `expected_bikes` INT NOT NULL DEFAULT 0,
+        `scanned_bikes` INT NOT NULL DEFAULT 0,
+        `expected_acc_units` INT NOT NULL DEFAULT 0,
+        `counted_acc_units` INT NOT NULL DEFAULT 0,
+        `status` ENUM('in_progress','reconciled') NOT NULL DEFAULT 'in_progress',
+        `conducted_by` INT NULL,
+        `reconciled_at` DATETIME NULL,
+        `notes` TEXT,
+        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    $conn->query("CREATE TABLE IF NOT EXISTS `stock_audit_items` (
+        `id` INT AUTO_INCREMENT PRIMARY KEY,
+        `audit_id` INT NOT NULL,
+        `item_type` ENUM('bike','accessory') NOT NULL,
+        `reference_id` INT NOT NULL,
+        `code_value` VARCHAR(120) NOT NULL,
+        `item_label` VARCHAR(255) NOT NULL,
+        `expected_qty` INT NOT NULL DEFAULT 1,
+        `counted_qty` INT NOT NULL DEFAULT 0,
+        `variance_qty` INT NOT NULL DEFAULT 0,
+        `unit_value` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        `scanned_at` DATETIME NULL,
+        `notes` VARCHAR(255) DEFAULT '',
+        INDEX `idx_sai_audit` (`audit_id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    // Safe column additions on `bikes`
+    $bike_extra_cols = [
+        'salesperson_id' => "ALTER TABLE `bikes` ADD COLUMN `salesperson_id` INT NULL DEFAULT NULL",
+        'battery_serial' => "ALTER TABLE `bikes` ADD COLUMN `battery_serial` VARCHAR(120) DEFAULT ''",
+        'controller_serial' => "ALTER TABLE `bikes` ADD COLUMN `controller_serial` VARCHAR(120) DEFAULT ''",
+        'charger_serial' => "ALTER TABLE `bikes` ADD COLUMN `charger_serial` VARCHAR(120) DEFAULT ''",
+        'warranty_months' => "ALTER TABLE `bikes` ADD COLUMN `warranty_months` INT NOT NULL DEFAULT 12",
+        'warranty_expiry' => "ALTER TABLE `bikes` ADD COLUMN `warranty_expiry` DATE NULL DEFAULT NULL",
+        'is_trade_in_unit' => "ALTER TABLE `bikes` ADD COLUMN `is_trade_in_unit` TINYINT(1) NOT NULL DEFAULT 0"
+    ];
+    foreach ($bike_extra_cols as $col_name => $alter_sql) {
+        $chk = @$conn->query("SHOW COLUMNS FROM `bikes` LIKE '$col_name'");
+        if ($chk && $chk->num_rows === 0) {
+            @$conn->query($alter_sql);
+        }
+    }
+
+    // Seed Administrator permissions for all 10 new modules
+    $new_module_pages = [
+        'kyc_vault', 'warranty_service', 'accessory_pos', 'excise_tracker',
+        'cash_book', 'whatsapp_hub', 'hr_payroll', 'trade_ins',
+        'audit_logs', 'barcode_audit'
+    ];
+    foreach ($new_module_pages as $nmp) {
+        $chk_p = @$conn->query("SELECT id FROM role_permissions WHERE role_id=1 AND page='$nmp' LIMIT 1");
+        if ($chk_p && $chk_p->num_rows === 0) {
+            @$conn->query("INSERT INTO role_permissions (role_id, page, can_view, can_add, can_edit, can_delete) VALUES (1, '$nmp', 1, 1, 1, 1)");
+        }
+    }
+
+    // Seed default WhatsApp / SMS templates if empty
+    $tpl_cnt_res = @$conn->query("SELECT COUNT(*) AS c FROM notification_templates");
+    $tpl_cnt = $tpl_cnt_res ? (int) $tpl_cnt_res->fetch_assoc()['c'] : 0;
+    if ($tpl_cnt === 0) {
+        $default_templates = [
+            [
+                'installment_upcoming',
+                'Upcoming Installment Reminder (English + Urdu)',
+                'whatsapp',
+                "Assalam-o-Alaikum *{customer_name}*,\n\nThis is a friendly reminder from *{company_name} ({branch_name})* that your electric bike (*{model}* | Chassis: `{chassis}`) installment of *{amount}* is due on *{due_date}*.\n\nMohtaram Customer, aap ki electric bike ki qist *{amount}* tareekh *{due_date}* ko wajib-ul-ada hai. Baraye mehrbani waqt par adaigi farma kar penalty se bachein.\n\nJazakAllah!\n📞 {branch_phone}"
+            ],
+            [
+                'installment_overdue',
+                'Overdue Installment Alert (Urgent)',
+                'whatsapp',
+                "🚨 *OVERDUE INSTALLMENT NOTICE — {company_name}*\n\nDear *{customer_name}*,\nYour installment for *{model}* (Chassis: `{chassis}`) due on *{due_date}* is currently *OVERDUE*.\n\n• Principal Due: *{amount}*\n• Late Penalty: *{penalty}*\n• *Total Payable Now: {total_due}*\n\nBaraye mehrbani apni qist fori jama karwayein taake qanooni karwai aur guarantor notice se bacha ja sakay.\n\n📍 {branch_name} ({branch_phone})"
+            ],
+            [
+                'sale_receipt',
+                'Digital Bike Sale Invoice / Receipt',
+                'whatsapp',
+                "⚡ *THANK YOU FOR YOUR PURCHASE — {company_name}*\n\nDear *{customer_name}*,\nCongratulations on your new Electric Bike!\n\n📄 *Invoice #:* {invoice_no}\n🚲 *Model:* {model}\n🔢 *Chassis #:* `{chassis}`\n💰 *Total Sale Amount:* {total_amount}\n💵 *Down Payment Paid:* {paid_amount}\n📉 *Remaining Balance:* {balance_amount}\n\nThank you for choosing *{branch_name}*!\n📞 {branch_phone}"
+            ],
+            [
+                'installment_receipt',
+                'Installment Payment Confirmation Receipt',
+                'whatsapp',
+                "✅ *PAYMENT RECEIVED — {company_name}*\n\nAssalam-o-Alaikum *{customer_name}*,\nWe have received your installment payment of *{paid_amount}* on *{payment_date}* for *{model}* (Chassis: `{chassis}`).\n\n• Installment Due Date: {due_date}\n• Status: *{status}*\n\nShukriya! Thank you for your timely payment.\n📍 {branch_name}"
+            ],
+            [
+                'pos_receipt',
+                'Counter POS Accessory / Spare Parts Receipt',
+                'whatsapp',
+                "🛍️ *COUNTER SALE RECEIPT — {company_name}*\n\nCustomer: *{customer_name}*\nInvoice #: *{invoice_no}* | Date: {payment_date}\nItems: {items_summary}\n*Net Total Paid: {paid_amount}* ({payment_method})\n\nThank you for shopping at *{branch_name}*!"
+            ],
+            [
+                'excise_ready',
+                'Number Plate / Smart Card Ready for Collection',
+                'whatsapp',
+                "🎉 *NUMBER PLATE / SMART CARD READY — {company_name}*\n\nAssalam-o-Alaikum *{customer_name}*,\nGood news! The Excise Registration Number Plate (*{plate_no}*) / Smart Card for your bike *{model}* (Chassis: `{chassis}`) has arrived at *{branch_name}*.\n\nBaraye mehrbani apna asal CNIC saath laa kar showroom se apni number plate / smart card wasool kar lein.\n📞 {branch_phone}"
+            ]
+        ];
+        $ins_tpl = $conn->prepare("INSERT IGNORE INTO notification_templates (template_key, template_name, channel, message_body) VALUES (?,?,?,?)");
+        if ($ins_tpl) {
+            foreach ($default_templates as $dt) {
+                $ins_tpl->bind_param('ssss', $dt[0], $dt[1], $dt[2], $dt[3]);
+                $ins_tpl->execute();
+            }
+            $ins_tpl->close();
+        }
+    }
+}
+
+function log_audit_event($conn, $module, $action_type, $record_id, $description, $before_data = null, $after_data = null, $explicit_branch_id = null)
+{
+    if (!$conn) return;
+    try {
+        $u = current_user($conn);
+        $uid = $u ? (int) $u['id'] : (isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null);
+        $uname = $u ? ($u['username'] ?? '') : '';
+        $urole = $u ? ($u['role_name'] ?? '') : '';
+        $bid = $explicit_branch_id !== null ? (int) $explicit_branch_id : get_write_branch_id($conn);
+        $ip = get_client_ip();
+        $rec_str = (string) $record_id;
+        $before_json = ($before_data !== null) ? (is_string($before_data) ? $before_data : json_encode($before_data, JSON_UNESCAPED_UNICODE)) : null;
+        $after_json = ($after_data !== null) ? (is_string($after_data) ? $after_data : json_encode($after_data, JSON_UNESCAPED_UNICODE)) : null;
+        $st = $conn->prepare("INSERT INTO system_audit_logs (branch_id, user_id, username, user_role, ip_address, module, action_type, record_id, description, before_data, after_data) VALUES (?,?,?,?,?,?,?,?,?,?,?)");
+        if ($st) {
+            $st->bind_param('iisssssssss', $bid, $uid, $uname, $urole, $ip, $module, $action_type, $rec_str, $description, $before_json, $after_json);
+            $st->execute();
+            $st->close();
+        }
+    } catch (Throwable $e) {
+        error_log('Audit log error: ' . $e->getMessage());
+    }
+}
+
+function capture_auto_post_audit($conn, $page, $action)
+{
+    if (!$conn || $_SERVER['REQUEST_METHOD'] !== 'POST') return;
+    if (isset($_POST['switch_active_branch']) || isset($_POST['toggle_theme']) || isset($_POST['do_login']) || isset($_POST['do_logout'])) return;
+    // Skip modules that already call log_audit_event directly with rich before/after snapshots
+    $direct_logged_Actions = [
+        'save_kyc_guarantor', 'delete_kyc_guarantor', 'upload_kyc_doc', 'delete_kyc_doc',
+        'save_warranty', 'save_warranty_claim', 'save_job_card', 'update_job_status',
+        'save_pos_sale', 'return_pos_sale', 'save_excise', 'save_cash_book_opening',
+        'save_cash_book_voucher', 'delete_cash_book_voucher', 'close_cash_drawer', 'reopen_cash_drawer',
+        'save_wa_template', 'log_wa_send', 'save_staff', 'save_staff_advance', 'generate_payroll',
+        'pay_payroll', 'save_standalone_trade_in', 'delete_trade_in', 'start_stock_audit',
+        'scan_audit_item', 'reconcile_stock_audit', 'clear_old_audit_logs'
+    ];
+    foreach ($direct_logged_Actions as $dla) {
+        if (isset($_POST[$dla])) return;
+    }
+
+    $sanitized_post = $_POST;
+    unset($sanitized_post['csrf_token'], $sanitized_post['password'], $sanitized_post['current_password'], $sanitized_post['new_password']);
+
+    $rec_id = (string) ($_POST['id'] ?? $_POST['bike_id'] ?? $_POST['installment_id'] ?? $_POST['transfer_id'] ?? $_POST['quote_id'] ?? $_POST['payment_id'] ?? $_POST['entry_id'] ?? $_POST['order_id'] ?? '');
+    $act_type = $action ?: 'post_action';
+    if (!empty($_POST['workflow_action'])) $act_type = (string) $_POST['workflow_action'];
+    elseif (!empty($_POST['account_action'])) $act_type = (string) $_POST['account_action'];
+    elseif (isset($_POST['save_sale'])) $act_type = 'save_sale';
+    elseif (isset($_POST['save_purchase'])) $act_type = 'save_purchase';
+    elseif (isset($_POST['save_return'])) $act_type = 'customer_return';
+    elseif (isset($_POST['save_purchase_return'])) $act_type = 'supplier_return';
+    elseif (isset($_POST['save_settings'])) $act_type = 'save_settings';
+    elseif (isset($_POST['save_branch'])) $act_type = !empty($_POST['id']) ? 'edit_branch' : 'add_branch';
+    elseif (isset($_POST['delete_branch'])) $act_type = 'delete_branch';
+    elseif (isset($_POST['create_bike_transfer'])) $act_type = 'bike_transfer';
+    elseif (isset($_POST['create_accessory_transfer'])) $act_type = 'accessory_transfer';
+    elseif (isset($_POST['create_cash_transfer'])) $act_type = 'cash_transfer';
+    elseif (isset($_POST['save_role'])) $act_type = !empty($_POST['id']) ? 'edit_role' : 'add_role';
+    elseif (isset($_POST['save_user'])) $act_type = !empty($_POST['id']) ? 'edit_user' : 'add_user';
+
+    // Capture before snapshot if editing/deleting an existing record by ID
+    $before_row = null;
+    $table_map = [
+        'inventory' => 'bikes',
+        'sale' => 'bikes',
+        'returns' => 'bikes',
+        'accessories' => 'accessories',
+        'models' => 'models',
+        'customers' => 'customers',
+        'suppliers' => 'suppliers',
+        'payments' => 'payments',
+        'installments' => 'installments',
+        'income_expense' => 'income_expenses',
+        'quotations' => 'quotations',
+        'branches' => 'branches',
+        'users' => 'users',
+        'roles' => 'roles',
+        'bank_deposits' => 'bank_deposits',
+        'money_destinations' => 'money_destinations'
+    ];
+    $num_id = (int) $rec_id;
+    if ($num_id > 0 && isset($table_map[$page])) {
+        $tbl = $table_map[$page];
+        $r_old = @$conn->query("SELECT * FROM `$tbl` WHERE id=$num_id LIMIT 1");
+        if ($r_old && ($row_old = $r_old->fetch_assoc())) {
+            unset($row_old['password_hash']);
+            $before_row = $row_old;
+        }
+    }
+
+    $desc = strtoupper($page) . ' → ' . str_replace('_', ' ', ucfirst($act_type)) . ($rec_id !== '' ? " (Record #$rec_id)" : '');
+    log_audit_event($conn, $page, $act_type, $rec_id, $desc, $before_row, $sanitized_post);
+}
+
+function handle_kyc_upload($file, $dest_dir = 'kyc_vault/')
+{
+    $dest_dir = basename($dest_dir) . '/';
+    if (!is_dir($dest_dir)) {
+        mkdir($dest_dir, 0755, true);
+    }
+    $ht = $dest_dir . '.htaccess';
+    if (!file_exists($ht)) {
+        @file_put_contents($ht, "Options -Indexes\n<FilesMatch \"\\.(php|phtml|phar|sh|pl|py|cgi)$\">\nOrder Allow,Deny\nDeny from all\n</FilesMatch>\n");
+    }
+    if (!isset($file['error']) || is_array($file['error']) || $file['error'] !== UPLOAD_ERR_OK) {
+        return null;
+    }
+    if (($file['size'] ?? 0) <= 0 || ($file['size'] ?? 0) > 10485760) {
+        return null;
+    }
+    $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+    if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif', 'pdf'], true)) {
+        return null;
+    }
+    if ($ext === 'pdf') {
+        $finfo = new finfo(FILEINFO_MIME_TYPE);
+        if ($finfo->file($file['tmp_name']) !== 'application/pdf') {
+            return null;
+        }
+        $pdf_dest = $dest_dir . 'kyc_' . bin2hex(random_bytes(10)) . '.pdf';
+        if (!move_uploaded_file($file['tmp_name'], $pdf_dest) && !copy($file['tmp_name'], $pdf_dest)) {
+            return null;
+        }
+        return $pdf_dest;
+    }
+    return handle_receipt_upload($file, $dest_dir);
+}
+
+function format_wa_phone($phone)
+{
+    $digits = preg_replace('/[^0-9]/', '', (string) $phone);
+    if ($digits === '') return '';
+    if (str_starts_with($digits, '0092')) {
+        $digits = '92' . substr($digits, 4);
+    } elseif (str_starts_with($digits, '03') && strlen($digits) === 11) {
+        $digits = '92' . substr($digits, 1);
+    } elseif (str_starts_with($digits, '3') && strlen($digits) === 10) {
+        $digits = '92' . $digits;
+    }
+    return $digits;
+}
+
+function render_notification_template($conn, $template_key, array $vars = [])
+{
+    $st = $conn->prepare("SELECT message_body FROM notification_templates WHERE template_key=? LIMIT 1");
+    $body = '';
+    if ($st) {
+        $st->bind_param('s', $template_key);
+        $st->execute();
+        $row = $st->get_result()->fetch_assoc();
+        $body = $row['message_body'] ?? '';
+        $st->close();
+    }
+    if ($body === '') {
+        $body = "Assalam-o-Alaikum {customer_name}, update from {company_name} ({branch_name}): Ref {chassis} Amount: {amount}.";
+    }
+    $defaults = [
+        'company_name' => get_setting('company_name') ?? 'BNI Enterprises',
+        'branch_name' => get_setting('branch_name') ?? 'Main Showroom',
+        'branch_phone' => get_setting('company_whatsapp') ?? '0336-1593533',
+        'customer_name' => 'Valued Customer',
+        'chassis' => '-',
+        'model' => 'Electric Bike',
+        'due_date' => '-',
+        'amount' => 'Rs. 0.00',
+        'penalty' => 'Rs. 0.00',
+        'total_due' => 'Rs. 0.00',
+        'invoice_no' => '-',
+        'total_amount' => 'Rs. 0.00',
+        'paid_amount' => 'Rs. 0.00',
+        'balance_amount' => 'Rs. 0.00',
+        'payment_date' => date('d/m/Y'),
+        'payment_method' => 'Cash',
+        'status' => 'PAID',
+        'items_summary' => '-',
+        'plate_no' => '-'
+    ];
+    $merged = array_merge($defaults, $vars);
+    foreach ($merged as $k => $v) {
+        $body = str_replace('{' . $k . '}', (string) $v, $body);
+    }
+    return $body;
+}
+
+function build_wa_link($phone, $message_text)
+{
+    $clean_phone = format_wa_phone($phone);
+    if ($clean_phone === '') return '';
+    return 'https://wa.me/' . $clean_phone . '?text=' . rawurlencode($message_text);
+}
+
+// Pure-PHP Code-128B SVG Barcode Generator (100% Offline, Vector Crisp)
+function generate_code128_svg($text, $bar_width = 1.6, $height = 42)
+{
+    $text = preg_replace('/[^\x20-\x7E]/', '', trim((string) $text));
+    if ($text === '') $text = '0000';
+    $patterns = [
+        '11011001100','11001101100','11001100110','10010011000','10010001100','10001001100','10011001000','10011000100',
+        '10001100100','11001001000','11001000100','11000100100','10110011100','10011011100','10011001110','10111001100',
+        '10011101100','10011100110','11001110010','11001011100','11001001110','11011100100','11001110100','11101101110',
+        '11101001100','11100101100','11100100110','11101100100','11100110100','11100110010','11011011000','11011000110',
+        '11000110110','10100011000','10001011000','10001000110','10110001000','10001101000','10001100010','11010001000',
+        '11000101000','11000100010','10110111000','10110001110','10001101110','10111011000','10111000110','10001110110',
+        '11101110110','11010001110','11000101110','11011101000','11011100010','11011101110','11101011000','11101000110',
+        '11100010110','11101101000','11101100010','11100011010','11101111010','11001000010','11110001010','10100110000',
+        '10100001100','10010110000','10010000110','10000101100','10000100110','10110010000','10110000100','10011010000',
+        '10011000010','10000110100','10000110010','11000010010','11001010000','11110111010','11000010100','10001111010',
+        '10100111100','10010111100','10010011110','10111100100','10011110100','10011110010','11110100100','11110010100',
+        '11110010010','11011011110','11011110110','11110110110','10101111000','10100011110','10001011110','10111101000',
+        '10111100010','11110101000','11110100010','10111011110','10111101110','11101011110','11110101110','11010000100',
+        '11010010000','11010011100','1100011101011'
+    ];
+    // Start Code B = 104
+    $checksum = 104;
+    $bits = $patterns[104];
+    $len = strlen($text);
+    for ($i = 0; $i < $len; $i++) {
+        $val = ord($text[$i]) - 32;
+        if ($val < 0 || $val > 95) $val = 0;
+        $bits .= $patterns[$val];
+        $checksum += $val * ($i + 1);
+    }
+    $check_val = $checksum % 103;
+    $bits .= $patterns[$check_val];
+    $bits .= $patterns[106]; // Stop
+
+    $total_bars = strlen($bits);
+    $svg_w = round(($total_bars + 10) * $bar_width, 2);
+    $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' . $svg_w . '" height="' . (int) $height . '" viewBox="0 0 ' . $svg_w . ' ' . (int) $height . '" style="max-width:100%;height:auto;background:#fff;padding:2px">';
+    $x = 5 * $bar_width;
+    $i = 0;
+    while ($i < $total_bars) {
+        if ($bits[$i] === '1') {
+            $run = 0;
+            while ($i < $total_bars && $bits[$i] === '1') {
+                $run++;
+                $i++;
+            }
+            $w = round($run * $bar_width, 2);
+            $svg .= '<rect x="' . round($x, 2) . '" y="2" width="' . $w . '" height="' . ((int) $height - 4) . '" fill="#000"/>';
+            $x += $w;
+        } else {
+            $x += $bar_width;
+            $i++;
+        }
+    }
+    $svg .= '</svg>';
+    return $svg;
+}
+
+// Offline Deterministic 21x21 QR-Style 2D Matrix Tag SVG Generator
+function generate_qr_svg($text, $px_size = 68)
+{
+    $hash = hash('sha256', (string) $text) . hash('sha256', 'bni_' . (string) $text);
+    $grid_n = 21;
+    $matrix = array_fill(0, $grid_n, array_fill(0, $grid_n, 0));
+
+    $draw_finder = function ($r0, $c0) use (&$matrix) {
+        for ($r = 0; $r < 7; $r++) {
+            for ($c = 0; $c < 7; $c++) {
+                if ($r === 0 || $r === 6 || $c === 0 || $c === 6 || ($r >= 2 && $r <= 4 && $c >= 2 && $c <= 4)) {
+                    $matrix[$r0 + $r][$c0 + $c] = 1;
+                }
+            }
+        }
+    };
+    $draw_finder(0, 0);
+    $draw_finder(0, $grid_n - 7);
+    $draw_finder($grid_n - 7, 0);
+
+    for ($i = 8; $i < $grid_n - 8; $i++) {
+        $matrix[6][$i] = ($i % 2 === 0) ? 1 : 0;
+        $matrix[$i][6] = ($i % 2 === 0) ? 1 : 0;
+    }
+
+    $bit_idx = 0;
+    $bits_str = '';
+    for ($h = 0; $h < strlen($hash); $h++) {
+        $bits_str .= str_pad(base_convert($hash[$h], 16, 2), 4, '0', STR_PAD_LEFT);
+    }
+    for ($r = 0; $r < $grid_n; $r++) {
+        for ($c = 0; $c < $grid_n; $c++) {
+            if (($r < 8 && $c < 8) || ($r < 8 && $c >= $grid_n - 8) || ($r >= $grid_n - 8 && $c < 8) || $r === 6 || $c === 6) {
+                continue;
+            }
+            $matrix[$r][$c] = ($bits_str[$bit_idx % strlen($bits_str)] === '1') ? 1 : 0;
+            $bit_idx++;
+        }
+    }
+
+    $cell = round($px_size / ($grid_n + 2), 2);
+    $real_size = round($cell * ($grid_n + 2), 2);
+    $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' . $real_size . '" height="' . $real_size . '" viewBox="0 0 ' . $real_size . ' ' . $real_size . '" style="background:#fff;border:1px solid #ddd">';
+    for ($r = 0; $r < $grid_n; $r++) {
+        for ($c = 0; $c < $grid_n; $c++) {
+            if ($matrix[$r][$c]) {
+                $svg .= '<rect x="' . round(($c + 1) * $cell, 2) . '" y="' . round(($r + 1) * $cell, 2) . '" width="' . $cell . '" height="' . $cell . '" fill="#000"/>';
+            }
+        }
+    }
+    $svg .= '</svg>';
+    return $svg;
+}
+
+// Daily Cash Book / Roznamcha Live Calculation Helper
+function calculate_branch_cash_book($conn, $branch_id, $book_date)
+{
+    $branch_id = (int) $branch_id;
+    $esc_date = mysqli_real_escape_string($conn, $book_date);
+    $b_cond = $branch_id > 0 ? "branch_id=$branch_id" : "1=1";
+
+    // 1. Check if a daily_cash_books record exists for this branch & date
+    $dcb = null;
+    if ($branch_id > 0) {
+        $r_dcb = $conn->query("SELECT * FROM daily_cash_books WHERE branch_id=$branch_id AND book_date='$esc_date' LIMIT 1");
+        $dcb = $r_dcb ? $r_dcb->fetch_assoc() : null;
+    }
+
+    // If no record exists yet, default opening balance to previous closed day's physical_cash (or expected_closing)
+    $opening_balance = 0.00;
+    if ($dcb) {
+        $opening_balance = (float) $dcb['opening_balance'];
+    } elseif ($branch_id > 0) {
+        $r_prev = $conn->query("SELECT physical_cash, expected_closing, status FROM daily_cash_books WHERE branch_id=$branch_id AND book_date < '$esc_date' ORDER BY book_date DESC LIMIT 1");
+        if ($r_prev && ($prev_row = $r_prev->fetch_assoc())) {
+            $opening_balance = ($prev_row['status'] === 'closed') ? (float) $prev_row['physical_cash'] : (float) $prev_row['expected_closing'];
+        }
+    } else {
+        $r_sum_open = $conn->query("SELECT COALESCE(SUM(opening_balance),0) FROM daily_cash_books WHERE book_date='$esc_date'");
+        $opening_balance = $r_sum_open ? (float) $r_sum_open->fetch_row()[0] : 0.00;
+    }
+
+    // Cash Inflows Breakdown
+    $cash_down_payments = (float) ($conn->query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE $b_cond AND payment_date='$esc_date' AND payment_type='cash' AND transaction_type='sale' AND COALESCE(status,'cleared') NOT IN ('bounced','cancelled')")->fetch_row()[0] ?? 0);
+    $cash_installments = (float) ($conn->query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE $b_cond AND payment_date='$esc_date' AND payment_type='cash' AND transaction_type='installment' AND COALESCE(status,'cleared') NOT IN ('bounced','cancelled')")->fetch_row()[0] ?? 0);
+    $cash_cust_advances = (float) ($conn->query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE $b_cond AND payment_date='$esc_date' AND payment_type='cash' AND transaction_type IN ('customer_advance','customer_payment') AND COALESCE(status,'cleared') NOT IN ('bounced','cancelled')")->fetch_row()[0] ?? 0);
+    $cash_sup_refunds = (float) ($conn->query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE $b_cond AND payment_date='$esc_date' AND payment_type='cash' AND transaction_type='supplier_refund' AND COALESCE(status,'cleared') NOT IN ('bounced','cancelled')")->fetch_row()[0] ?? 0);
+    $cash_pos_sales = (float) ($conn->query("SELECT COALESCE(SUM(amount_paid),0) FROM pos_accessory_sales WHERE $b_cond AND sale_date='$esc_date' AND payment_method='cash' AND status='completed'")->fetch_row()[0] ?? 0);
+    $cash_job_cards = (float) ($conn->query("SELECT COALESCE(SUM(total_amount),0) FROM service_job_cards WHERE $b_cond AND job_date='$esc_date' AND payment_status='paid' AND payment_method='cash' AND job_status!='cancelled'")->fetch_row()[0] ?? 0);
+    $cash_other_income = (float) ($conn->query("SELECT COALESCE(SUM(amount),0) FROM income_expenses WHERE $b_cond AND entry_date='$esc_date' AND type='income' AND payment_method='cash'")->fetch_row()[0] ?? 0);
+    $manual_inflows = (float) ($conn->query("SELECT COALESCE(SUM(amount),0) FROM cash_book_entries WHERE $b_cond AND entry_date='$esc_date' AND direction='inflow'")->fetch_row()[0] ?? 0);
+
+    $total_inflows = round($cash_down_payments + $cash_installments + $cash_cust_advances + $cash_sup_refunds + $cash_pos_sales + $cash_job_cards + $cash_other_income + $manual_inflows, 2);
+
+    // Cash Outflows Breakdown
+    $cash_expenses = (float) ($conn->query("SELECT COALESCE(SUM(amount),0) FROM income_expenses WHERE $b_cond AND entry_date='$esc_date' AND type='expense' AND payment_method='cash'")->fetch_row()[0] ?? 0);
+    $cash_supplier_payments = (float) ($conn->query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE $b_cond AND payment_date='$esc_date' AND payment_type='cash' AND transaction_type IN ('purchase','supplier_payment') AND COALESCE(status,'cleared') NOT IN ('bounced','cancelled')")->fetch_row()[0] ?? 0);
+    $cash_customer_refunds = (float) ($conn->query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE $b_cond AND payment_date='$esc_date' AND payment_type='cash' AND transaction_type='customer_refund' AND COALESCE(status,'cleared') NOT IN ('bounced','cancelled')")->fetch_row()[0] ?? 0);
+    $cash_bank_deposits = (float) ($conn->query("SELECT COALESCE(SUM(amount),0) FROM bank_deposits WHERE $b_cond AND deposit_date='$esc_date'")->fetch_row()[0] ?? 0);
+    $manual_outflows = (float) ($conn->query("SELECT COALESCE(SUM(amount),0) FROM cash_book_entries WHERE $b_cond AND entry_date='$esc_date' AND direction='outflow'")->fetch_row()[0] ?? 0);
+
+    $total_outflows = round($cash_expenses + $cash_supplier_payments + $cash_customer_refunds + $cash_bank_deposits + $manual_outflows, 2);
+    $expected_closing = round($opening_balance + $total_inflows - $total_outflows, 2);
+
+    return [
+        'record' => $dcb,
+        'opening_balance' => $opening_balance,
+        'inflows' => [
+            'down_payments' => $cash_down_payments,
+            'installments' => $cash_installments,
+            'customer_advances' => $cash_cust_advances,
+            'supplier_refunds' => $cash_sup_refunds,
+            'pos_sales' => $cash_pos_sales,
+            'job_cards' => $cash_job_cards,
+            'other_income' => $cash_other_income,
+            'manual_inflows' => $manual_inflows,
+            'total' => $total_inflows
+        ],
+        'outflows' => [
+            'expenses' => $cash_expenses,
+            'supplier_payments' => $cash_supplier_payments,
+            'customer_refunds' => $cash_customer_refunds,
+            'bank_deposits' => $cash_bank_deposits,
+            'manual_outflows' => $manual_outflows,
+            'total' => $total_outflows
+        ],
+        'expected_closing' => $expected_closing,
+        'physical_cash' => $dcb ? (float) $dcb['physical_cash'] : $expected_closing,
+        'variance' => $dcb ? (float) $dcb['variance'] : 0.00,
+        'status' => $dcb['status'] ?? 'open'
+    ];
+}
+
+
 function db_connect($create_db = false)
 {
     global $db_host, $db_user, $db_pass, $db_name;
-    // NOTE: The $create_db branch (connecting without a database for the
-    // one-time installer) is commented out — the database is live in production.
-    /*
-    if ($create_db) {
-        $conn = new mysqli($db_host, $db_user, $db_pass);
-    } else {
-        $conn = new mysqli($db_host, $db_user, $db_pass, $db_name);
-    }
-    */
     $conn = new mysqli($db_host, $db_user, $db_pass, $db_name);
     if ($conn->connect_error) {
         error_log('DB Connection Error: ' . $conn->connect_error);
         return null;
     }
     $conn->set_charset('utf8mb4');
-    // NOTE: ensure_multibranch_schema() (one-time migration/seed) is disabled.
-    /*
     if (!$create_db) {
-        ensure_multibranch_schema($conn);
+        ensure_erp_v4_schema($conn);
     }
-    */
     return $conn;
 }
 
@@ -1654,6 +2524,13 @@ function delete_bike_cascade($conn, $bike_id)
     $conn->query("DELETE FROM branch_transfers WHERE bike_id=$bid");
     $conn->query("DELETE FROM quotations WHERE bike_id=$bid");
     $conn->query("DELETE FROM quote_requests WHERE bike_id=$bid");
+    $conn->query("DELETE FROM sale_guarantors WHERE bike_id=$bid");
+    $conn->query("DELETE FROM kyc_documents WHERE bike_id=$bid");
+    $conn->query("DELETE FROM warranties WHERE bike_id=$bid");
+    $conn->query("DELETE FROM warranty_claims WHERE bike_id=$bid");
+    $conn->query("DELETE FROM excise_registrations WHERE bike_id=$bid");
+    $conn->query("DELETE FROM sales_commissions WHERE bike_id=$bid");
+    $conn->query("DELETE FROM ledger WHERE reference_type='trade_in' AND reference_id=$bid");
     $conn->query("DELETE FROM settings WHERE setting_key IN ('workflow_return_sale_$bid','workflow_return_purchase_$bid')");
 
     $loss_ref = 'Bike ID: ' . $bid . ' (%';
@@ -2802,10 +3679,1288 @@ if ($db_exists && isset($_SESSION['user_id'])) {
     $currency = get_setting('currency') ?? 'Rs.';
     $tax_rate = (float) (get_setting('tax_rate') ?? 0.1);
     $tax_on = get_setting('tax_on') ?? 'purchase_price';
-    $protected_pages = ['purchase', 'inventory', 'sale', 'returns', 'payments', 'customers', 'suppliers', 'models', 'reports', 'customer_ledger', 'supplier_ledger', 'settings', 'roles', 'users', 'income_expense', 'accessories', 'quotations', 'installments', 'money_destinations', 'money_tracking', 'bank_deposits', 'license', 'branches', 'branch_transfers'];
+    $protected_pages = ['purchase', 'inventory', 'sale', 'returns', 'payments', 'customers', 'suppliers', 'models', 'reports', 'customer_ledger', 'supplier_ledger', 'settings', 'roles', 'users', 'income_expense', 'accessories', 'quotations', 'installments', 'money_destinations', 'money_tracking', 'bank_deposits', 'license', 'branches', 'branch_transfers', 'kyc_vault', 'warranty_service', 'accessory_pos', 'excise_tracker', 'cash_book', 'whatsapp_hub', 'hr_payroll', 'trade_ins', 'audit_logs', 'barcode_audit'];
     if (in_array($page, $protected_pages)) {
         require_permission($conn, $page, 'view');
     }
+    // ========================================================================
+    // ERP v4.0 — AUTO-AUDIT CAPTURE & 10 NEW MODULE POST / GET HANDLERS
+    // ========================================================================
+    capture_auto_post_audit($conn, $page, $action);
+
+    // Secure KYC Document & Guarantor File Streaming
+    if (isset($_GET['kyc_doc_view']) || isset($_GET['guarantor_doc_view'])) {
+        require_any_permission($conn, [['kyc_vault', 'view'], ['sale', 'view'], ['installments', 'view']]);
+        $rel_path = '';
+        if (isset($_GET['kyc_doc_view'])) {
+            $k_id = (int) $_GET['kyc_doc_view'];
+            $k_row = $conn->query("SELECT file_path FROM kyc_documents WHERE id=$k_id LIMIT 1")->fetch_assoc();
+            $rel_path = $k_row['file_path'] ?? '';
+        } elseif (isset($_GET['guarantor_doc_view'])) {
+            $g_id = (int) $_GET['guarantor_doc_view'];
+            $f_col = $_GET['field'] ?? 'cnic_front_file';
+            if (!in_array($f_col, ['cnic_front_file', 'cnic_back_file', 'stamp_paper_file', 'security_cheque_file'], true)) {
+                $f_col = 'cnic_front_file';
+            }
+            $g_row = $conn->query("SELECT `$f_col` AS fp FROM sale_guarantors WHERE id=$g_id LIMIT 1")->fetch_assoc();
+            $rel_path = $g_row['fp'] ?? '';
+        }
+        $vault_root = realpath(__DIR__ . DIRECTORY_SEPARATOR . 'kyc_vault');
+        $target_file = ($rel_path !== '') ? realpath(__DIR__ . DIRECTORY_SEPARATOR . $rel_path) : false;
+        if (!$vault_root || !$target_file || !is_file($target_file) || strpos($target_file, $vault_root . DIRECTORY_SEPARATOR) !== 0) {
+            http_response_code(404);
+            exit('KYC Document file not found.');
+        }
+        $mime = (new finfo(FILEINFO_MIME_TYPE))->file($target_file);
+        if (!in_array($mime, ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'], true)) {
+            http_response_code(403);
+            exit('Unsupported KYC file format.');
+        }
+        header('Content-Type: ' . $mime);
+        header('Content-Disposition: inline; filename="' . basename($target_file) . '"');
+        header('Cache-Control: private, no-store');
+        readfile($target_file);
+        exit;
+    }
+
+    // ------------------------------------------------------------------------
+    // MODULE 1: GUARANTOR & INSTALLMENT KYC DOCUMENT VAULT HANDLERS
+    // ------------------------------------------------------------------------
+    if ($page === 'kyc_vault' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        if (isset($_POST['save_kyc_guarantor'])) {
+            $id = (int) ($_POST['id'] ?? 0);
+            require_permission($conn, 'kyc_vault', $id > 0 ? 'edit' : 'add');
+            $bike_id = (int) ($_POST['bike_id'] ?? 0);
+            $guarantor_no = in_array((int) ($_POST['guarantor_no'] ?? 1), [1, 2], true) ? (int) $_POST['guarantor_no'] : 1;
+            $name = clean_text($_POST['name'] ?? '', 255);
+            $cnic = clean_text($_POST['cnic'] ?? '', 40);
+            $phone = clean_text($_POST['phone'] ?? '', 60);
+            $relation = clean_text($_POST['relation'] ?? '', 100);
+            $occupation = clean_text($_POST['occupation'] ?? '', 150);
+            $monthly_income = max(0, (float) ($_POST['monthly_income'] ?? 0));
+            $address = clean_text($_POST['address'] ?? '');
+            $security_cheque_no = clean_text($_POST['security_cheque_no'] ?? '', 100);
+            $security_bank_name = clean_text($_POST['security_bank_name'] ?? '', 150);
+            $security_cheque_amount = max(0, (float) ($_POST['security_cheque_amount'] ?? 0));
+            $notes = clean_text($_POST['notes'] ?? '');
+
+            if ($bike_id <= 0 || empty($name) || empty($cnic) || empty($phone)) {
+                $err = 'Bike sale, Guarantor Name, CNIC, and Phone are required.';
+            } else {
+                $bk = $conn->query("SELECT id, branch_id, customer_id, chassis_number FROM bikes WHERE id=$bike_id LIMIT 1")->fetch_assoc();
+                if (!$bk) {
+                    $err = 'Selected bike record does not exist.';
+                } else {
+                    $branch_id = (int) ($bk['branch_id'] ?? get_write_branch_id($conn));
+                    $customer_id = !empty($bk['customer_id']) ? (int) $bk['customer_id'] : null;
+                    $old_row = $id > 0 ? $conn->query("SELECT * FROM sale_guarantors WHERE id=$id LIMIT 1")->fetch_assoc() : null;
+
+                    $cnic_front = $old_row['cnic_front_file'] ?? '';
+                    $cnic_back = $old_row['cnic_back_file'] ?? '';
+                    $stamp_paper = $old_row['stamp_paper_file'] ?? '';
+                    $sec_cheque = $old_row['security_cheque_file'] ?? '';
+
+                    if (isset($_FILES['cnic_front_file']) && $_FILES['cnic_front_file']['error'] === UPLOAD_ERR_OK) {
+                        $up = handle_kyc_upload($_FILES['cnic_front_file']);
+                        if ($up) $cnic_front = $up;
+                    }
+                    if (isset($_FILES['cnic_back_file']) && $_FILES['cnic_back_file']['error'] === UPLOAD_ERR_OK) {
+                        $up = handle_kyc_upload($_FILES['cnic_back_file']);
+                        if ($up) $cnic_back = $up;
+                    }
+                    if (isset($_FILES['stamp_paper_file']) && $_FILES['stamp_paper_file']['error'] === UPLOAD_ERR_OK) {
+                        $up = handle_kyc_upload($_FILES['stamp_paper_file']);
+                        if ($up) $stamp_paper = $up;
+                    }
+                    if (isset($_FILES['security_cheque_file']) && $_FILES['security_cheque_file']['error'] === UPLOAD_ERR_OK) {
+                        $up = handle_kyc_upload($_FILES['security_cheque_file']);
+                        if ($up) $sec_cheque = $up;
+                    }
+
+                    if ($id > 0 && $old_row) {
+                        $st = $conn->prepare("UPDATE sale_guarantors SET bike_id=?, customer_id=?, guarantor_no=?, name=?, cnic=?, phone=?, relation=?, occupation=?, monthly_income=?, address=?, security_cheque_no=?, security_bank_name=?, security_cheque_amount=?, cnic_front_file=?, cnic_back_file=?, stamp_paper_file=?, security_cheque_file=?, notes=? WHERE id=?");
+                        $st->bind_param('iiisssssdsssssssssi', $bike_id, $customer_id, $guarantor_no, $name, $cnic, $phone, $relation, $occupation, $monthly_income, $address, $security_cheque_no, $security_bank_name, $security_cheque_amount, $cnic_front, $cnic_back, $stamp_paper, $sec_cheque, $notes, $id);
+                        $st->execute();
+                        $st->close();
+                        log_audit_event($conn, 'kyc_vault', 'edit', $id, "Updated Guarantor #$guarantor_no ($name) for Chassis {$bk['chassis_number']}", $old_row, $_POST, $branch_id);
+                        $msg = "Guarantor #$guarantor_no updated successfully.";
+                    } else {
+                        $st = $conn->prepare("INSERT INTO sale_guarantors (branch_id, bike_id, customer_id, guarantor_no, name, cnic, phone, relation, occupation, monthly_income, address, security_cheque_no, security_bank_name, security_cheque_amount, cnic_front_file, cnic_back_file, stamp_paper_file, security_cheque_file, notes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+                        $st->bind_param('iiiisssssdsssssssss', $branch_id, $bike_id, $customer_id, $guarantor_no, $name, $cnic, $phone, $relation, $occupation, $monthly_income, $address, $security_cheque_no, $security_bank_name, $security_cheque_amount, $cnic_front, $cnic_back, $stamp_paper, $sec_cheque, $notes);
+                        $st->execute();
+                        $new_id = $conn->insert_id;
+                        $st->close();
+                        log_audit_event($conn, 'kyc_vault', 'add', $new_id, "Added Guarantor #$guarantor_no ($name) for Chassis {$bk['chassis_number']}", null, $_POST, $branch_id);
+                        $msg = "Guarantor #$guarantor_no saved to KYC Vault.";
+                    }
+                }
+            }
+            header('Location: index.php?page=kyc_vault&bike_id=' . $bike_id . '&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+            exit;
+        }
+
+        if (isset($_POST['delete_kyc_guarantor'])) {
+            require_permission($conn, 'kyc_vault', 'delete');
+            $id = (int) ($_POST['id'] ?? 0);
+            $old_g = $conn->query("SELECT * FROM sale_guarantors WHERE id=$id LIMIT 1")->fetch_assoc();
+            if ($old_g) {
+                $conn->query("DELETE FROM sale_guarantors WHERE id=$id");
+                log_audit_event($conn, 'kyc_vault', 'delete', $id, "Deleted Guarantor {$old_g['name']} (CNIC: {$old_g['cnic']})", $old_g, null, $old_g['branch_id']);
+                $msg = 'Guarantor removed.';
+            } else {
+                $err = 'Guarantor record not found.';
+            }
+            header('Location: index.php?page=kyc_vault&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+            exit;
+        }
+
+        if (isset($_POST['upload_kyc_doc'])) {
+            require_permission($conn, 'kyc_vault', 'add');
+            $bike_id = (int) ($_POST['bike_id'] ?? 0);
+            $doc_type = clean_text($_POST['doc_type'] ?? 'other', 40);
+            if (!in_array($doc_type, ['customer_cnic', 'guarantor_cnic', 'stamp_paper', 'security_cheque', 'utility_bill', 'photo', 'other'], true)) {
+                $doc_type = 'other';
+            }
+            $doc_title = clean_text($_POST['doc_title'] ?? '', 255);
+            $doc_number = clean_text($_POST['doc_number'] ?? '', 100);
+            $notes = clean_text($_POST['notes'] ?? '');
+            $bk = $conn->query("SELECT id, branch_id, customer_id, chassis_number FROM bikes WHERE id=$bike_id LIMIT 1")->fetch_assoc();
+            $file_path = isset($_FILES['doc_file']) ? handle_kyc_upload($_FILES['doc_file']) : null;
+            if (!$bk || empty($doc_title) || !$file_path) {
+                $err = 'Please select a valid bike sale, document title, and image/PDF file (max 10MB).';
+            } else {
+                $branch_id = (int) $bk['branch_id'];
+                $cust_id = !empty($bk['customer_id']) ? (int) $bk['customer_id'] : null;
+                $uid = (int) $_SESSION['user_id'];
+                $st = $conn->prepare("INSERT INTO kyc_documents (branch_id, bike_id, customer_id, doc_type, doc_title, doc_number, file_path, verified_status, uploaded_by, notes) VALUES (?,?,?,?,?,?,?,'verified',?,?)");
+                $st->bind_param('iiissssis', $branch_id, $bike_id, $cust_id, $doc_type, $doc_title, $doc_number, $file_path, $uid, $notes);
+                $st->execute();
+                $doc_id = $conn->insert_id;
+                $st->close();
+                log_audit_event($conn, 'kyc_vault', 'add', $doc_id, "Uploaded KYC Document '$doc_title' ($doc_type) for Chassis {$bk['chassis_number']}", null, ['doc_title' => $doc_title, 'doc_type' => $doc_type, 'bike_id' => $bike_id], $branch_id);
+                $msg = 'KYC document uploaded to vault.';
+            }
+            header('Location: index.php?page=kyc_vault&bike_id=' . $bike_id . '&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+            exit;
+        }
+
+        if (isset($_POST['delete_kyc_doc'])) {
+            require_permission($conn, 'kyc_vault', 'delete');
+            $doc_id = (int) ($_POST['id'] ?? 0);
+            $old_d = $conn->query("SELECT * FROM kyc_documents WHERE id=$doc_id LIMIT 1")->fetch_assoc();
+            if ($old_d) {
+                $conn->query("DELETE FROM kyc_documents WHERE id=$doc_id");
+                if (!empty($old_d['file_path']) && is_file($old_d['file_path'])) {
+                    @unlink($old_d['file_path']);
+                }
+                log_audit_event($conn, 'kyc_vault', 'delete', $doc_id, "Deleted KYC document '{$old_d['doc_title']}'", $old_d, null, $old_d['branch_id']);
+                $msg = 'KYC document deleted.';
+            }
+            header('Location: index.php?page=kyc_vault&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+            exit;
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // MODULE 2: BATTERY WARRANTY & WORKSHOP / SERVICE JOB CARDS HANDLERS
+    // ------------------------------------------------------------------------
+    if ($page === 'warranty_service' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        $sub_tab = clean_text($_POST['sub'] ?? 'job_cards', 30);
+
+        if (isset($_POST['save_warranty'])) {
+            $id = (int) ($_POST['id'] ?? 0);
+            require_permission($conn, 'warranty_service', $id > 0 ? 'edit' : 'add');
+            $bike_id = (int) ($_POST['bike_id'] ?? 0);
+            $warranty_card_no = clean_text($_POST['warranty_card_no'] ?? '', 60);
+            $battery_serial = clean_text($_POST['battery_serial'] ?? '', 120);
+            $motor_serial = clean_text($_POST['motor_serial'] ?? '', 120);
+            $controller_serial = clean_text($_POST['controller_serial'] ?? '', 120);
+            $charger_serial = clean_text($_POST['charger_serial'] ?? '', 120);
+            $warranty_start_date = clean_text($_POST['warranty_start_date'] ?? date('Y-m-d'));
+            $battery_months = max(1, (int) ($_POST['battery_warranty_months'] ?? 12));
+            $motor_months = max(1, (int) ($_POST['motor_warranty_months'] ?? 18));
+            $controller_months = max(1, (int) ($_POST['controller_warranty_months'] ?? 12));
+            $status = in_array($_POST['status'] ?? 'active', ['active', 'expired', 'void'], true) ? $_POST['status'] : 'active';
+            $notes = clean_text($_POST['notes'] ?? '');
+
+            $bk = $conn->query("SELECT * FROM bikes WHERE id=$bike_id LIMIT 1")->fetch_assoc();
+            if (!$bk || !valid_date($warranty_start_date)) {
+                $err = 'Please select a valid bike and warranty start date.';
+            } else {
+                $branch_id = (int) ($bk['branch_id'] ?? get_write_branch_id($conn));
+                $customer_id = !empty($bk['customer_id']) ? (int) $bk['customer_id'] : null;
+                if ($motor_serial === '') $motor_serial = $bk['motor_number'] ?? '';
+                if ($warranty_card_no === '') $warranty_card_no = 'WRN-' . date('Ymd', strtotime($warranty_start_date)) . '-' . $bike_id;
+
+                $dt_bat = new DateTime($warranty_start_date);
+                $dt_bat->modify("+{$battery_months} months");
+                $battery_expiry = $dt_bat->format('Y-m-d');
+
+                $dt_mot = new DateTime($warranty_start_date);
+                $dt_mot->modify("+{$motor_months} months");
+                $motor_expiry = $dt_mot->format('Y-m-d');
+
+                if ($id > 0) {
+                    $st = $conn->prepare("UPDATE warranties SET bike_id=?, customer_id=?, warranty_card_no=?, battery_serial=?, motor_serial=?, controller_serial=?, charger_serial=?, warranty_start_date=?, battery_warranty_months=?, motor_warranty_months=?, controller_warranty_months=?, battery_expiry_date=?, motor_expiry_date=?, status=?, notes=? WHERE id=?");
+                    $st->bind_param('iissssssiiissssi', $bike_id, $customer_id, $warranty_card_no, $battery_serial, $motor_serial, $controller_serial, $charger_serial, $warranty_start_date, $battery_months, $motor_months, $controller_months, $battery_expiry, $motor_expiry, $status, $notes, $id);
+                    $st->execute();
+                    $st->close();
+                    $msg = 'Warranty registration updated.';
+                } else {
+                    $st = $conn->prepare("INSERT INTO warranties (branch_id, bike_id, customer_id, warranty_card_no, battery_serial, motor_serial, controller_serial, charger_serial, warranty_start_date, battery_warranty_months, motor_warranty_months, controller_warranty_months, battery_expiry_date, motor_expiry_date, status, notes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+                    $st->bind_param('iiissssssiiissss', $branch_id, $bike_id, $customer_id, $warranty_card_no, $battery_serial, $motor_serial, $controller_serial, $charger_serial, $warranty_start_date, $battery_months, $motor_months, $controller_months, $battery_expiry, $motor_expiry, $status, $notes);
+                    $st->execute();
+                    $id = $conn->insert_id;
+                    $st->close();
+                    $msg = "Warranty Card $warranty_card_no registered.";
+                }
+                // Sync serials onto bike record
+                $up_b = $conn->prepare("UPDATE bikes SET battery_serial=?, controller_serial=?, charger_serial=?, warranty_months=?, warranty_expiry=? WHERE id=?");
+                if ($up_b) {
+                    $up_b->bind_param('sssisi', $battery_serial, $controller_serial, $charger_serial, $battery_months, $battery_expiry, $bike_id);
+                    $up_b->execute();
+                    $up_b->close();
+                }
+                log_audit_event($conn, 'warranty_service', 'save_warranty', $id, "Saved warranty card $warranty_card_no for Chassis {$bk['chassis_number']}", null, $_POST, $branch_id);
+            }
+            header('Location: index.php?page=warranty_service&sub=warranties&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+            exit;
+        }
+
+        if (isset($_POST['save_warranty_claim'])) {
+            $id = (int) ($_POST['id'] ?? 0);
+            require_permission($conn, 'warranty_service', $id > 0 ? 'edit' : 'add');
+            $bike_id = (int) ($_POST['bike_id'] ?? 0);
+            $claim_date = clean_text($_POST['claim_date'] ?? date('Y-m-d'));
+            $component = clean_text($_POST['component'] ?? 'battery', 30);
+            if (!in_array($component, ['battery', 'motor', 'controller', 'charger', 'frame', 'other'], true)) $component = 'battery';
+            $old_serial = clean_text($_POST['old_serial'] ?? '', 120);
+            $new_serial = clean_text($_POST['new_serial'] ?? '', 120);
+            $issue_description = clean_text($_POST['issue_description'] ?? '');
+            $claim_status = clean_text($_POST['claim_status'] ?? 'pending', 30);
+            if (!in_array($claim_status, ['pending', 'sent_to_vendor', 'approved', 'replaced', 'repaired', 'rejected'], true)) $claim_status = 'pending';
+            $technician_id = !empty($_POST['technician_id']) ? (int) $_POST['technician_id'] : null;
+            $vendor_reference = clean_text($_POST['vendor_reference'] ?? '', 150);
+            $resolved_date = !empty($_POST['resolved_date']) && valid_date($_POST['resolved_date']) ? $_POST['resolved_date'] : null;
+            $resolution_notes = clean_text($_POST['resolution_notes'] ?? '');
+
+            $bk = $conn->query("SELECT * FROM bikes WHERE id=$bike_id LIMIT 1")->fetch_assoc();
+            if (!$bk || empty($issue_description)) {
+                $err = 'Bike selection and issue description are required for a warranty claim.';
+            } else {
+                $branch_id = (int) ($bk['branch_id'] ?? get_write_branch_id($conn));
+                $customer_id = !empty($bk['customer_id']) ? (int) $bk['customer_id'] : null;
+                $w_row = $conn->query("SELECT id FROM warranties WHERE bike_id=$bike_id ORDER BY id DESC LIMIT 1")->fetch_assoc();
+                $warranty_id = $w_row ? (int) $w_row['id'] : null;
+                $uid = (int) $_SESSION['user_id'];
+
+                if ($id > 0) {
+                    $st = $conn->prepare("UPDATE warranty_claims SET bike_id=?, customer_id=?, claim_date=?, component=?, old_serial=?, new_serial=?, issue_description=?, claim_status=?, technician_id=?, vendor_reference=?, resolved_date=?, resolution_notes=? WHERE id=?");
+                    $st->bind_param('iissssssisssi', $bike_id, $customer_id, $claim_date, $component, $old_serial, $new_serial, $issue_description, $claim_status, $technician_id, $vendor_reference, $resolved_date, $resolution_notes, $id);
+                    $st->execute();
+                    $st->close();
+                    $msg = 'Warranty claim updated.';
+                } else {
+                    $claim_no = 'WCL-' . date('Ymd', strtotime($claim_date)) . '-' . strtoupper(substr(bin2hex(random_bytes(2)), 0, 4));
+                    $st = $conn->prepare("INSERT INTO warranty_claims (claim_no, branch_id, warranty_id, bike_id, customer_id, claim_date, component, old_serial, new_serial, issue_description, claim_status, technician_id, vendor_reference, resolved_date, resolution_notes, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+                    $st->bind_param('siiiissssssisssi', $claim_no, $branch_id, $warranty_id, $bike_id, $customer_id, $claim_date, $component, $old_serial, $new_serial, $issue_description, $claim_status, $technician_id, $vendor_reference, $resolved_date, $resolution_notes, $uid);
+                    $st->execute();
+                    $id = $conn->insert_id;
+                    $st->close();
+                    $msg = "Warranty Claim $claim_no logged.";
+                }
+                if ($claim_status === 'replaced' && $new_serial !== '') {
+                    $col_map = ['battery' => 'battery_serial', 'motor' => 'motor_serial', 'controller' => 'controller_serial', 'charger' => 'charger_serial'];
+                    if (isset($col_map[$component]) && $warranty_id) {
+                        $scol = $col_map[$component];
+                        $esc_ns = mysqli_real_escape_string($conn, $new_serial);
+                        $conn->query("UPDATE warranties SET `$scol`='$esc_ns' WHERE id=$warranty_id");
+                    }
+                }
+                log_audit_event($conn, 'warranty_service', 'save_warranty_claim', $id, "Warranty claim ($component - $claim_status) for Chassis {$bk['chassis_number']}", null, $_POST, $branch_id);
+            }
+            header('Location: index.php?page=warranty_service&sub=claims&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+            exit;
+        }
+
+        if (isset($_POST['save_job_card'])) {
+            $id = (int) ($_POST['id'] ?? 0);
+            require_permission($conn, 'warranty_service', $id > 0 ? 'edit' : 'add');
+            $branch_id = get_write_branch_id($conn, (int) ($_POST['branch_id'] ?? 0));
+            $job_date = clean_text($_POST['job_date'] ?? date('Y-m-d'));
+            $bike_id = !empty($_POST['bike_id']) ? (int) $_POST['bike_id'] : null;
+            $customer_id = !empty($_POST['customer_id']) ? (int) $_POST['customer_id'] : null;
+            $walkin_name = clean_text($_POST['walkin_customer_name'] ?? '', 255);
+            $walkin_phone = clean_text($_POST['walkin_customer_phone'] ?? '', 60);
+            $chassis_number = clean_text($_POST['chassis_number'] ?? '', 100);
+            $model_name = clean_text($_POST['model_name'] ?? '', 150);
+            $service_type = clean_text($_POST['service_type'] ?? 'paid_repair', 30);
+            if (!in_array($service_type, ['free_service', 'warranty_repair', 'paid_repair', 'battery_diagnostic', 'accident_repair'], true)) {
+                $service_type = 'paid_repair';
+            }
+            $technician_id = !empty($_POST['technician_id']) ? (int) $_POST['technician_id'] : null;
+            $technician_name = clean_text($_POST['technician_name'] ?? '', 150);
+            if ($technician_id && $technician_name === '') {
+                $t_r = $conn->query("SELECT name FROM staff_members WHERE id=$technician_id LIMIT 1")->fetch_assoc();
+                if ($t_r) $technician_name = $t_r['name'];
+            }
+            $odometer_km = max(0, (int) ($_POST['odometer_km'] ?? 0));
+            $complaint_details = clean_text($_POST['complaint_details'] ?? '');
+            $work_performed = clean_text($_POST['work_performed'] ?? '');
+            $labor_charges = max(0, (float) ($_POST['labor_charges'] ?? 0));
+            $discount_amount = max(0, (float) ($_POST['discount_amount'] ?? 0));
+            $payment_status = in_array($_POST['payment_status'] ?? 'paid', ['paid', 'unpaid', 'free_warranty'], true) ? $_POST['payment_status'] : 'paid';
+            $payment_method = clean_text($_POST['payment_method'] ?? 'cash', 30);
+            $job_status = in_array($_POST['job_status'] ?? 'open', ['open', 'in_progress', 'ready', 'delivered', 'cancelled'], true) ? $_POST['job_status'] : 'open';
+
+            if ($bike_id) {
+                $bk_info = $conn->query("SELECT b.chassis_number, b.customer_id, m.model_name, c.name AS cname, c.phone AS cphone FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id WHERE b.id=$bike_id LIMIT 1")->fetch_assoc();
+                if ($bk_info) {
+                    if ($chassis_number === '') $chassis_number = $bk_info['chassis_number'];
+                    if ($model_name === '') $model_name = $bk_info['model_name'] ?? '';
+                    if (!$customer_id && !empty($bk_info['customer_id'])) $customer_id = (int) $bk_info['customer_id'];
+                    if ($walkin_name === '' && !empty($bk_info['cname'])) $walkin_name = $bk_info['cname'];
+                    if ($walkin_phone === '' && !empty($bk_info['cphone'])) $walkin_phone = $bk_info['cphone'];
+                }
+            }
+
+            if (empty($complaint_details)) {
+                $err = 'Complaint / service work details are required.';
+            } else {
+                $conn->begin_transaction();
+                try {
+                    $job_parts = isset($_POST['job_parts']) && is_array($_POST['job_parts']) ? $_POST['job_parts'] : [];
+                    $parts_clean = [];
+                    $parts_charges = 0.0;
+
+                    foreach ($job_parts as $jp) {
+                        $acc_id = (int) ($jp['accessory_id'] ?? 0);
+                        $qty = max(0, (int) ($jp['qty'] ?? 0));
+                        $u_price = max(0, (float) ($jp['unit_price'] ?? 0));
+                        if ($acc_id > 0 && $qty > 0) {
+                            $acc_row = $conn->query("SELECT id, name, sku, selling_price, current_stock FROM accessories WHERE id=$acc_id FOR UPDATE")->fetch_assoc();
+                            if ($acc_row) {
+                                if ($u_price <= 0) $u_price = (float) $acc_row['selling_price'];
+                                $line_total = round($qty * $u_price, 2);
+                                $parts_charges += $line_total;
+                                $parts_clean[] = [
+                                    'accessory_id' => $acc_id,
+                                    'name' => $acc_row['name'],
+                                    'sku' => $acc_row['sku'],
+                                    'qty' => $qty,
+                                    'unit_price' => $u_price,
+                                    'line_total' => $line_total
+                                ];
+                                // Deduct spare parts stock on new job card creation
+                                if ($id === 0) {
+                                    if ((int) $acc_row['current_stock'] < $qty) {
+                                        throw new Exception("Insufficient stock for spare part {$acc_row['name']} (Available: {$acc_row['current_stock']}).");
+                                    }
+                                    $conn->query("UPDATE accessories SET current_stock = current_stock - $qty WHERE id=$acc_id");
+                                }
+                            }
+                        }
+                    }
+                    if ($id > 0 && empty($parts_clean)) {
+                        $existing_jc = $conn->query("SELECT parts_json, parts_charges FROM service_job_cards WHERE id=$id LIMIT 1")->fetch_assoc();
+                        if ($existing_jc && !empty($existing_jc['parts_json'])) {
+                            $parts_clean = json_decode($existing_jc['parts_json'], true) ?: [];
+                            $parts_charges = (float) ($existing_jc['parts_charges'] ?? 0);
+                        }
+                    }
+
+                    $total_amount = ($service_type === 'free_service' || $service_type === 'warranty_repair' || $payment_status === 'free_warranty')
+                        ? 0.00
+                        : max(0, round($labor_charges + $parts_charges - $discount_amount, 2));
+                    $parts_json = json_encode($parts_clean);
+                    $delivered_dt = ($job_status === 'delivered') ? date('Y-m-d H:i:s') : null;
+                    $uid = (int) $_SESSION['user_id'];
+
+                    if ($id > 0) {
+                        $st = $conn->prepare("UPDATE service_job_cards SET branch_id=?, job_date=?, bike_id=?, customer_id=?, walkin_customer_name=?, walkin_customer_phone=?, chassis_number=?, model_name=?, service_type=?, technician_id=?, technician_name=?, odometer_km=?, complaint_details=?, work_performed=?, labor_charges=?, parts_charges=?, discount_amount=?, total_amount=?, payment_status=?, payment_method=?, job_status=?, delivered_date=? WHERE id=?");
+                        $st->bind_param('isiisssssisissddddssssi', $branch_id, $job_date, $bike_id, $customer_id, $walkin_name, $walkin_phone, $chassis_number, $model_name, $service_type, $technician_id, $technician_name, $odometer_km, $complaint_details, $work_performed, $labor_charges, $parts_charges, $discount_amount, $total_amount, $payment_status, $payment_method, $job_status, $delivered_dt, $id);
+                        $st->execute();
+                        $st->close();
+                        $msg = 'Service Job Card updated.';
+                    } else {
+                        $job_no = 'JOB-' . date('Ymd', strtotime($job_date)) . '-' . strtoupper(substr(bin2hex(random_bytes(2)), 0, 4));
+                        $st = $conn->prepare("INSERT INTO service_job_cards (job_no, branch_id, job_date, bike_id, customer_id, walkin_customer_name, walkin_customer_phone, chassis_number, model_name, service_type, technician_id, technician_name, odometer_km, complaint_details, work_performed, parts_json, labor_charges, parts_charges, discount_amount, total_amount, payment_status, payment_method, job_status, delivered_date, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+                        $st->bind_param('sisiisssssisissddddsssssi', $job_no, $branch_id, $job_date, $bike_id, $customer_id, $walkin_name, $walkin_phone, $chassis_number, $model_name, $service_type, $technician_id, $technician_name, $odometer_km, $complaint_details, $work_performed, $parts_json, $labor_charges, $parts_charges, $discount_amount, $total_amount, $payment_status, $payment_method, $job_status, $delivered_dt, $uid);
+                        $st->execute();
+                        $id = $conn->insert_id;
+                        $st->close();
+
+                        if ($payment_status === 'paid' && $total_amount > 0) {
+                            $ie_notes = "Workshop Job Card $job_no ($service_type) - Customer: " . ($walkin_name ?: 'Walk-in');
+                            $st_ie = $conn->prepare("INSERT INTO income_expenses (branch_id, entry_date, type, category, amount, payment_method, reference, notes, created_by) VALUES (?,?,'income','Workshop / Service Revenue',?,?,?,?,?)");
+                            $st_ie->bind_param('isdsssi', $branch_id, $job_date, $total_amount, $payment_method, $job_no, $ie_notes, $uid);
+                            $st_ie->execute();
+                            $st_ie->close();
+                        }
+                        $_SESSION['last_job_card_id'] = $id;
+                        $msg = "Workshop Job Card $job_no created.";
+                    }
+                    $conn->commit();
+                    log_audit_event($conn, 'warranty_service', 'save_job_card', $id, "Saved Workshop Job Card #$id ($service_type)", null, $_POST, $branch_id);
+                } catch (Throwable $e) {
+                    $conn->rollback();
+                    $err = $e->getMessage();
+                }
+            }
+            header('Location: index.php?page=warranty_service&sub=job_cards&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+            exit;
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // MODULE 3: STANDALONE ACCESSORY & SPARE PARTS COUNTER POS HANDLERS
+    // ------------------------------------------------------------------------
+    if ($page === 'accessory_pos' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        if (isset($_POST['save_pos_sale'])) {
+            require_permission($conn, 'accessory_pos', 'add');
+            $branch_id = get_write_branch_id($conn, (int) ($_POST['branch_id'] ?? 0));
+            $sale_date = clean_text($_POST['sale_date'] ?? date('Y-m-d'));
+            $customer_id = !empty($_POST['customer_id']) ? (int) $_POST['customer_id'] : null;
+            $customer_name = clean_text($_POST['customer_name'] ?? 'Walk-in Customer', 255);
+            $customer_phone = clean_text($_POST['customer_phone'] ?? '', 60);
+            $salesperson_id = !empty($_POST['salesperson_id']) ? (int) $_POST['salesperson_id'] : null;
+            $payment_method = clean_text($_POST['payment_method'] ?? 'cash', 30);
+            $extra_discount = max(0, (float) ($_POST['extra_discount'] ?? 0));
+            $notes = clean_text($_POST['notes'] ?? '');
+            $pos_items = isset($_POST['pos_items']) && is_array($_POST['pos_items']) ? $_POST['pos_items'] : [];
+
+            if (empty($pos_items) || !valid_date($sale_date)) {
+                $err = 'Please add at least one accessory or spare part to the POS cart.';
+            } else {
+                $conn->begin_transaction();
+                try {
+                    assert_valid_payment_method($payment_method);
+                    if ($customer_id) {
+                        $c_row = $conn->query("SELECT name, phone FROM customers WHERE id=$customer_id LIMIT 1")->fetch_assoc();
+                        if ($c_row) {
+                            $customer_name = $c_row['name'];
+                            if ($customer_phone === '') $customer_phone = $c_row['phone'] ?? '';
+                        }
+                    }
+                    if ($customer_name === '') $customer_name = 'Walk-in Customer';
+
+                    $subtotal = 0.0;
+                    $item_discount_total = 0.0;
+                    $total_cost = 0.0;
+                    $validated_items = [];
+
+                    foreach ($pos_items as $pi) {
+                        $acc_id = (int) ($pi['accessory_id'] ?? 0);
+                        $qty = (int) ($pi['quantity'] ?? 0);
+                        $u_price = (float) ($pi['unit_price'] ?? 0);
+                        $disc = max(0, (float) ($pi['discount'] ?? 0));
+                        if ($acc_id <= 0 || $qty <= 0) continue;
+
+                        $acc = $conn->query("SELECT * FROM accessories WHERE id=$acc_id FOR UPDATE")->fetch_assoc();
+                        if (!$acc) throw new Exception("Accessory ID #$acc_id not found.");
+                        if ((int) $acc['current_stock'] < $qty) {
+                            throw new Exception("Insufficient stock for {$acc['name']} (Available: {$acc['current_stock']}, Requested: $qty).");
+                        }
+                        if ($u_price <= 0) $u_price = (float) $acc['selling_price'];
+                        $line_gross = round($qty * $u_price, 2);
+                        $line_final = max(0, round($line_gross - $disc, 2));
+                        $line_cost = round($qty * (float) $acc['purchase_price'], 2);
+
+                        $subtotal += $line_gross;
+                        $item_discount_total += $disc;
+                        $total_cost += $line_cost;
+
+                        $validated_items[] = [
+                            'accessory_id' => $acc_id,
+                            'item_name' => $acc['name'],
+                            'sku' => $acc['sku'],
+                            'quantity' => $qty,
+                            'purchase_price' => (float) $acc['purchase_price'],
+                            'unit_price' => $u_price,
+                            'discount_amount' => $disc,
+                            'final_price' => $line_final
+                        ];
+                    }
+
+                    if (empty($validated_items)) {
+                        throw new Exception('No valid items with positive quantity in POS cart.');
+                    }
+
+                    $discount_total = round($item_discount_total + $extra_discount, 2);
+                    $net_total = max(0, round($subtotal - $discount_total, 2));
+                    $total_profit = round($net_total - $total_cost, 2);
+                    $amount_paid = isset($_POST['amount_paid']) && $_POST['amount_paid'] !== '' ? (float) $_POST['amount_paid'] : $net_total;
+                    if (!$customer_id && abs($amount_paid - $net_total) > 0.01) {
+                        $amount_paid = $net_total;
+                    }
+
+                    $invoice_no = 'POS-' . date('Ymd', strtotime($sale_date)) . '-' . strtoupper(substr(bin2hex(random_bytes(2)), 0, 4));
+                    $uid = (int) $_SESSION['user_id'];
+
+                    $st = $conn->prepare("INSERT INTO pos_accessory_sales (invoice_no, branch_id, sale_date, customer_id, customer_name, customer_phone, salesperson_id, subtotal, discount_total, net_total, total_cost, total_profit, amount_paid, payment_method, status, notes, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,'completed',?,?)");
+                    $st->bind_param('sisissiddddddssi', $invoice_no, $branch_id, $sale_date, $customer_id, $customer_name, $customer_phone, $salesperson_id, $subtotal, $discount_total, $net_total, $total_cost, $total_profit, $amount_paid, $payment_method, $notes, $uid);
+                    $st->execute();
+                    $pos_sale_id = $conn->insert_id;
+                    $st->close();
+
+                    $st_item = $conn->prepare("INSERT INTO pos_accessory_sale_items (pos_sale_id, accessory_id, item_name, sku, quantity, purchase_price, unit_price, discount_amount, final_price) VALUES (?,?,?,?,?,?,?,?,?)");
+                    foreach ($validated_items as $vi) {
+                        $st_item->bind_param('iissidddd', $pos_sale_id, $vi['accessory_id'], $vi['item_name'], $vi['sku'], $vi['quantity'], $vi['purchase_price'], $vi['unit_price'], $vi['discount_amount'], $vi['final_price']);
+                        $st_item->execute();
+                        $conn->query("UPDATE accessories SET current_stock = current_stock - " . (int) $vi['quantity'] . " WHERE id=" . (int) $vi['accessory_id']);
+                    }
+                    $st_item->close();
+
+                    // Record income in income_expenses for financial & cash book tracking
+                    if ($amount_paid > 0) {
+                        $ie_desc = "Counter POS Sale ($invoice_no) to $customer_name";
+                        $st_ie = $conn->prepare("INSERT INTO income_expenses (branch_id, entry_date, type, category, amount, payment_method, reference, notes, created_by) VALUES (?,?,'income','Counter POS Accessory Sale',?,?,?,?,?)");
+                        $st_ie->bind_param('isdsssi', $branch_id, $sale_date, $amount_paid, $payment_method, $invoice_no, $ie_desc, $uid);
+                        $st_ie->execute();
+                        $st_ie->close();
+                    }
+
+                    // If registered customer, also post to customer ledger
+                    if ($customer_id > 0) {
+                        $led_desc = "Counter POS Sale #$invoice_no";
+                        $st_l1 = $conn->prepare("INSERT INTO ledger (branch_id, entry_date, entry_type, amount, party_type, party_id, description, reference_type, reference_id, balance) VALUES (?,?,'debit',?,'customer',?,?,'pos_sale',?,?)");
+                        $st_l1->bind_param('isdisid', $branch_id, $sale_date, $net_total, $customer_id, $led_desc, $pos_sale_id, $net_total);
+                        $st_l1->execute();
+                        $st_l1->close();
+                        if ($amount_paid > 0) {
+                            $led_pdesc = "Payment for Counter POS #$invoice_no";
+                            $st_l2 = $conn->prepare("INSERT INTO ledger (branch_id, entry_date, entry_type, amount, party_type, party_id, description, reference_type, reference_id, balance) VALUES (?,?,'credit',?,'customer',?,?,'pos_payment',?,?)");
+                            $st_l2->bind_param('isdisid', $branch_id, $sale_date, $amount_paid, $customer_id, $led_pdesc, $pos_sale_id, $amount_paid);
+                            $st_l2->execute();
+                            $st_l2->close();
+                        }
+                    }
+
+                    $conn->commit();
+                    $_SESSION['last_pos_sale_id'] = $pos_sale_id;
+                    log_audit_event($conn, 'accessory_pos', 'add', $pos_sale_id, "Counter POS Sale $invoice_no (" . fmt_money($net_total) . ") to $customer_name", null, ['invoice_no' => $invoice_no, 'net_total' => $net_total, 'items' => count($validated_items)], $branch_id);
+                    $msg = "Counter POS Sale $invoice_no completed! Profit: " . fmt_money($total_profit);
+                } catch (Throwable $e) {
+                    $conn->rollback();
+                    $err = 'POS Sale failed: ' . $e->getMessage();
+                }
+            }
+            header('Location: index.php?page=accessory_pos&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+            exit;
+        }
+
+        if (isset($_POST['return_pos_sale'])) {
+            require_permission($conn, 'accessory_pos', 'delete');
+            $pos_id = (int) ($_POST['pos_sale_id'] ?? 0);
+            $conn->begin_transaction();
+            try {
+                $sale = $conn->query("SELECT * FROM pos_accessory_sales WHERE id=$pos_id FOR UPDATE")->fetch_assoc();
+                if (!$sale || $sale['status'] === 'returned') {
+                    throw new Exception('POS sale not found or already returned.');
+                }
+                $items = $conn->query("SELECT * FROM pos_accessory_sale_items WHERE pos_sale_id=$pos_id");
+                while ($it = $items->fetch_assoc()) {
+                    $conn->query("UPDATE accessories SET current_stock = current_stock + " . (int) $it['quantity'] . " WHERE id=" . (int) $it['accessory_id']);
+                }
+                $esc_inv = mysqli_real_escape_string($conn, $sale['invoice_no']);
+                $conn->query("DELETE FROM income_expenses WHERE reference='$esc_inv' AND category='Counter POS Accessory Sale'");
+                $conn->query("DELETE FROM ledger WHERE reference_type IN ('pos_sale','pos_payment') AND reference_id=$pos_id");
+                $conn->query("UPDATE pos_accessory_sales SET status='returned' WHERE id=$pos_id");
+                $conn->commit();
+                log_audit_event($conn, 'accessory_pos', 'return', $pos_id, "Returned Counter POS Sale {$sale['invoice_no']} and restored stock", $sale, ['status' => 'returned'], $sale['branch_id']);
+                $msg = "POS Invoice {$sale['invoice_no']} marked as returned and stock restored.";
+            } catch (Throwable $e) {
+                $conn->rollback();
+                $err = $e->getMessage();
+            }
+            header('Location: index.php?page=accessory_pos&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+            exit;
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // MODULE 4: EXCISE REGISTRATION, NUMBER PLATE & SMART CARD TRACKER
+    // ------------------------------------------------------------------------
+    if ($page === 'excise_tracker' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        if (isset($_POST['save_excise'])) {
+            $id = (int) ($_POST['id'] ?? 0);
+            require_permission($conn, 'excise_tracker', $id > 0 ? 'edit' : 'add');
+            $bike_id = (int) ($_POST['bike_id'] ?? 0);
+            $fee_collected = max(0, (float) ($_POST['fee_collected'] ?? 0));
+            $fee_paid = max(0, (float) ($_POST['fee_paid_to_excise'] ?? 0));
+            $agent_name = clean_text($_POST['agent_name'] ?? '', 150);
+            $agent_phone = clean_text($_POST['agent_phone'] ?? '', 60);
+            $docs_arr = isset($_POST['docs_submitted']) && is_array($_POST['docs_submitted']) ? array_map('clean_text', $_POST['docs_submitted']) : [];
+            $docs_submitted = implode(', ', $docs_arr);
+            if (!empty($_POST['docs_submitted_text'])) {
+                $docs_submitted = clean_text($_POST['docs_submitted_text'], 255);
+            }
+            $submission_date = !empty($_POST['submission_date']) && valid_date($_POST['submission_date']) ? $_POST['submission_date'] : null;
+            $registration_no = strtoupper(clean_text($_POST['registration_no'] ?? '', 60));
+            $smart_card_no = strtoupper(clean_text($_POST['smart_card_no'] ?? '', 80));
+            $allowed_p_status = ['Pending', 'Applied', 'Received at Branch', 'Delivered to Customer'];
+            $plate_status = in_array($_POST['plate_status'] ?? 'Pending', $allowed_p_status, true) ? $_POST['plate_status'] : 'Pending';
+            $smart_card_status = in_array($_POST['smart_card_status'] ?? 'Pending', $allowed_p_status, true) ? $_POST['smart_card_status'] : 'Pending';
+            $received_date = !empty($_POST['received_at_branch_date']) && valid_date($_POST['received_at_branch_date']) ? $_POST['received_at_branch_date'] : ($plate_status === 'Received at Branch' ? date('Y-m-d') : null);
+            $delivered_date = !empty($_POST['delivered_to_customer_date']) && valid_date($_POST['delivered_to_customer_date']) ? $_POST['delivered_to_customer_date'] : ($plate_status === 'Delivered to Customer' ? date('Y-m-d') : null);
+            $received_by_person = clean_text($_POST['received_by_person'] ?? '', 150);
+            $received_by_cnic = clean_text($_POST['received_by_cnic'] ?? '', 40);
+            $notes = clean_text($_POST['notes'] ?? '');
+
+            $bk = $conn->query("SELECT id, branch_id, customer_id, chassis_number FROM bikes WHERE id=$bike_id LIMIT 1")->fetch_assoc();
+            if (!$bk) {
+                $err = 'Please select a valid sold bike.';
+            } else {
+                $branch_id = (int) ($bk['branch_id'] ?? get_write_branch_id($conn));
+                $customer_id = !empty($bk['customer_id']) ? (int) $bk['customer_id'] : null;
+                $uid = (int) $_SESSION['user_id'];
+                if ($id > 0) {
+                    $old_ex = $conn->query("SELECT * FROM excise_registrations WHERE id=$id LIMIT 1")->fetch_assoc();
+                    $st = $conn->prepare("UPDATE excise_registrations SET bike_id=?, customer_id=?, fee_collected=?, fee_paid_to_excise=?, agent_name=?, agent_phone=?, docs_submitted=?, submission_date=?, registration_no=?, smart_card_no=?, plate_status=?, smart_card_status=?, received_at_branch_date=?, delivered_to_customer_date=?, received_by_person=?, received_by_cnic=?, notes=? WHERE id=?");
+                    $st->bind_param('iiddsssssssssssssi', $bike_id, $customer_id, $fee_collected, $fee_paid, $agent_name, $agent_phone, $docs_submitted, $submission_date, $registration_no, $smart_card_no, $plate_status, $smart_card_status, $received_date, $delivered_date, $received_by_person, $received_by_cnic, $notes, $id);
+                    $st->execute();
+                    $st->close();
+                    log_audit_event($conn, 'excise_tracker', 'edit', $id, "Updated Excise/Plate status ($plate_status | Plate: $registration_no) for Chassis {$bk['chassis_number']}", $old_ex, $_POST, $branch_id);
+                    $msg = 'Excise registration & plate tracker updated.';
+                } else {
+                    $st = $conn->prepare("INSERT INTO excise_registrations (branch_id, bike_id, customer_id, fee_collected, fee_paid_to_excise, agent_name, agent_phone, docs_submitted, submission_date, registration_no, smart_card_no, plate_status, smart_card_status, received_at_branch_date, delivered_to_customer_date, received_by_person, received_by_cnic, notes, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+                    $st->bind_param('iiiddsssssssssssssi', $branch_id, $bike_id, $customer_id, $fee_collected, $fee_paid, $agent_name, $agent_phone, $docs_submitted, $submission_date, $registration_no, $smart_card_no, $plate_status, $smart_card_status, $received_date, $delivered_date, $received_by_person, $received_by_cnic, $notes, $uid);
+                    $st->execute();
+                    $new_id = $conn->insert_id;
+                    $st->close();
+                    log_audit_event($conn, 'excise_tracker', 'add', $new_id, "Created Excise registration tracker for Chassis {$bk['chassis_number']}", null, $_POST, $branch_id);
+                    $msg = 'Excise registration entry created.';
+                }
+            }
+            header('Location: index.php?page=excise_tracker&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+            exit;
+        }
+
+        if (isset($_POST['quick_plate_status'])) {
+            require_permission($conn, 'excise_tracker', 'edit');
+            $id = (int) ($_POST['id'] ?? 0);
+            $next_status = clean_text($_POST['next_status'] ?? 'Applied', 40);
+            $allowed_p_status = ['Pending', 'Applied', 'Received at Branch', 'Delivered to Customer'];
+            if ($id > 0 && in_array($next_status, $allowed_p_status, true)) {
+                $old_ex = $conn->query("SELECT * FROM excise_registrations WHERE id=$id LIMIT 1")->fetch_assoc();
+                if ($old_ex) {
+                    $extra_sql = '';
+                    if ($next_status === 'Applied' && empty($old_ex['submission_date'])) $extra_sql = ", submission_date=CURDATE()";
+                    elseif ($next_status === 'Received at Branch') $extra_sql = ", received_at_branch_date=CURDATE()";
+                    elseif ($next_status === 'Delivered to Customer') $extra_sql = ", delivered_to_customer_date=CURDATE()";
+                    $esc_st = mysqli_real_escape_string($conn, $next_status);
+                    $conn->query("UPDATE excise_registrations SET plate_status='$esc_st' $extra_sql WHERE id=$id");
+                    log_audit_event($conn, 'excise_tracker', 'status_change', $id, "Advanced Plate Status to '$next_status' (ID #$id)", $old_ex, ['plate_status' => $next_status], $old_ex['branch_id']);
+                    $msg = "Plate status updated to: $next_status";
+                }
+            }
+            header('Location: index.php?page=excise_tracker&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+            exit;
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // MODULE 5: DAILY CASH BOOK / ROZNAMCHA & DRAWER CLOSING HANDLERS
+    // ------------------------------------------------------------------------
+    if ($page === 'cash_book' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        $book_date = clean_text($_POST['book_date'] ?? date('Y-m-d'));
+        if (!valid_date($book_date)) $book_date = date('Y-m-d');
+        $branch_id = get_write_branch_id($conn, (int) ($_POST['branch_id'] ?? 0));
+
+        if (isset($_POST['save_cash_book_opening'])) {
+            require_permission($conn, 'cash_book', 'edit');
+            $opening_balance = round((float) ($_POST['opening_balance'] ?? 0), 2);
+            $calc = calculate_branch_cash_book($conn, $branch_id, $book_date);
+            if (($calc['status'] ?? 'open') === 'closed') {
+                $err = 'This day\'s cash drawer is already closed. Reopen it first to modify the opening balance.';
+            } else {
+                $sys_in = $calc['inflows']['total'];
+                $sys_out = $calc['outflows']['total'];
+                $exp_close = round($opening_balance + $sys_in - $sys_out, 2);
+                $st = $conn->prepare("INSERT INTO daily_cash_books (branch_id, book_date, opening_balance, system_inflows, system_outflows, expected_closing, physical_cash, status) VALUES (?,?,?,?,?,?,?,'open') ON DUPLICATE KEY UPDATE opening_balance=VALUES(opening_balance), system_inflows=VALUES(system_inflows), system_outflows=VALUES(system_outflows), expected_closing=VALUES(expected_closing)");
+                $st->bind_param('isddddd', $branch_id, $book_date, $opening_balance, $sys_in, $sys_out, $exp_close, $exp_close);
+                $st->execute();
+                $st->close();
+                log_audit_event($conn, 'cash_book', 'edit', "$branch_id:$book_date", "Set Opening Cash Balance to " . fmt_money($opening_balance) . " for $book_date", null, ['opening_balance' => $opening_balance], $branch_id);
+                $msg = 'Opening cash balance updated for ' . fmt_date($book_date) . '.';
+            }
+            header('Location: index.php?page=cash_book&book_date=' . urlencode($book_date) . '&branch_id=' . $branch_id . '&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+            exit;
+        }
+
+        if (isset($_POST['save_cash_book_voucher'])) {
+            require_permission($conn, 'cash_book', 'add');
+            $direction = ($_POST['direction'] ?? 'inflow') === 'outflow' ? 'outflow' : 'inflow';
+            $category = clean_text($_POST['category'] ?? 'General Cash', 120);
+            $party_name = clean_text($_POST['party_name'] ?? '', 255);
+            $amount = round((float) ($_POST['amount'] ?? 0), 2);
+            $narration = clean_text($_POST['narration'] ?? '');
+            $calc = calculate_branch_cash_book($conn, $branch_id, $book_date);
+            if (($calc['status'] ?? 'open') === 'closed') {
+                $err = 'Cannot add voucher: Cash drawer for ' . fmt_date($book_date) . ' is closed.';
+            } elseif ($amount <= 0 || empty($category)) {
+                $err = 'Please enter a valid positive amount and category.';
+            } else {
+                $voucher_no = 'RV-' . date('Ymd', strtotime($book_date)) . '-' . strtoupper(substr(bin2hex(random_bytes(2)), 0, 4));
+                $uid = (int) $_SESSION['user_id'];
+                $st = $conn->prepare("INSERT INTO cash_book_entries (branch_id, entry_date, voucher_no, direction, category, party_name, amount, narration, created_by) VALUES (?,?,?,?,?,?,?,?,?)");
+                $st->bind_param('isssssdsi', $branch_id, $book_date, $voucher_no, $direction, $category, $party_name, $amount, $narration, $uid);
+                $st->execute();
+                $vid = $conn->insert_id;
+                $st->close();
+                log_audit_event($conn, 'cash_book', 'add', $vid, "Added Roznamcha $direction voucher $voucher_no (" . fmt_money($amount) . ")", null, $_POST, $branch_id);
+                $msg = "Roznamcha Voucher $voucher_no recorded.";
+            }
+            header('Location: index.php?page=cash_book&book_date=' . urlencode($book_date) . '&branch_id=' . $branch_id . '&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+            exit;
+        }
+
+        if (isset($_POST['delete_cash_book_voucher'])) {
+            require_permission($conn, 'cash_book', 'delete');
+            $vid = (int) ($_POST['id'] ?? 0);
+            $v_row = $conn->query("SELECT * FROM cash_book_entries WHERE id=$vid LIMIT 1")->fetch_assoc();
+            if ($v_row) {
+                $calc = calculate_branch_cash_book($conn, (int) $v_row['branch_id'], $v_row['entry_date']);
+                if (($calc['status'] ?? 'open') === 'closed') {
+                    $err = 'Cannot delete voucher from a closed cash book day.';
+                } else {
+                    $conn->query("DELETE FROM cash_book_entries WHERE id=$vid");
+                    log_audit_event($conn, 'cash_book', 'delete', $vid, "Deleted Roznamcha voucher {$v_row['voucher_no']}", $v_row, null, $v_row['branch_id']);
+                    $msg = 'Roznamcha voucher deleted.';
+                }
+            }
+            header('Location: index.php?page=cash_book&book_date=' . urlencode($book_date) . '&branch_id=' . $branch_id . '&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+            exit;
+        }
+
+        if (isset($_POST['close_cash_drawer'])) {
+            require_permission($conn, 'cash_book', 'edit');
+            $calc = calculate_branch_cash_book($conn, $branch_id, $book_date);
+            $opening_balance = $calc['opening_balance'];
+            $sys_in = $calc['inflows']['total'];
+            $sys_out = $calc['outflows']['total'];
+            $expected_closing = $calc['expected_closing'];
+            $physical_cash = round((float) ($_POST['physical_cash'] ?? $expected_closing), 2);
+            $variance = round($physical_cash - $expected_closing, 2);
+            $denoms = isset($_POST['denom']) && is_array($_POST['denom']) ? $_POST['denom'] : [];
+            $denom_json = json_encode($denoms);
+            $closing_notes = clean_text($_POST['closing_notes'] ?? '');
+            $uid = (int) $_SESSION['user_id'];
+            $now_dt = date('Y-m-d H:i:s');
+
+            $st = $conn->prepare("INSERT INTO daily_cash_books (branch_id, book_date, opening_balance, system_inflows, system_outflows, expected_closing, physical_cash, variance, denominations_json, status, closed_by, closed_at, closing_notes) VALUES (?,?,?,?,?,?,?,?,?,'closed',?,?,?) ON DUPLICATE KEY UPDATE opening_balance=VALUES(opening_balance), system_inflows=VALUES(system_inflows), system_outflows=VALUES(system_outflows), expected_closing=VALUES(expected_closing), physical_cash=VALUES(physical_cash), variance=VALUES(variance), denominations_json=VALUES(denominations_json), status='closed', closed_by=VALUES(closed_by), closed_at=VALUES(closed_at), closing_notes=VALUES(closing_notes)");
+            $st->bind_param('isddddddssis', $branch_id, $book_date, $opening_balance, $sys_in, $sys_out, $expected_closing, $physical_cash, $variance, $denom_json, $uid, $now_dt, $closing_notes);
+            $st->execute();
+            $st->close();
+            log_audit_event($conn, 'cash_book', 'closing', "$branch_id:$book_date", "Closed Daily Cash Drawer for $book_date (Expected: " . fmt_money($expected_closing) . ", Physical: " . fmt_money($physical_cash) . ", Variance: " . fmt_money($variance) . ")", null, ['expected' => $expected_closing, 'physical' => $physical_cash, 'variance' => $variance], $branch_id);
+            $msg = 'Daily Cash Book / Roznamcha Drawer closed & reconciled for ' . fmt_date($book_date) . '!';
+            header('Location: index.php?page=cash_book&book_date=' . urlencode($book_date) . '&branch_id=' . $branch_id . '&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+            exit;
+        }
+
+        if (isset($_POST['reopen_cash_drawer'])) {
+            require_permission($conn, 'cash_book', 'delete');
+            $esc_d = mysqli_real_escape_string($conn, $book_date);
+            $conn->query("UPDATE daily_cash_books SET status='open' WHERE branch_id=$branch_id AND book_date='$esc_d'");
+            log_audit_event($conn, 'cash_book', 'reopen', "$branch_id:$book_date", "Reopened Daily Cash Drawer for $book_date", ['status' => 'closed'], ['status' => 'open'], $branch_id);
+            $msg = 'Cash drawer reopened for ' . fmt_date($book_date) . '.';
+            header('Location: index.php?page=cash_book&book_date=' . urlencode($book_date) . '&branch_id=' . $branch_id . '&msg=' . urlencode($msg));
+            exit;
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // MODULE 6: WHATSAPP / SMS INSTALLMENT REMINDERS & DIGITAL RECEIPTS
+    // ------------------------------------------------------------------------
+    if ($page === 'whatsapp_hub' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        if (isset($_POST['save_wa_template'])) {
+            require_permission($conn, 'whatsapp_hub', 'edit');
+            $t_key = clean_text($_POST['template_key'] ?? '', 60);
+            $t_name = clean_text($_POST['template_name'] ?? '', 150);
+            $t_body = trim((string) ($_POST['message_body'] ?? ''));
+            if ($t_key === '' || $t_name === '' || $t_body === '') {
+                $err = 'Template key, name, and message body are required.';
+            } else {
+                $st = $conn->prepare("INSERT INTO notification_templates (template_key, template_name, channel, message_body) VALUES (?,?,'whatsapp',?) ON DUPLICATE KEY UPDATE template_name=VALUES(template_name), message_body=VALUES(message_body)");
+                $st->bind_param('sss', $t_key, $t_name, $t_body);
+                $st->execute();
+                $st->close();
+                log_audit_event($conn, 'whatsapp_hub', 'edit', $t_key, "Updated WhatsApp/SMS template '$t_name'", null, ['template_key' => $t_key, 'message_body' => $t_body]);
+                $msg = "Template '$t_name' saved.";
+            }
+            header('Location: index.php?page=whatsapp_hub&sub=templates&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+            exit;
+        }
+
+        if (isset($_POST['log_wa_send'])) {
+            require_permission($conn, 'whatsapp_hub', 'add');
+            $branch_id = get_write_branch_id($conn);
+            $customer_id = !empty($_POST['customer_id']) ? (int) $_POST['customer_id'] : null;
+            $recipient_name = clean_text($_POST['recipient_name'] ?? '', 150);
+            $recipient_phone = clean_text($_POST['recipient_phone'] ?? '', 60);
+            $template_key = clean_text($_POST['template_key'] ?? 'custom', 60);
+            $reference_type = clean_text($_POST['reference_type'] ?? '', 50);
+            $reference_id = !empty($_POST['reference_id']) ? (int) $_POST['reference_id'] : null;
+            $channel = in_array($_POST['channel'] ?? 'whatsapp', ['whatsapp', 'sms'], true) ? $_POST['channel'] : 'whatsapp';
+            $message_text = trim((string) ($_POST['message_text'] ?? ''));
+            $uid = (int) $_SESSION['user_id'];
+
+            if ($recipient_phone !== '' && $message_text !== '') {
+                $st = $conn->prepare("INSERT INTO notification_logs (branch_id, customer_id, recipient_name, recipient_phone, template_key, reference_type, reference_id, channel, message_text, sent_by) VALUES (?,?,?,?,?,?,?,?,?,?)");
+                $st->bind_param('iissssissi', $branch_id, $customer_id, $recipient_name, $recipient_phone, $template_key, $reference_type, $reference_id, $channel, $message_text, $uid);
+                $st->execute();
+                $st->close();
+                if ($channel === 'whatsapp') {
+                    $wa_url = build_wa_link($recipient_phone, $message_text);
+                    if ($wa_url !== '') {
+                        header('Location: ' . $wa_url);
+                        exit;
+                    }
+                }
+                $msg = 'Notification logged in dispatch history.';
+            } else {
+                $err = 'Recipient phone number and message text are required.';
+            }
+            header('Location: index.php?page=whatsapp_hub&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+            exit;
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // MODULE 7: SALESPERSON COMMISSION, STAFF HR & PAYROLL MODULE
+    // ------------------------------------------------------------------------
+    if ($page === 'hr_payroll' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        $sub_tab = clean_text($_POST['sub'] ?? 'staff', 30);
+
+        if (isset($_POST['save_staff'])) {
+            $id = (int) ($_POST['id'] ?? 0);
+            require_permission($conn, 'hr_payroll', $id > 0 ? 'edit' : 'add');
+            $branch_id = get_write_branch_id($conn, (int) ($_POST['branch_id'] ?? 0));
+            $staff_code = strtoupper(clean_text($_POST['staff_code'] ?? '', 40));
+            $name = clean_text($_POST['name'] ?? '', 255);
+            $cnic = clean_text($_POST['cnic'] ?? '', 40);
+            $phone = clean_text($_POST['phone'] ?? '', 60);
+            $designation = clean_text($_POST['designation'] ?? 'Sales Executive', 100);
+            $department = in_array($_POST['department'] ?? 'Sales', ['Sales', 'Workshop', 'Management', 'Accounts', 'Support'], true) ? $_POST['department'] : 'Sales';
+            $base_salary = max(0, (float) ($_POST['base_salary'] ?? 0));
+            $commission_type = in_array($_POST['commission_type'] ?? 'fixed', ['fixed', 'percentage_price', 'percentage_margin'], true) ? $_POST['commission_type'] : 'fixed';
+            $commission_rate = max(0, (float) ($_POST['commission_rate'] ?? 0));
+            $joining_date = !empty($_POST['joining_date']) && valid_date($_POST['joining_date']) ? $_POST['joining_date'] : date('Y-m-d');
+            $address = clean_text($_POST['address'] ?? '');
+            $is_active = isset($_POST['is_active']) ? 1 : 0;
+
+            if ($staff_code === '') {
+                $staff_code = 'EMP-' . rand(100, 999);
+            }
+            if ($name === '') {
+                $err = 'Staff Member Name is required.';
+            } else {
+                if ($id > 0) {
+                    $old_s = $conn->query("SELECT * FROM staff_members WHERE id=$id LIMIT 1")->fetch_assoc();
+                    $st = $conn->prepare("UPDATE staff_members SET staff_code=?, branch_id=?, name=?, cnic=?, phone=?, designation=?, department=?, base_salary=?, commission_type=?, commission_rate=?, joining_date=?, address=?, is_active=? WHERE id=?");
+                    $st->bind_param('sisssssdsdssii', $staff_code, $branch_id, $name, $cnic, $phone, $designation, $department, $base_salary, $commission_type, $commission_rate, $joining_date, $address, $is_active, $id);
+                    $st->execute();
+                    $st->close();
+                    log_audit_event($conn, 'hr_payroll', 'edit', $id, "Updated Staff Member $name ($staff_code)", $old_s, $_POST, $branch_id);
+                    $msg = 'Staff profile updated.';
+                } else {
+                    $st = $conn->prepare("INSERT INTO staff_members (staff_code, branch_id, name, cnic, phone, designation, department, base_salary, commission_type, commission_rate, joining_date, address, is_active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)");
+                    $st->bind_param('sisssssdsdssi', $staff_code, $branch_id, $name, $cnic, $phone, $designation, $department, $base_salary, $commission_type, $commission_rate, $joining_date, $address, $is_active);
+                    $st->execute();
+                    $new_id = $conn->insert_id;
+                    $st->close();
+                    log_audit_event($conn, 'hr_payroll', 'add', $new_id, "Added Staff Member $name ($staff_code)", null, $_POST, $branch_id);
+                    $msg = "Staff Member $name ($staff_code) added.";
+                }
+            }
+            header('Location: index.php?page=hr_payroll&sub=staff&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+            exit;
+        }
+
+        if (isset($_POST['save_staff_advance'])) {
+            require_permission($conn, 'hr_payroll', 'add');
+            $staff_id = (int) ($_POST['staff_id'] ?? 0);
+            $advance_date = clean_text($_POST['advance_date'] ?? date('Y-m-d'));
+            $amount = round((float) ($_POST['amount'] ?? 0), 2);
+            $payment_method = clean_text($_POST['payment_method'] ?? 'cash', 30);
+            $notes = clean_text($_POST['notes'] ?? '');
+            $stf = $conn->query("SELECT * FROM staff_members WHERE id=$staff_id LIMIT 1")->fetch_assoc();
+            if (!$stf || $amount <= 0 || !valid_date($advance_date)) {
+                $err = 'Please select a valid staff member, date, and positive advance amount.';
+            } else {
+                $branch_id = (int) $stf['branch_id'];
+                $uid = (int) $_SESSION['user_id'];
+                $st = $conn->prepare("INSERT INTO staff_advances (branch_id, staff_id, advance_date, amount, recovered_amount, payment_method, status, notes, created_by) VALUES (?,?,?,?,0.00,?,'active',?,?)");
+                $st->bind_param('iisdssi', $branch_id, $staff_id, $advance_date, $amount, $payment_method, $notes, $uid);
+                $st->execute();
+                $adv_id = $conn->insert_id;
+                $st->close();
+
+                if (!empty($_POST['post_to_expenses'])) {
+                    $ref = "ADV-$adv_id ({$stf['staff_code']})";
+                    $exp_note = "Staff Salary Advance to {$stf['name']}. " . $notes;
+                    $st_ie = $conn->prepare("INSERT INTO income_expenses (branch_id, entry_date, type, category, amount, payment_method, reference, notes, created_by) VALUES (?,?,'expense','Staff Salary Advance',?,?,?,?,?)");
+                    $st_ie->bind_param('isdsssi', $branch_id, $advance_date, $amount, $payment_method, $ref, $exp_note, $uid);
+                    $st_ie->execute();
+                    $st_ie->close();
+                }
+                log_audit_event($conn, 'hr_payroll', 'add', $adv_id, "Issued Staff Advance of " . fmt_money($amount) . " to {$stf['name']}", null, $_POST, $branch_id);
+                $msg = "Advance of " . fmt_money($amount) . " recorded for {$stf['name']}.";
+            }
+            header('Location: index.php?page=hr_payroll&sub=advances&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+            exit;
+        }
+
+        if (isset($_POST['generate_payroll'])) {
+            require_permission($conn, 'hr_payroll', 'add');
+            $salary_month = clean_text($_POST['salary_month'] ?? date('Y-m'), 7);
+            $staff_id = (int) ($_POST['staff_id'] ?? 0);
+            $bonus_amount = max(0, (float) ($_POST['bonus_amount'] ?? 0));
+            $other_deduction = max(0, (float) ($_POST['other_deduction'] ?? 0));
+            $custom_adv_deduct = isset($_POST['advance_deduction']) && $_POST['advance_deduction'] !== '' ? max(0, (float) $_POST['advance_deduction']) : null;
+            $notes = clean_text($_POST['notes'] ?? '');
+            $uid = (int) $_SESSION['user_id'];
+
+            $where_stf = $staff_id > 0 ? "id=$staff_id" : ("is_active=1 " . branch_and($conn));
+            $stf_res = $conn->query("SELECT * FROM staff_members WHERE $where_stf");
+            $gen_cnt = 0;
+            if ($stf_res) {
+                while ($stf = $stf_res->fetch_assoc()) {
+                    $sid = (int) $stf['id'];
+                    $bid = (int) $stf['branch_id'];
+                    $base = (float) $stf['base_salary'];
+                    $esc_m = mysqli_real_escape_string($conn, $salary_month);
+                    // Sum approved unpaid commissions for this staff member up to this month
+                    $comm_total = (float) ($conn->query("SELECT COALESCE(SUM(commission_amount),0) FROM sales_commissions WHERE staff_id=$sid AND status='approved' AND DATE_FORMAT(sale_date,'%Y-%m')<='$esc_m'")->fetch_row()[0] ?? 0);
+                    // Active unrecovered advances
+                    $adv_outstanding = (float) ($conn->query("SELECT COALESCE(SUM(amount - recovered_amount),0) FROM staff_advances WHERE staff_id=$sid AND status='active'")->fetch_row()[0] ?? 0);
+                    $adv_ded = ($staff_id > 0 && $custom_adv_deduct !== null) ? min($adv_outstanding, $custom_adv_deduct) : min($adv_outstanding, max(0, $base * 0.5));
+                    $net = max(0, round($base + $comm_total + $bonus_amount - $adv_ded - $other_deduction, 2));
+
+                    $chk_pr = $conn->query("SELECT id, payment_status FROM staff_payroll WHERE staff_id=$sid AND salary_month='$esc_m' LIMIT 1")->fetch_assoc();
+                    if ($chk_pr && $chk_pr['payment_status'] === 'paid') {
+                        continue; // Do not overwrite already paid payroll
+                    }
+                    $st = $conn->prepare("INSERT INTO staff_payroll (branch_id, staff_id, salary_month, base_salary, commission_total, bonus_amount, advance_deduction, other_deduction, net_salary, payment_status, notes, created_by) VALUES (?,?,?,?,?,?,?,?,?,'unpaid',?,?) ON DUPLICATE KEY UPDATE base_salary=VALUES(base_salary), commission_total=VALUES(commission_total), bonus_amount=VALUES(bonus_amount), advance_deduction=VALUES(advance_deduction), other_deduction=VALUES(other_deduction), net_salary=VALUES(net_salary), notes=VALUES(notes)");
+                    $st->bind_param('iisddddddsi', $bid, $sid, $salary_month, $base, $comm_total, $bonus_amount, $adv_ded, $other_deduction, $net, $notes, $uid);
+                    $st->execute();
+                    $st->close();
+                    $gen_cnt++;
+                }
+            }
+            log_audit_event($conn, 'hr_payroll', 'generate_payroll', $salary_month, "Generated/Updated $gen_cnt payroll sheet(s) for $salary_month", null, $_POST);
+            $msg = "Generated/updated $gen_cnt staff payroll record(s) for $salary_month.";
+            header('Location: index.php?page=hr_payroll&sub=payroll&month=' . urlencode($salary_month) . '&msg=' . urlencode($msg));
+            exit;
+        }
+
+        if (isset($_POST['pay_payroll'])) {
+            require_permission($conn, 'hr_payroll', 'edit');
+            $payroll_id = (int) ($_POST['payroll_id'] ?? 0);
+            $payment_date = clean_text($_POST['payment_date'] ?? date('Y-m-d'));
+            $payment_method = clean_text($_POST['payment_method'] ?? 'cash', 30);
+            $conn->begin_transaction();
+            try {
+                $pr = $conn->query("SELECT sp.*, sm.name AS staff_name, sm.staff_code FROM staff_payroll sp JOIN staff_members sm ON sp.staff_id=sm.id WHERE sp.id=$payroll_id FOR UPDATE")->fetch_assoc();
+                if (!$pr || $pr['payment_status'] === 'paid') {
+                    throw new Exception('Payroll record not found or already paid.');
+                }
+                $sid = (int) $pr['staff_id'];
+                $bid = (int) $pr['branch_id'];
+                $esc_m = mysqli_real_escape_string($conn, $pr['salary_month']);
+
+                // Mark payroll paid
+                $st = $conn->prepare("UPDATE staff_payroll SET payment_status='paid', payment_date=?, payment_method=? WHERE id=?");
+                $st->bind_param('ssi', $payment_date, $payment_method, $payroll_id);
+                $st->execute();
+                $st->close();
+
+                // Mark included commissions as paid
+                $conn->query("UPDATE sales_commissions SET status='paid', payroll_id=$payroll_id WHERE staff_id=$sid AND status='approved' AND DATE_FORMAT(sale_date,'%Y-%m')<='$esc_m'");
+
+                // Recover advance deduction across active staff_advances FIFO
+                $rem_deduct = (float) $pr['advance_deduction'];
+                if ($rem_deduct > 0) {
+                    $adv_rows = $conn->query("SELECT * FROM staff_advances WHERE staff_id=$sid AND status='active' ORDER BY advance_date ASC, id ASC FOR UPDATE");
+                    while ($ar = $adv_rows->fetch_assoc()) {
+                        if ($rem_deduct <= 0) break;
+                        $avail = max(0, (float) $ar['amount'] - (float) $ar['recovered_amount']);
+                        $take = min($rem_deduct, $avail);
+                        $new_rec = round((float) $ar['recovered_amount'] + $take, 2);
+                        $new_st = ($new_rec + 0.009 >= (float) $ar['amount']) ? 'recovered' : 'active';
+                        $conn->query("UPDATE staff_advances SET recovered_amount=$new_rec, status='$new_st' WHERE id=" . (int) $ar['id']);
+                        $rem_deduct = round($rem_deduct - $take, 2);
+                    }
+                }
+
+                // Post Net Salary payout to income_expenses
+                if ((float) $pr['net_salary'] > 0) {
+                    $uid = (int) $_SESSION['user_id'];
+                    $ref = "PAY-{$pr['salary_month']}-{$pr['staff_code']}";
+                    $exp_note = "Monthly Salary & Commission Payout for {$pr['staff_name']} ({$pr['salary_month']})";
+                    $st_ie = $conn->prepare("INSERT INTO income_expenses (branch_id, entry_date, type, category, amount, payment_method, reference, notes, created_by) VALUES (?,?,'expense','Staff Salary & Payroll',?,?,?,?,?)");
+                    $st_ie->bind_param('isdsssi', $bid, $payment_date, $pr['net_salary'], $payment_method, $ref, $exp_note, $uid);
+                    $st_ie->execute();
+                    $st_ie->close();
+                }
+
+                $conn->commit();
+                log_audit_event($conn, 'hr_payroll', 'pay_payroll', $payroll_id, "Disbursed Salary (" . fmt_money($pr['net_salary']) . ") to {$pr['staff_name']} for {$pr['salary_month']}", $pr, ['payment_status' => 'paid', 'payment_date' => $payment_date], $bid);
+                $msg = "Salary of " . fmt_money($pr['net_salary']) . " paid to {$pr['staff_name']} and posted to expenses.";
+            } catch (Throwable $e) {
+                $conn->rollback();
+                $err = $e->getMessage();
+            }
+            header('Location: index.php?page=hr_payroll&sub=payroll&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+            exit;
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // MODULE 8: BIKE TRADE-IN / EXCHANGE WORKFLOW STANDALONE HANDLERS
+    // ------------------------------------------------------------------------
+    if ($page === 'trade_ins' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        if (isset($_POST['save_standalone_trade_in'])) {
+            require_permission($conn, 'trade_ins', 'add');
+            $branch_id = get_write_branch_id($conn, (int) ($_POST['branch_id'] ?? 0));
+            $trade_in_date = clean_text($_POST['trade_in_date'] ?? date('Y-m-d'));
+            $customer_id = !empty($_POST['customer_id']) ? (int) $_POST['customer_id'] : null;
+            $customer_name = clean_text($_POST['customer_name'] ?? '', 255);
+            $customer_phone = clean_text($_POST['customer_phone'] ?? '', 60);
+            $customer_cnic = clean_text($_POST['customer_cnic'] ?? '', 40);
+            $model_id = (int) ($_POST['model_id'] ?? 0);
+            $old_make_model = clean_text($_POST['old_make_model'] ?? '', 150);
+            $old_chassis = clean_text($_POST['old_chassis'] ?? '', 100);
+            $old_motor = clean_text($_POST['old_motor'] ?? '', 100);
+            $old_reg_no = clean_text($_POST['old_reg_no'] ?? '', 60);
+            $old_color = clean_text($_POST['old_color'] ?? 'Black', 50);
+            $condition_grade = in_array($_POST['condition_grade'] ?? 'Good', ['Excellent', 'Good', 'Fair', 'Needs Repair'], true) ? $_POST['condition_grade'] : 'Good';
+            $agreed_trade_value = round((float) ($_POST['agreed_trade_value'] ?? 0), 2);
+            $estimated_resale_price = round((float) ($_POST['estimated_resale_price'] ?? $agreed_trade_value), 2);
+            $notes = clean_text($_POST['notes'] ?? '');
+
+            if ($old_chassis === '' || $old_motor === '' || $agreed_trade_value <= 0 || $model_id <= 0) {
+                $err = 'Model, Old Bike Chassis #, Motor #, and positive Agreed Trade-In Value are required.';
+            } else {
+                $conn->begin_transaction();
+                try {
+                    if ($customer_id) {
+                        $c_row = $conn->query("SELECT name, phone, cnic FROM customers WHERE id=$customer_id LIMIT 1")->fetch_assoc();
+                        if ($c_row) {
+                            if ($customer_name === '') $customer_name = $c_row['name'];
+                            if ($customer_phone === '') $customer_phone = $c_row['phone'] ?? '';
+                            if ($customer_cnic === '') $customer_cnic = $c_row['cnic'] ?? '';
+                        }
+                    }
+                    if ($old_make_model === '') {
+                        $m_row = $conn->query("SELECT model_name FROM models WHERE id=$model_id LIMIT 1")->fetch_assoc();
+                        $old_make_model = $m_row['model_name'] ?? 'Traded-In Bike';
+                    }
+                    $trade_in_no = 'TRD-' . date('Ymd', strtotime($trade_in_date)) . '-' . strtoupper(substr(bin2hex(random_bytes(2)), 0, 4));
+                    $safe_note = "Trade-In ($trade_in_no) Condition: $condition_grade | Reg: " . ($old_reg_no ?: 'Unregistered');
+                    $b_note = "Traded in by " . ($customer_name ?: 'Walk-in') . ". " . $notes;
+                    $zero_tax = 0.00;
+                    $t_basis = 'purchase_price';
+
+                    $st_b = $conn->prepare("INSERT INTO bikes (branch_id, order_date, inventory_date, chassis_number, motor_number, model_id, color, purchase_price, tax_amount, tax_rate_applied, tax_basis, status, safeguard_notes, notes, is_trade_in_unit) VALUES (?,?,?,?,?,?,?,?,?,?,?,'in_stock',?,?,1)");
+                    $st_b->bind_param('issssisdddsss', $branch_id, $trade_in_date, $trade_in_date, $old_chassis, $old_motor, $model_id, $old_color, $agreed_trade_value, $zero_tax, $zero_tax, $t_basis, $safe_note, $b_note);
+                    if (!$st_b->execute()) {
+                        throw new Exception("Could not add traded-in bike to inventory (Chassis $old_chassis may already exist).");
+                    }
+                    $stock_bike_id = $conn->insert_id;
+                    $st_b->close();
+
+                    $uid = (int) $_SESSION['user_id'];
+                    $st_ti = $conn->prepare("INSERT INTO bike_trade_ins (trade_in_no, branch_id, trade_in_date, customer_id, customer_name, customer_phone, customer_cnic, stock_bike_id, old_make_model, old_chassis, old_motor, old_reg_no, old_color, condition_grade, agreed_trade_value, estimated_resale_price, notes, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+                    $st_ti->bind_param('sisisssissssssddsi', $trade_in_no, $branch_id, $trade_in_date, $customer_id, $customer_name, $customer_phone, $customer_cnic, $stock_bike_id, $old_make_model, $old_chassis, $old_motor, $old_reg_no, $old_color, $condition_grade, $agreed_trade_value, $estimated_resale_price, $notes, $uid);
+                    $st_ti->execute();
+                    $ti_id = $conn->insert_id;
+                    $st_ti->close();
+
+                    if ($customer_id > 0) {
+                        $l_desc = "Trade-In Exchange Credit ($trade_in_no - Chassis: $old_chassis)";
+                        $st_l = $conn->prepare("INSERT INTO ledger (branch_id, entry_date, entry_type, amount, party_type, party_id, description, reference_type, reference_id, balance) VALUES (?,?,'credit',?,'customer',?,?,'trade_in',?,?)");
+                        $st_l->bind_param('isdisid', $branch_id, $trade_in_date, $agreed_trade_value, $customer_id, $l_desc, $ti_id, $agreed_trade_value);
+                        $st_l->execute();
+                        $st_l->close();
+                    }
+
+                    $conn->commit();
+                    log_audit_event($conn, 'trade_ins', 'add', $ti_id, "Recorded Trade-In $trade_in_no (Chassis: $old_chassis, Value: " . fmt_money($agreed_trade_value) . ") & added to stock", null, $_POST, $branch_id);
+                    $msg = "Trade-In $trade_in_no recorded! Old bike ($old_chassis) added to branch stock and customer credited " . fmt_money($agreed_trade_value) . ".";
+                } catch (Throwable $e) {
+                    $conn->rollback();
+                    $err = $e->getMessage();
+                }
+            }
+            header('Location: index.php?page=trade_ins&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+            exit;
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // MODULE 9: FULL SYSTEM AUDIT LOG HANDLERS
+    // ------------------------------------------------------------------------
+    if ($page === 'audit_logs' && isset($_GET['export_audit_csv']) && $_GET['export_audit_csv'] == 1) {
+        require_permission($conn, 'audit_logs', 'view');
+        $res_a = $conn->query("SELECT a.*, b.branch_code FROM system_audit_logs a LEFT JOIN branches b ON a.branch_id=b.id ORDER BY a.id DESC LIMIT 5000");
+        header('Content-Type: text/csv');
+        header('Content-Disposition: attachment; filename="system_audit_logs_' . date('Ymd_His') . '.csv"');
+        $out = fopen('php://output', 'w');
+        stream_csv_row($out, ['Log ID', 'Timestamp', 'Branch', 'Username', 'Role', 'IP Address', 'Module', 'Action', 'Record ID', 'Description']);
+        while ($r = $res_a->fetch_assoc()) {
+            stream_csv_row($out, [$r['id'], $r['created_at'], $r['branch_code'] ?? 'HQ', $r['username'], $r['user_role'], $r['ip_address'], $r['module'], $r['action_type'], $r['record_id'], $r['description']]);
+        }
+        fclose($out);
+        exit;
+    }
+
+    // ------------------------------------------------------------------------
+    // MODULE 10: QR / BARCODE GENERATOR & PHYSICAL STOCK OPENER / AUDIT
+    // ------------------------------------------------------------------------
+    if ($page === 'barcode_audit' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        if (isset($_POST['start_stock_audit'])) {
+            require_permission($conn, 'barcode_audit', 'add');
+            $branch_id = get_write_branch_id($conn, (int) ($_POST['branch_id'] ?? 0));
+            $audit_date = clean_text($_POST['audit_date'] ?? date('Y-m-d'));
+            $audit_scope = in_array($_POST['audit_scope'] ?? 'all', ['all', 'bikes', 'accessories'], true) ? $_POST['audit_scope'] : 'all';
+            $notes = clean_text($_POST['notes'] ?? '');
+            $uid = (int) $_SESSION['user_id'];
+            $audit_no = 'AUD-' . date('Ymd', strtotime($audit_date)) . '-' . strtoupper(substr(bin2hex(random_bytes(2)), 0, 4));
+
+            $conn->begin_transaction();
+            try {
+                $expected_bikes = 0;
+                $expected_acc_units = 0;
+
+                $st = $conn->prepare("INSERT INTO stock_audits (audit_no, branch_id, audit_date, audit_scope, expected_bikes, scanned_bikes, expected_acc_units, counted_acc_units, status, conducted_by, notes) VALUES (?,?,?,?,0,0,0,0,'in_progress',?,?)");
+                $st->bind_param('ssisss', $audit_no, $branch_id, $audit_date, $audit_scope, $uid, $notes);
+                $st->execute();
+                $audit_id = $conn->insert_id;
+                $st->close();
+
+                $st_it = $conn->prepare("INSERT INTO stock_audit_items (audit_id, item_type, reference_id, code_value, item_label, expected_qty, counted_qty, variance_qty, unit_value) VALUES (?,?,?,?,?,?,0,?,?)");
+
+                if ($audit_scope === 'all' || $audit_scope === 'bikes') {
+                    $b_res = $conn->query("SELECT b.id, b.chassis_number, b.color, b.purchase_price, m.model_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.status='in_stock' AND b.branch_id=$branch_id ORDER BY b.chassis_number ASC");
+                    while ($bk = $b_res->fetch_assoc()) {
+                        $itype = 'bike';
+                        $ref_id = (int) $bk['id'];
+                        $code = $bk['chassis_number'];
+                        $lbl = ($bk['model_name'] ?? 'Bike') . ' (' . $bk['color'] . ')';
+                        $exp_q = 1;
+                        $var_q = -1;
+                        $uval = (float) $bk['purchase_price'];
+                        $st_it->bind_param('isissiid', $audit_id, $itype, $ref_id, $code, $lbl, $exp_q, $var_q, $uval);
+                        $st_it->execute();
+                        $expected_bikes++;
+                    }
+                }
+
+                if ($audit_scope === 'all' || $audit_scope === 'accessories') {
+                    $a_res = $conn->query("SELECT id, name, sku, current_stock, purchase_price FROM accessories WHERE branch_id=$branch_id ORDER BY name ASC");
+                    while ($ac = $a_res->fetch_assoc()) {
+                        $itype = 'accessory';
+                        $ref_id = (int) $ac['id'];
+                        $code = $ac['sku'];
+                        $lbl = $ac['name'];
+                        $exp_q = (int) $ac['current_stock'];
+                        $var_q = -$exp_q;
+                        $uval = (float) $ac['purchase_price'];
+                        $st_it->bind_param('isissiid', $audit_id, $itype, $ref_id, $code, $lbl, $exp_q, $var_q, $uval);
+                        $st_it->execute();
+                        $expected_acc_units += $exp_q;
+                    }
+                }
+                $st_it->close();
+
+                $conn->query("UPDATE stock_audits SET expected_bikes=$expected_bikes, expected_acc_units=$expected_acc_units WHERE id=$audit_id");
+                $conn->commit();
+                log_audit_event($conn, 'barcode_audit', 'start_audit', $audit_id, "Started Physical Stock Audit $audit_no (Bikes: $expected_bikes, Accessory Units: $expected_acc_units)", null, $_POST, $branch_id);
+                header('Location: index.php?page=barcode_audit&sub=audit&audit_id=' . $audit_id . '&msg=' . urlencode("Stock Audit $audit_no initialized. Scan barcodes or enter physical counts below."));
+                exit;
+            } catch (Throwable $e) {
+                $conn->rollback();
+                $err = $e->getMessage();
+            }
+            header('Location: index.php?page=barcode_audit&sub=audit&err=' . urlencode($err));
+            exit;
+        }
+
+        if (isset($_POST['scan_audit_item'])) {
+            require_permission($conn, 'barcode_audit', 'edit');
+            $audit_id = (int) ($_POST['audit_id'] ?? 0);
+            $scan_code = trim(clean_text($_POST['scan_code'] ?? '', 120));
+            $scan_qty = max(1, (int) ($_POST['scan_qty'] ?? 1));
+            $aud = $conn->query("SELECT * FROM stock_audits WHERE id=$audit_id LIMIT 1")->fetch_assoc();
+            if (!$aud || $aud['status'] === 'reconciled') {
+                $err = 'Audit session not found or already reconciled.';
+            } elseif ($scan_code === '') {
+                $err = 'Please scan or enter a valid Chassis Number or SKU.';
+            } else {
+                $esc_c = mysqli_real_escape_string($conn, $scan_code);
+                $item = $conn->query("SELECT * FROM stock_audit_items WHERE audit_id=$audit_id AND LOWER(code_value)=LOWER('$esc_c') LIMIT 1")->fetch_assoc();
+                if ($item) {
+                    $new_cnt = ($item['item_type'] === 'bike') ? 1 : ((int) $item['counted_qty'] + $scan_qty);
+                    $new_var = $new_cnt - (int) $item['expected_qty'];
+                    $conn->query("UPDATE stock_audit_items SET counted_qty=$new_cnt, variance_qty=$new_var, scanned_at=NOW() WHERE id=" . (int) $item['id']);
+                    // Update totals on stock_audits
+                    $sb = (int) ($conn->query("SELECT COALESCE(SUM(counted_qty),0) FROM stock_audit_items WHERE audit_id=$audit_id AND item_type='bike'")->fetch_row()[0] ?? 0);
+                    $sa = (int) ($conn->query("SELECT COALESCE(SUM(counted_qty),0) FROM stock_audit_items WHERE audit_id=$audit_id AND item_type='accessory'")->fetch_row()[0] ?? 0);
+                    $conn->query("UPDATE stock_audits SET scanned_bikes=$sb, counted_acc_units=$sa WHERE id=$audit_id");
+                    $msg = "✅ Verified: {$item['code_value']} — {$item['item_label']} (Counted: $new_cnt / Expected: {$item['expected_qty']})";
+                } else {
+                    $err = "⚠️ Code '$scan_code' was NOT found in expected stock for this branch audit!";
+                }
+            }
+            header('Location: index.php?page=barcode_audit&sub=audit&audit_id=' . $audit_id . '&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+            exit;
+        }
+
+        if (isset($_POST['reconcile_stock_audit'])) {
+            require_permission($conn, 'barcode_audit', 'edit');
+            $audit_id = (int) ($_POST['audit_id'] ?? 0);
+            $apply_adjustments = !empty($_POST['apply_accessory_adjustments']);
+            $counts = isset($_POST['counted_qty']) && is_array($_POST['counted_qty']) ? $_POST['counted_qty'] : [];
+            $item_notes = isset($_POST['item_notes']) && is_array($_POST['item_notes']) ? $_POST['item_notes'] : [];
+
+            $conn->begin_transaction();
+            try {
+                $aud = $conn->query("SELECT * FROM stock_audits WHERE id=$audit_id FOR UPDATE")->fetch_assoc();
+                if (!$aud) throw new Exception('Stock Audit not found.');
+
+                foreach ($counts as $item_id => $c_val) {
+                    $iid = (int) $item_id;
+                    $c_qty = max(0, (int) $c_val);
+                    $inote = clean_text($item_notes[$item_id] ?? '', 255);
+                    $it_row = $conn->query("SELECT * FROM stock_audit_items WHERE id=$iid AND audit_id=$audit_id LIMIT 1")->fetch_assoc();
+                    if ($it_row) {
+                        $var_q = $c_qty - (int) $it_row['expected_qty'];
+                        $st_u = $conn->prepare("UPDATE stock_audit_items SET counted_qty=?, variance_qty=?, notes=? WHERE id=?");
+                        $st_u->bind_param('iisi', $c_qty, $var_q, $inote, $iid);
+                        $st_u->execute();
+                        $st_u->close();
+
+                        if ($apply_adjustments && $it_row['item_type'] === 'accessory' && $var_q !== 0) {
+                            $conn->query("UPDATE accessories SET current_stock=$c_qty WHERE id=" . (int) $it_row['reference_id']);
+                        }
+                    }
+                }
+                $sb = (int) ($conn->query("SELECT COALESCE(SUM(counted_qty),0) FROM stock_audit_items WHERE audit_id=$audit_id AND item_type='bike'")->fetch_row()[0] ?? 0);
+                $sa = (int) ($conn->query("SELECT COALESCE(SUM(counted_qty),0) FROM stock_audit_items WHERE audit_id=$audit_id AND item_type='accessory'")->fetch_row()[0] ?? 0);
+                $conn->query("UPDATE stock_audits SET scanned_bikes=$sb, counted_acc_units=$sa, status='reconciled', reconciled_at=NOW() WHERE id=$audit_id");
+                $conn->commit();
+                log_audit_event($conn, 'barcode_audit', 'reconcile', $audit_id, "Reconciled Stock Audit {$aud['audit_no']} (Bikes: $sb/{$aud['expected_bikes']}, Acc: $sa/{$aud['expected_acc_units']})", null, ['apply_adjustments' => $apply_adjustments], $aud['branch_id']);
+                $msg = "Stock Audit {$aud['audit_no']} finalized and reconciled!" . ($apply_adjustments ? ' Accessory stock quantities updated to physical count.' : '');
+            } catch (Throwable $e) {
+                $conn->rollback();
+                $err = $e->getMessage();
+            }
+            header('Location: index.php?page=barcode_audit&sub=audit&audit_id=' . $audit_id . '&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+            exit;
+        }
+    }
+
 
     if ($page === 'branches' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if (isset($_POST['save_branch'])) {
@@ -4359,9 +6514,11 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     $party_name = 'Walk-in Customer';
                 }
                 $total_sale_amount = $selling_price + $total_acc_price;
-                $transaction_balance = $total_sale_amount - $down_payment;
+                $enable_trade_in = !empty($_POST['enable_trade_in']);
+                $trade_in_value = $enable_trade_in ? max(0, round((float) ($_POST['trade_in_value'] ?? 0), 2)) : 0.0;
+                $transaction_balance = $total_sale_amount - $down_payment - $trade_in_value;
                 if (empty($customer_id) && abs($transaction_balance) > 0.0001) {
-                    throw new Exception('Walk-in customers must pay the exact sale total.');
+                    throw new Exception('Walk-in customers must pay the exact sale total (including any trade-in value).');
                 }
                 assert_valid_payment_method($payment_method_dp);
                 $payment_notes = 'Down Payment for Chassis: ' . $bike['chassis_number'];
@@ -4387,7 +6544,48 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     $led_dp_st->execute();
                     $led_dp_st->close();
                 }
-                $remaining_balance = max(0, $total_sale_amount - $down_payment - max(0, $prior_customer_advance));
+                // Module 8: Process Bike Trade-In / Exchange during Sale
+                if ($enable_trade_in && $trade_in_value > 0) {
+                    $ti_model_id = (int) ($_POST['trade_in_model_id'] ?? $bike['model_id']);
+                    $ti_make_model = clean_text($_POST['trade_in_make_model'] ?? 'Traded-In Bike', 150);
+                    $ti_chassis = clean_text($_POST['trade_in_chassis'] ?? '', 100);
+                    $ti_motor = clean_text($_POST['trade_in_motor'] ?? '', 100);
+                    $ti_reg_no = clean_text($_POST['trade_in_reg_no'] ?? '', 60);
+                    $ti_color = clean_text($_POST['trade_in_color'] ?? 'Black', 50);
+                    $ti_cond = in_array($_POST['trade_in_condition'] ?? 'Good', ['Excellent', 'Good', 'Fair', 'Needs Repair'], true) ? $_POST['trade_in_condition'] : 'Good';
+                    $ti_resale = max(0, round((float) ($_POST['trade_in_resale'] ?? $trade_in_value), 2));
+                    if (empty($ti_chassis) || empty($ti_motor)) {
+                        throw new Exception('Traded-in bike Chassis # and Engine/Motor # are required when Trade-In is enabled.');
+                    }
+                    $ti_no = 'TRD-' . date('Ymd', strtotime($selling_date)) . '-' . strtoupper(substr(bin2hex(random_bytes(2)), 0, 4));
+                    $ti_safe = "Trade-In ($ti_no) against Chassis {$bike['chassis_number']} | Cond: $ti_cond";
+                    $ti_bnote = "Exchanged by $party_name ($ti_make_model | Reg: $ti_reg_no)";
+                    $z_tax = 0.00;
+                    $z_basis = 'purchase_price';
+                    $st_tib = $conn->prepare("INSERT INTO bikes (branch_id, order_date, inventory_date, chassis_number, motor_number, model_id, color, purchase_price, tax_amount, tax_rate_applied, tax_basis, status, safeguard_notes, notes, is_trade_in_unit) VALUES (?,?,?,?,?,?,?,?,?,?,?,'in_stock',?,?,1)");
+                    $st_tib->bind_param('issssisdddsss', $sale_branch_id, $selling_date, $selling_date, $ti_chassis, $ti_motor, $ti_model_id, $ti_color, $trade_in_value, $z_tax, $z_tax, $z_basis, $ti_safe, $ti_bnote);
+                    if (!$st_tib->execute()) {
+                        throw new Exception("Trade-In Bike Chassis '$ti_chassis' already exists in inventory.");
+                    }
+                    $new_trade_stock_id = $conn->insert_id;
+                    $st_tib->close();
+
+                    $uid_sale = (int) ($_SESSION['user_id'] ?? 0);
+                    $st_tir = $conn->prepare("INSERT INTO bike_trade_ins (trade_in_no, branch_id, trade_in_date, customer_id, customer_name, sold_bike_id, stock_bike_id, old_make_model, old_chassis, old_motor, old_reg_no, old_color, condition_grade, agreed_trade_value, estimated_resale_price, notes, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+                    $st_tir->bind_param('sisisiissssssddsi', $ti_no, $sale_branch_id, $selling_date, $customer_id, $party_name, $bike_id, $new_trade_stock_id, $ti_make_model, $ti_chassis, $ti_motor, $ti_reg_no, $ti_color, $ti_cond, $trade_in_value, $ti_resale, $ti_bnote, $uid_sale);
+                    $st_tir->execute();
+                    $st_tir->close();
+
+                    if ($customer_id) {
+                        $led_ti = $conn->prepare("INSERT INTO ledger (branch_id,entry_date,entry_type,amount,party_type,party_id,description,reference_type,reference_id,balance) VALUES (?,?,'credit',?,'customer',?,?,'trade_in',?,?)");
+                        $desc_ti = "Trade-In Exchange Credit ($ti_no: $ti_chassis) for Chassis: " . $bike['chassis_number'];
+                        $led_ti->bind_param('isdisid', $sale_branch_id, $selling_date, $trade_in_value, $customer_id, $desc_ti, $bike_id, $trade_in_value);
+                        $led_ti->execute();
+                        $led_ti->close();
+                    }
+                    $msg .= " Trade-In ($ti_no) added to stock & deducted.";
+                }
+                $remaining_balance = max(0, $total_sale_amount - $down_payment - $trade_in_value - max(0, $prior_customer_advance));
                 if ($total_installments > 0 && $remaining_balance > 0) {
                     if (empty($customer_id) || !valid_date($first_due_date)) {
                         throw new Exception('A customer and valid first due date are required for installment sales.');
@@ -4439,6 +6637,112 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     }
                     $msg .= ' Money allocation tracked.';
                 }
+                // Module 7: Salesperson & Commission Hook
+                $salesperson_id = !empty($_POST['salesperson_id']) ? (int) $_POST['salesperson_id'] : null;
+                $custom_comm = isset($_POST['sales_commission_amount']) && $_POST['sales_commission_amount'] !== '' ? max(0, (float) $_POST['sales_commission_amount']) : null;
+                if ($salesperson_id) {
+                    $conn->query("UPDATE bikes SET salesperson_id=$salesperson_id WHERE id=$bike_id");
+                    $sp_row = $conn->query("SELECT * FROM staff_members WHERE id=$salesperson_id LIMIT 1")->fetch_assoc();
+                    if ($sp_row) {
+                        $comm_amt = 0.0;
+                        if ($custom_comm !== null) {
+                            $comm_amt = $custom_comm;
+                        } elseif ($sp_row['commission_type'] === 'fixed') {
+                            $comm_amt = (float) $sp_row['commission_rate'];
+                        } elseif ($sp_row['commission_type'] === 'percentage_price') {
+                            $comm_amt = round($selling_price * ((float) $sp_row['commission_rate'] / 100.0), 2);
+                        } elseif ($sp_row['commission_type'] === 'percentage_margin') {
+                            $comm_amt = max(0, round($margin * ((float) $sp_row['commission_rate'] / 100.0), 2));
+                        }
+                        if ($comm_amt > 0) {
+                            $c_note = "Commission on Chassis {$bike['chassis_number']}";
+                            $st_cm = $conn->prepare("INSERT INTO sales_commissions (branch_id, staff_id, bike_id, sale_date, sale_amount, commission_amount, status, notes) VALUES (?,?,?,?,?,?,'approved',?)");
+                            $st_cm->bind_param('iiisdds', $sale_branch_id, $salesperson_id, $bike_id, $selling_date, $total_sale_amount, $comm_amt, $c_note);
+                            $st_cm->execute();
+                            $st_cm->close();
+                            $msg .= " Salesperson commission recorded.";
+                        }
+                    }
+                }
+
+                // Module 2: Battery & Motor Warranty Registration Hook
+                $bat_serial = clean_text($_POST['battery_serial'] ?? '', 120);
+                $ctrl_serial = clean_text($_POST['controller_serial'] ?? '', 120);
+                $chg_serial = clean_text($_POST['charger_serial'] ?? '', 120);
+                $bat_w_months = max(1, (int) ($_POST['battery_warranty_months'] ?? 12));
+                $mot_w_months = max(1, (int) ($_POST['motor_warranty_months'] ?? 18));
+                $dt_b_exp = new DateTime($selling_date);
+                $dt_b_exp->modify("+{$bat_w_months} months");
+                $b_exp_str = $dt_b_exp->format('Y-m-d');
+                $dt_m_exp = new DateTime($selling_date);
+                $dt_m_exp->modify("+{$mot_w_months} months");
+                $m_exp_str = $dt_m_exp->format('Y-m-d');
+                $w_card_no = 'WRN-' . date('Ymd', strtotime($selling_date)) . '-' . $bike_id;
+                $m_ser_val = $bike['motor_number'] ?? '';
+                $st_wr = $conn->prepare("INSERT INTO warranties (branch_id, bike_id, customer_id, warranty_card_no, battery_serial, motor_serial, controller_serial, charger_serial, warranty_start_date, battery_warranty_months, motor_warranty_months, controller_warranty_months, battery_expiry_date, motor_expiry_date, status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,'active')");
+                $st_wr->bind_param('iiissssssiiiss', $sale_branch_id, $bike_id, $customer_id, $w_card_no, $bat_serial, $m_ser_val, $ctrl_serial, $chg_serial, $selling_date, $bat_w_months, $mot_w_months, $bat_w_months, $b_exp_str, $m_exp_str);
+                $st_wr->execute();
+                $st_wr->close();
+                $up_bw = $conn->prepare("UPDATE bikes SET battery_serial=?, controller_serial=?, charger_serial=?, warranty_months=?, warranty_expiry=? WHERE id=?");
+                $up_bw->bind_param('sssisi', $bat_serial, $ctrl_serial, $chg_serial, $bat_w_months, $b_exp_str, $bike_id);
+                $up_bw->execute();
+                $up_bw->close();
+
+                // Module 1: Installment Guarantors (1-2) & KYC Scans Hook
+                $sale_guarantors_in = isset($_POST['guarantors']) && is_array($_POST['guarantors']) ? $_POST['guarantors'] : [];
+                foreach ([1, 2] as $g_slot) {
+                    $g_data = $sale_guarantors_in[$g_slot] ?? [];
+                    $g_name = clean_text($g_data['name'] ?? '', 255);
+                    $g_cnic = clean_text($g_data['cnic'] ?? '', 40);
+                    $g_phone = clean_text($g_data['phone'] ?? '', 60);
+                    if ($g_name !== '' && $g_cnic !== '') {
+                        $g_rel = clean_text($g_data['relation'] ?? '', 100);
+                        $g_occ = clean_text($g_data['occupation'] ?? '', 150);
+                        $g_inc = max(0, (float) ($g_data['monthly_income'] ?? 0));
+                        $g_addr = clean_text($g_data['address'] ?? '');
+                        $g_chq_no = clean_text($g_data['security_cheque_no'] ?? '', 100);
+                        $g_bank = clean_text($g_data['security_bank_name'] ?? '', 150);
+                        $g_chq_amt = max(0, (float) ($g_data['security_cheque_amount'] ?? 0));
+                        $g_front = '';
+                        $g_stamp = '';
+                        if (isset($_FILES['guarantor_files']['name'][$g_slot]['cnic_front']) && $_FILES['guarantor_files']['error'][$g_slot]['cnic_front'] === UPLOAD_ERR_OK) {
+                            $f_arr = [
+                                'name' => $_FILES['guarantor_files']['name'][$g_slot]['cnic_front'],
+                                'type' => $_FILES['guarantor_files']['type'][$g_slot]['cnic_front'],
+                                'tmp_name' => $_FILES['guarantor_files']['tmp_name'][$g_slot]['cnic_front'],
+                                'error' => $_FILES['guarantor_files']['error'][$g_slot]['cnic_front'],
+                                'size' => $_FILES['guarantor_files']['size'][$g_slot]['cnic_front']
+                            ];
+                            $g_front = handle_kyc_upload($f_arr) ?: '';
+                        }
+                        if (isset($_FILES['guarantor_files']['name'][$g_slot]['stamp_paper']) && $_FILES['guarantor_files']['error'][$g_slot]['stamp_paper'] === UPLOAD_ERR_OK) {
+                            $f_arr2 = [
+                                'name' => $_FILES['guarantor_files']['name'][$g_slot]['stamp_paper'],
+                                'type' => $_FILES['guarantor_files']['type'][$g_slot]['stamp_paper'],
+                                'tmp_name' => $_FILES['guarantor_files']['tmp_name'][$g_slot]['stamp_paper'],
+                                'error' => $_FILES['guarantor_files']['error'][$g_slot]['stamp_paper'],
+                                'size' => $_FILES['guarantor_files']['size'][$g_slot]['stamp_paper']
+                            ];
+                            $g_stamp = handle_kyc_upload($f_arr2) ?: '';
+                        }
+                        $st_sg = $conn->prepare("INSERT INTO sale_guarantors (branch_id, bike_id, customer_id, guarantor_no, name, cnic, phone, relation, occupation, monthly_income, address, security_cheque_no, security_bank_name, security_cheque_amount, cnic_front_file, stamp_paper_file) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+                        $st_sg->bind_param('iiiisssssdssssss', $sale_branch_id, $bike_id, $customer_id, $g_slot, $g_name, $g_cnic, $g_phone, $g_rel, $g_occ, $g_inc, $g_addr, $g_chq_no, $g_bank, $g_chq_amt, $g_front, $g_stamp);
+                        $st_sg->execute();
+                        $st_sg->close();
+                    }
+                }
+
+                // Module 4: Excise Registration Tracker Hook
+                $excise_fee_col = max(0, (float) ($_POST['excise_fee_collected'] ?? 0));
+                if (!empty($_POST['track_excise_on_sale']) || $excise_fee_col > 0) {
+                    $uid_ex = (int) ($_SESSION['user_id'] ?? 0);
+                    $ex_docs = 'Sale Invoice, Customer CNIC';
+                    $st_ex = $conn->prepare("INSERT INTO excise_registrations (branch_id, bike_id, customer_id, fee_collected, docs_submitted, plate_status, smart_card_status, created_by) VALUES (?,?,?,?,?,'Pending','Pending',?)");
+                    $st_ex->bind_param('iiidsi', $sale_branch_id, $bike_id, $customer_id, $excise_fee_col, $ex_docs, $uid_ex);
+                    $st_ex->execute();
+                    $st_ex->close();
+                }
+
                 $conn->commit();
                 $_SESSION['last_sale_bike_id'] = $bike_id;
                 $msg = 'Sale recorded successfully. Margin: ' . fmt_money($margin) . '. ' . $msg;
@@ -5680,6 +7984,13 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             header('Content-Type: application/json');
             $customers_list_ajax = get_customers_with_balances($conn);
             echo json_encode($customers_list_ajax->fetch_all(MYSQLI_ASSOC));
+        } elseif ($_GET['ajax'] === 'barcode_lookup') {
+            require_any_permission($conn, [['sale', 'view'], ['inventory', 'view'], ['accessory_pos', 'view'], ['barcode_audit', 'view']]);
+            header('Content-Type: application/json');
+            $code = mysqli_real_escape_string($conn, clean_text($_GET['code'] ?? '', 120));
+            $bk = $conn->query("SELECT b.id, b.chassis_number, b.motor_number, b.color, b.purchase_price, b.status, m.model_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.chassis_number='$code' OR b.motor_number='$code' LIMIT 1")->fetch_assoc();
+            $ac = $conn->query("SELECT id, name, sku, selling_price, current_stock FROM accessories WHERE sku='$code' LIMIT 1")->fetch_assoc();
+            echo json_encode(['bike' => $bk, 'accessory' => $ac]);
         } elseif ($_GET['ajax'] === 'get_branch_bikes') {
             require_any_permission($conn, [['branch_transfers', 'view'], ['inventory', 'view']]);
             header('Content-Type: application/json');
@@ -6697,9 +9008,18 @@ else:
         ['purchase', '📦', 'Purchase Entry'],
         ['inventory', '📋', 'Inventory / Stock'],
         ['sale', '🛒', 'Sales Entry'],
+        ['accessory_pos', '🛍️', 'Parts & Acc. POS'],
+        ['trade_ins', '🔄', 'Bike Trade-Ins'],
+        ['installments', '🗓️', 'Installments'],
+        ['kyc_vault', '🛡️', 'KYC & Guarantors'],
+        ['whatsapp_hub', '💬', 'WhatsApp & SMS Hub'],
+        ['cash_book', '📖', 'Daily Cash Book'],
+        ['warranty_service', '🔧', 'Warranty & Workshop'],
+        ['excise_tracker', '🏛️', 'Excise & Plates'],
+        ['hr_payroll', '👨‍💼', 'HR, Comm. & Payroll'],
+        ['barcode_audit', '🏷️', 'Barcodes & Stock Audit'],
         ['returns', '↩', 'Returns'],
         ['payments', '💳', 'Payments Register'],
-        ['installments', '🗓️', 'Installments'],
         ['money_destinations', '🏦', 'Money Destinations'],
         ['money_tracking', '💸', 'Money Tracking'],
         ['bank_deposits', '🏧', 'Bank Deposits'],
@@ -6712,6 +9032,7 @@ else:
         ['accessories', '🛠️', 'Accessories'],
         ['customers', '👥', 'Customers'],
         ['suppliers', '🏢', 'Suppliers'],
+        ['audit_logs', '🕵️', 'System Audit Logs'],
         ['users', '👨‍💼', 'Users'],
         ['roles', '🔑', 'Roles & Permissions'],
         ['settings', '⚙', 'Settings'],
@@ -6922,7 +9243,15 @@ else:
 <style>.quick-actions-wrap .btn { flex: 1 1 auto; justify-content: center; min-width: 140px; text-align: center; }</style>
 <fieldset class="fieldset"><legend>⚡ Quick Actions</legend>
 <div class="quick-actions-wrap" style="display:flex;gap:8px;flex-wrap:wrap">
-<?php if (has_permission($conn, 'sale', 'add')): ?><a href="index.php?page=sale" class="btn btn-success animate__animated animate__pulse">🛒 New Sale</a><?php endif; ?>
+<?php if (has_permission($conn, 'sale', 'add')): ?><a href="index.php?page=sale" class="btn btn-success animate__animated animate__pulse">🛒 New Bike Sale</a><?php endif; ?>
+<?php if (has_permission($conn, 'accessory_pos', 'view')): ?><a href="index.php?page=accessory_pos" class="btn btn-primary">🛍️ Counter Parts POS</a><?php endif; ?>
+<?php if (has_permission($conn, 'cash_book', 'view')): ?><a href="index.php?page=cash_book" class="btn btn-warning">📖 Daily Roznamcha</a><?php endif; ?>
+<?php if (has_permission($conn, 'warranty_service', 'view')): ?><a href="index.php?page=warranty_service" class="btn btn-info">🔧 Workshop Job Card</a><?php endif; ?>
+<?php if (has_permission($conn, 'whatsapp_hub', 'view')): ?><a href="index.php?page=whatsapp_hub" class="btn btn-success">💬 WhatsApp Reminders</a><?php endif; ?>
+<?php if (has_permission($conn, 'kyc_vault', 'view')): ?><a href="index.php?page=kyc_vault" class="btn btn-default">🛡️ KYC & Guarantors</a><?php endif; ?>
+<?php if (has_permission($conn, 'excise_tracker', 'view')): ?><a href="index.php?page=excise_tracker" class="btn btn-default">🏛️ Excise & Plates</a><?php endif; ?>
+<?php if (has_permission($conn, 'hr_payroll', 'view')): ?><a href="index.php?page=hr_payroll" class="btn btn-default">👨‍💼 Staff & Payroll</a><?php endif; ?>
+<?php if (has_permission($conn, 'barcode_audit', 'view')): ?><a href="index.php?page=barcode_audit" class="btn btn-default">🏷️ Barcodes & Audit</a><?php endif; ?>
 <?php if (has_permission($conn, 'purchase', 'add')): ?><a href="index.php?page=purchase" class="btn btn-primary animate__animated animate__pulse">📦 New Purchase</a><?php endif; ?>
 <?php if (has_permission($conn, 'branch_transfers', 'add')): ?><a href="index.php?page=branch_transfers" class="btn btn-info">🔄 Transfer Stock</a><?php endif; ?>
 <?php if (has_permission($conn, 'branches', 'view')): ?><a href="index.php?page=branches" class="btn btn-default">🏢 Branches</a><?php endif; ?>
@@ -8527,7 +10856,16 @@ document.getElementById('bulkExportForm').addEventListener('submit', function(){
         $last_sale_bike_id = $_SESSION['last_sale_bike_id'] ?? 0;
         unset($_SESSION['last_sale_bike_id']);
 ?>
-<form method="POST" id="saleForm" class="animate__animated animate__fadeIn">
+<?php
+        $sale_staff_list = $conn->query("SELECT id, name, staff_code, commission_type, commission_rate FROM staff_members WHERE is_active=1 " . branch_and($conn) . " ORDER BY name");
+        $sale_models_all = $conn->query("SELECT id, model_code, model_name FROM models ORDER BY model_name");
+?>
+<div style="background:var(--bg2);border:1px solid var(--accent);padding:8px 12px;border-radius:2px;margin-bottom:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap" class="no-print">
+    <strong>🔫 Barcode / QR Chassis Scanner:</strong>
+    <input type="text" id="saleChassisScanner" placeholder="Scan Bike Chassis Barcode here to auto-select bike..." style="flex:1;min-width:220px;padding:6px 10px;border:1px solid var(--accent);background:var(--input-bg);color:var(--input-text)" onkeydown="if(event.key==='Enter'){event.preventDefault();scanBikeChassisForSale(this.value);}">
+    <a href="index.php?page=accessory_pos" class="btn btn-primary btn-sm">🛍️ Standalone Accessory Counter POS →</a>
+</div>
+<form method="POST" id="saleForm" enctype="multipart/form-data" class="animate__animated animate__fadeIn">
 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="save_sale" value="1">
 <fieldset class="fieldset"><legend>🛒 Sale Details</legend>
@@ -8595,6 +10933,7 @@ document.getElementById('bulkExportForm').addEventListener('submit', function(){
 </div>
 <div class="form-row">
     <div class="form-group"><label>This Sale Total</label><input type="text" id="totalAmountDue" readonly style="background:var(--bg3);color:var(--text2)"></div>
+    <div class="form-group"><label>Trade-In Deduction</label><input type="text" id="tradeInDeductionDisp" readonly style="background:var(--bg3);color:var(--success);font-weight:700" value="0.00"></div>
     <div class="form-group"><label>Previous Khata</label><input type="text" id="previousCustomerBalance" readonly style="background:var(--bg3);color:var(--text2)"></div>
     <div class="form-group"><label>Amount to Finance</label><input type="text" id="remainingBalance" readonly style="background:var(--bg3);color:var(--text2)" aria-describedby="financeBalanceHelp"><small id="financeBalanceHelp" style="color:var(--text3)">After today’s payment and any existing advance</small></div>
     <div class="form-group"><label>Closing Khata</label><input type="text" id="closingCustomerBalance" readonly style="background:var(--bg3);font-weight:700"></div>
@@ -8650,6 +10989,88 @@ function addMoneyAllocRow() {
     $(row).find('select').select2({ minimumResultsForSearch: 10, placeholder: '-- Select --', allowClear: false, theme: 'default' });
 }
 </script>
+<fieldset class="fieldset" style="border-color:var(--accent);background:var(--surface)">
+<legend>👨‍💼 Salesperson, Battery Warranty & Excise Registration</legend>
+<div class="form-row">
+    <div class="form-group" style="flex:2">
+        <label>Assigned Salesperson (Auto-calculates Commission)</label>
+        <select name="salesperson_id" id="saleStaffSel" onchange="updateSaleCommission()">
+            <option value="" data-type="fixed" data-rate="0">-- Direct Showroom Sale (No Salesperson) --</option>
+            <?php if ($sale_staff_list) { while ($ssl = $sale_staff_list->fetch_assoc()): ?>
+            <option value="<?= (int) $ssl['id'] ?>" data-type="<?= sanitize($ssl['commission_type']) ?>" data-rate="<?= (float) $ssl['commission_rate'] ?>">
+                <?= sanitize($ssl['name'] . ' (' . $ssl['staff_code'] . ') — ' . ($ssl['commission_type'] === 'fixed' ? 'Rs. ' . $ssl['commission_rate'] : $ssl['commission_rate'] . '%')) ?>
+            </option>
+            <?php endwhile; } ?>
+        </select>
+    </div>
+    <div class="form-group"><label>Salesperson Commission (<?= $currency ?>)</label><input type="number" name="sales_commission_amount" id="saleCommAmt" step="0.01" min="0" value="0.00"></div>
+    <div class="form-group"><label>Excise Reg. Fee Collected (<?= $currency ?>)</label><input type="number" name="excise_fee_collected" step="0.01" min="0" value="0.00"></div>
+    <div class="form-group"><label style="display:flex;align-items:center;gap:6px;margin-top:24px"><input type="checkbox" name="track_excise_on_sale" value="1" checked> Track Number Plate / Excise</label></div>
+</div>
+<div class="form-row">
+    <div class="form-group"><label>Battery Pack Serial #</label><input type="text" name="battery_serial" placeholder="BAT-SN-XXXXX"></div>
+    <div class="form-group"><label>Controller Serial #</label><input type="text" name="controller_serial" placeholder="CTRL-SN-XXXXX"></div>
+    <div class="form-group"><label>Charger Serial #</label><input type="text" name="charger_serial" placeholder="CHG-SN-XXXXX"></div>
+    <div class="form-group"><label>Battery Warranty (Months)</label><input type="number" name="battery_warranty_months" min="1" max="60" value="12"></div>
+    <div class="form-group"><label>Motor Warranty (Months)</label><input type="number" name="motor_warranty_months" min="1" max="60" value="18"></div>
+</div>
+</fieldset>
+
+<fieldset class="fieldset" style="border-color:var(--warning);background:var(--surface)">
+<legend style="cursor:pointer" onclick="document.getElementById('saleTradeInArea').style.display=document.getElementById('saleTradeInArea').style.display==='none'?'block':'none'">🔄 Bike Trade-In / Exchange Workflow <small style="color:var(--text3)">(Optional — deducts old bike value & adds to stock)</small></legend>
+<div id="saleTradeInArea" style="display:none">
+    <div class="form-group" style="margin-bottom:8px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;color:var(--warning);font-weight:700">
+            <input type="checkbox" name="enable_trade_in" id="enableTradeInChk" value="1" onchange="calcRemainingBalance()"> Enable Customer Bike Trade-In / Exchange on this Sale
+        </label>
+    </div>
+    <div class="form-row">
+        <div class="form-group">
+            <label>Assign Stock Model Category</label>
+            <select name="trade_in_model_id">
+                <?php if ($sale_models_all) { while ($sma = $sale_models_all->fetch_assoc()): ?>
+                <option value="<?= (int) $sma['id'] ?>"><?= sanitize($sma['model_name'] . ' (' . $sma['model_code'] . ')') ?></option>
+                <?php endwhile; } ?>
+            </select>
+        </div>
+        <div class="form-group"><label>Old Bike Make / Model Name</label><input type="text" name="trade_in_make_model" placeholder="e.g. Honda CD70 2021 / Old EV"></div>
+        <div class="form-group"><label>Old Bike Chassis #</label><input type="text" name="trade_in_chassis" placeholder="Required for Trade-In"></div>
+        <div class="form-group"><label>Old Bike Motor / Engine #</label><input type="text" name="trade_in_motor" placeholder="Required for Trade-In"></div>
+        <div class="form-group"><label>Old Reg / Plate #</label><input type="text" name="trade_in_reg_no" placeholder="e.g. MZG-21-1122"></div>
+    </div>
+    <div class="form-row">
+        <div class="form-group"><label>Color</label><input type="text" name="trade_in_color" value="Black"></div>
+        <div class="form-group"><label>Condition</label><select name="trade_in_condition"><option value="Good">Good</option><option value="Excellent">Excellent</option><option value="Fair">Fair</option><option value="Needs Repair">Needs Repair</option></select></div>
+        <div class="form-group"><label>Agreed Trade-In Value (<?= $currency ?>)</label><input type="number" name="trade_in_value" id="tradeInValueInput" step="0.01" min="0" value="0.00" oninput="calcRemainingBalance()"></div>
+        <div class="form-group"><label>Expected Resale Value (<?= $currency ?>)</label><input type="number" name="trade_in_resale" step="0.01" min="0" value="0.00"></div>
+    </div>
+</div>
+</fieldset>
+
+<fieldset class="fieldset" style="border-color:var(--success);background:var(--surface)">
+<legend style="cursor:pointer" onclick="document.getElementById('saleKycArea').style.display=document.getElementById('saleKycArea').style.display==='none'?'block':'none'">🛡️ Installment Guarantors (1–2) & KYC Document Vault <small style="color:var(--text3)">(Click to expand for Installment Sales)</small></legend>
+<div id="saleKycArea" style="display:none">
+    <?php foreach ([1, 2] as $g_idx): ?>
+    <div style="padding:10px;background:var(--bg2);border:1px solid var(--border);margin-bottom:8px;border-radius:2px">
+        <strong style="color:var(--accent);display:block;margin-bottom:6px">🛡️ Guarantor #<?= $g_idx ?> Details</strong>
+        <div class="form-row">
+            <div class="form-group"><label>Guarantor #<?= $g_idx ?> Name</label><input type="text" name="guarantors[<?= $g_idx ?>][name]" placeholder="Full Name"></div>
+            <div class="form-group"><label>CNIC #</label><input type="text" name="guarantors[<?= $g_idx ?>][cnic]" placeholder="XXXXX-XXXXXXX-X"></div>
+            <div class="form-group"><label>Phone</label><input type="text" name="guarantors[<?= $g_idx ?>][phone]" placeholder="03XX-XXXXXXX"></div>
+            <div class="form-group"><label>Relation</label><input type="text" name="guarantors[<?= $g_idx ?>][relation]" placeholder="Brother, Father..."></div>
+            <div class="form-group"><label>Address</label><input type="text" name="guarantors[<?= $g_idx ?>][address]" placeholder="Verified Address"></div>
+        </div>
+        <div class="form-row">
+            <div class="form-group"><label>Security Cheque #</label><input type="text" name="guarantors[<?= $g_idx ?>][security_cheque_no]" placeholder="CHQ-XXXXX"></div>
+            <div class="form-group"><label>Security Bank</label><input type="text" name="guarantors[<?= $g_idx ?>][security_bank_name]" placeholder="Bank Name"></div>
+            <div class="form-group"><label>Cheque Amount</label><input type="number" name="guarantors[<?= $g_idx ?>][security_cheque_amount]" step="0.01" min="0" value="0.00"></div>
+            <div class="form-group"><label>CNIC Scan (Image/PDF)</label><input type="file" name="guarantor_files[<?= $g_idx ?>][cnic_front]" accept="image/*,.pdf"></div>
+            <div class="form-group"><label>Stamp Paper / Cheque Scan</label><input type="file" name="guarantor_files[<?= $g_idx ?>][stamp_paper]" accept="image/*,.pdf"></div>
+        </div>
+    </div>
+    <?php endforeach; ?>
+</div>
+</fieldset>
 <div style="display:flex;gap:8px;flex-wrap:wrap">
 <button type="submit" name="save_sale" class="btn btn-success">💾 Record Sale</button>
 <a href="index.php?page=inventory" class="btn btn-default">← Back to Inventory</a>
@@ -8762,8 +11183,23 @@ function addMoneyAllocRow() {
         Created by: <?= sanitize($APP_CONFIG['author']) ?> | Linkedin: <?= sanitize($APP_CONFIG['author_linkedin']) ?> | WhatsApp: <?= sanitize($APP_CONFIG['author_whatsapp']) ?>
     </div>
 </div>
-<div class="no-print" style="margin-top:10px">
+<?php
+                $wa_sale_msg = render_notification_template($conn, 'sale_receipt', [
+                    'customer_name' => $inv['cust_name'] ?? 'Walk-in Customer',
+                    'invoice_no' => $inv_no,
+                    'model' => $inv['model_name'] ?? 'Electric Bike',
+                    'chassis' => $inv['chassis_number'],
+                    'total_amount' => fmt_money($inv['selling_price'] + $invoice_acc_total),
+                    'paid_amount' => fmt_money($dp_amount),
+                    'balance_amount' => fmt_money(max(0, ($inv['selling_price'] + $invoice_acc_total + $total_penalty) - ($dp_amount + $total_paid_installments + $total_penalty_paid))),
+                    'branch_name' => $inv['br_name'] ?? 'Main Showroom'
+                ]);
+                $wa_sale_link = build_wa_link($inv['cust_phone'] ?? '', $wa_sale_msg);
+?>
+<div class="no-print" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
     <button onclick="window.print()" class="btn btn-success">🖨 Print Receipt</button>
+    <?php if ($wa_sale_link): ?><a href="<?= sanitize($wa_sale_link) ?>" target="_blank" class="btn btn-success">📲 Share Receipt on WhatsApp</a><?php endif; ?>
+    <a href="index.php?page=kyc_vault&bike_id=<?= (int) $inv['id'] ?>" class="btn btn-primary">🛡️ View / Upload KYC & Guarantors</a>
 </div>
 <?php endif;
         endif; ?>
@@ -8858,9 +11294,18 @@ function calcRemainingBalance() {
             instInput.readOnly = false;
         }
     }
+    var tradeInEnabled = document.getElementById('enableTradeInChk') && document.getElementById('enableTradeInChk').checked;
+    var tradeInVal = tradeInEnabled ? (parseFloat(document.getElementById('tradeInValueInput').value) || 0) : 0;
+    if (document.getElementById('tradeInDeductionDisp')) {
+        document.getElementById('tradeInDeductionDisp').value = '<?= $currency ?> ' + tradeInVal.toFixed(2);
+    }
+    if (custSel && custSel.value == '0') {
+        document.getElementById('downPayment').value = Math.max(0, totalAmountDue - tradeInVal).toFixed(2);
+    }
     var downPayment = parseFloat(document.getElementById('downPayment').value) || 0;
-    var amountToFinance = Math.max(0, totalAmountDue - downPayment - Math.max(0, existingAdvance));
-    var closingBalance = -existingAdvance + totalAmountDue - downPayment;
+    var amountToFinance = Math.max(0, totalAmountDue - downPayment - tradeInVal - Math.max(0, existingAdvance));
+    var closingBalance = -existingAdvance + totalAmountDue - downPayment - tradeInVal;
+    if (typeof updateSaleCommission === 'function') updateSaleCommission();
     document.getElementById('totalAmountDue').value = '<?= $currency ?> ' + totalAmountDue.toFixed(2);
     var previousBalanceEl = document.getElementById('previousCustomerBalance');
     var closingBalanceEl = document.getElementById('closingCustomerBalance');
@@ -8889,6 +11334,38 @@ function calcInstallments() {
         installmentAmount = remainingBalance / totalInstallments;
     }
     document.getElementById('installmentAmount').value = installmentAmount.toFixed(2);
+}
+function updateSaleCommission() {
+    var sel = document.getElementById('saleStaffSel');
+    var commInp = document.getElementById('saleCommAmt');
+    if (!sel || !commInp || sel.selectedIndex <= 0) return;
+    var opt = sel.options[sel.selectedIndex];
+    var ctype = opt.dataset.type || 'fixed';
+    var rate = parseFloat(opt.dataset.rate || 0);
+    var sp = parseFloat(document.getElementById('sellingPrice').value) || 0;
+    var pp = parseFloat((document.getElementById('purchasePriceDisplay').value || '0').replace(/,/g,'')) || 0;
+    var base = taxOn === 'selling_price' ? sp : pp;
+    var margin = Math.max(0, sp - pp - (base * taxRate));
+    var calc = 0;
+    if (ctype === 'fixed') calc = rate;
+    else if (ctype === 'percentage_price') calc = (sp * rate) / 100.0;
+    else if (ctype === 'percentage_margin') calc = (margin * rate) / 100.0;
+    commInp.value = calc.toFixed(2);
+}
+function scanBikeChassisForSale(code) {
+    code = (code || '').trim().toLowerCase();
+    if (!code) return;
+    var sel = document.getElementById('bikeSelect');
+    for (var i = 0; i < sel.options.length; i++) {
+        if (sel.options[i].text.toLowerCase().indexOf(code) !== -1) {
+            sel.selectedIndex = i;
+            $(sel).trigger('change');
+            fillBikeDetails(sel);
+            document.getElementById('saleChassisScanner').value = '';
+            return;
+        }
+    }
+    alert('No in-stock bike matched scanned chassis: ' + code);
 }
 function toggleChequeFieldsDp(val) {
     var chequeFields = document.getElementById('chequeFieldsDp');
@@ -9339,6 +11816,20 @@ $(document).ready(function() {
 <td class="no-print">
 <div class="actions-col">
 <a class="btn btn-default btn-sm" href="index.php?page=installments&amp;manage_installment=<?= (int) $inst['id'] ?>">History / correct</a>
+<a class="btn btn-info btn-sm" href="index.php?page=kyc_vault&amp;bike_id=<?= (int) $inst['bike_id'] ?>" title="KYC & Guarantors">🛡️ KYC</a>
+<?php if (!empty($inst['customer_phone'])):
+    $wa_inst_quick = build_wa_link($inst['customer_phone'], render_notification_template($conn, ($inst['due_date'] < date('Y-m-d') ? 'installment_overdue' : 'installment_upcoming'), [
+        'customer_name' => $inst['customer_name'] ?? 'Customer',
+        'chassis' => $inst['chassis_number'] ?? '-',
+        'model' => $inst['model_name'] ?? 'Electric Bike',
+        'due_date' => fmt_date($inst['due_date']),
+        'amount' => fmt_money(max(0, $inst['installment_amount'] - $inst['amount_paid'])),
+        'penalty' => fmt_money(max(0, $inst['penalty_fee'] - ($inst['penalty_paid'] ?? 0))),
+        'total_due' => fmt_money(max(0, ($inst['installment_amount'] - $inst['amount_paid']) + ($inst['penalty_fee'] - ($inst['penalty_paid'] ?? 0))))
+    ]));
+    if ($wa_inst_quick): ?>
+<a class="btn btn-success btn-sm" href="<?= sanitize($wa_inst_quick) ?>" target="_blank" title="Send WhatsApp Installment Reminder">📲 WA</a>
+<?php endif; endif; ?>
 <?php if (($inst['status'] === 'pending' || $inst['status'] === 'overdue') && has_permission($conn, 'installments', 'edit')): ?>
 <button type="button" class="btn btn-success btn-sm" onclick="openPayInstallmentModal(<?= $inst['id'] ?>, '<?= fmt_date($inst['due_date']) ?>', <?= $inst['installment_amount'] ?>, <?= $inst['amount_paid'] ?>, <?= $inst['penalty_fee'] ?>, <?= $inst['penalty_paid'] ?? 0 ?>)">💵 Pay</button>
 <?php endif; ?>
@@ -10884,6 +13375,8 @@ document.addEventListener('DOMContentLoaded', function() {
 <?php endif; ?>
 <?php if (has_permission($conn, 'branch_transfers', 'add')): ?>
 <a href="index.php?page=branch_transfers&sub=accessories" class="btn btn-info">🔄 Transfer Accessory Stock</a>
+<a href="index.php?page=accessory_pos" class="btn btn-primary">🛍️ Standalone Counter POS (Walk-in Sales)</a>
+<a href="index.php?page=barcode_audit&sub=labels" class="btn btn-warning">🏷️ Print SKU Barcode Labels</a>
 <?php endif; ?>
 </div>
 <div id="addAccFormArea" style="display:<?= $edit_acc ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
@@ -11549,13 +14042,18 @@ function showQuoteBikeDetails(sel) {
         }
         $all_pages = [
             'dashboard' => 'Dashboard', 'branches' => 'Branches', 'branch_transfers' => 'Branch Transfers',
-            'inventory' => 'Inventory', 'purchase' => 'Purchase Orders', 'sale' => 'Sales', 'customers' => 'Customers',
-            'suppliers' => 'Suppliers', 'models' => 'Models', 'reports' => 'Reports', 'returns' => 'Returns',
-            'payments' => 'Payments Register', 'settings' => 'Settings', 'roles' => 'Roles', 'users' => 'Users',
-            'income_expense' => 'Income/Expense', 'accessories' => 'Accessories', 'quotations' => 'Quotations',
-            'installments' => 'Installments', 'customer_ledger' => 'Customer Ledger', 'supplier_ledger' => 'Supplier Ledger',
-            'money_destinations' => 'Money Destinations', 'money_tracking' => 'Money Tracking', 'bank_deposits' => 'Bank Deposits',
-            'landing_page' => 'Landing Page'
+            'inventory' => 'Inventory', 'purchase' => 'Purchase Orders', 'sale' => 'Sales',
+            'accessory_pos' => 'Standalone Accessory POS', 'trade_ins' => 'Bike Trade-Ins / Exchange',
+            'installments' => 'Installments', 'kyc_vault' => 'Guarantors & KYC Vault',
+            'whatsapp_hub' => 'WhatsApp & SMS Reminders', 'cash_book' => 'Daily Cash Book / Roznamcha',
+            'warranty_service' => 'Battery Warranty & Workshop', 'excise_tracker' => 'Excise & Number Plates',
+            'hr_payroll' => 'Staff HR, Commissions & Payroll', 'barcode_audit' => 'QR/Barcodes & Stock Audit',
+            'customers' => 'Customers', 'suppliers' => 'Suppliers', 'models' => 'Models', 'reports' => 'Reports',
+            'returns' => 'Returns', 'payments' => 'Payments Register', 'settings' => 'Settings', 'roles' => 'Roles',
+            'users' => 'Users', 'income_expense' => 'Income/Expense', 'accessories' => 'Accessories',
+            'quotations' => 'Quotations', 'customer_ledger' => 'Customer Ledger', 'supplier_ledger' => 'Supplier Ledger',
+            'money_destinations' => 'Money Destinations', 'money_tracking' => 'Money Tracking',
+            'bank_deposits' => 'Bank Deposits', 'audit_logs' => 'System Audit Logs', 'landing_page' => 'Landing Page'
         ];
 ?>
 <div style="display:flex;gap:8px;margin-bottom:10px" class="no-print animate__animated animate__fadeInLeft">
@@ -12947,6 +15445,2178 @@ document.getElementById('licenseKeyInput').addEventListener('input', function(e)
     this.value = formatted;
 });
 </script>
+<?php
+    // ========================================================================
+    // MODULE 1 UI: GUARANTOR & INSTALLMENT KYC DOCUMENT VAULT (page=kyc_vault)
+    // ========================================================================
+    elseif ($page === 'kyc_vault'):
+        require_permission($conn, 'kyc_vault', 'view');
+        $filter_bike_id = (int) ($_GET['bike_id'] ?? 0);
+        $edit_guarantor_id = (int) ($_GET['edit_id'] ?? 0);
+        $edit_guarantor = $edit_guarantor_id > 0 ? $conn->query("SELECT * FROM sale_guarantors WHERE id=$edit_guarantor_id LIMIT 1")->fetch_assoc() : null;
+        if ($edit_guarantor && !$filter_bike_id) {
+            $filter_bike_id = (int) $edit_guarantor['bike_id'];
+        }
+
+        $b_and_b_kyc = branch_and($conn, 'b');
+        $sold_bikes_kyc = $conn->query("SELECT b.id, b.chassis_number, b.selling_date, b.selling_price, b.branch_id, m.model_name, c.name AS customer_name, c.phone AS customer_phone, c.cnic AS customer_cnic,
+            (SELECT COUNT(*) FROM installments i WHERE i.bike_id=b.id) AS inst_count,
+            (SELECT COUNT(*) FROM sale_guarantors sg WHERE sg.bike_id=b.id) AS guarantor_count,
+            (SELECT COUNT(*) FROM kyc_documents kd WHERE kd.bike_id=b.id) AS doc_count
+            FROM bikes b
+            LEFT JOIN models m ON b.model_id=m.id
+            LEFT JOIN customers c ON b.customer_id=c.id
+            WHERE b.status='sold' $b_and_b_kyc
+            ORDER BY inst_count DESC, b.selling_date DESC, b.id DESC");
+
+        $guarantors_where = branch_where($conn, 'sg');
+        if ($filter_bike_id > 0) $guarantors_where .= " AND sg.bike_id=$filter_bike_id";
+        $guarantors_res = $conn->query("SELECT sg.*, b.chassis_number, m.model_name, c.name AS customer_name, c.phone AS customer_phone
+            FROM sale_guarantors sg
+            JOIN bikes b ON sg.bike_id=b.id
+            LEFT JOIN models m ON b.model_id=m.id
+            LEFT JOIN customers c ON sg.customer_id=c.id
+            WHERE $guarantors_where
+            ORDER BY sg.id DESC");
+
+        $docs_where = branch_where($conn, 'kd');
+        if ($filter_bike_id > 0) $docs_where .= " AND kd.bike_id=$filter_bike_id";
+        $docs_res = $conn->query("SELECT kd.*, b.chassis_number, c.name AS customer_name, u.username AS uploaded_by_user
+            FROM kyc_documents kd
+            JOIN bikes b ON kd.bike_id=b.id
+            LEFT JOIN customers c ON kd.customer_id=c.id
+            LEFT JOIN users u ON kd.uploaded_by=u.id
+            WHERE $docs_where
+            ORDER BY kd.id DESC");
+
+        $kyc_stats = $conn->query("SELECT
+            (SELECT COUNT(DISTINCT i.bike_id) FROM installments i JOIN bikes b ON i.bike_id=b.id WHERE b.status='sold' $b_and_b_kyc) AS total_inst_sales,
+            (SELECT COUNT(*) FROM sale_guarantors sg WHERE " . branch_where($conn, 'sg') . ") AS total_guarantors,
+            (SELECT COUNT(*) FROM sale_guarantors sg WHERE sg.security_cheque_no != '' AND " . branch_where($conn, 'sg') . ") AS total_sec_cheques,
+            (SELECT COUNT(*) FROM kyc_documents kd WHERE " . branch_where($conn, 'kd') . ") AS total_docs")->fetch_assoc();
+?>
+<div class="card-grid animate__animated animate__fadeInDown">
+    <div class="card accent"><div class="card-icon">🗓️</div><div class="card-body"><div class="card-label">Installment Sales</div><div class="card-value"><?= (int) ($kyc_stats['total_inst_sales'] ?? 0) ?></div><div class="card-sub">requiring KYC</div></div></div>
+    <div class="card success"><div class="card-icon">🛡️</div><div class="card-body"><div class="card-label">Registered Guarantors</div><div class="card-value"><?= (int) ($kyc_stats['total_guarantors'] ?? 0) ?></div><div class="card-sub">1–2 per sale</div></div></div>
+    <div class="card warning"><div class="card-icon">🏦</div><div class="card-body"><div class="card-label">Security Cheques Held</div><div class="card-value"><?= (int) ($kyc_stats['total_sec_cheques'] ?? 0) ?></div><div class="card-sub">in vault</div></div></div>
+    <div class="card"><div class="card-icon">📂</div><div class="card-body"><div class="card-label">Vault Documents</div><div class="card-value"><?= (int) ($kyc_stats['total_docs'] ?? 0) ?></div><div class="card-sub">CNIC / Stamp scans</div></div></div>
+</div>
+
+<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap" class="no-print">
+    <button type="button" class="btn btn-success" onclick="document.getElementById('guarantorFormBox').style.display='block';document.getElementById('guarantorFormBox').scrollIntoView({behavior:'smooth'})">+ Add / Update Guarantor (1–2 per Sale)</button>
+    <button type="button" class="btn btn-primary" onclick="document.getElementById('kycDocUploadBox').style.display='block';document.getElementById('kycDocUploadBox').scrollIntoView({behavior:'smooth'})">📤 Upload KYC Document / Stamp Paper</button>
+    <?php if ($filter_bike_id > 0): ?>
+    <a href="index.php?page=kyc_vault" class="btn btn-default">✖ Clear Bike Filter (#<?= $filter_bike_id ?>)</a>
+    <?php endif; ?>
+</div>
+
+<div id="guarantorFormBox" style="display:<?= ($edit_guarantor || $filter_bike_id > 0) ? 'block' : 'none' ?>;margin-bottom:16px" class="no-print animate__animated animate__fadeIn">
+<fieldset class="fieldset"><legend><?= $edit_guarantor ? '✏ Edit Guarantor #' . (int) $edit_guarantor['guarantor_no'] : '🛡️ Register Installment Guarantor & KYC Scans' ?></legend>
+<form method="POST" action="index.php?page=kyc_vault" enctype="multipart/form-data">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+<input type="hidden" name="save_kyc_guarantor" value="1">
+<?php if ($edit_guarantor): ?><input type="hidden" name="id" value="<?= (int) $edit_guarantor['id'] ?>"><?php endif; ?>
+<div class="form-row">
+    <div class="form-group" style="flex:2">
+        <label>Select Bike Sale <span class="req">*</span></label>
+        <select name="bike_id" class="select2-enable" required>
+            <option value="">-- Select Sold Bike / Customer --</option>
+            <?php if ($sold_bikes_kyc) { $sold_bikes_kyc->data_seek(0); while ($sbk = $sold_bikes_kyc->fetch_assoc()): ?>
+            <option value="<?= (int) $sbk['id'] ?>" <?= ((int) ($edit_guarantor['bike_id'] ?? $filter_bike_id)) === (int) $sbk['id'] ? 'selected' : '' ?>>
+                <?= sanitize($sbk['chassis_number']) ?> | <?= sanitize($sbk['model_name']) ?> — Customer: <?= sanitize($sbk['customer_name'] ?? 'Walk-in') ?> (Guarantors: <?= (int) $sbk['guarantor_count'] ?>/2)
+            </option>
+            <?php endwhile; } ?>
+        </select>
+    </div>
+    <div class="form-group">
+        <label>Guarantor Slot <span class="req">*</span></label>
+        <select name="guarantor_no" required>
+            <option value="1" <?= ((int) ($edit_guarantor['guarantor_no'] ?? 1)) === 1 ? 'selected' : '' ?>>Guarantor #1 (Primary)</option>
+            <option value="2" <?= ((int) ($edit_guarantor['guarantor_no'] ?? 1)) === 2 ? 'selected' : '' ?>>Guarantor #2 (Secondary)</option>
+        </select>
+    </div>
+</div>
+<div class="form-row">
+    <div class="form-group"><label>Guarantor Full Name <span class="req">*</span></label><input type="text" name="name" value="<?= sanitize($edit_guarantor['name'] ?? '') ?>" required placeholder="Full Name as per CNIC"></div>
+    <div class="form-group"><label>CNIC Number <span class="req">*</span></label><input type="text" name="cnic" value="<?= sanitize($edit_guarantor['cnic'] ?? '') ?>" required placeholder="XXXXX-XXXXXXX-X"></div>
+    <div class="form-group"><label>Phone / Mobile <span class="req">*</span></label><input type="text" name="phone" value="<?= sanitize($edit_guarantor['phone'] ?? '') ?>" required placeholder="03XX-XXXXXXX"></div>
+    <div class="form-group"><label>Relation with Customer</label><input type="text" name="relation" value="<?= sanitize($edit_guarantor['relation'] ?? '') ?>" placeholder="Brother, Father, Colleague..."></div>
+</div>
+<div class="form-row">
+    <div class="form-group"><label>Occupation / Business</label><input type="text" name="occupation" value="<?= sanitize($edit_guarantor['occupation'] ?? '') ?>" placeholder="Govt Servant, Shopkeeper..."></div>
+    <div class="form-group"><label>Monthly Income (<?= $currency ?>)</label><input type="number" name="monthly_income" step="0.01" min="0" value="<?= (float) ($edit_guarantor['monthly_income'] ?? 0) ?>"></div>
+    <div class="form-group"><label>Security Cheque #</label><input type="text" name="security_cheque_no" value="<?= sanitize($edit_guarantor['security_cheque_no'] ?? '') ?>" placeholder="CHQ-998877"></div>
+    <div class="form-group"><label>Security Cheque Bank</label><input type="text" name="security_bank_name" value="<?= sanitize($edit_guarantor['security_bank_name'] ?? '') ?>" placeholder="HBL, Meezan, MCB..."></div>
+    <div class="form-group"><label>Security Cheque Amount (<?= $currency ?>)</label><input type="number" name="security_cheque_amount" step="0.01" min="0" value="<?= (float) ($edit_guarantor['security_cheque_amount'] ?? 0) ?>"></div>
+</div>
+<div class="form-row">
+    <div class="form-group"><label>CNIC Front Photo / Scan</label><input type="file" name="cnic_front_file" accept="image/*,.pdf"></div>
+    <div class="form-group"><label>CNIC Back Photo / Scan</label><input type="file" name="cnic_back_file" accept="image/*,.pdf"></div>
+    <div class="form-group"><label>Signed Agreement / Stamp Paper</label><input type="file" name="stamp_paper_file" accept="image/*,.pdf"></div>
+    <div class="form-group"><label>Security Cheque Scan</label><input type="file" name="security_cheque_file" accept="image/*,.pdf"></div>
+</div>
+<div class="form-row">
+    <div class="form-group"><label>Residential / Office Address</label><input type="text" name="address" value="<?= sanitize($edit_guarantor['address'] ?? '') ?>" placeholder="Complete verified address"></div>
+    <div class="form-group"><label>Verification Notes</label><input type="text" name="notes" value="<?= sanitize($edit_guarantor['notes'] ?? '') ?>" placeholder="Any verification remarks"></div>
+</div>
+<button type="submit" class="btn btn-primary">💾 Save Guarantor & Documents</button>
+<button type="button" class="btn btn-default" onclick="document.getElementById('guarantorFormBox').style.display='none'">Cancel</button>
+</form>
+</fieldset>
+</div>
+
+<div id="kycDocUploadBox" style="display:none;margin-bottom:16px" class="no-print animate__animated animate__fadeIn">
+<fieldset class="fieldset"><legend>📤 Upload Additional KYC Document (Customer CNIC, Stamp Paper, Utility Bill, Cheque)</legend>
+<form method="POST" action="index.php?page=kyc_vault" enctype="multipart/form-data">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+<input type="hidden" name="upload_kyc_doc" value="1">
+<div class="form-row">
+    <div class="form-group" style="flex:2">
+        <label>Select Bike Sale <span class="req">*</span></label>
+        <select name="bike_id" class="select2-enable" required>
+            <option value="">-- Select Sold Bike --</option>
+            <?php if ($sold_bikes_kyc) { $sold_bikes_kyc->data_seek(0); while ($sbk = $sold_bikes_kyc->fetch_assoc()): ?>
+            <option value="<?= (int) $sbk['id'] ?>" <?= $filter_bike_id === (int) $sbk['id'] ? 'selected' : '' ?>>
+                <?= sanitize($sbk['chassis_number']) ?> — <?= sanitize($sbk['customer_name'] ?? 'Walk-in') ?>
+            </option>
+            <?php endwhile; } ?>
+        </select>
+    </div>
+    <div class="form-group">
+        <label>Document Category <span class="req">*</span></label>
+        <select name="doc_type" required>
+            <option value="customer_cnic">Customer CNIC (Front/Back)</option>
+            <option value="guarantor_cnic">Guarantor CNIC</option>
+            <option value="stamp_paper">Signed Stamp Paper / Agreement</option>
+            <option value="security_cheque">Security Cheque Scan</option>
+            <option value="utility_bill">Utility Bill / Address Proof</option>
+            <option value="photo">Customer / Biometric Photo</option>
+            <option value="other">Other KYC Document</option>
+        </select>
+    </div>
+    <div class="form-group"><label>Document Title <span class="req">*</span></label><input type="text" name="doc_title" required placeholder="e.g. Stamp Paper Rs. 1200 Agreement"></div>
+    <div class="form-group"><label>Reference / Cheque / CNIC #</label><input type="text" name="doc_number" placeholder="Optional ID/Ref"></div>
+</div>
+<div class="form-row">
+    <div class="form-group"><label>Select File (JPG, PNG, WEBP, PDF) <span class="req">*</span></label><input type="file" name="doc_file" accept="image/*,.pdf" required></div>
+    <div class="form-group"><label>Notes</label><input type="text" name="notes" placeholder="Optional notes"></div>
+</div>
+<button type="submit" class="btn btn-success">📤 Upload to Vault</button>
+<button type="button" class="btn btn-default" onclick="document.getElementById('kycDocUploadBox').style.display='none'">Cancel</button>
+</form>
+</fieldset>
+</div>
+
+<fieldset class="fieldset"><legend>🛡️ Registered Installment Guarantors & Security Cheques</legend>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Sr#</th><th>Branch</th><th>Bike / Chassis</th><th>Customer</th><th>Slot</th><th>Guarantor Name & Relation</th><th>CNIC & Phone</th><th>Security Cheque</th><th>Uploaded Scans</th><th class="no-sort">Actions</th></tr></thead>
+<tbody>
+<?php $sr = 1; if ($guarantors_res): while ($gr = $guarantors_res->fetch_assoc()): ?>
+<tr>
+    <td><?= $sr++ ?></td>
+    <td><?= get_branch_badge($conn, $gr['branch_id'] ?? 1) ?></td>
+    <td><strong><?= sanitize($gr['chassis_number']) ?></strong><br><small><?= sanitize($gr['model_name']) ?></small></td>
+    <td><?= sanitize($gr['customer_name'] ?? '-') ?><br><small><?= sanitize($gr['customer_phone'] ?? '') ?></small></td>
+    <td><span class="badge badge-info">Guarantor #<?= (int) $gr['guarantor_no'] ?></span></td>
+    <td><strong><?= sanitize($gr['name']) ?></strong><br><small><?= sanitize($gr['relation'] ?: 'Guarantor') ?> | <?= sanitize($gr['occupation'] ?: '-') ?></small></td>
+    <td><code><?= sanitize($gr['cnic']) ?></code><br><small>📞 <?= sanitize($gr['phone']) ?></small></td>
+    <td>
+        <?php if (!empty($gr['security_cheque_no'])): ?>
+            <strong><?= sanitize($gr['security_cheque_no']) ?></strong> (<?= sanitize($gr['security_bank_name']) ?>)<br>
+            <small style="color:var(--warning)"><?= fmt_money($gr['security_cheque_amount']) ?></small>
+        <?php else: ?>
+            <span style="color:var(--text3)">No cheque</span>
+        <?php endif; ?>
+    </td>
+    <td>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+            <?php if (!empty($gr['cnic_front_file'])): ?><a href="index.php?guarantor_doc_view=<?= (int) $gr['id'] ?>&field=cnic_front_file" target="_blank" class="badge badge-success">🪪 CNIC Front</a><?php endif; ?>
+            <?php if (!empty($gr['cnic_back_file'])): ?><a href="index.php?guarantor_doc_view=<?= (int) $gr['id'] ?>&field=cnic_back_file" target="_blank" class="badge badge-success">🪪 CNIC Back</a><?php endif; ?>
+            <?php if (!empty($gr['stamp_paper_file'])): ?><a href="index.php?guarantor_doc_view=<?= (int) $gr['id'] ?>&field=stamp_paper_file" target="_blank" class="badge badge-warning">📜 Stamp Paper</a><?php endif; ?>
+            <?php if (!empty($gr['security_cheque_file'])): ?><a href="index.php?guarantor_doc_view=<?= (int) $gr['id'] ?>&field=security_cheque_file" target="_blank" class="badge badge-info">🏦 Cheque Scan</a><?php endif; ?>
+            <?php if (empty($gr['cnic_front_file']) && empty($gr['cnic_back_file']) && empty($gr['stamp_paper_file']) && empty($gr['security_cheque_file'])): ?><span style="color:var(--text3);font-size:0.75rem">No files</span><?php endif; ?>
+        </div>
+    </td>
+    <td class="no-print">
+        <div class="actions-col">
+            <a href="index.php?page=kyc_vault&edit_id=<?= (int) $gr['id'] ?>" class="btn btn-primary btn-sm">✏</a>
+            <form method="POST" action="index.php?page=kyc_vault" style="display:inline" onsubmit="return confirm('Delete this guarantor record?')">
+                <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+                <input type="hidden" name="id" value="<?= (int) $gr['id'] ?>">
+                <button type="submit" name="delete_kyc_guarantor" value="1" class="btn btn-danger btn-sm">🗑</button>
+            </form>
+        </div>
+    </td>
+</tr>
+<?php endwhile; endif; ?>
+</tbody>
+</table>
+</div>
+</fieldset>
+
+<fieldset class="fieldset" style="margin-top:16px"><legend>📂 Standalone KYC Document Vault Files</legend>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Sr#</th><th>Date</th><th>Chassis #</th><th>Customer</th><th>Category</th><th>Document Title</th><th>Ref / Number</th><th>Uploaded By</th><th class="no-sort">Actions</th></tr></thead>
+<tbody>
+<?php $sr = 1; if ($docs_res): while ($dr = $docs_res->fetch_assoc()): ?>
+<tr>
+    <td><?= $sr++ ?></td>
+    <td><?= date('d/m/Y', strtotime($dr['created_at'])) ?></td>
+    <td><code><?= sanitize($dr['chassis_number']) ?></code></td>
+    <td><?= sanitize($dr['customer_name'] ?? '-') ?></td>
+    <td><span class="badge badge-info"><?= strtoupper(str_replace('_', ' ', $dr['doc_type'])) ?></span></td>
+    <td><strong><?= sanitize($dr['doc_title']) ?></strong></td>
+    <td><?= sanitize($dr['doc_number'] ?: '-') ?></td>
+    <td><?= sanitize($dr['uploaded_by_user'] ?? '-') ?></td>
+    <td class="no-print">
+        <div class="actions-col">
+            <a href="index.php?kyc_doc_view=<?= (int) $dr['id'] ?>" target="_blank" class="btn btn-success btn-sm">👁 View / Download</a>
+            <form method="POST" action="index.php?page=kyc_vault" style="display:inline" onsubmit="return confirm('Delete this KYC file?')">
+                <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+                <input type="hidden" name="id" value="<?= (int) $dr['id'] ?>">
+                <button type="submit" name="delete_kyc_doc" value="1" class="btn btn-danger btn-sm">🗑</button>
+            </form>
+        </div>
+    </td>
+</tr>
+<?php endwhile; endif; ?>
+</tbody>
+</table>
+</div>
+</fieldset>
+
+<?php
+    // ========================================================================
+    // MODULE 2 UI: BATTERY WARRANTY & WORKSHOP / SERVICE JOB CARDS
+    // ========================================================================
+    elseif ($page === 'warranty_service'):
+        require_permission($conn, 'warranty_service', 'view');
+        $sub_tab = clean_text($_GET['sub'] ?? 'job_cards', 30);
+        $print_job_id = (int) ($_GET['print_job'] ?? 0);
+
+        if ($print_job_id > 0):
+            echo '<style>.sidebar, .topbar { display: none !important; } .main-wrap { margin-left: 0 !important; } .content > *:not(#receiptArea):not(.no-print) { display: none !important; } .content { padding: 30px !important; background: #333 !important; } @media print { .content, body { padding: 0 !important; background: #fff !important; } }</style>';
+            $jc = $conn->query("SELECT j.*, br.name AS br_name, br.branch_code, br.phone AS br_phone, br.address AS br_addr, c.name AS c_name, c.phone AS c_phone FROM service_job_cards j LEFT JOIN branches br ON j.branch_id=br.id LEFT JOIN customers c ON j.customer_id=c.id WHERE j.id=$print_job_id LIMIT 1")->fetch_assoc();
+            if ($jc):
+                $jc_parts = json_decode($jc['parts_json'] ?? '[]', true) ?: [];
+?>
+<div class="a4-invoice" id="receiptArea">
+    <div class="invoice-header">
+        <h1>⚡ <?= sanitize(get_setting('company_name') ?? 'BNI Enterprises') ?> — EV Workshop & Service Center</h1>
+        <h2><?= sanitize(($jc['br_name'] ?? 'Main Branch') . ' (' . ($jc['branch_code'] ?? 'HQ') . ')') ?></h2>
+        <div style="font-size:0.9rem;margin-top:4px"><strong>WORKSHOP JOB CARD & SERVICE RECEIPT</strong></div>
+    </div>
+    <div class="invoice-meta">
+        <div>
+            <strong>Job Card #:</strong> <?= sanitize($jc['job_no']) ?><br>
+            <strong>Service Date:</strong> <?= fmt_date($jc['job_date']) ?><br>
+            <strong>Service Type:</strong> <?= strtoupper(str_replace('_', ' ', $jc['service_type'])) ?><br>
+            <strong>Technician:</strong> <?= sanitize($jc['technician_name'] ?: 'Assigned Workshop Tech') ?>
+        </div>
+        <div style="text-align:right">
+            <strong>Customer:</strong> <?= sanitize($jc['walkin_customer_name'] ?: ($jc['c_name'] ?: 'Walk-in Customer')) ?><br>
+            <strong>Phone:</strong> <?= sanitize($jc['walkin_customer_phone'] ?: ($jc['c_phone'] ?: '-')) ?><br>
+            <strong>Bike / Chassis:</strong> <?= sanitize($jc['chassis_number'] ?: '-') ?> (<?= sanitize($jc['model_name'] ?: 'EV Bike') ?>)<br>
+            <strong>Odometer:</strong> <?= (int) $jc['odometer_km'] ?> KM | <strong>Status:</strong> <?= strtoupper($jc['job_status']) ?>
+        </div>
+    </div>
+    <div class="invoice-section">
+        <h3>Customer Complaint / Work Requested</h3>
+        <p style="border:1px solid #ccc;padding:8px;background:#f9f9f9"><?= nl2br(sanitize($jc['complaint_details'])) ?></p>
+        <?php if (!empty($jc['work_performed'])): ?>
+        <h3 style="margin-top:10px">Diagnosis & Work Performed</h3>
+        <p style="border:1px solid #ccc;padding:8px;background:#f9f9f9"><?= nl2br(sanitize($jc['work_performed'])) ?></p>
+        <?php endif; ?>
+    </div>
+    <?php if (!empty($jc_parts)): ?>
+    <div class="invoice-section">
+        <h3>Spare Parts & Components Replaced</h3>
+        <table class="invoice-table">
+            <thead><tr><th>Part / Accessory</th><th>SKU</th><th>Qty</th><th style="text-align:right">Unit Price</th><th style="text-align:right">Total</th></tr></thead>
+            <tbody>
+            <?php foreach ($jc_parts as $pt): ?>
+            <tr>
+                <td><?= sanitize($pt['name']) ?></td>
+                <td><?= sanitize($pt['sku'] ?? '-') ?></td>
+                <td><?= (int) $pt['qty'] ?></td>
+                <td style="text-align:right"><?= fmt_money($pt['unit_price']) ?></td>
+                <td style="text-align:right"><?= fmt_money($pt['line_total']) ?></td>
+            </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+    <?php endif; ?>
+    <div class="invoice-section">
+        <table class="invoice-table" style="width:55%;margin-left:auto">
+            <tbody>
+                <tr><td>Spare Parts Total</td><td style="text-align:right"><?= fmt_money($jc['parts_charges']) ?></td></tr>
+                <tr><td>Workshop Labor Charges</td><td style="text-align:right"><?= fmt_money($jc['labor_charges']) ?></td></tr>
+                <?php if ($jc['discount_amount'] > 0): ?><tr><td>Discount</td><td style="text-align:right">- <?= fmt_money($jc['discount_amount']) ?></td></tr><?php endif; ?>
+                <tr><td><strong>Net Payable Bill (<?= strtoupper($jc['payment_status']) ?>)</strong></td><td style="text-align:right"><strong><?= fmt_money($jc['total_amount']) ?></strong></td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+<div class="no-print" style="margin-top:12px">
+    <button onclick="window.print()" class="btn btn-success">🖨 Print Job Card</button>
+    <a href="index.php?page=warranty_service" class="btn btn-default">← Back to Workshop</a>
+</div>
+<?php
+            endif;
+        else:
+            $ws_stats = $conn->query("SELECT
+                (SELECT COUNT(*) FROM warranties w WHERE w.status='active' AND w.battery_expiry_date >= CURDATE() " . branch_and($conn, 'w') . ") AS active_warranties,
+                (SELECT COUNT(*) FROM warranty_claims wc WHERE wc.claim_status IN ('pending','sent_to_vendor') " . branch_and($conn, 'wc') . ") AS open_claims,
+                (SELECT COUNT(*) FROM service_job_cards sj WHERE sj.job_status IN ('open','in_progress','ready') " . branch_and($conn, 'sj') . ") AS open_jobs,
+                (SELECT COALESCE(SUM(sj.total_amount),0) FROM service_job_cards sj WHERE sj.payment_status='paid' " . branch_and($conn, 'sj') . ") AS workshop_rev")->fetch_assoc();
+            $sold_bikes_ws = $conn->query("SELECT b.id, b.chassis_number, b.motor_number, b.battery_serial, b.controller_serial, b.charger_serial, b.selling_date, m.model_name, c.id AS cust_id, c.name AS cust_name, c.phone AS cust_phone FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id WHERE 1=1 " . branch_and($conn, 'b') . " ORDER BY b.id DESC");
+            $tech_staff = $conn->query("SELECT id, name, staff_code, designation FROM staff_members WHERE is_active=1 " . branch_and($conn) . " ORDER BY name");
+            $acc_ws = $conn->query("SELECT id, name, sku, selling_price, current_stock FROM accessories WHERE current_stock > 0 " . branch_and($conn) . " ORDER BY name");
+?>
+<div class="card-grid animate__animated animate__fadeInDown">
+    <div class="card success"><div class="card-icon">🔋</div><div class="card-body"><div class="card-label">Active Warranties</div><div class="card-value"><?= (int) ($ws_stats['active_warranties'] ?? 0) ?></div><div class="card-sub">battery / motor</div></div></div>
+    <div class="card warning"><div class="card-icon">⚠️</div><div class="card-body"><div class="card-label">Pending Claims</div><div class="card-value"><?= (int) ($ws_stats['open_claims'] ?? 0) ?></div><div class="card-sub">under review</div></div></div>
+    <div class="card accent"><div class="card-icon">🔧</div><div class="card-body"><div class="card-label">Active Job Cards</div><div class="card-value"><?= (int) ($ws_stats['open_jobs'] ?? 0) ?></div><div class="card-sub">in workshop</div></div></div>
+    <div class="card success"><div class="card-icon">💵</div><div class="card-body"><div class="card-label">Service Revenue</div><div class="card-value" style="font-size:1rem"><?= fmt_money($ws_stats['workshop_rev'] ?? 0) ?></div><div class="card-sub">paid repairs</div></div></div>
+</div>
+
+<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap" class="no-print">
+    <a href="index.php?page=warranty_service&sub=job_cards" class="btn <?= $sub_tab === 'job_cards' ? 'btn-primary' : 'btn-default' ?>">🔧 Workshop / Service Job Cards</a>
+    <a href="index.php?page=warranty_service&sub=warranties" class="btn <?= $sub_tab === 'warranties' ? 'btn-primary' : 'btn-default' ?>">🔋 Battery & Motor Warranties</a>
+    <a href="index.php?page=warranty_service&sub=claims" class="btn <?= $sub_tab === 'claims' ? 'btn-primary' : 'btn-default' ?>">⚠️ Warranty Claims</a>
+</div>
+
+<?php if ($sub_tab === 'job_cards'):
+    $edit_jc_id = (int) ($_GET['edit_job'] ?? 0);
+    $edit_jc = $edit_jc_id > 0 ? $conn->query("SELECT * FROM service_job_cards WHERE id=$edit_jc_id LIMIT 1")->fetch_assoc() : null;
+    $jobs_res = $conn->query("SELECT j.*, br.branch_code FROM service_job_cards j LEFT JOIN branches br ON j.branch_id=br.id WHERE " . branch_where($conn, 'j') . " ORDER BY j.id DESC");
+?>
+<div style="margin-bottom:12px" class="no-print">
+    <button type="button" class="btn btn-success" onclick="document.getElementById('jobCardFormBox').style.display='block'">+ Create Workshop Job Card</button>
+</div>
+<div id="jobCardFormBox" style="display:<?= $edit_jc ? 'block' : 'none' ?>;margin-bottom:16px" class="no-print">
+<fieldset class="fieldset"><legend><?= $edit_jc ? '✏ Edit Job Card ' . sanitize($edit_jc['job_no']) : '🔧 New Workshop / Service Job Card' ?></legend>
+<form method="POST" action="index.php?page=warranty_service&sub=job_cards">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+<input type="hidden" name="save_job_card" value="1">
+<input type="hidden" name="sub" value="job_cards">
+<?php if ($edit_jc): ?><input type="hidden" name="id" value="<?= (int) $edit_jc['id'] ?>"><?php endif; ?>
+<div class="form-row">
+    <div class="form-group">
+        <label>Branch</label>
+        <select name="branch_id" required>
+            <?php foreach ($active_branches_list as $ab): ?>
+            <option value="<?= (int) $ab['id'] ?>" <?= ((int) ($edit_jc['branch_id'] ?? get_write_branch_id($conn))) === (int) $ab['id'] ? 'selected' : '' ?>><?= sanitize($ab['branch_code'] . ' — ' . $ab['name']) ?></option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+    <div class="form-group"><label>Job Date <span class="req">*</span></label><input type="date" name="job_date" value="<?= $edit_jc['job_date'] ?? date('Y-m-d') ?>" required></div>
+    <div class="form-group" style="flex:2">
+        <label>Select Dealership Bike (Optional for Walk-In)</label>
+        <select name="bike_id" class="select2-enable" onchange="if(this.selectedIndex>0){var o=this.options[this.selectedIndex];document.getElementById('jcChassis').value=o.dataset.chassis||'';document.getElementById('jcModel').value=o.dataset.model||'';document.getElementById('jcCustName').value=o.dataset.cname||'';document.getElementById('jcCustPhone').value=o.dataset.cphone||'';}">
+            <option value="">-- Walk-in Bike / Manual Entry --</option>
+            <?php if ($sold_bikes_ws) { $sold_bikes_ws->data_seek(0); while ($sbw = $sold_bikes_ws->fetch_assoc()): ?>
+            <option value="<?= (int) $sbw['id'] ?>" data-chassis="<?= sanitize($sbw['chassis_number']) ?>" data-model="<?= sanitize($sbw['model_name']) ?>" data-cname="<?= sanitize($sbw['cust_name'] ?? '') ?>" data-cphone="<?= sanitize($sbw['cust_phone'] ?? '') ?>" <?= ((int) ($edit_jc['bike_id'] ?? 0)) === (int) $sbw['id'] ? 'selected' : '' ?>>
+                <?= sanitize($sbw['chassis_number']) ?> — <?= sanitize($sbw['model_name']) ?> (<?= sanitize($sbw['cust_name'] ?: 'In Stock') ?>)
+            </option>
+            <?php endwhile; } ?>
+        </select>
+    </div>
+</div>
+<div class="form-row">
+    <div class="form-group"><label>Customer Name <span class="req">*</span></label><input type="text" name="walkin_customer_name" id="jcCustName" value="<?= sanitize($edit_jc['walkin_customer_name'] ?? '') ?>" required placeholder="Customer Name"></div>
+    <div class="form-group"><label>Customer Phone</label><input type="text" name="walkin_customer_phone" id="jcCustPhone" value="<?= sanitize($edit_jc['walkin_customer_phone'] ?? '') ?>" placeholder="03XX-XXXXXXX"></div>
+    <div class="form-group"><label>Chassis Number</label><input type="text" name="chassis_number" id="jcChassis" value="<?= sanitize($edit_jc['chassis_number'] ?? '') ?>" placeholder="Chassis #"></div>
+    <div class="form-group"><label>Bike Model</label><input type="text" name="model_name" id="jcModel" value="<?= sanitize($edit_jc['model_name'] ?? '') ?>" placeholder="e.g. Metro T9 / E8S Pro"></div>
+    <div class="form-group"><label>Odometer (KM)</label><input type="number" name="odometer_km" min="0" value="<?= (int) ($edit_jc['odometer_km'] ?? 0) ?>"></div>
+</div>
+<div class="form-row">
+    <div class="form-group">
+        <label>Service Type</label>
+        <select name="service_type">
+            <?php foreach (['paid_repair' => 'Paid Repair / Service', 'free_service' => 'Free Scheduled Service', 'warranty_repair' => 'Free Warranty Repair', 'battery_diagnostic' => 'Battery Health Diagnostic', 'accident_repair' => 'Accident / Body Repair'] as $stk => $stv): ?>
+            <option value="<?= $stk ?>" <?= ($edit_jc['service_type'] ?? 'paid_repair') === $stk ? 'selected' : '' ?>><?= $stv ?></option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+    <div class="form-group">
+        <label>Assign Technician (Staff)</label>
+        <select name="technician_id">
+            <option value="">-- Select Technician --</option>
+            <?php if ($tech_staff) { $tech_staff->data_seek(0); while ($ts = $tech_staff->fetch_assoc()): ?>
+            <option value="<?= (int) $ts['id'] ?>" <?= ((int) ($edit_jc['technician_id'] ?? 0)) === (int) $ts['id'] ? 'selected' : '' ?>><?= sanitize($ts['name'] . ' (' . $ts['designation'] . ')') ?></option>
+            <?php endwhile; } ?>
+        </select>
+    </div>
+    <div class="form-group"><label>Or Technician Name</label><input type="text" name="technician_name" value="<?= sanitize($edit_jc['technician_name'] ?? '') ?>" placeholder="Ustad / Technician Name"></div>
+    <div class="form-group">
+        <label>Job Status</label>
+        <select name="job_status">
+            <?php foreach (['open' => 'Open / Queued', 'in_progress' => 'In Progress', 'ready' => 'Ready for Delivery', 'delivered' => 'Delivered to Customer', 'cancelled' => 'Cancelled'] as $jsk => $jsv): ?>
+            <option value="<?= $jsk ?>" <?= ($edit_jc['job_status'] ?? 'open') === $jsk ? 'selected' : '' ?>><?= $jsv ?></option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+</div>
+<div class="form-row">
+    <div class="form-group"><label>Customer Complaint / Fault Details <span class="req">*</span></label><textarea name="complaint_details" rows="2" required placeholder="Describe battery issue, brake adjustment, controller error..."><?= sanitize($edit_jc['complaint_details'] ?? '') ?></textarea></div>
+    <div class="form-group"><label>Diagnosis / Work Performed</label><textarea name="work_performed" rows="2" placeholder="Technician remarks & work completed..."><?= sanitize($edit_jc['work_performed'] ?? '') ?></textarea></div>
+</div>
+<?php if (!$edit_jc): ?>
+<fieldset class="fieldset" style="margin-bottom:10px"><legend>🛠️ Spare Parts Used from Inventory (Auto-deducts stock)</legend>
+<div class="form-row">
+    <div class="form-group" style="flex:2">
+        <label>Part #1</label>
+        <select name="job_parts[0][accessory_id]">
+            <option value="">-- None --</option>
+            <?php if ($acc_ws) { $acc_ws->data_seek(0); while ($aw = $acc_ws->fetch_assoc()): ?>
+            <option value="<?= (int) $aw['id'] ?>"><?= sanitize($aw['name'] . ' [' . $aw['sku'] . '] — ' . fmt_money($aw['selling_price']) . ' (Stock: ' . $aw['current_stock'] . ')') ?></option>
+            <?php endwhile; } ?>
+        </select>
+    </div>
+    <div class="form-group"><label>Qty</label><input type="number" name="job_parts[0][qty]" min="1" value="1"></div>
+    <div class="form-group"><label>Custom Unit Price (Optional)</label><input type="number" name="job_parts[0][unit_price]" step="0.01" min="0" placeholder="Auto from SKU"></div>
+</div>
+</fieldset>
+<?php endif; ?>
+<div class="form-row">
+    <div class="form-group"><label>Workshop Labor Charges (<?= $currency ?>)</label><input type="number" name="labor_charges" step="0.01" min="0" value="<?= (float) ($edit_jc['labor_charges'] ?? 0) ?>"></div>
+    <div class="form-group"><label>Discount (<?= $currency ?>)</label><input type="number" name="discount_amount" step="0.01" min="0" value="<?= (float) ($edit_jc['discount_amount'] ?? 0) ?>"></div>
+    <div class="form-group">
+        <label>Payment Status</label>
+        <select name="payment_status">
+            <option value="paid" <?= ($edit_jc['payment_status'] ?? 'paid') === 'paid' ? 'selected' : '' ?>>Paid</option>
+            <option value="unpaid" <?= ($edit_jc['payment_status'] ?? '') === 'unpaid' ? 'selected' : '' ?>>Unpaid / Pending</option>
+            <option value="free_warranty" <?= ($edit_jc['payment_status'] ?? '') === 'free_warranty' ? 'selected' : '' ?>>Free (Under Warranty)</option>
+        </select>
+    </div>
+    <div class="form-group">
+        <label>Payment Method</label>
+        <select name="payment_method">
+            <option value="cash">Cash</option>
+            <option value="online">Online / Easypaisa / JazzCash</option>
+            <option value="bank_transfer">Bank Transfer</option>
+        </select>
+    </div>
+</div>
+<button type="submit" class="btn btn-primary">💾 Save Job Card</button>
+<button type="button" class="btn btn-default" onclick="document.getElementById('jobCardFormBox').style.display='none'">Cancel</button>
+</form>
+</fieldset>
+</div>
+
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Job #</th><th>Branch</th><th>Date</th><th>Customer</th><th>Bike / Chassis</th><th>Service Type</th><th>Technician</th><th>Labor + Parts</th><th>Total Bill</th><th>Job Status</th><th class="no-sort">Actions</th></tr></thead>
+<tbody>
+<?php if ($jobs_res): while ($jr = $jobs_res->fetch_assoc()):
+    $jb_badge = $jr['job_status'] === 'delivered' ? 'badge-success' : ($jr['job_status'] === 'ready' ? 'badge-info' : ($jr['job_status'] === 'cancelled' ? 'badge-danger' : 'badge-warning'));
+?>
+<tr>
+    <td><strong><?= sanitize($jr['job_no']) ?></strong></td>
+    <td><?= get_branch_badge($conn, $jr['branch_id'] ?? 1) ?></td>
+    <td><?= fmt_date($jr['job_date']) ?></td>
+    <td><?= sanitize($jr['walkin_customer_name'] ?: '-') ?><br><small><?= sanitize($jr['walkin_customer_phone'] ?: '') ?></small></td>
+    <td><code><?= sanitize($jr['chassis_number'] ?: '-') ?></code><br><small><?= sanitize($jr['model_name'] ?: '') ?></small></td>
+    <td><span class="badge badge-default"><?= strtoupper(str_replace('_', ' ', $jr['service_type'])) ?></span></td>
+    <td><?= sanitize($jr['technician_name'] ?: '-') ?></td>
+    <td>L: <?= fmt_money($jr['labor_charges']) ?><br><small>P: <?= fmt_money($jr['parts_charges']) ?></small></td>
+    <td><strong><?= fmt_money($jr['total_amount']) ?></strong><br><span class="badge badge-<?= $jr['payment_status'] === 'paid' ? 'success' : ($jr['payment_status'] === 'free_warranty' ? 'info' : 'danger') ?>"><?= strtoupper($jr['payment_status']) ?></span></td>
+    <td><span class="badge <?= $jb_badge ?>"><?= strtoupper($jr['job_status']) ?></span></td>
+    <td class="no-print">
+        <div class="actions-col">
+            <a href="index.php?page=warranty_service&print_job=<?= (int) $jr['id'] ?>" target="_blank" class="btn btn-default btn-sm" title="Print Job Card">🖨</a>
+            <a href="index.php?page=warranty_service&sub=job_cards&edit_job=<?= (int) $jr['id'] ?>" class="btn btn-primary btn-sm" title="Edit">✏</a>
+        </div>
+    </td>
+</tr>
+<?php endwhile; endif; ?>
+</tbody>
+</table>
+</div>
+
+<?php elseif ($sub_tab === 'warranties'):
+    $war_res = $conn->query("SELECT w.*, b.chassis_number, m.model_name, c.name AS customer_name, c.phone AS customer_phone FROM warranties w JOIN bikes b ON w.bike_id=b.id LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON w.customer_id=c.id WHERE " . branch_where($conn, 'w') . " ORDER BY w.id DESC");
+?>
+<fieldset class="fieldset no-print" style="margin-bottom:16px"><legend>🔋 Register / Update Bike Battery, Motor & Controller Warranty</legend>
+<form method="POST" action="index.php?page=warranty_service&sub=warranties">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+<input type="hidden" name="save_warranty" value="1">
+<input type="hidden" name="sub" value="warranties">
+<div class="form-row">
+    <div class="form-group" style="flex:2">
+        <label>Select Bike <span class="req">*</span></label>
+        <select name="bike_id" class="select2-enable" required onchange="if(this.selectedIndex>0){var o=this.options[this.selectedIndex];document.getElementById('wMotorSer').value=o.dataset.motor||'';document.getElementById('wBatSer').value=o.dataset.bat||'';document.getElementById('wCtrlSer').value=o.dataset.ctrl||'';}">
+            <option value="">-- Select Bike --</option>
+            <?php if ($sold_bikes_ws) { $sold_bikes_ws->data_seek(0); while ($sbw = $sold_bikes_ws->fetch_assoc()): ?>
+            <option value="<?= (int) $sbw['id'] ?>" data-motor="<?= sanitize($sbw['motor_number'] ?? '') ?>" data-bat="<?= sanitize($sbw['battery_serial'] ?? '') ?>" data-ctrl="<?= sanitize($sbw['controller_serial'] ?? '') ?>">
+                <?= sanitize($sbw['chassis_number']) ?> | <?= sanitize($sbw['model_name']) ?> — <?= sanitize($sbw['cust_name'] ?: 'In Stock') ?>
+            </option>
+            <?php endwhile; } ?>
+        </select>
+    </div>
+    <div class="form-group"><label>Warranty Card #</label><input type="text" name="warranty_card_no" placeholder="Auto-generated if blank"></div>
+    <div class="form-group"><label>Warranty Start Date <span class="req">*</span></label><input type="date" name="warranty_start_date" value="<?= date('Y-m-d') ?>" required></div>
+</div>
+<div class="form-row">
+    <div class="form-group"><label>Battery Pack Serial # <span class="req">*</span></label><input type="text" name="battery_serial" id="wBatSer" required placeholder="BAT-SN-XXXXX"></div>
+    <div class="form-group"><label>Motor Serial # <span class="req">*</span></label><input type="text" name="motor_serial" id="wMotorSer" required placeholder="MTR-SN-XXXXX"></div>
+    <div class="form-group"><label>Controller Serial #</label><input type="text" name="controller_serial" id="wCtrlSer" placeholder="CTRL-SN-XXXXX"></div>
+    <div class="form-group"><label>Charger Serial #</label><input type="text" name="charger_serial" placeholder="CHG-SN-XXXXX"></div>
+</div>
+<div class="form-row">
+    <div class="form-group"><label>Battery Warranty (Months)</label><input type="number" name="battery_warranty_months" min="1" max="60" value="12"></div>
+    <div class="form-group"><label>Motor Warranty (Months)</label><input type="number" name="motor_warranty_months" min="1" max="60" value="18"></div>
+    <div class="form-group"><label>Controller Warranty (Months)</label><input type="number" name="controller_warranty_months" min="1" max="60" value="12"></div>
+    <div class="form-group"><label>Notes / Terms</label><input type="text" name="notes" placeholder="e.g. Graphene 72V 38Ah Warranty"></div>
+</div>
+<button type="submit" class="btn btn-primary">💾 Register Warranty</button>
+</form>
+</fieldset>
+
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Card #</th><th>Branch</th><th>Bike / Chassis</th><th>Customer</th><th>Battery Serial</th><th>Motor / Controller Serial</th><th>Start Date</th><th>Battery Expiry</th><th>Motor Expiry</th><th>Status</th></tr></thead>
+<tbody>
+<?php if ($war_res): while ($wr = $war_res->fetch_assoc()):
+    $is_exp = $wr['battery_expiry_date'] < date('Y-m-d');
+?>
+<tr>
+    <td><strong><?= sanitize($wr['warranty_card_no']) ?></strong></td>
+    <td><?= get_branch_badge($conn, $wr['branch_id'] ?? 1) ?></td>
+    <td><code><?= sanitize($wr['chassis_number']) ?></code><br><small><?= sanitize($wr['model_name']) ?></small></td>
+    <td><?= sanitize($wr['customer_name'] ?? '-') ?><br><small><?= sanitize($wr['customer_phone'] ?? '') ?></small></td>
+    <td><code><?= sanitize($wr['battery_serial']) ?></code></td>
+    <td>M: <code><?= sanitize($wr['motor_serial']) ?></code><br><small>C: <code><?= sanitize($wr['controller_serial'] ?: '-') ?></code></small></td>
+    <td><?= fmt_date($wr['warranty_start_date']) ?></td>
+    <td><?= fmt_date($wr['battery_expiry_date']) ?> (<?= (int) $wr['battery_warranty_months'] ?>m)</td>
+    <td><?= fmt_date($wr['motor_expiry_date']) ?> (<?= (int) $wr['motor_warranty_months'] ?>m)</td>
+    <td><span class="badge <?= (!$is_exp && $wr['status'] === 'active') ? 'badge-success' : 'badge-danger' ?>"><?= $is_exp ? 'EXPIRED' : strtoupper($wr['status']) ?></span></td>
+</tr>
+<?php endwhile; endif; ?>
+</tbody>
+</table>
+</div>
+
+<?php elseif ($sub_tab === 'claims'):
+    $claims_res = $conn->query("SELECT wc.*, b.chassis_number, m.model_name, c.name AS customer_name, c.phone AS customer_phone FROM warranty_claims wc JOIN bikes b ON wc.bike_id=b.id LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON wc.customer_id=c.id WHERE " . branch_where($conn, 'wc') . " ORDER BY wc.id DESC");
+?>
+<fieldset class="fieldset no-print" style="margin-bottom:16px"><legend>⚠️ Log New Battery / Component Warranty Claim</legend>
+<form method="POST" action="index.php?page=warranty_service&sub=claims">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+<input type="hidden" name="save_warranty_claim" value="1">
+<input type="hidden" name="sub" value="claims">
+<div class="form-row">
+    <div class="form-group" style="flex:2">
+        <label>Select Bike <span class="req">*</span></label>
+        <select name="bike_id" class="select2-enable" required>
+            <option value="">-- Select Bike --</option>
+            <?php if ($sold_bikes_ws) { $sold_bikes_ws->data_seek(0); while ($sbw = $sold_bikes_ws->fetch_assoc()): ?>
+            <option value="<?= (int) $sbw['id'] ?>"><?= sanitize($sbw['chassis_number']) ?> — <?= sanitize($sbw['model_name']) ?> (<?= sanitize($sbw['cust_name'] ?: 'Walk-in') ?>)</option>
+            <?php endwhile; } ?>
+        </select>
+    </div>
+    <div class="form-group"><label>Claim Date <span class="req">*</span></label><input type="date" name="claim_date" value="<?= date('Y-m-d') ?>" required></div>
+    <div class="form-group">
+        <label>Faulty Component <span class="req">*</span></label>
+        <select name="component" required>
+            <option value="battery">Battery Pack / Cell</option>
+            <option value="motor">BLDC Hub Motor</option>
+            <option value="controller">Controller Unit</option>
+            <option value="charger">Charger</option>
+            <option value="frame">Chassis / Frame</option>
+            <option value="other">Other</option>
+        </select>
+    </div>
+    <div class="form-group">
+        <label>Claim Status</label>
+        <select name="claim_status">
+            <option value="pending">Pending Inspection</option>
+            <option value="sent_to_vendor">Sent to Vendor / Factory</option>
+            <option value="approved">Approved by Factory</option>
+            <option value="replaced">Replaced with New Unit</option>
+            <option value="repaired">Repaired & Returned</option>
+            <option value="rejected">Rejected (Out of Warranty)</option>
+        </select>
+    </div>
+</div>
+<div class="form-row">
+    <div class="form-group"><label>Faulty Unit Serial #</label><input type="text" name="old_serial" placeholder="Old Serial #"></div>
+    <div class="form-group"><label>Replacement Unit Serial # (If Replaced)</label><input type="text" name="new_serial" placeholder="New Serial #"></div>
+    <div class="form-group"><label>Vendor / Factory Claim Ticket #</label><input type="text" name="vendor_reference" placeholder="Optional Vendor Ref"></div>
+    <div class="form-group"><label>Resolved Date</label><input type="date" name="resolved_date"></div>
+</div>
+<div class="form-row">
+    <div class="form-group"><label>Issue / Fault Description <span class="req">*</span></label><input type="text" name="issue_description" required placeholder="e.g. Battery voltage drop below 60V within 15km"></div>
+    <div class="form-group"><label>Resolution Notes</label><input type="text" name="resolution_notes" placeholder="Replaced 2 cells / full pack under warranty"></div>
+</div>
+<button type="submit" class="btn btn-primary">💾 Submit Warranty Claim</button>
+</form>
+</fieldset>
+
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Claim #</th><th>Date</th><th>Bike / Chassis</th><th>Customer</th><th>Component</th><th>Old → New Serial</th><th>Fault Description</th><th>Status</th><th>Resolved</th></tr></thead>
+<tbody>
+<?php if ($claims_res): while ($cr = $claims_res->fetch_assoc()): ?>
+<tr>
+    <td><strong><?= sanitize($cr['claim_no']) ?></strong></td>
+    <td><?= fmt_date($cr['claim_date']) ?></td>
+    <td><code><?= sanitize($cr['chassis_number']) ?></code><br><small><?= sanitize($cr['model_name']) ?></small></td>
+    <td><?= sanitize($cr['customer_name'] ?? '-') ?><br><small><?= sanitize($cr['customer_phone'] ?? '') ?></small></td>
+    <td><span class="badge badge-info"><?= strtoupper($cr['component']) ?></span></td>
+    <td>Old: <code><?= sanitize($cr['old_serial'] ?: '-') ?></code><br>New: <code><?= sanitize($cr['new_serial'] ?: '-') ?></code></td>
+    <td><?= sanitize($cr['issue_description']) ?><br><small style="color:var(--text3)"><?= sanitize($cr['resolution_notes'] ?: '') ?></small></td>
+    <td><span class="badge badge-<?= in_array($cr['claim_status'], ['replaced','repaired','approved']) ? 'success' : ($cr['claim_status'] === 'rejected' ? 'danger' : 'warning') ?>"><?= strtoupper(str_replace('_', ' ', $cr['claim_status'])) ?></span></td>
+    <td><?= fmt_date($cr['resolved_date']) ?></td>
+</tr>
+<?php endwhile; endif; ?>
+</tbody>
+</table>
+</div>
+<?php endif; ?>
+<?php endif; ?>
+
+<?php
+    // ========================================================================
+    // MODULE 3 UI: STANDALONE ACCESSORY & SPARE PARTS POS (page=accessory_pos)
+    // ========================================================================
+    elseif ($page === 'accessory_pos'):
+        require_permission($conn, 'accessory_pos', 'view');
+        $print_pos_id = (int) ($_GET['print_pos'] ?? ($_SESSION['last_pos_sale_id'] ?? 0));
+        unset($_SESSION['last_pos_sale_id']);
+        $pos_format = ($_GET['format'] ?? 'thermal') === 'a4' ? 'a4' : 'thermal';
+
+        if (!empty($_GET['print_pos'])):
+            echo '<style>.sidebar, .topbar { display: none !important; } .main-wrap { margin-left: 0 !important; } .content > *:not(#receiptArea):not(.no-print) { display: none !important; } .content { padding: 30px !important; background: #333 !important; } @media print { .content, body { padding: 0 !important; background: #fff !important; } }</style>';
+            $ps = $conn->query("SELECT p.*, br.name AS br_name, br.branch_code, br.phone AS br_phone, br.address AS br_addr FROM pos_accessory_sales p LEFT JOIN branches br ON p.branch_id=br.id WHERE p.id=$print_pos_id LIMIT 1")->fetch_assoc();
+            if ($ps):
+                $p_items = $conn->query("SELECT * FROM pos_accessory_sale_items WHERE pos_sale_id=" . (int) $ps['id']);
+                $items_summary_arr = [];
+?>
+<div class="<?= $pos_format === 'thermal' ? 'thermal-receipt' : 'a4-invoice' ?>" id="receiptArea">
+    <div class="invoice-header">
+        <h1>⚡ <?= sanitize(get_setting('company_name') ?? 'BNI Enterprises') ?></h1>
+        <h2><?= sanitize(($ps['br_name'] ?? 'Main Branch') . ' (' . ($ps['branch_code'] ?? 'HQ') . ')') ?></h2>
+        <div style="font-size:0.88rem;margin-top:4px"><strong>SPARE PARTS & ACCESSORY COUNTER RECEIPT</strong></div>
+    </div>
+    <div class="invoice-meta">
+        <div><strong>Invoice #:</strong> <?= sanitize($ps['invoice_no']) ?><br><strong>Date:</strong> <?= fmt_date($ps['sale_date']) ?></div>
+        <div style="text-align:right"><strong>Customer:</strong> <?= sanitize($ps['customer_name']) ?><br><?php if (!empty($ps['customer_phone'])): ?><strong>Phone:</strong> <?= sanitize($ps['customer_phone']) ?><?php endif; ?></div>
+    </div>
+    <div class="invoice-section">
+        <table class="invoice-table">
+            <thead><tr><th>Item / SKU</th><th>Qty</th><th style="text-align:right">Price</th><th style="text-align:right">Total</th></tr></thead>
+            <tbody>
+            <?php while ($pit = $p_items->fetch_assoc()):
+                $items_summary_arr[] = $pit['item_name'] . ' x' . $pit['quantity'];
+            ?>
+            <tr>
+                <td><strong><?= sanitize($pit['item_name']) ?></strong><br><small><?= sanitize($pit['sku']) ?></small></td>
+                <td><?= (int) $pit['quantity'] ?></td>
+                <td style="text-align:right"><?= fmt_money($pit['unit_price']) ?></td>
+                <td style="text-align:right"><?= fmt_money($pit['final_price']) ?></td>
+            </tr>
+            <?php endwhile; ?>
+            </tbody>
+        </table>
+    </div>
+    <div class="invoice-section">
+        <div class="invoice-total">Subtotal: <?= fmt_money($ps['subtotal']) ?></div>
+        <?php if ($ps['discount_total'] > 0): ?><div class="invoice-total">Discount: - <?= fmt_money($ps['discount_total']) ?></div><?php endif; ?>
+        <div class="invoice-total" style="background:#fff;border-color:#000">Net Total Paid (<?= strtoupper($ps['payment_method']) ?>): <?= fmt_money($ps['net_total']) ?></div>
+    </div>
+    <div class="invoice-footer">Thank you for shopping at <?= sanitize(get_setting('company_name') ?? 'BNI Enterprises') ?>!</div>
+</div>
+<?php
+                $wa_pos_msg = render_notification_template($conn, 'pos_receipt', [
+                    'customer_name' => $ps['customer_name'],
+                    'invoice_no' => $ps['invoice_no'],
+                    'payment_date' => fmt_date($ps['sale_date']),
+                    'items_summary' => implode(', ', $items_summary_arr),
+                    'paid_amount' => fmt_money($ps['net_total']),
+                    'payment_method' => strtoupper($ps['payment_method']),
+                    'branch_name' => $ps['br_name'] ?? 'Main Showroom'
+                ]);
+                $wa_pos_url = build_wa_link($ps['customer_phone'] ?? '', $wa_pos_msg);
+?>
+<div class="no-print" style="margin-top:12px;display:flex;gap:8px">
+    <button onclick="window.print()" class="btn btn-success">🖨 Print Receipt</button>
+    <a href="index.php?page=accessory_pos&print_pos=<?= (int) $ps['id'] ?>&format=<?= $pos_format === 'thermal' ? 'a4' : 'thermal' ?>" class="btn btn-primary">Switch to <?= $pos_format === 'thermal' ? 'A4' : 'Thermal' ?></a>
+    <?php if ($wa_pos_url): ?><a href="<?= sanitize($wa_pos_url) ?>" target="_blank" class="btn btn-success">📲 Share on WhatsApp</a><?php endif; ?>
+    <a href="index.php?page=accessory_pos" class="btn btn-default">← Back to Counter POS</a>
+</div>
+<?php
+            endif;
+        else:
+            $pos_acc_list = $conn->query("SELECT id, name, sku, selling_price, purchase_price, current_stock FROM accessories WHERE current_stock > 0 " . branch_and($conn) . " ORDER BY name")->fetch_all(MYSQLI_ASSOC);
+            $pos_cust_list = $conn->query("SELECT id, name, phone FROM customers ORDER BY name");
+            $pos_staff_list = $conn->query("SELECT id, name, staff_code FROM staff_members WHERE is_active=1 " . branch_and($conn) . " ORDER BY name");
+            $pos_history = $conn->query("SELECT p.*, br.branch_code, (SELECT COUNT(*) FROM pos_accessory_sale_items pi WHERE pi.pos_sale_id=p.id) AS item_cnt FROM pos_accessory_sales p LEFT JOIN branches br ON p.branch_id=br.id WHERE " . branch_where($conn, 'p') . " ORDER BY p.id DESC LIMIT 100");
+            $pos_kpi = $conn->query("SELECT COUNT(*) AS cnt, COALESCE(SUM(net_total),0) AS rev, COALESCE(SUM(total_profit),0) AS prof FROM pos_accessory_sales p WHERE p.status='completed' " . branch_and($conn, 'p'))->fetch_assoc();
+?>
+<div class="card-grid animate__animated animate__fadeInDown">
+    <div class="card accent"><div class="card-icon">🛍️</div><div class="card-body"><div class="card-label">Counter POS Invoices</div><div class="card-value"><?= (int) ($pos_kpi['cnt'] ?? 0) ?></div><div class="card-sub">walk-in & counter</div></div></div>
+    <div class="card success"><div class="card-icon">💵</div><div class="card-body"><div class="card-label">POS Counter Revenue</div><div class="card-value" style="font-size:1rem"><?= fmt_money($pos_kpi['rev'] ?? 0) ?></div></div></div>
+    <div class="card success"><div class="card-icon">📈</div><div class="card-body"><div class="card-label">POS Net Profit</div><div class="card-value" style="font-size:1rem;color:var(--success)"><?= fmt_money($pos_kpi['prof'] ?? 0) ?></div></div></div>
+    <div class="card warning"><div class="card-icon">🛠️</div><div class="card-body"><div class="card-label">SKUs in Stock</div><div class="card-value"><?= count($pos_acc_list) ?></div><div class="card-sub">ready for counter sale</div></div></div>
+</div>
+
+<fieldset class="fieldset animate__animated animate__fadeIn"><legend>🛍️ Standalone Accessory & Spare Parts Walk-In Counter POS</legend>
+<div style="background:var(--bg2);border:1px solid var(--accent);padding:10px 14px;border-radius:2px;margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <strong>🔫 Barcode / SKU Quick Scanner:</strong>
+    <input type="text" id="posBarcodeInput" placeholder="Scan or type SKU / Accessory Name and press Enter..." style="flex:1;min-width:240px;padding:7px 10px;border:1px solid var(--accent);background:var(--input-bg);color:var(--input-text)" onkeydown="if(event.key==='Enter'){event.preventDefault();scanPosSku(this.value);}">
+    <button type="button" class="btn btn-primary btn-sm" onclick="scanPosSku(document.getElementById('posBarcodeInput').value)">+ Add by SKU</button>
+    <button type="button" class="btn btn-success btn-sm" onclick="addPosCartRow()">+ Add Item Row</button>
+</div>
+
+<form method="POST" action="index.php?page=accessory_pos" id="posSaleForm">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+<input type="hidden" name="save_pos_sale" value="1">
+<div class="form-row">
+    <div class="form-group">
+        <label>Branch</label>
+        <select name="branch_id" required>
+            <?php foreach ($active_branches_list as $ab): ?>
+            <option value="<?= (int) $ab['id'] ?>" <?= get_write_branch_id($conn) === (int) $ab['id'] ? 'selected' : '' ?>><?= sanitize($ab['branch_code'] . ' — ' . $ab['name']) ?></option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+    <div class="form-group"><label>Sale Date <span class="req">*</span></label><input type="date" name="sale_date" value="<?= date('Y-m-d') ?>" required></div>
+    <div class="form-group" style="flex:2">
+        <label>Registered Customer (Optional — leave blank for Walk-in)</label>
+        <select name="customer_id" class="select2-enable" onchange="if(this.selectedIndex>0){var o=this.options[this.selectedIndex];document.getElementById('posCustName').value=o.dataset.name||'Walk-in Customer';document.getElementById('posCustPhone').value=o.dataset.phone||'';}">
+            <option value="">-- Walk-in Counter Customer --</option>
+            <?php if ($pos_cust_list) { while ($pcl = $pos_cust_list->fetch_assoc()): ?>
+            <option value="<?= (int) $pcl['id'] ?>" data-name="<?= sanitize($pcl['name']) ?>" data-phone="<?= sanitize($pcl['phone']) ?>"><?= sanitize($pcl['name'] . ' (' . $pcl['phone'] . ')') ?></option>
+            <?php endwhile; } ?>
+        </select>
+    </div>
+    <div class="form-group"><label>Walk-in Customer Name</label><input type="text" name="customer_name" id="posCustName" value="Walk-in Customer" required></div>
+    <div class="form-group"><label>Customer Phone (for WhatsApp Receipt)</label><input type="text" name="customer_phone" id="posCustPhone" placeholder="03XX-XXXXXXX"></div>
+</div>
+
+<div id="posCartContainer" style="margin:12px 0"></div>
+
+<div class="form-row" style="background:var(--bg3);padding:12px;border-radius:2px;border:1px solid var(--border)">
+    <div class="form-group"><label>Cart Subtotal</label><input type="text" id="posSubtotalDisp" readonly style="background:var(--bg);font-weight:700" value="0.00"></div>
+    <div class="form-group"><label>Extra Bill Discount (<?= $currency ?>)</label><input type="number" name="extra_discount" id="posExtraDisc" step="0.01" min="0" value="0.00" oninput="recalcPosTotals()"></div>
+    <div class="form-group"><label>Net Payable Total (<?= $currency ?>)</label><input type="text" id="posNetTotalDisp" readonly style="background:var(--bg);font-weight:700;color:var(--success);font-size:1.05rem" value="0.00"></div>
+    <div class="form-group">
+        <label>Payment Method</label>
+        <select name="payment_method">
+            <option value="cash">Cash</option>
+            <option value="online">Online / Easypaisa / JazzCash</option>
+            <option value="bank_transfer">Bank Transfer</option>
+            <option value="cheque">Cheque</option>
+        </select>
+    </div>
+    <div class="form-group">
+        <label>Salesperson (Optional)</label>
+        <select name="salesperson_id">
+            <option value="">-- Counter Staff --</option>
+            <?php if ($pos_staff_list) { while ($psl = $pos_staff_list->fetch_assoc()): ?>
+            <option value="<?= (int) $psl['id'] ?>"><?= sanitize($psl['name'] . ' (' . $psl['staff_code'] . ')') ?></option>
+            <?php endwhile; } ?>
+        </select>
+    </div>
+</div>
+<div style="margin-top:12px;display:flex;gap:8px">
+    <button type="submit" class="btn btn-success">💳 Complete Counter Sale & Print Receipt</button>
+</div>
+</form>
+</fieldset>
+
+<script>
+var posCatalog = <?= json_encode($pos_acc_list) ?>;
+var posRowIdx = 0;
+function addPosCartRow(preselectId) {
+    posRowIdx++;
+    var idx = posRowIdx;
+    var opts = '<option value="">-- Select Accessory / Spare Part --</option>';
+    posCatalog.forEach(function(a) {
+        var sel = (preselectId && parseInt(preselectId) === parseInt(a.id)) ? 'selected' : '';
+        opts += '<option value="'+a.id+'" data-price="'+a.selling_price+'" data-stock="'+a.current_stock+'" data-sku="'+a.sku+'" '+sel+'>'+a.name+' ['+a.sku+'] — Rs. '+a.selling_price+' (Stock: '+a.current_stock+')</option>';
+    });
+    var row = document.createElement('div');
+    row.className = 'form-row';
+    row.id = 'posRow_' + idx;
+    row.style.alignItems = 'flex-end';
+    row.style.marginBottom = '8px';
+    row.innerHTML = '<div class="form-group" style="flex:2"><label>Item #' + idx + '</label><select name="pos_items['+idx+'][accessory_id]" id="posSel_'+idx+'" required onchange="onPosItemChange('+idx+')">'+opts+'</select></div>'
+        + '<div class="form-group"><label>Qty</label><input type="number" name="pos_items['+idx+'][quantity]" id="posQty_'+idx+'" value="1" min="1" required oninput="recalcPosTotals()"></div>'
+        + '<div class="form-group"><label>Unit Price</label><input type="number" name="pos_items['+idx+'][unit_price]" id="posPrice_'+idx+'" step="0.01" min="0" value="0.00" oninput="recalcPosTotals()"></div>'
+        + '<div class="form-group"><label>Discount</label><input type="number" name="pos_items['+idx+'][discount]" id="posDisc_'+idx+'" step="0.01" min="0" value="0.00" oninput="recalcPosTotals()"></div>'
+        + '<div class="form-group"><label>Line Total</label><input type="text" id="posLine_'+idx+'" readonly style="background:var(--bg3);font-weight:700" value="0.00"></div>'
+        + '<div class="form-group"><button type="button" class="btn btn-danger btn-sm" onclick="document.getElementById(\'posRow_'+idx+'\').remove();recalcPosTotals();">✕</button></div>';
+    document.getElementById('posCartContainer').appendChild(row);
+    if (preselectId) onPosItemChange(idx);
+}
+function onPosItemChange(idx) {
+    var sel = document.getElementById('posSel_' + idx);
+    if (!sel || sel.selectedIndex <= 0) return;
+    var opt = sel.options[sel.selectedIndex];
+    document.getElementById('posPrice_' + idx).value = parseFloat(opt.dataset.price || 0).toFixed(2);
+    recalcPosTotals();
+}
+function recalcPosTotals() {
+    var sub = 0;
+    var itemDisc = 0;
+    document.querySelectorAll('[id^="posRow_"]').forEach(function(r) {
+        var idx = r.id.replace('posRow_', '');
+        var q = parseFloat(document.getElementById('posQty_' + idx).value) || 0;
+        var p = parseFloat(document.getElementById('posPrice_' + idx).value) || 0;
+        var d = parseFloat(document.getElementById('posDisc_' + idx).value) || 0;
+        var line = Math.max(0, (q * p) - d);
+        document.getElementById('posLine_' + idx).value = line.toFixed(2);
+        sub += (q * p);
+        itemDisc += d;
+    });
+    var extraD = parseFloat(document.getElementById('posExtraDisc').value) || 0;
+    var net = Math.max(0, sub - itemDisc - extraD);
+    document.getElementById('posSubtotalDisp').value = sub.toFixed(2);
+    document.getElementById('posNetTotalDisp').value = net.toFixed(2);
+}
+function scanPosSku(code) {
+    code = (code || '').trim().toLowerCase();
+    if (!code) return;
+    var found = posCatalog.find(function(a) {
+        return (a.sku && a.sku.toLowerCase() === code) || (a.name && a.name.toLowerCase().indexOf(code) !== -1);
+    });
+    if (found) {
+        addPosCartRow(found.id);
+        document.getElementById('posBarcodeInput').value = '';
+    } else {
+        alert('No in-stock accessory matched SKU/Name: ' + code);
+    }
+}
+window.addEventListener('DOMContentLoaded', function() { addPosCartRow(); });
+</script>
+
+<fieldset class="fieldset" style="margin-top:16px"><legend>📜 Recent Counter POS Sales</legend>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Invoice #</th><th>Branch</th><th>Date</th><th>Customer</th><th>Items</th><th>Net Total</th><th>Profit</th><th>Method</th><th>Status</th><th class="no-sort">Actions</th></tr></thead>
+<tbody>
+<?php if ($pos_history): while ($ph = $pos_history->fetch_assoc()): ?>
+<tr>
+    <td><strong><?= sanitize($ph['invoice_no']) ?></strong></td>
+    <td><?= get_branch_badge($conn, $ph['branch_id'] ?? 1) ?></td>
+    <td><?= fmt_date($ph['sale_date']) ?></td>
+    <td><?= sanitize($ph['customer_name']) ?><br><small><?= sanitize($ph['customer_phone']) ?></small></td>
+    <td><?= (int) $ph['item_cnt'] ?> item(s)</td>
+    <td><strong><?= fmt_money($ph['net_total']) ?></strong></td>
+    <td style="color:var(--success)"><?= fmt_money($ph['total_profit']) ?></td>
+    <td><?= strtoupper($ph['payment_method']) ?></td>
+    <td><span class="badge badge-<?= $ph['status'] === 'completed' ? 'success' : 'danger' ?>"><?= strtoupper($ph['status']) ?></span></td>
+    <td class="no-print">
+        <div class="actions-col">
+            <a href="index.php?page=accessory_pos&print_pos=<?= (int) $ph['id'] ?>&format=thermal" target="_blank" class="btn btn-warning btn-sm" title="Thermal Receipt">🧾</a>
+            <a href="index.php?page=accessory_pos&print_pos=<?= (int) $ph['id'] ?>&format=a4" target="_blank" class="btn btn-primary btn-sm" title="A4 Invoice">📄</a>
+            <?php if ($ph['status'] === 'completed' && has_permission($conn, 'accessory_pos', 'delete')): ?>
+            <form method="POST" action="index.php?page=accessory_pos" style="display:inline" onsubmit="return confirm('Return/Void this POS sale and restore stock?')">
+                <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+                <input type="hidden" name="pos_sale_id" value="<?= (int) $ph['id'] ?>">
+                <button type="submit" name="return_pos_sale" value="1" class="btn btn-danger btn-sm" title="Return / Void">↩</button>
+            </form>
+            <?php endif; ?>
+        </div>
+    </td>
+</tr>
+<?php endwhile; endif; ?>
+</tbody>
+</table>
+</div>
+</fieldset>
+<?php endif; ?>
+
+<?php
+    // ========================================================================
+    // MODULE 4 UI: EXCISE REGISTRATION, NUMBER PLATE & SMART CARD TRACKER
+    // ========================================================================
+    elseif ($page === 'excise_tracker'):
+        require_permission($conn, 'excise_tracker', 'view');
+        $edit_ex_id = (int) ($_GET['edit_id'] ?? 0);
+        $edit_ex = $edit_ex_id > 0 ? $conn->query("SELECT * FROM excise_registrations WHERE id=$edit_ex_id LIMIT 1")->fetch_assoc() : null;
+        $filter_plate_st = clean_text($_GET['plate_status'] ?? '', 40);
+
+        $where_ex = branch_where($conn, 'e');
+        if ($filter_plate_st !== '') {
+            $where_ex .= " AND e.plate_status='" . mysqli_real_escape_string($conn, $filter_plate_st) . "'";
+        }
+        $excise_res = $conn->query("SELECT e.*, b.chassis_number, b.motor_number, b.selling_date, m.model_name, c.name AS customer_name, c.phone AS customer_phone, c.cnic AS customer_cnic, br.name AS branch_title
+            FROM excise_registrations e
+            JOIN bikes b ON e.bike_id=b.id
+            LEFT JOIN models m ON b.model_id=m.id
+            LEFT JOIN customers c ON e.customer_id=c.id
+            LEFT JOIN branches br ON e.branch_id=br.id
+            WHERE $where_ex
+            ORDER BY e.id DESC");
+
+        $sold_bikes_ex = $conn->query("SELECT b.id, b.chassis_number, m.model_name, c.name AS customer_name, c.phone AS customer_phone FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id WHERE b.status='sold' " . branch_and($conn, 'b') . " ORDER BY b.selling_date DESC");
+        $ex_kpi = $conn->query("SELECT
+            SUM(CASE WHEN plate_status='Pending' THEN 1 ELSE 0 END) AS pending_cnt,
+            SUM(CASE WHEN plate_status='Applied' THEN 1 ELSE 0 END) AS applied_cnt,
+            SUM(CASE WHEN plate_status='Received at Branch' THEN 1 ELSE 0 END) AS branch_cnt,
+            SUM(CASE WHEN plate_status='Delivered to Customer' THEN 1 ELSE 0 END) AS delivered_cnt,
+            COALESCE(SUM(fee_collected),0) AS fees_in,
+            COALESCE(SUM(fee_paid_to_excise),0) AS fees_out
+            FROM excise_registrations e WHERE " . branch_where($conn, 'e'))->fetch_assoc();
+?>
+<div class="card-grid animate__animated animate__fadeInDown">
+    <div class="card warning"><div class="card-icon">⏳</div><div class="card-body"><div class="card-label">Pending Docs</div><div class="card-value"><?= (int) ($ex_kpi['pending_cnt'] ?? 0) ?></div><div class="card-sub">awaiting agent</div></div></div>
+    <div class="card accent"><div class="card-icon">🏛️</div><div class="card-body"><div class="card-label">Applied at Excise</div><div class="card-value"><?= (int) ($ex_kpi['applied_cnt'] ?? 0) ?></div><div class="card-sub">in process</div></div></div>
+    <div class="card info"><div class="card-icon">🔢</div><div class="card-body"><div class="card-label">Received at Branch</div><div class="card-value"><?= (int) ($ex_kpi['branch_cnt'] ?? 0) ?></div><div class="card-sub">ready for customer</div></div></div>
+    <div class="card success"><div class="card-icon">✅</div><div class="card-body"><div class="card-label">Delivered to Customer</div><div class="card-value"><?= (int) ($ex_kpi['delivered_cnt'] ?? 0) ?></div><div class="card-sub">completed</div></div></div>
+    <div class="card success"><div class="card-icon">💰</div><div class="card-body"><div class="card-label">Reg. Fees Collected</div><div class="card-value" style="font-size:1rem"><?= fmt_money($ex_kpi['fees_in'] ?? 0) ?></div><div class="card-sub">Paid to Excise: <?= fmt_money($ex_kpi['fees_out'] ?? 0) ?></div></div></div>
+</div>
+
+<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap" class="no-print">
+    <button type="button" class="btn btn-success" onclick="document.getElementById('exciseFormBox').style.display='block'">+ New Excise Registration Entry</button>
+    <a href="index.php?page=excise_tracker" class="btn <?= $filter_plate_st === '' ? 'btn-primary' : 'btn-default' ?> btn-sm">All</a>
+    <a href="index.php?page=excise_tracker&plate_status=Pending" class="btn <?= $filter_plate_st === 'Pending' ? 'btn-primary' : 'btn-default' ?> btn-sm">1. Pending</a>
+    <a href="index.php?page=excise_tracker&plate_status=Applied" class="btn <?= $filter_plate_st === 'Applied' ? 'btn-primary' : 'btn-default' ?> btn-sm">2. Applied</a>
+    <a href="index.php?page=excise_tracker&plate_status=<?= urlencode('Received at Branch') ?>" class="btn <?= $filter_plate_st === 'Received at Branch' ? 'btn-primary' : 'btn-default' ?> btn-sm">3. Received at Branch</a>
+    <a href="index.php?page=excise_tracker&plate_status=<?= urlencode('Delivered to Customer') ?>" class="btn <?= $filter_plate_st === 'Delivered to Customer' ? 'btn-primary' : 'btn-default' ?> btn-sm">4. Delivered</a>
+</div>
+
+<div id="exciseFormBox" style="display:<?= $edit_ex ? 'block' : 'none' ?>;margin-bottom:16px" class="no-print">
+<fieldset class="fieldset"><legend><?= $edit_ex ? '✏ Update Excise / Number Plate Record' : '🏛️ Register Bike for Excise, Number Plate & Smart Card' ?></legend>
+<form method="POST" action="index.php?page=excise_tracker">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+<input type="hidden" name="save_excise" value="1">
+<?php if ($edit_ex): ?><input type="hidden" name="id" value="<?= (int) $edit_ex['id'] ?>"><?php endif; ?>
+<div class="form-row">
+    <div class="form-group" style="flex:2">
+        <label>Select Sold Bike <span class="req">*</span></label>
+        <select name="bike_id" class="select2-enable" required>
+            <option value="">-- Select Sold Bike --</option>
+            <?php if ($sold_bikes_ex) { while ($sbe = $sold_bikes_ex->fetch_assoc()): ?>
+            <option value="<?= (int) $sbe['id'] ?>" <?= ((int) ($edit_ex['bike_id'] ?? 0)) === (int) $sbe['id'] ? 'selected' : '' ?>>
+                <?= sanitize($sbe['chassis_number']) ?> | <?= sanitize($sbe['model_name']) ?> — <?= sanitize($sbe['customer_name'] ?? 'Walk-in') ?>
+            </option>
+            <?php endwhile; } ?>
+        </select>
+    </div>
+    <div class="form-group"><label>Reg. Fee Collected (<?= $currency ?>)</label><input type="number" name="fee_collected" step="0.01" min="0" value="<?= (float) ($edit_ex['fee_collected'] ?? 0) ?>"></div>
+    <div class="form-group"><label>Fee Paid to Excise/Agent (<?= $currency ?>)</label><input type="number" name="fee_paid_to_excise" step="0.01" min="0" value="<?= (float) ($edit_ex['fee_paid_to_excise'] ?? 0) ?>"></div>
+</div>
+<div class="form-row">
+    <div class="form-group"><label>Excise Agent Name</label><input type="text" name="agent_name" value="<?= sanitize($edit_ex['agent_name'] ?? '') ?>" placeholder="Agent / File Submitter"></div>
+    <div class="form-group"><label>Agent Phone</label><input type="text" name="agent_phone" value="<?= sanitize($edit_ex['agent_phone'] ?? '') ?>" placeholder="03XX-XXXXXXX"></div>
+    <div class="form-group"><label>Documents Submitted to Agent</label><input type="text" name="docs_submitted_text" value="<?= sanitize($edit_ex['docs_submitted'] ?? 'Sale Invoice, CNIC Copy, Biometric Slip, Form-F') ?>"></div>
+    <div class="form-group"><label>Submission Date</label><input type="date" name="submission_date" value="<?= $edit_ex['submission_date'] ?? date('Y-m-d') ?>"></div>
+</div>
+<div class="form-row">
+    <div class="form-group"><label>Assigned Reg / Plate #</label><input type="text" name="registration_no" value="<?= sanitize($edit_ex['registration_no'] ?? '') ?>" placeholder="e.g. DGK-26-4412"></div>
+    <div class="form-group"><label>Smart Card #</label><input type="text" name="smart_card_no" value="<?= sanitize($edit_ex['smart_card_no'] ?? '') ?>" placeholder="SC-XXXXX"></div>
+    <div class="form-group">
+        <label>Plate Pipeline Status <span class="req">*</span></label>
+        <select name="plate_status" required>
+            <?php foreach (['Pending', 'Applied', 'Received at Branch', 'Delivered to Customer'] as $pst): ?>
+            <option value="<?= $pst ?>" <?= ($edit_ex['plate_status'] ?? 'Pending') === $pst ? 'selected' : '' ?>><?= $pst ?></option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+    <div class="form-group">
+        <label>Smart Card Status</label>
+        <select name="smart_card_status">
+            <?php foreach (['Pending', 'Applied', 'Received at Branch', 'Delivered to Customer'] as $scst): ?>
+            <option value="<?= $scst ?>" <?= ($edit_ex['smart_card_status'] ?? 'Pending') === $scst ? 'selected' : '' ?>><?= $scst ?></option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+</div>
+<div class="form-row">
+    <div class="form-group"><label>Received by Customer / Person Name</label><input type="text" name="received_by_person" value="<?= sanitize($edit_ex['received_by_person'] ?? '') ?>" placeholder="Name of receiver at handover"></div>
+    <div class="form-group"><label>Receiver CNIC</label><input type="text" name="received_by_cnic" value="<?= sanitize($edit_ex['received_by_cnic'] ?? '') ?>" placeholder="XXXXX-XXXXXXX-X"></div>
+    <div class="form-group"><label>Notes</label><input type="text" name="notes" value="<?= sanitize($edit_ex['notes'] ?? '') ?>"></div>
+</div>
+<button type="submit" class="btn btn-primary">💾 Save Excise Record</button>
+<button type="button" class="btn btn-default" onclick="document.getElementById('exciseFormBox').style.display='none'">Cancel</button>
+</form>
+</fieldset>
+</div>
+
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Sr#</th><th>Branch</th><th>Bike / Chassis</th><th>Customer</th><th>Fees (In / Out)</th><th>Excise Agent & Docs</th><th>Assigned Plate & Card</th><th>Plate Pipeline Status</th><th class="no-sort">Actions</th></tr></thead>
+<tbody>
+<?php $sr = 1; if ($excise_res): while ($ex = $excise_res->fetch_assoc()):
+    $p_badge = $ex['plate_status'] === 'Delivered to Customer' ? 'badge-success' : ($ex['plate_status'] === 'Received at Branch' ? 'badge-info' : ($ex['plate_status'] === 'Applied' ? 'badge-accent' : 'badge-warning'));
+    $next_map = ['Pending' => 'Applied', 'Applied' => 'Received at Branch', 'Received at Branch' => 'Delivered to Customer'];
+    $next_st = $next_map[$ex['plate_status']] ?? '';
+    $wa_ex_msg = render_notification_template($conn, 'excise_ready', [
+        'customer_name' => $ex['customer_name'] ?? 'Customer',
+        'plate_no' => $ex['registration_no'] ?: 'Registered',
+        'model' => $ex['model_name'] ?? 'Electric Bike',
+        'chassis' => $ex['chassis_number'],
+        'branch_name' => $ex['branch_title'] ?? 'Showroom'
+    ]);
+    $wa_ex_url = build_wa_link($ex['customer_phone'] ?? '', $wa_ex_msg);
+?>
+<tr>
+    <td><?= $sr++ ?></td>
+    <td><?= get_branch_badge($conn, $ex['branch_id'] ?? 1) ?></td>
+    <td><code><?= sanitize($ex['chassis_number']) ?></code><br><small><?= sanitize($ex['model_name']) ?></small></td>
+    <td><strong><?= sanitize($ex['customer_name'] ?? '-') ?></strong><br><small>📞 <?= sanitize($ex['customer_phone'] ?? '') ?></small></td>
+    <td>In: <?= fmt_money($ex['fee_collected']) ?><br><small>Out: <?= fmt_money($ex['fee_paid_to_excise']) ?></small></td>
+    <td><strong><?= sanitize($ex['agent_name'] ?: '-') ?></strong><br><small><?= sanitize($ex['docs_submitted'] ?: '-') ?></small></td>
+    <td>Plate: <strong style="color:var(--accent)"><?= sanitize($ex['registration_no'] ?: 'Unassigned') ?></strong><br><small>Card: <?= sanitize($ex['smart_card_no'] ?: '-') ?></small></td>
+    <td>
+        <span class="badge <?= $p_badge ?>"><?= sanitize($ex['plate_status']) ?></span>
+        <?php if ($ex['delivered_to_customer_date']): ?><br><small>Delivered: <?= fmt_date($ex['delivered_to_customer_date']) ?></small><?php endif; ?>
+    </td>
+    <td class="no-print">
+        <div class="actions-col">
+            <?php if ($next_st !== ''): ?>
+            <form method="POST" action="index.php?page=excise_tracker" style="display:inline">
+                <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+                <input type="hidden" name="id" value="<?= (int) $ex['id'] ?>">
+                <input type="hidden" name="next_status" value="<?= sanitize($next_st) ?>">
+                <button type="submit" name="quick_plate_status" value="1" class="btn btn-success btn-sm" title="Advance to <?= sanitize($next_st) ?>">→ <?= sanitize($next_st) ?></button>
+            </form>
+            <?php endif; ?>
+            <?php if ($wa_ex_url): ?><a href="<?= sanitize($wa_ex_url) ?>" target="_blank" class="btn btn-success btn-sm" title="Notify Customer on WhatsApp">📲 WA</a><?php endif; ?>
+            <a href="index.php?page=excise_tracker&edit_id=<?= (int) $ex['id'] ?>" class="btn btn-primary btn-sm">✏</a>
+        </div>
+    </td>
+</tr>
+<?php endwhile; endif; ?>
+</tbody>
+</table>
+</div>
+
+<?php
+    // ========================================================================
+    // MODULE 5 UI: DAILY CASH BOOK / ROZNAMCHA & DRAWER CLOSING (page=cash_book)
+    // ========================================================================
+    elseif ($page === 'cash_book'):
+        require_permission($conn, 'cash_book', 'view');
+        $book_date = clean_text($_GET['book_date'] ?? date('Y-m-d'));
+        if (!valid_date($book_date)) $book_date = date('Y-m-d');
+        $cb_branch_id = isset($_GET['branch_id']) ? (int) $_GET['branch_id'] : get_write_branch_id($conn);
+        $cb = calculate_branch_cash_book($conn, $cb_branch_id, $book_date);
+        $esc_bdate = mysqli_real_escape_string($conn, $book_date);
+        $vouchers_res = $conn->query("SELECT * FROM cash_book_entries WHERE branch_id=$cb_branch_id AND entry_date='$esc_bdate' ORDER BY id ASC");
+        $recent_closings = $conn->query("SELECT d.*, b.branch_code, u.username AS closed_by_user FROM daily_cash_books d LEFT JOIN branches b ON d.branch_id=b.id LEFT JOIN users u ON d.closed_by=u.id WHERE " . ($cb_branch_id > 0 ? "d.branch_id=$cb_branch_id" : "1=1") . " ORDER BY d.book_date DESC LIMIT 15");
+        $saved_denoms = !empty($cb['record']['denominations_json']) ? (json_decode($cb['record']['denominations_json'], true) ?: []) : [];
+?>
+<div class="filter-bar no-print">
+    <form method="GET" action="index.php" style="display:contents">
+        <input type="hidden" name="page" value="cash_book">
+        <div class="form-group">
+            <label>Branch</label>
+            <select name="branch_id" onchange="this.form.submit()">
+                <?php foreach ($active_branches_list as $ab): ?>
+                <option value="<?= (int) $ab['id'] ?>" <?= $cb_branch_id === (int) $ab['id'] ? 'selected' : '' ?>><?= sanitize($ab['branch_code'] . ' — ' . $ab['name']) ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div class="form-group"><label>Roznamcha Date</label><input type="date" name="book_date" value="<?= $book_date ?>" onchange="this.form.submit()"></div>
+        <button type="submit" class="btn btn-primary btn-sm" style="align-self:flex-end">🔍 Load Roznamcha</button>
+        <button type="button" onclick="window.print()" class="btn btn-default btn-sm" style="align-self:flex-end">🖨 Print Roznamcha</button>
+    </form>
+</div>
+
+<div class="card-grid animate__animated animate__fadeInDown">
+    <div class="card accent"><div class="card-icon">🌅</div><div class="card-body"><div class="card-label">Opening Cash Balance</div><div class="card-value" style="font-size:1rem"><?= fmt_money($cb['opening_balance']) ?></div><div class="card-sub"><?= fmt_date($book_date) ?></div></div></div>
+    <div class="card success"><div class="card-icon">📥</div><div class="card-body"><div class="card-label">Total Cash Inflows</div><div class="card-value" style="font-size:1rem;color:var(--success)">+ <?= fmt_money($cb['inflows']['total']) ?></div><div class="card-sub">sales, installments, POS</div></div></div>
+    <div class="card danger"><div class="card-icon">📤</div><div class="card-body"><div class="card-label">Total Cash Outflows</div><div class="card-value" style="font-size:1rem;color:var(--danger)">- <?= fmt_money($cb['outflows']['total']) ?></div><div class="card-sub">expenses, suppliers, bank</div></div></div>
+    <div class="card warning"><div class="card-icon">🧮</div><div class="card-body"><div class="card-label">Expected System Cash</div><div class="card-value" style="font-size:1rem"><?= fmt_money($cb['expected_closing']) ?></div><div class="card-sub">Status: <?= strtoupper($cb['status']) ?></div></div></div>
+</div>
+
+<div class="split-grid" id="receiptArea">
+    <fieldset class="fieldset">
+        <legend>📥 Today's Cash Inflows (Receipts / Aamad)</legend>
+        <table class="data-table no-dt">
+            <tbody>
+                <tr><td>🛒 Bike Sale Cash Down Payments</td><td style="text-align:right"><strong><?= fmt_money($cb['inflows']['down_payments']) ?></strong></td></tr>
+                <tr><td>🗓️ Installment Cash Collections</td><td style="text-align:right"><strong><?= fmt_money($cb['inflows']['installments']) ?></strong></td></tr>
+                <tr><td>🛍️ Counter POS Accessory Cash Sales</td><td style="text-align:right"><strong><?= fmt_money($cb['inflows']['pos_sales']) ?></strong></td></tr>
+                <tr><td>🔧 Workshop / Service Job Card Cash</td><td style="text-align:right"><strong><?= fmt_money($cb['inflows']['job_cards']) ?></strong></td></tr>
+                <tr><td>👤 Customer Ledger Cash Advances / Receipts</td><td style="text-align:right"><strong><?= fmt_money($cb['inflows']['customer_advances']) ?></strong></td></tr>
+                <tr><td>🏭 Supplier Cash Refunds</td><td style="text-align:right"><strong><?= fmt_money($cb['inflows']['supplier_refunds']) ?></strong></td></tr>
+                <tr><td>💰 Other Cash Income (Income/Expense Module)</td><td style="text-align:right"><strong><?= fmt_money($cb['inflows']['other_income']) ?></strong></td></tr>
+                <tr><td>📝 Manual Roznamcha Cash-In Vouchers</td><td style="text-align:right"><strong><?= fmt_money($cb['inflows']['manual_inflows']) ?></strong></td></tr>
+            </tbody>
+            <tfoot>
+                <tr><td><strong>TOTAL CASH INFLOWS</strong></td><td style="text-align:right;color:var(--success)"><strong><?= fmt_money($cb['inflows']['total']) ?></strong></td></tr>
+            </tfoot>
+        </table>
+    </fieldset>
+
+    <fieldset class="fieldset">
+        <legend>📤 Today's Cash Outflows (Payments / Kharch)</legend>
+        <table class="data-table no-dt">
+            <tbody>
+                <tr><td>💸 Branch Daily Cash Expenses (incl. Payroll/Advances)</td><td style="text-align:right"><strong><?= fmt_money($cb['outflows']['expenses']) ?></strong></td></tr>
+                <tr><td>🏭 Supplier Cash Payments</td><td style="text-align:right"><strong><?= fmt_money($cb['outflows']['supplier_payments']) ?></strong></td></tr>
+                <tr><td>↩ Customer Return Cash Refunds</td><td style="text-align:right"><strong><?= fmt_money($cb['outflows']['customer_refunds']) ?></strong></td></tr>
+                <tr><td>🏧 Cash Deposited to Bank</td><td style="text-align:right"><strong><?= fmt_money($cb['outflows']['bank_deposits']) ?></strong></td></tr>
+                <tr><td>📝 Manual Roznamcha Cash-Out Vouchers</td><td style="text-align:right"><strong><?= fmt_money($cb['outflows']['manual_outflows']) ?></strong></td></tr>
+            </tbody>
+            <tfoot>
+                <tr><td><strong>TOTAL CASH OUTFLOWS</strong></td><td style="text-align:right;color:var(--danger)"><strong><?= fmt_money($cb['outflows']['total']) ?></strong></td></tr>
+            </tfoot>
+        </table>
+    </fieldset>
+</div>
+
+<div class="split-grid no-print" style="margin-top:14px">
+    <fieldset class="fieldset">
+        <legend>🌅 Opening Balance & Manual Roznamcha Vouchers</legend>
+        <form method="POST" action="index.php?page=cash_book" style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+            <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+            <input type="hidden" name="save_cash_book_opening" value="1">
+            <input type="hidden" name="branch_id" value="<?= $cb_branch_id ?>">
+            <input type="hidden" name="book_date" value="<?= $book_date ?>">
+            <div class="form-row" style="align-items:flex-end">
+                <div class="form-group"><label>Opening Cash in Drawer (<?= $currency ?>)</label><input type="number" name="opening_balance" step="0.01" value="<?= $cb['opening_balance'] ?>" <?= $cb['status'] === 'closed' ? 'readonly' : '' ?>></div>
+                <div class="form-group"><button type="submit" class="btn btn-primary btn-sm" <?= $cb['status'] === 'closed' ? 'disabled' : '' ?>>💾 Update Opening Balance</button></div>
+            </div>
+        </form>
+
+        <form method="POST" action="index.php?page=cash_book">
+            <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+            <input type="hidden" name="save_cash_book_voucher" value="1">
+            <input type="hidden" name="branch_id" value="<?= $cb_branch_id ?>">
+            <input type="hidden" name="book_date" value="<?= $book_date ?>">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Voucher Type</label>
+                    <select name="direction">
+                        <option value="inflow">📥 Cash In (Receipt)</option>
+                        <option value="outflow">📤 Cash Out (Payment)</option>
+                    </select>
+                </div>
+                <div class="form-group"><label>Category <span class="req">*</span></label><input type="text" name="category" required placeholder="Petty Cash, Tea/Refreshment, Misc..."></div>
+                <div class="form-group"><label>Party / Person</label><input type="text" name="party_name" placeholder="Name"></div>
+                <div class="form-group"><label>Amount (<?= $currency ?>) <span class="req">*</span></label><input type="number" name="amount" step="0.01" min="0.01" required placeholder="0.00"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>Narration / Details</label><input type="text" name="narration" placeholder="Voucher description"></div>
+            </div>
+            <button type="submit" class="btn btn-success btn-sm" <?= $cb['status'] === 'closed' ? 'disabled' : '' ?>>+ Add Roznamcha Entry</button>
+        </form>
+    </fieldset>
+
+    <fieldset class="fieldset">
+        <legend>🔒 Physical Cash Denomination Counter & Drawer Closing</legend>
+        <form method="POST" action="index.php?page=cash_book">
+            <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+            <input type="hidden" name="branch_id" value="<?= $cb_branch_id ?>">
+            <input type="hidden" name="book_date" value="<?= $book_date ?>">
+            <div class="form-row" style="gap:6px">
+                <?php foreach ([5000, 1000, 500, 100, 50, 20, 10] as $note_val): ?>
+                <div class="form-group" style="min-width:90px;flex:1">
+                    <label>Rs. <?= $note_val ?> x</label>
+                    <input type="number" name="denom[<?= $note_val ?>]" class="denom-inp" data-note="<?= $note_val ?>" min="0" value="<?= (int) ($saved_denoms[$note_val] ?? 0) ?>" oninput="calcDenomTotal()">
+                </div>
+                <?php endforeach; ?>
+                <div class="form-group" style="min-width:90px;flex:1">
+                    <label>Coins (Rs.)</label>
+                    <input type="number" name="denom[1]" class="denom-inp" data-note="1" min="0" value="<?= (int) ($saved_denoms[1] ?? 0) ?>" oninput="calcDenomTotal()">
+                </div>
+            </div>
+            <div class="form-row" style="margin-top:8px">
+                <div class="form-group"><label>Expected System Closing Cash</label><input type="text" id="cbExpectedDisp" readonly style="background:var(--bg3);font-weight:700" value="<?= $cb['expected_closing'] ?>"></div>
+                <div class="form-group"><label>Physical Cash in Drawer (<?= $currency ?>) <span class="req">*</span></label><input type="number" name="physical_cash" id="cbPhysicalInput" step="0.01" value="<?= $cb['physical_cash'] ?>" required oninput="calcCashVariance()"></div>
+                <div class="form-group"><label>Variance (Physical - System)</label><input type="text" id="cbVarianceDisp" readonly style="background:var(--bg3);font-weight:700" value="<?= $cb['variance'] ?>"></div>
+            </div>
+            <div class="form-group" style="margin-bottom:10px"><label>Closing Reconciliation Notes</label><input type="text" name="closing_notes" value="<?= sanitize($cb['record']['closing_notes'] ?? '') ?>" placeholder="Any cash difference explanation or handover remarks"></div>
+            <div style="display:flex;gap:8px">
+                <?php if ($cb['status'] !== 'closed'): ?>
+                <button type="submit" name="close_cash_drawer" value="1" class="btn btn-warning">🔒 Reconcile & Close Today's Cash Drawer</button>
+                <?php else: ?>
+                <span class="badge badge-success" style="padding:8px 12px">✅ Drawer Closed at <?= sanitize($cb['record']['closed_at'] ?? '') ?></span>
+                <?php if (has_permission($conn, 'cash_book', 'delete')): ?>
+                <button type="submit" name="reopen_cash_drawer" value="1" class="btn btn-danger btn-sm">🔓 Reopen Drawer</button>
+                <?php endif; ?>
+                <?php endif; ?>
+            </div>
+        </form>
+    </fieldset>
+</div>
+
+<script>
+function calcDenomTotal() {
+    var total = 0;
+    document.querySelectorAll('.denom-inp').forEach(function(inp) {
+        var n = parseFloat(inp.dataset.note) || 0;
+        var q = parseFloat(inp.value) || 0;
+        total += (n * q);
+    });
+    if (total > 0) {
+        document.getElementById('cbPhysicalInput').value = total.toFixed(2);
+    }
+    calcCashVariance();
+}
+function calcCashVariance() {
+    var exp = parseFloat(document.getElementById('cbExpectedDisp').value) || 0;
+    var phy = parseFloat(document.getElementById('cbPhysicalInput').value) || 0;
+    var diff = phy - exp;
+    var el = document.getElementById('cbVarianceDisp');
+    el.value = (diff >= 0 ? '+' : '') + diff.toFixed(2);
+    el.style.color = Math.abs(diff) < 0.01 ? 'var(--success)' : 'var(--danger)';
+}
+</script>
+
+<?php if ($vouchers_res && $vouchers_res->num_rows > 0): ?>
+<fieldset class="fieldset" style="margin-top:16px"><legend>📝 Manual Roznamcha Vouchers for <?= fmt_date($book_date) ?></legend>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Voucher #</th><th>Type</th><th>Category</th><th>Party</th><th>Narration</th><th>Amount</th><th class="no-sort">Actions</th></tr></thead>
+<tbody>
+<?php while ($vr = $vouchers_res->fetch_assoc()): ?>
+<tr>
+    <td><strong><?= sanitize($vr['voucher_no']) ?></strong></td>
+    <td><span class="badge badge-<?= $vr['direction'] === 'inflow' ? 'success' : 'danger' ?>"><?= strtoupper($vr['direction']) ?></span></td>
+    <td><?= sanitize($vr['category']) ?></td>
+    <td><?= sanitize($vr['party_name'] ?: '-') ?></td>
+    <td><?= sanitize($vr['narration'] ?: '-') ?></td>
+    <td><strong><?= fmt_money($vr['amount']) ?></strong></td>
+    <td class="no-print">
+        <?php if ($cb['status'] !== 'closed'): ?>
+        <form method="POST" action="index.php?page=cash_book" style="display:inline">
+            <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+            <input type="hidden" name="id" value="<?= (int) $vr['id'] ?>">
+            <input type="hidden" name="branch_id" value="<?= $cb_branch_id ?>">
+            <input type="hidden" name="book_date" value="<?= $book_date ?>">
+            <button type="submit" name="delete_cash_book_voucher" value="1" class="btn btn-danger btn-sm">🗑</button>
+        </form>
+        <?php endif; ?>
+    </td>
+</tr>
+<?php endwhile; ?>
+</tbody>
+</table>
+</div>
+</fieldset>
+<?php endif; ?>
+
+<fieldset class="fieldset" style="margin-top:16px"><legend>📚 Recent Daily Drawer Closings History</legend>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Date</th><th>Branch</th><th>Opening</th><th>Cash Inflows</th><th>Cash Outflows</th><th>Expected Closing</th><th>Physical Cash</th><th>Variance</th><th>Status</th><th>Closed By</th></tr></thead>
+<tbody>
+<?php if ($recent_closings): while ($rc = $recent_closings->fetch_assoc()): ?>
+<tr>
+    <td><a href="index.php?page=cash_book&book_date=<?= urlencode($rc['book_date']) ?>&branch_id=<?= (int) $rc['branch_id'] ?>"><strong><?= fmt_date($rc['book_date']) ?></strong></a></td>
+    <td><?= get_branch_badge($conn, $rc['branch_id']) ?></td>
+    <td><?= fmt_money($rc['opening_balance']) ?></td>
+    <td style="color:var(--success)">+ <?= fmt_money($rc['system_inflows']) ?></td>
+    <td style="color:var(--danger)">- <?= fmt_money($rc['system_outflows']) ?></td>
+    <td><strong><?= fmt_money($rc['expected_closing']) ?></strong></td>
+    <td><strong><?= fmt_money($rc['physical_cash']) ?></strong></td>
+    <td style="color:<?= abs((float) $rc['variance']) < 0.01 ? 'var(--success)' : 'var(--danger)' ?>;font-weight:700"><?= fmt_money($rc['variance']) ?></td>
+    <td><span class="badge badge-<?= $rc['status'] === 'closed' ? 'success' : 'warning' ?>"><?= strtoupper($rc['status']) ?></span></td>
+    <td><?= sanitize($rc['closed_by_user'] ?? '-') ?></td>
+</tr>
+<?php endwhile; endif; ?>
+</tbody>
+</table>
+</div>
+</fieldset>
+
+<?php
+    // ========================================================================
+    // MODULE 6 UI: WHATSAPP / SMS INSTALLMENT REMINDERS & DIGITAL RECEIPTS
+    // ========================================================================
+    elseif ($page === 'whatsapp_hub'):
+        require_permission($conn, 'whatsapp_hub', 'view');
+        $sub_tab = clean_text($_GET['sub'] ?? 'reminders', 30);
+        $days_ahead = max(1, (int) ($_GET['days_ahead'] ?? 7));
+
+        $wa_Reminders = $conn->query("SELECT i.*, b.chassis_number, m.model_name, c.name AS customer_name, c.phone AS customer_phone, br.name AS branch_title, br.phone AS branch_phone,
+            (SELECT sent_at FROM notification_logs nl WHERE nl.reference_type='installment' AND nl.reference_id=i.id ORDER BY nl.id DESC LIMIT 1) AS last_sent_at
+            FROM installments i
+            JOIN bikes b ON i.bike_id=b.id
+            LEFT JOIN models m ON b.model_id=m.id
+            JOIN customers c ON i.customer_id=c.id
+            LEFT JOIN branches br ON i.branch_id=br.id
+            WHERE i.status IN ('pending','overdue')
+              AND i.due_date <= DATE_ADD(CURDATE(), INTERVAL $days_ahead DAY)
+              " . branch_and($conn, 'i') . "
+            ORDER BY i.due_date ASC");
+
+        $wa_sales = $conn->query("SELECT b.id, b.chassis_number, b.selling_date, b.selling_price, m.model_name, c.id AS cust_id, c.name AS customer_name, c.phone AS customer_phone, br.name AS branch_title, br.phone AS branch_phone,
+            COALESCE((SELECT SUM(sa.final_price) FROM sale_accessories sa WHERE sa.bike_id=b.id),0) AS acc_total,
+            COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.transaction_type='sale' AND p.reference_id=b.id AND COALESCE(p.status,'cleared') NOT IN ('bounced','cancelled')),0) AS dp_paid
+            FROM bikes b
+            LEFT JOIN models m ON b.model_id=m.id
+            LEFT JOIN customers c ON b.customer_id=c.id
+            LEFT JOIN branches br ON b.branch_id=br.id
+            WHERE b.status='sold' " . branch_and($conn, 'b') . "
+            ORDER BY b.selling_date DESC, b.id DESC LIMIT 50");
+
+        $wa_templates = $conn->query("SELECT * FROM notification_templates ORDER BY id ASC");
+        $wa_logs = $conn->query("SELECT nl.*, u.username AS sent_by_user FROM notification_logs nl LEFT JOIN users u ON nl.sent_by=u.id WHERE " . branch_where($conn, 'nl') . " ORDER BY nl.id DESC LIMIT 100");
+?>
+<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap" class="no-print">
+    <a href="index.php?page=whatsapp_hub&sub=reminders" class="btn <?= $sub_tab === 'reminders' ? 'btn-primary' : 'btn-default' ?>">🔔 Overdue & Upcoming Installment Reminders</a>
+    <a href="index.php?page=whatsapp_hub&sub=receipts" class="btn <?= $sub_tab === 'receipts' ? 'btn-primary' : 'btn-default' ?>">🧾 Digital Sale Receipts Sharing</a>
+    <a href="index.php?page=whatsapp_hub&sub=templates" class="btn <?= $sub_tab === 'templates' ? 'btn-primary' : 'btn-default' ?>">📝 Dynamic Message Templates</a>
+    <a href="index.php?page=whatsapp_hub&sub=logs" class="btn <?= $sub_tab === 'logs' ? 'btn-primary' : 'btn-default' ?>">📜 Sent History Log</a>
+</div>
+
+<?php if ($sub_tab === 'reminders'): ?>
+<fieldset class="fieldset"><legend>🔔 Installment Payment Reminders Queue (Overdue & Due Within <?= $days_ahead ?> Days)</legend>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Due Date</th><th>Days</th><th>Customer</th><th>Phone</th><th>Bike / Chassis</th><th>Principal Due</th><th>Penalty</th><th>Total Payable</th><th>Last Reminder</th><th class="no-sort">1-Click Send</th></tr></thead>
+<tbody>
+<?php if ($wa_Reminders): while ($ir = $wa_Reminders->fetch_assoc()):
+    $prin_due = max(0, (float) $ir['installment_amount'] - (float) $ir['amount_paid']);
+    $pen_due = max(0, (float) $ir['penalty_fee'] - (float) ($ir['penalty_paid'] ?? 0));
+    $tot_due = round($prin_due + $pen_due, 2);
+    $is_over = $ir['due_date'] < date('Y-m-d');
+    $diff_days = (int) ((strtotime($ir['due_date']) - strtotime(date('Y-m-d'))) / 86400);
+    $tpl_key = $is_over ? 'installment_overdue' : 'installment_upcoming';
+    $msg_txt = render_notification_template($conn, $tpl_key, [
+        'customer_name' => $ir['customer_name'],
+        'chassis' => $ir['chassis_number'],
+        'model' => $ir['model_name'] ?? 'Electric Bike',
+        'due_date' => fmt_date($ir['due_date']),
+        'amount' => fmt_money($prin_due),
+        'penalty' => fmt_money($pen_due),
+        'total_due' => fmt_money($tot_due),
+        'branch_name' => $ir['branch_title'] ?? 'Main Showroom',
+        'branch_phone' => $ir['branch_phone'] ?: (get_setting('company_whatsapp') ?? '0336-1593533')
+    ]);
+?>
+<tr class="<?= $is_over ? 'row-returned' : 'row-reserved' ?>">
+    <td><strong><?= fmt_date($ir['due_date']) ?></strong></td>
+    <td><span class="badge badge-<?= $is_over ? 'danger' : 'warning' ?>"><?= $is_over ? abs($diff_days) . 'd OVERDUE' : ($diff_days === 0 ? 'DUE TODAY' : 'In ' . $diff_days . 'd') ?></span></td>
+    <td><strong><?= sanitize($ir['customer_name']) ?></strong></td>
+    <td><?= sanitize($ir['customer_phone']) ?></td>
+    <td><code><?= sanitize($ir['chassis_number']) ?></code><br><small><?= sanitize($ir['model_name']) ?></small></td>
+    <td><?= fmt_money($prin_due) ?></td>
+    <td><?= fmt_money($pen_due) ?></td>
+    <td><strong><?= fmt_money($tot_due) ?></strong></td>
+    <td><?= $ir['last_sent_at'] ? date('d/m H:i', strtotime($ir['last_sent_at'])) : '<span style="color:var(--text3)">Never</span>' ?></td>
+    <td class="no-print">
+        <form method="POST" action="index.php?page=whatsapp_hub" target="_blank" style="display:inline">
+            <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+            <input type="hidden" name="log_wa_send" value="1">
+            <input type="hidden" name="customer_id" value="<?= (int) $ir['customer_id'] ?>">
+            <input type="hidden" name="recipient_name" value="<?= sanitize($ir['customer_name']) ?>">
+            <input type="hidden" name="recipient_phone" value="<?= sanitize($ir['customer_phone']) ?>">
+            <input type="hidden" name="template_key" value="<?= $tpl_key ?>">
+            <input type="hidden" name="reference_type" value="installment">
+            <input type="hidden" name="reference_id" value="<?= (int) $ir['id'] ?>">
+            <input type="hidden" name="channel" value="whatsapp">
+            <input type="hidden" name="message_text" value="<?= sanitize($msg_txt) ?>">
+            <button type="submit" class="btn btn-success btn-sm">📲 Send WhatsApp</button>
+        </form>
+    </td>
+</tr>
+<?php endwhile; endif; ?>
+</tbody>
+</table>
+</div>
+</fieldset>
+
+<?php elseif ($sub_tab === 'receipts'): ?>
+<fieldset class="fieldset"><legend>🧾 1-Click Digital Bike Sale Receipts on WhatsApp</legend>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Sale Date</th><th>Invoice #</th><th>Customer</th><th>Phone</th><th>Bike / Chassis</th><th>Total Sale</th><th>Paid</th><th>Balance</th><th class="no-sort">Share Digital Receipt</th></tr></thead>
+<tbody>
+<?php if ($wa_sales): while ($ws = $wa_sales->fetch_assoc()):
+    $tot_s = (float) $ws['selling_price'] + (float) $ws['acc_total'];
+    $bal_s = max(0, $tot_s - (float) $ws['dp_paid']);
+    $inv_code = 'INV-' . date('Ymd', strtotime($ws['selling_date'])) . '-' . str_pad($ws['id'], 3, '0', STR_PAD_LEFT);
+    $rcpt_txt = render_notification_template($conn, 'sale_receipt', [
+        'customer_name' => $ws['customer_name'] ?: 'Walk-in Customer',
+        'invoice_no' => $inv_code,
+        'model' => $ws['model_name'] ?? 'Electric Bike',
+        'chassis' => $ws['chassis_number'],
+        'total_amount' => fmt_money($tot_s),
+        'paid_amount' => fmt_money($ws['dp_paid']),
+        'balance_amount' => fmt_money($bal_s),
+        'branch_name' => $ws['branch_title'] ?? 'Showroom',
+        'branch_phone' => $ws['branch_phone'] ?: (get_setting('company_whatsapp') ?? '0336-1593533')
+    ]);
+?>
+<tr>
+    <td><?= fmt_date($ws['selling_date']) ?></td>
+    <td><strong><?= $inv_code ?></strong></td>
+    <td><?= sanitize($ws['customer_name'] ?: 'Walk-in') ?></td>
+    <td><?= sanitize($ws['customer_phone'] ?: '-') ?></td>
+    <td><code><?= sanitize($ws['chassis_number']) ?></code> (<?= sanitize($ws['model_name']) ?>)</td>
+    <td><?= fmt_money($tot_s) ?></td>
+    <td style="color:var(--success)"><?= fmt_money($ws['dp_paid']) ?></td>
+    <td><?= fmt_money($bal_s) ?></td>
+    <td class="no-print">
+        <?php if (!empty($ws['customer_phone'])): ?>
+        <form method="POST" action="index.php?page=whatsapp_hub" target="_blank" style="display:inline">
+            <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+            <input type="hidden" name="log_wa_send" value="1">
+            <input type="hidden" name="customer_id" value="<?= (int) $ws['cust_id'] ?>">
+            <input type="hidden" name="recipient_name" value="<?= sanitize($ws['customer_name'] ?? '') ?>">
+            <input type="hidden" name="recipient_phone" value="<?= sanitize($ws['customer_phone']) ?>">
+            <input type="hidden" name="template_key" value="sale_receipt">
+            <input type="hidden" name="reference_type" value="sale">
+            <input type="hidden" name="reference_id" value="<?= (int) $ws['id'] ?>">
+            <input type="hidden" name="channel" value="whatsapp">
+            <input type="hidden" name="message_text" value="<?= sanitize($rcpt_txt) ?>">
+            <button type="submit" class="btn btn-success btn-sm">📲 Share WhatsApp Receipt</button>
+        </form>
+        <?php else: ?>
+        <span style="color:var(--text3);font-size:0.78rem">No phone</span>
+        <?php endif; ?>
+    </td>
+</tr>
+<?php endwhile; endif; ?>
+</tbody>
+</table>
+</div>
+</fieldset>
+
+<?php elseif ($sub_tab === 'templates'): ?>
+<fieldset class="fieldset"><legend>📝 Dynamic WhatsApp & SMS Message Templates</legend>
+<p style="font-size:0.82rem;color:var(--text2);margin-bottom:12px">Available dynamic tags: <code>{customer_name}</code>, <code>{chassis}</code>, <code>{model}</code>, <code>{due_date}</code>, <code>{amount}</code>, <code>{penalty}</code>, <code>{total_due}</code>, <code>{invoice_no}</code>, <code>{total_amount}</code>, <code>{paid_amount}</code>, <code>{balance_amount}</code>, <code>{company_name}</code>, <code>{branch_name}</code>, <code>{branch_phone}</code>, <code>{plate_no}</code></p>
+<?php if ($wa_templates): while ($wt = $wa_templates->fetch_assoc()): ?>
+<form method="POST" action="index.php?page=whatsapp_hub&sub=templates" style="margin-bottom:14px;padding:12px;background:var(--bg2);border:1px solid var(--border);border-radius:2px">
+    <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+    <input type="hidden" name="save_wa_template" value="1">
+    <input type="hidden" name="template_key" value="<?= sanitize($wt['template_key']) ?>">
+    <div class="form-row">
+        <div class="form-group"><label>Template Key</label><input type="text" value="<?= sanitize($wt['template_key']) ?>" readonly style="background:var(--bg3)"></div>
+        <div class="form-group" style="flex:2"><label>Template Title</label><input type="text" name="template_name" value="<?= sanitize($wt['template_name']) ?>" required></div>
+    </div>
+    <div class="form-group"><label>Message Body</label><textarea name="message_body" rows="4" required><?= sanitize($wt['message_body']) ?></textarea></div>
+    <button type="submit" class="btn btn-primary btn-sm" style="margin-top:6px">💾 Save Template</button>
+</form>
+<?php endwhile; endif; ?>
+</fieldset>
+
+<?php elseif ($sub_tab === 'logs'): ?>
+<fieldset class="fieldset"><legend>📜 Sent WhatsApp / SMS Reminders & Receipts Log</legend>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>ID</th><th>Sent At</th><th>Recipient</th><th>Phone</th><th>Template</th><th>Message Preview</th><th>Sent By</th></tr></thead>
+<tbody>
+<?php if ($wa_logs): while ($wl = $wa_logs->fetch_assoc()): ?>
+<tr>
+    <td>#<?= (int) $wl['id'] ?></td>
+    <td><?= date('d/m/Y H:i', strtotime($wl['sent_at'])) ?></td>
+    <td><strong><?= sanitize($wl['recipient_name'] ?: '-') ?></strong></td>
+    <td><?= sanitize($wl['recipient_phone']) ?></td>
+    <td><span class="badge badge-info"><?= sanitize($wl['template_key']) ?></span></td>
+    <td style="max-width:360px;font-size:0.78rem"><?= nl2br(sanitize( clean_text($wl['message_text'], 180) )) ?></td>
+    <td><?= sanitize($wl['sent_by_user'] ?? '-') ?></td>
+</tr>
+<?php endwhile; endif; ?>
+</tbody>
+</table>
+</div>
+</fieldset>
+<?php endif; ?>
+
+<?php
+    // ========================================================================
+    // MODULE 7 UI: SALESPERSON COMMISSION, STAFF HR & PAYROLL (page=hr_payroll)
+    // ========================================================================
+    elseif ($page === 'hr_payroll'):
+        require_permission($conn, 'hr_payroll', 'view');
+        $sub_tab = clean_text($_GET['sub'] ?? 'staff', 30);
+        $sel_month = clean_text($_GET['month'] ?? date('Y-m'), 7);
+        $print_payslip_id = (int) ($_GET['print_payslip'] ?? 0);
+
+        if ($print_payslip_id > 0):
+            echo '<style>.sidebar, .topbar { display: none !important; } .main-wrap { margin-left: 0 !important; } .content > *:not(#receiptArea):not(.no-print) { display: none !important; } .content { padding: 30px !important; background: #333 !important; } @media print { .content, body { padding: 0 !important; background: #fff !important; } }</style>';
+            $psl = $conn->query("SELECT sp.*, sm.name AS staff_name, sm.staff_code, sm.designation, sm.department, sm.cnic, sm.phone, br.name AS br_name, br.branch_code FROM staff_payroll sp JOIN staff_members sm ON sp.staff_id=sm.id LEFT JOIN branches br ON sp.branch_id=br.id WHERE sp.id=$print_payslip_id LIMIT 1")->fetch_assoc();
+            if ($psl):
+?>
+<div class="a4-invoice" id="receiptArea">
+    <div class="invoice-header">
+        <h1>⚡ <?= sanitize(get_setting('company_name') ?? 'BNI Enterprises') ?></h1>
+        <h2><?= sanitize(($psl['br_name'] ?? 'Head Office') . ' (' . ($psl['branch_code'] ?? 'HQ') . ')') ?></h2>
+        <div style="font-size:0.95rem;margin-top:4px"><strong>EMPLOYEE SALARY & COMMISSION PAYSLIP — <?= sanitize($psl['salary_month']) ?></strong></div>
+    </div>
+    <div class="invoice-meta">
+        <div>
+            <strong>Employee:</strong> <?= sanitize($psl['staff_name']) ?> (<?= sanitize($psl['staff_code']) ?>)<br>
+            <strong>Designation:</strong> <?= sanitize($psl['designation']) ?> (<?= sanitize($psl['department']) ?>)<br>
+            <strong>CNIC / Phone:</strong> <?= sanitize($psl['cnic'] ?: '-') ?> | <?= sanitize($psl['phone'] ?: '-') ?>
+        </div>
+        <div style="text-align:right">
+            <strong>Payroll Month:</strong> <?= sanitize($psl['salary_month']) ?><br>
+            <strong>Payment Status:</strong> <?= strtoupper($psl['payment_status']) ?><br>
+            <strong>Payment Date:</strong> <?= fmt_date($psl['payment_date']) ?> (<?= strtoupper($psl['payment_method']) ?>)
+        </div>
+    </div>
+    <div class="invoice-section">
+        <table class="invoice-table">
+            <thead><tr><th>Earnings & Allowances</th><th style="text-align:right">Amount</th><th>Deductions & Recoveries</th><th style="text-align:right">Amount</th></tr></thead>
+            <tbody>
+                <tr>
+                    <td>Basic Monthly Salary</td><td style="text-align:right"><?= fmt_money($psl['base_salary']) ?></td>
+                    <td>Salary Advance Recovery</td><td style="text-align:right">- <?= fmt_money($psl['advance_deduction']) ?></td>
+                </tr>
+                <tr>
+                    <td>Sales Commissions Earned</td><td style="text-align:right">+ <?= fmt_money($psl['commission_total']) ?></td>
+                    <td>Absences / Other Deductions</td><td style="text-align:right">- <?= fmt_money($psl['other_deduction']) ?></td>
+                </tr>
+                <tr>
+                    <td>Bonus / Overtime</td><td style="text-align:right">+ <?= fmt_money($psl['bonus_amount']) ?></td>
+                    <td></td><td></td>
+                </tr>
+            </tbody>
+        </table>
+        <div class="invoice-total" style="margin-top:14px;background:#fff;border-color:#000">Net Salary Payable: <?= fmt_money($psl['net_salary']) ?></div>
+    </div>
+</div>
+<div class="no-print" style="margin-top:12px">
+    <button onclick="window.print()" class="btn btn-success">🖨 Print Payslip</button>
+    <a href="index.php?page=hr_payroll&sub=payroll" class="btn btn-default">← Back to Payroll</a>
+</div>
+<?php
+            endif;
+        else:
+            $hr_kpi = $conn->query("SELECT
+                (SELECT COUNT(*) FROM staff_members sm WHERE sm.is_active=1 " . branch_and($conn, 'sm') . ") AS active_staff,
+                (SELECT COALESCE(SUM(commission_amount),0) FROM sales_commissions sc WHERE sc.status IN ('approved','paid') " . branch_and($conn, 'sc') . ") AS total_comm,
+                (SELECT COALESCE(SUM(amount - recovered_amount),0) FROM staff_advances sa WHERE sa.status='active' " . branch_and($conn, 'sa') . ") AS active_adv,
+                (SELECT COALESCE(SUM(net_salary),0) FROM staff_payroll sp WHERE sp.payment_status='paid' " . branch_and($conn, 'sp') . ") AS paid_salaries")->fetch_assoc();
+?>
+<div class="card-grid animate__animated animate__fadeInDown">
+    <div class="card accent"><div class="card-icon">👨‍💼</div><div class="card-body"><div class="card-label">Active Staff</div><div class="card-value"><?= (int) ($hr_kpi['active_staff'] ?? 0) ?></div><div class="card-sub">sales & workshop</div></div></div>
+    <div class="card success"><div class="card-icon">🎯</div><div class="card-body"><div class="card-label">Sales Commissions</div><div class="card-value" style="font-size:1rem"><?= fmt_money($hr_kpi['total_comm'] ?? 0) ?></div><div class="card-sub">earned on bikes</div></div></div>
+    <div class="card warning"><div class="card-icon">💸</div><div class="card-body"><div class="card-label">Unrecovered Advances</div><div class="card-value" style="font-size:1rem"><?= fmt_money($hr_kpi['active_adv'] ?? 0) ?></div><div class="card-sub">staff loans</div></div></div>
+    <div class="card success"><div class="card-icon">🏦</div><div class="card-body"><div class="card-label">Salaries Disbursed</div><div class="card-value" style="font-size:1rem"><?= fmt_money($hr_kpi['paid_salaries'] ?? 0) ?></div><div class="card-sub">total paid</div></div></div>
+</div>
+
+<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap" class="no-print">
+    <a href="index.php?page=hr_payroll&sub=staff" class="btn <?= $sub_tab === 'staff' ? 'btn-primary' : 'btn-default' ?>">👨‍💼 Staff Directory & Commission Rules</a>
+    <a href="index.php?page=hr_payroll&sub=commissions" class="btn <?= $sub_tab === 'commissions' ? 'btn-primary' : 'btn-default' ?>">🎯 Salesperson Commissions</a>
+    <a href="index.php?page=hr_payroll&sub=advances" class="btn <?= $sub_tab === 'advances' ? 'btn-primary' : 'btn-default' ?>">💵 Staff Salary Advances</a>
+    <a href="index.php?page=hr_payroll&sub=payroll" class="btn <?= $sub_tab === 'payroll' ? 'btn-primary' : 'btn-default' ?>">🏦 Monthly Payroll & Payslips</a>
+</div>
+
+<?php if ($sub_tab === 'staff'):
+    $edit_stf_id = (int) ($_GET['edit_id'] ?? 0);
+    $edit_stf = $edit_stf_id > 0 ? $conn->query("SELECT * FROM staff_members WHERE id=$edit_stf_id LIMIT 1")->fetch_assoc() : null;
+    $staff_res = $conn->query("SELECT sm.*, br.branch_code,
+        (SELECT COUNT(*) FROM sales_commissions sc WHERE sc.staff_id=sm.id AND sc.status!='cancelled') AS units_sold,
+        (SELECT COALESCE(SUM(sc.commission_amount),0) FROM sales_commissions sc WHERE sc.staff_id=sm.id AND sc.status!='cancelled') AS comm_earned
+        FROM staff_members sm LEFT JOIN branches br ON sm.branch_id=br.id WHERE " . branch_where($conn, 'sm') . " ORDER BY sm.id DESC");
+?>
+<fieldset class="fieldset no-print" style="margin-bottom:16px"><legend><?= $edit_stf ? '✏ Edit Staff Member' : '+ Add Branch Staff / Salesperson / Technician' ?></legend>
+<form method="POST" action="index.php?page=hr_payroll&sub=staff">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+<input type="hidden" name="save_staff" value="1">
+<input type="hidden" name="sub" value="staff">
+<?php if ($edit_stf): ?><input type="hidden" name="id" value="<?= (int) $edit_stf['id'] ?>"><?php endif; ?>
+<div class="form-row">
+    <div class="form-group">
+        <label>Branch</label>
+        <select name="branch_id" required>
+            <?php foreach ($active_branches_list as $ab): ?>
+            <option value="<?= (int) $ab['id'] ?>" <?= ((int) ($edit_stf['branch_id'] ?? get_write_branch_id($conn))) === (int) $ab['id'] ? 'selected' : '' ?>><?= sanitize($ab['branch_code'] . ' — ' . $ab['name']) ?></option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+    <div class="form-group"><label>Staff Code</label><input type="text" name="staff_code" value="<?= sanitize($edit_stf['staff_code'] ?? '') ?>" placeholder="Auto e.g. EMP-101"></div>
+    <div class="form-group"><label>Full Name <span class="req">*</span></label><input type="text" name="name" value="<?= sanitize($edit_stf['name'] ?? '') ?>" required></div>
+    <div class="form-group"><label>CNIC</label><input type="text" name="cnic" value="<?= sanitize($edit_stf['cnic'] ?? '') ?>" placeholder="XXXXX-XXXXXXX-X"></div>
+    <div class="form-group"><label>Phone</label><input type="text" name="phone" value="<?= sanitize($edit_stf['phone'] ?? '') ?>" placeholder="03XX-XXXXXXX"></div>
+</div>
+<div class="form-row">
+    <div class="form-group">
+        <label>Department</label>
+        <select name="department">
+            <?php foreach (['Sales', 'Workshop', 'Management', 'Accounts', 'Support'] as $dep): ?>
+            <option value="<?= $dep ?>" <?= ($edit_stf['department'] ?? 'Sales') === $dep ? 'selected' : '' ?>><?= $dep ?></option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+    <div class="form-group"><label>Designation</label><input type="text" name="designation" value="<?= sanitize($edit_stf['designation'] ?? 'Sales Executive') ?>"></div>
+    <div class="form-group"><label>Base Monthly Salary (<?= $currency ?>)</label><input type="number" name="base_salary" step="0.01" min="0" value="<?= (float) ($edit_stf['base_salary'] ?? 35000) ?>"></div>
+    <div class="form-group">
+        <label>Per-Bike Commission Rule</label>
+        <select name="commission_type">
+            <option value="fixed" <?= ($edit_stf['commission_type'] ?? 'fixed') === 'fixed' ? 'selected' : '' ?>>Fixed Amount per Bike (Rs.)</option>
+            <option value="percentage_price" <?= ($edit_stf['commission_type'] ?? '') === 'percentage_price' ? 'selected' : '' ?>>% of Bike Selling Price</option>
+            <option value="percentage_margin" <?= ($edit_stf['commission_type'] ?? '') === 'percentage_margin' ? 'selected' : '' ?>>% of Net Sale Margin</option>
+        </select>
+    </div>
+    <div class="form-group"><label>Commission Rate / Value</label><input type="number" name="commission_rate" step="0.01" min="0" value="<?= (float) ($edit_stf['commission_rate'] ?? 2000) ?>"></div>
+    <div class="form-group"><label style="display:flex;align-items:center;gap:6px;margin-top:24px"><input type="checkbox" name="is_active" value="1" <?= ($edit_stf['is_active'] ?? 1) ? 'checked' : '' ?>> Active</label></div>
+</div>
+<button type="submit" class="btn btn-primary">💾 Save Staff Member</button>
+</form>
+</fieldset>
+
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Code</th><th>Branch</th><th>Name</th><th>Department / Role</th><th>Phone</th><th>Base Salary</th><th>Commission Rule</th><th>Bikes Sold</th><th>Total Commission</th><th>Status</th><th class="no-sort">Actions</th></tr></thead>
+<tbody>
+<?php if ($staff_res): while ($sr = $staff_res->fetch_assoc()): ?>
+<tr>
+    <td><code><?= sanitize($sr['staff_code']) ?></code></td>
+    <td><?= get_branch_badge($conn, $sr['branch_id']) ?></td>
+    <td><strong><?= sanitize($sr['name']) ?></strong></td>
+    <td><?= sanitize($sr['designation']) ?> <span class="badge badge-info"><?= sanitize($sr['department']) ?></span></td>
+    <td><?= sanitize($sr['phone'] ?: '-') ?></td>
+    <td><?= fmt_money($sr['base_salary']) ?></td>
+    <td><?= $sr['commission_type'] === 'fixed' ? fmt_money($sr['commission_rate']) . ' / bike' : $sr['commission_rate'] . '% (' . str_replace('percentage_', '', $sr['commission_type']) . ')' ?></td>
+    <td><span class="badge badge-success"><?= (int) $sr['units_sold'] ?></span></td>
+    <td><strong><?= fmt_money($sr['comm_earned']) ?></strong></td>
+    <td><?= $sr['is_active'] ? '<span class="badge badge-success">ACTIVE</span>' : '<span class="badge badge-default">INACTIVE</span>' ?></td>
+    <td class="no-print"><a href="index.php?page=hr_payroll&sub=staff&edit_id=<?= (int) $sr['id'] ?>" class="btn btn-primary btn-sm">✏</a></td>
+</tr>
+<?php endwhile; endif; ?>
+</tbody>
+</table>
+</div>
+
+<?php elseif ($sub_tab === 'commissions'):
+    $comm_res = $conn->query("SELECT sc.*, sm.name AS staff_name, sm.staff_code, b.chassis_number, m.model_name FROM sales_commissions sc JOIN staff_members sm ON sc.staff_id=sm.id LEFT JOIN bikes b ON sc.bike_id=b.id LEFT JOIN models m ON b.model_id=m.id WHERE " . branch_where($conn, 'sc') . " ORDER BY sc.id DESC");
+?>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>ID</th><th>Sale Date</th><th>Branch</th><th>Salesperson</th><th>Bike / Chassis</th><th>Sale Amount</th><th>Commission Earned</th><th>Status</th><th>Notes</th></tr></thead>
+<tbody>
+<?php if ($comm_res): while ($cm = $comm_res->fetch_assoc()): ?>
+<tr>
+    <td>#<?= (int) $cm['id'] ?></td>
+    <td><?= fmt_date($cm['sale_date']) ?></td>
+    <td><?= get_branch_badge($conn, $cm['branch_id']) ?></td>
+    <td><strong><?= sanitize($cm['staff_name']) ?></strong> (<?= sanitize($cm['staff_code']) ?>)</td>
+    <td><code><?= sanitize($cm['chassis_number'] ?: '-') ?></code><br><small><?= sanitize($cm['model_name'] ?: '') ?></small></td>
+    <td><?= fmt_money($cm['sale_amount']) ?></td>
+    <td style="color:var(--success);font-weight:700"><?= fmt_money($cm['commission_amount']) ?></td>
+    <td><span class="badge badge-<?= $cm['status'] === 'paid' ? 'success' : ($cm['status'] === 'approved' ? 'info' : 'warning') ?>"><?= strtoupper($cm['status']) ?></span></td>
+    <td><?= sanitize($cm['notes'] ?: '-') ?></td>
+</tr>
+<?php endwhile; endif; ?>
+</tbody>
+</table>
+</div>
+
+<?php elseif ($sub_tab === 'advances'):
+    $stf_all = $conn->query("SELECT id, name, staff_code, base_salary FROM staff_members WHERE is_active=1 " . branch_and($conn) . " ORDER BY name");
+    $adv_res = $conn->query("SELECT sa.*, sm.name AS staff_name, sm.staff_code FROM staff_advances sa JOIN staff_members sm ON sa.staff_id=sm.id WHERE " . branch_where($conn, 'sa') . " ORDER BY sa.id DESC");
+?>
+<fieldset class="fieldset no-print" style="margin-bottom:16px"><legend>💵 Issue Staff Salary Advance</legend>
+<form method="POST" action="index.php?page=hr_payroll&sub=advances">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+<input type="hidden" name="save_staff_advance" value="1">
+<div class="form-row">
+    <div class="form-group" style="flex:2">
+        <label>Select Staff Member <span class="req">*</span></label>
+        <select name="staff_id" required>
+            <option value="">-- Select Staff --</option>
+            <?php if ($stf_all) { while ($sa_o = $stf_all->fetch_assoc()): ?>
+            <option value="<?= (int) $sa_o['id'] ?>"><?= sanitize($sa_o['name'] . ' (' . $sa_o['staff_code'] . ') — Salary: ' . fmt_money($sa_o['base_salary'])) ?></option>
+            <?php endwhile; } ?>
+        </select>
+    </div>
+    <div class="form-group"><label>Advance Date <span class="req">*</span></label><input type="date" name="advance_date" value="<?= date('Y-m-d') ?>" required></div>
+    <div class="form-group"><label>Advance Amount (<?= $currency ?>) <span class="req">*</span></label><input type="number" name="amount" step="0.01" min="1" required></div>
+    <div class="form-group"><label>Method</label><select name="payment_method"><option value="cash">Cash</option><option value="bank_transfer">Bank Transfer</option><option value="online">Online</option></select></div>
+    <div class="form-group"><label>Notes</label><input type="text" name="notes" placeholder="Reason for advance"></div>
+</div>
+<button type="submit" class="btn btn-primary">💾 Record Advance</button>
+</form>
+</fieldset>
+
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>ID</th><th>Date</th><th>Branch</th><th>Staff Member</th><th>Advance Amount</th><th>Recovered</th><th>Remaining Balance</th><th>Status</th><th>Notes</th></tr></thead>
+<tbody>
+<?php if ($adv_res): while ($ar = $adv_res->fetch_assoc()): ?>
+<tr>
+    <td>#<?= (int) $ar['id'] ?></td>
+    <td><?= fmt_date($ar['advance_date']) ?></td>
+    <td><?= get_branch_badge($conn, $ar['branch_id']) ?></td>
+    <td><strong><?= sanitize($ar['staff_name']) ?></strong> (<?= sanitize($ar['staff_code']) ?>)</td>
+    <td><?= fmt_money($ar['amount']) ?></td>
+    <td style="color:var(--success)"><?= fmt_money($ar['recovered_amount']) ?></td>
+    <td style="color:var(--danger);font-weight:700"><?= fmt_money(max(0, (float) $ar['amount'] - (float) $ar['recovered_amount'])) ?></td>
+    <td><span class="badge badge-<?= $ar['status'] === 'recovered' ? 'success' : 'warning' ?>"><?= strtoupper($ar['status']) ?></span></td>
+    <td><?= sanitize($ar['notes'] ?: '-') ?></td>
+</tr>
+<?php endwhile; endif; ?>
+</tbody>
+</table>
+</div>
+
+<?php elseif ($sub_tab === 'payroll'):
+    $esc_m = mysqli_real_escape_string($conn, $sel_month);
+    $pay_res = $conn->query("SELECT sp.*, sm.name AS staff_name, sm.staff_code, sm.designation FROM staff_payroll sp JOIN staff_members sm ON sp.staff_id=sm.id WHERE sp.salary_month='$esc_m' " . branch_and($conn, 'sp') . " ORDER BY sm.name ASC");
+?>
+<fieldset class="fieldset no-print" style="margin-bottom:16px"><legend>🏦 Generate / Refresh Monthly Staff Payroll (Base + Commissions - Advances)</legend>
+<form method="POST" action="index.php?page=hr_payroll&sub=payroll">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+<input type="hidden" name="generate_payroll" value="1">
+<div class="form-row" style="align-items:flex-end">
+    <div class="form-group"><label>Salary Month (YYYY-MM)</label><input type="month" name="salary_month" value="<?= sanitize($sel_month) ?>" required></div>
+    <div class="form-group"><label>Bonus / Overtime (<?= $currency ?>)</label><input type="number" name="bonus_amount" step="0.01" min="0" value="0.00"></div>
+    <div class="form-group"><label>Other Deduction (<?= $currency ?>)</label><input type="number" name="other_deduction" step="0.01" min="0" value="0.00"></div>
+    <div class="form-group"><button type="submit" class="btn btn-success">⚡ Calculate & Generate Monthly Payroll</button></div>
+</div>
+</form>
+</fieldset>
+
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Month</th><th>Branch</th><th>Employee</th><th>Base Salary</th><th>Sales Commissions</th><th>Bonus</th><th>Advance Deducted</th><th>Net Payable</th><th>Status</th><th class="no-sort">Actions</th></tr></thead>
+<tbody>
+<?php if ($pay_res): while ($pr = $pay_res->fetch_assoc()): ?>
+<tr>
+    <td><strong><?= sanitize($pr['salary_month']) ?></strong></td>
+    <td><?= get_branch_badge($conn, $pr['branch_id']) ?></td>
+    <td><strong><?= sanitize($pr['staff_name']) ?></strong><br><small><?= sanitize($pr['staff_code']) ?> — <?= sanitize($pr['designation']) ?></small></td>
+    <td><?= fmt_money($pr['base_salary']) ?></td>
+    <td style="color:var(--success)">+ <?= fmt_money($pr['commission_total']) ?></td>
+    <td>+ <?= fmt_money($pr['bonus_amount']) ?></td>
+    <td style="color:var(--danger)">- <?= fmt_money($pr['advance_deduction'] + $pr['other_deduction']) ?></td>
+    <td style="font-weight:700;font-size:0.95rem"><?= fmt_money($pr['net_salary']) ?></td>
+    <td><span class="badge badge-<?= $pr['payment_status'] === 'paid' ? 'success' : 'warning' ?>"><?= strtoupper($pr['payment_status']) ?></span></td>
+    <td class="no-print">
+        <div class="actions-col">
+            <a href="index.php?page=hr_payroll&print_payslip=<?= (int) $pr['id'] ?>" target="_blank" class="btn btn-default btn-sm" title="Print Payslip">🖨 Payslip</a>
+            <?php if ($pr['payment_status'] === 'unpaid'): ?>
+            <form method="POST" action="index.php?page=hr_payroll&sub=payroll" style="display:inline" onsubmit="return confirm('Disburse salary and post to branch expenses?')">
+                <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+                <input type="hidden" name="payroll_id" value="<?= (int) $pr['id'] ?>">
+                <input type="hidden" name="payment_date" value="<?= date('Y-m-d') ?>">
+                <input type="hidden" name="payment_method" value="cash">
+                <button type="submit" name="pay_payroll" value="1" class="btn btn-success btn-sm">💵 Pay Now</button>
+            </form>
+            <?php endif; ?>
+        </div>
+    </td>
+</tr>
+<?php endwhile; endif; ?>
+</tbody>
+</table>
+</div>
+<?php endif; ?>
+<?php endif; ?>
+
+<?php
+    // ========================================================================
+    // MODULE 8 UI: BIKE TRADE-IN / EXCHANGE WORKFLOW (page=trade_ins)
+    // ========================================================================
+    elseif ($page === 'trade_ins'):
+        require_permission($conn, 'trade_ins', 'view');
+        $ti_res = $conn->query("SELECT ti.*, sb.chassis_number AS new_bike_chassis, tk.status AS stock_status, tk.selling_price AS resold_price
+            FROM bike_trade_ins ti
+            LEFT JOIN bikes sb ON ti.sold_bike_id=sb.id
+            LEFT JOIN bikes tk ON ti.stock_bike_id=tk.id
+            WHERE " . branch_where($conn, 'ti') . "
+            ORDER BY ti.id DESC");
+        $ti_models = $conn->query("SELECT id, model_code, model_name FROM models ORDER BY model_name");
+        $ti_custs = $conn->query("SELECT id, name, phone, cnic FROM customers ORDER BY name");
+        $ti_kpi = $conn->query("SELECT COUNT(*) AS cnt, COALESCE(SUM(agreed_trade_value),0) AS val, COALESCE(SUM(estimated_resale_price),0) AS est FROM bike_trade_ins ti WHERE " . branch_where($conn, 'ti'))->fetch_assoc();
+?>
+<div class="card-grid animate__animated animate__fadeInDown">
+    <div class="card accent"><div class="card-icon">🔄</div><div class="card-body"><div class="card-label">Total Trade-Ins</div><div class="card-value"><?= (int) ($ti_kpi['cnt'] ?? 0) ?></div><div class="card-sub">exchanged units</div></div></div>
+    <div class="card warning"><div class="card-icon">💰</div><div class="card-body"><div class="card-label">Trade-In Allowances</div><div class="card-value" style="font-size:1rem"><?= fmt_money($ti_kpi['val'] ?? 0) ?></div><div class="card-sub">deducted from sales</div></div></div>
+    <div class="card success"><div class="card-icon">📈</div><div class="card-body"><div class="card-label">Est. Resale Value</div><div class="card-value" style="font-size:1rem"><?= fmt_money($ti_kpi['est'] ?? 0) ?></div><div class="card-sub">in inventory</div></div></div>
+</div>
+
+<div style="margin-bottom:12px" class="no-print">
+    <button type="button" class="btn btn-success" onclick="document.getElementById('tradeInFormBox').style.display='block'">+ Record Standalone Bike Trade-In into Stock</button>
+    <a href="index.php?page=sale" class="btn btn-primary">🛒 Go to Sales Entry (Direct Exchange on New Bike Sale)</a>
+</div>
+
+<div id="tradeInFormBox" style="display:none;margin-bottom:16px" class="no-print">
+<fieldset class="fieldset"><legend>🔄 Record Customer Bike Trade-In & Add Traded Unit to Inventory</legend>
+<form method="POST" action="index.php?page=trade_ins">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+<input type="hidden" name="save_standalone_trade_in" value="1">
+<div class="form-row">
+    <div class="form-group">
+        <label>Branch</label>
+        <select name="branch_id" required>
+            <?php foreach ($active_branches_list as $ab): ?>
+            <option value="<?= (int) $ab['id'] ?>" <?= get_write_branch_id($conn) === (int) $ab['id'] ? 'selected' : '' ?>><?= sanitize($ab['branch_code'] . ' — ' . $ab['name']) ?></option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+    <div class="form-group"><label>Date <span class="req">*</span></label><input type="date" name="trade_in_date" value="<?= date('Y-m-d') ?>" required></div>
+    <div class="form-group" style="flex:2">
+        <label>Customer (Credits Customer Khata for Next Purchase)</label>
+        <select name="customer_id" class="select2-enable">
+            <option value="">-- Walk-in / Select Customer --</option>
+            <?php if ($ti_custs) { while ($tc = $ti_custs->fetch_assoc()): ?>
+            <option value="<?= (int) $tc['id'] ?>"><?= sanitize($tc['name'] . ' — ' . $tc['phone']) ?></option>
+            <?php endwhile; } ?>
+        </select>
+    </div>
+</div>
+<div class="form-row">
+    <div class="form-group">
+        <label>Assign Inventory Model Category <span class="req">*</span></label>
+        <select name="model_id" required>
+            <?php if ($ti_models) { while ($tm = $ti_models->fetch_assoc()): ?>
+            <option value="<?= (int) $tm['id'] ?>"><?= sanitize($tm['model_name'] . ' (' . $tm['model_code'] . ')') ?></option>
+            <?php endwhile; } ?>
+        </select>
+    </div>
+    <div class="form-group"><label>Old Bike Make/Model Description</label><input type="text" name="old_make_model" placeholder="e.g. Honda CD70 2022 / Used Metro"></div>
+    <div class="form-group"><label>Old Bike Chassis # <span class="req">*</span></label><input type="text" name="old_chassis" required></div>
+    <div class="form-group"><label>Old Bike Engine / Motor # <span class="req">*</span></label><input type="text" name="old_motor" required></div>
+    <div class="form-group"><label>Registration Plate #</label><input type="text" name="old_reg_no" placeholder="e.g. MN-22-9011"></div>
+</div>
+<div class="form-row">
+    <div class="form-group"><label>Color</label><input type="text" name="old_color" value="Black"></div>
+    <div class="form-group"><label>Condition</label><select name="condition_grade"><option value="Good">Good</option><option value="Excellent">Excellent</option><option value="Fair">Fair</option><option value="Needs Repair">Needs Repair</option></select></div>
+    <div class="form-group"><label>Agreed Trade-In Value (<?= $currency ?>) <span class="req">*</span></label><input type="number" name="agreed_trade_value" step="0.01" min="1" required></div>
+    <div class="form-group"><label>Estimated Resale Price (<?= $currency ?>)</label><input type="number" name="estimated_resale_price" step="0.01" min="0"></div>
+    <div class="form-group"><label>Notes</label><input type="text" name="notes" placeholder="Original file & card verified"></div>
+</div>
+<button type="submit" class="btn btn-primary">💾 Save Trade-In & Add to Stock</button>
+</form>
+</fieldset>
+</div>
+
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Trade-In #</th><th>Date</th><th>Branch</th><th>Customer</th><th>Traded-In Bike (Old)</th><th>Condition</th><th>Trade-In Value</th><th>Exchanged Against New EV</th><th>Current Stock Status</th></tr></thead>
+<tbody>
+<?php if ($ti_res): while ($tr = $ti_res->fetch_assoc()): ?>
+<tr>
+    <td><strong><?= sanitize($tr['trade_in_no']) ?></strong></td>
+    <td><?= fmt_date($tr['trade_in_date']) ?></td>
+    <td><?= get_branch_badge($conn, $tr['branch_id']) ?></td>
+    <td><strong><?= sanitize($tr['customer_name'] ?: 'Walk-in') ?></strong><br><small><?= sanitize($tr['customer_phone'] ?: '') ?></small></td>
+    <td><strong><?= sanitize($tr['old_make_model']) ?></strong><br><small>Chassis: <code><?= sanitize($tr['old_chassis']) ?></code> | Reg: <?= sanitize($tr['old_reg_no'] ?: '-') ?></small></td>
+    <td><span class="badge badge-info"><?= sanitize($tr['condition_grade']) ?></span></td>
+    <td style="color:var(--success);font-weight:700"><?= fmt_money($tr['agreed_trade_value']) ?></td>
+    <td><?= !empty($tr['new_bike_chassis']) ? '<code>' . sanitize($tr['new_bike_chassis']) . '</code>' : '<span style="color:var(--text3)">Standalone Credit</span>' ?></td>
+    <td>
+        <?php if (!empty($tr['stock_bike_id'])): ?>
+        <a href="index.php?page=inventory&view_id=<?= (int) $tr['stock_bike_id'] ?>" class="badge badge-<?= ($tr['stock_status'] ?? '') === 'sold' ? 'success' : 'warning' ?>">Stock #<?= (int) $tr['stock_bike_id'] ?> (<?= strtoupper($tr['stock_status'] ?? 'in_stock') ?>)</a>
+        <?php endif; ?>
+    </td>
+</tr>
+<?php endwhile; endif; ?>
+</tbody>
+</table>
+</div>
+
+<?php
+    // ========================================================================
+    // MODULE 9 UI: FULL SYSTEM AUDIT LOG (SECURITY & EDIT HISTORY)
+    // ========================================================================
+    elseif ($page === 'audit_logs'):
+        require_permission($conn, 'audit_logs', 'view');
+        $f_mod = clean_text($_GET['f_mod'] ?? '', 60);
+        $f_act = clean_text($_GET['f_act'] ?? '', 40);
+        $f_user = clean_text($_GET['f_user'] ?? '', 100);
+        $f_q = clean_text($_GET['f_q'] ?? '', 150);
+
+        $w_aud = ['1=1'];
+        if (get_active_branch_id($conn) > 0) {
+            $w_aud[] = "a.branch_id=" . (int) get_active_branch_id($conn);
+        }
+        if ($f_mod !== '') $w_aud[] = "a.module='" . mysqli_real_escape_string($conn, $f_mod) . "'";
+        if ($f_act !== '') $w_aud[] = "a.action_type='" . mysqli_real_escape_string($conn, $f_act) . "'";
+        if ($f_user !== '') $w_aud[] = "a.username LIKE '%" . mysqli_real_escape_string($conn, $f_user) . "%'";
+        if ($f_q !== '') $w_aud[] = "(a.description LIKE '%" . mysqli_real_escape_string($conn, $f_q) . "%' OR a.record_id LIKE '%" . mysqli_real_escape_string($conn, $f_q) . "%')";
+
+        $aud_res = $conn->query("SELECT a.*, b.branch_code FROM system_audit_logs a LEFT JOIN branches b ON a.branch_id=b.id WHERE " . implode(' AND ', $w_aud) . " ORDER BY a.id DESC LIMIT 300");
+        $mod_opts = $conn->query("SELECT DISTINCT module FROM system_audit_logs ORDER BY module");
+?>
+<div class="filter-bar no-print">
+<form method="GET" action="index.php" style="display:contents">
+    <input type="hidden" name="page" value="audit_logs">
+    <div class="form-group">
+        <label>Module</label>
+        <select name="f_mod">
+            <option value="">All Modules</option>
+            <?php if ($mod_opts) { while ($mo = $mod_opts->fetch_assoc()): ?>
+            <option value="<?= sanitize($mo['module']) ?>" <?= $f_mod === $mo['module'] ? 'selected' : '' ?>><?= strtoupper($mo['module']) ?></option>
+            <?php endwhile; } ?>
+        </select>
+    </div>
+    <div class="form-group"><label>Username</label><input type="text" name="f_user" value="<?= sanitize($f_user) ?>" placeholder="User"></div>
+    <div class="form-group"><label>Search Description / ID</label><input type="text" name="f_q" value="<?= sanitize($f_q) ?>" placeholder="Chassis, Invoice, ID..."></div>
+    <button type="submit" class="btn btn-primary btn-sm" style="align-self:flex-end">🔍 Filter</button>
+    <a href="index.php?page=audit_logs" class="btn btn-default btn-sm" style="align-self:flex-end">Reset</a>
+    <a href="index.php?page=audit_logs&export_audit_csv=1" class="btn btn-success btn-sm" style="align-self:flex-end">⬇ Export Audit CSV</a>
+</form>
+</div>
+
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Log #</th><th>Timestamp</th><th>Branch</th><th>User & Role</th><th>IP Address</th><th>Module</th><th>Action</th><th>Record</th><th>Description</th><th class="no-sort">Before / After Diff</th></tr></thead>
+<tbody>
+<?php if ($aud_res): while ($al = $aud_res->fetch_assoc()): ?>
+<tr>
+    <td>#<?= (int) $al['id'] ?></td>
+    <td style="white-space:nowrap;font-size:0.78rem"><?= date('d/m/Y H:i:s', strtotime($al['created_at'])) ?></td>
+    <td><?= get_branch_badge($conn, $al['branch_id'] ?? 1) ?></td>
+    <td><strong><?= sanitize($al['username'] ?: 'System') ?></strong><br><small><?= sanitize($al['user_role'] ?: '') ?></small></td>
+    <td><code><?= sanitize($al['ip_address']) ?></code></td>
+    <td><span class="badge badge-info"><?= strtoupper($al['module']) ?></span></td>
+    <td><span class="badge badge-<?= str_contains($al['action_type'], 'delete') || str_contains($al['action_type'], 'cancel') ? 'danger' : (str_contains($al['action_type'], 'add') || str_contains($al['action_type'], 'save') ? 'success' : 'warning') ?>"><?= strtoupper($al['action_type']) ?></span></td>
+    <td><code><?= sanitize($al['record_id'] ?: '-') ?></code></td>
+    <td><?= sanitize($al['description']) ?></td>
+    <td class="no-print">
+        <?php if (!empty($al['before_data']) || !empty($al['after_data'])): ?>
+        <details style="font-size:0.74rem;max-width:320px">
+            <summary style="cursor:pointer;color:var(--accent);font-weight:600">🔍 View Payload</summary>
+            <div style="background:var(--bg3);padding:6px;border-radius:2px;margin-top:4px;max-height:160px;overflow:auto;font-family:Consolas,monospace">
+                <?php if (!empty($al['before_data'])): ?><div><strong style="color:var(--danger)">BEFORE:</strong> <?= sanitize($al['before_data']) ?></div><?php endif; ?>
+                <?php if (!empty($al['after_data'])): ?><div style="margin-top:4px"><strong style="color:var(--success)">AFTER:</strong> <?= sanitize($al['after_data']) ?></div><?php endif; ?>
+            </div>
+        </details>
+        <?php else: ?>-<?php endif; ?>
+    </td>
+</tr>
+<?php endwhile; endif; ?>
+</tbody>
+</table>
+</div>
+
+<?php
+    // ========================================================================
+    // MODULE 10 UI: QR / BARCODE LABEL GENERATOR & STOCK OPENER / AUDIT
+    // ========================================================================
+    elseif ($page === 'barcode_audit'):
+        require_permission($conn, 'barcode_audit', 'view');
+        $sub_tab = clean_text($_GET['sub'] ?? 'labels', 30);
+
+        if (isset($_GET['print_labels'])):
+            echo '<style>.sidebar, .topbar { display: none !important; } .main-wrap { margin-left: 0 !important; } .content > *:not(#receiptArea):not(.no-print) { display: none !important; } .content { padding: 20px !important; background: #fff !important; color:#000 !important; } @media print { .no-print { display: none !important; } }</style>';
+            $label_style = clean_text($_GET['label_style'] ?? 'hybrid', 20);
+            $bike_ids_lbl = isset($_GET['bike_ids']) && is_array($_GET['bike_ids']) ? array_map('intval', $_GET['bike_ids']) : [];
+            $acc_ids_lbl = isset($_GET['acc_ids']) && is_array($_GET['acc_ids']) ? array_map('intval', $_GET['acc_ids']) : [];
+            $copies = max(1, min(20, (int) ($_GET['copies'] ?? 1)));
+            $labels_to_render = [];
+
+            if (!empty($bike_ids_lbl)) {
+                $in_b = implode(',', $bike_ids_lbl);
+                $rb = $conn->query("SELECT b.chassis_number, b.motor_number, b.color, m.model_name, br.branch_code FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN branches br ON b.branch_id=br.id WHERE b.id IN ($in_b)");
+                if ($rb) {
+                    while ($row = $rb->fetch_assoc()) {
+                        for ($c = 0; $c < $copies; $c++) {
+                            $labels_to_render[] = [
+                                'type' => 'BIKE CHASSIS TAG',
+                                'title' => ($row['model_name'] ?: 'EV Bike') . ' (' . $row['color'] . ')',
+                                'code' => $row['chassis_number'],
+                                'sub' => 'Motor: ' . ($row['motor_number'] ?: '-') . ' | ' . ($row['branch_code'] ?: 'HQ')
+                            ];
+                        }
+                    }
+                }
+            }
+            if (!empty($acc_ids_lbl)) {
+                $in_a = implode(',', $acc_ids_lbl);
+                $ra = $conn->query("SELECT a.name, a.sku, a.selling_price, br.branch_code FROM accessories a LEFT JOIN branches br ON a.branch_id=br.id WHERE a.id IN ($in_a)");
+                if ($ra) {
+                    while ($row = $ra->fetch_assoc()) {
+                        for ($c = 0; $c < $copies; $c++) {
+                            $labels_to_render[] = [
+                                'type' => 'SPAREPART / SKU',
+                                'title' => $row['name'],
+                                'code' => $row['sku'],
+                                'sub' => 'Price: ' . fmt_money($row['selling_price']) . ' | ' . ($row['branch_code'] ?: 'HQ')
+                            ];
+                        }
+                    }
+                }
+            }
+?>
+<div class="no-print" style="margin-bottom:14px;display:flex;gap:8px">
+    <button onclick="window.print()" class="btn btn-success">🖨 Print Barcode / QR Labels (<?= count($labels_to_render) ?> tags)</button>
+    <a href="index.php?page=barcode_audit" class="btn btn-default">← Back to Generator</a>
+</div>
+<div id="receiptArea" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;background:#fff;padding:10px">
+<?php foreach ($labels_to_render as $lbl): ?>
+    <div style="border:2px solid #000;border-radius:4px;padding:8px 10px;background:#fff;color:#000;text-align:center;page-break-inside:avoid">
+        <div style="font-size:0.72rem;font-weight:800;letter-spacing:0.5px;border-bottom:1px solid #ccc;padding-bottom:2px;margin-bottom:4px">⚡ <?= sanitize(get_setting('company_name') ?? 'BNI ENTERPRISES') ?> — <?= sanitize($lbl['type']) ?></div>
+        <div style="font-size:0.85rem;font-weight:700;margin-bottom:4px"><?= sanitize($lbl['title']) ?></div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:4px 0">
+            <?php if ($label_style === 'barcode' || $label_style === 'hybrid'): ?>
+                <div><?= generate_code128_svg($lbl['code'], 1.35, 38) ?></div>
+            <?php endif; ?>
+            <?php if ($label_style === 'qr' || $label_style === 'hybrid'): ?>
+                <div><?= generate_qr_svg($lbl['code'], 52) ?></div>
+            <?php endif; ?>
+        </div>
+        <div style="font-family:Consolas,monospace;font-size:0.9rem;font-weight:800;letter-spacing:1px"><?= sanitize($lbl['code']) ?></div>
+        <div style="font-size:0.72rem;color:#333;margin-top:2px"><?= sanitize($lbl['sub']) ?></div>
+    </div>
+<?php endforeach; ?>
+</div>
+<?php
+        else:
+?>
+<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap" class="no-print">
+    <a href="index.php?page=barcode_audit&sub=labels" class="btn <?= $sub_tab === 'labels' ? 'btn-primary' : 'btn-default' ?>">🏷️ Printable QR / Barcode Label Generator</a>
+    <a href="index.php?page=barcode_audit&sub=audit" class="btn <?= $sub_tab === 'audit' ? 'btn-primary' : 'btn-default' ?>">📋 Physical Stock Opener & Scanner Audit</a>
+</div>
+
+<?php if ($sub_tab === 'labels'):
+    $lbl_bikes = $conn->query("SELECT b.id, b.chassis_number, b.motor_number, b.color, m.model_name, br.branch_code FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN branches br ON b.branch_id=br.id WHERE b.status IN ('in_stock','returned') " . branch_and($conn, 'b') . " ORDER BY b.id DESC");
+    $lbl_accs = $conn->query("SELECT a.id, a.name, a.sku, a.selling_price, a.current_stock, br.branch_code FROM accessories a LEFT JOIN branches br ON a.branch_id=br.id WHERE " . branch_where($conn, 'a') . " ORDER BY a.name ASC");
+?>
+<fieldset class="fieldset"><legend>🏷️ Generate Printable QR & Code-128 Barcode Tags for Bikes & Accessories</legend>
+<form method="GET" action="index.php" target="_blank">
+<input type="hidden" name="page" value="barcode_audit">
+<input type="hidden" name="print_labels" value="1">
+<div class="form-row">
+    <div class="form-group">
+        <label>Label Symbology</label>
+        <select name="label_style">
+            <option value="hybrid">Hybrid (Code-128 Barcode + QR Code)</option>
+            <option value="barcode">Code-128 Linear Barcode Only</option>
+            <option value="qr">2D QR Matrix Tag Only</option>
+        </select>
+    </div>
+    <div class="form-group"><label>Copies per Selected Item</label><input type="number" name="copies" min="1" max="20" value="1"></div>
+    <div class="form-group" style="align-self:flex-end"><button type="submit" class="btn btn-success">🖨 Generate & Print Selected Tags</button></div>
+</div>
+<div class="split-grid" style="margin-top:12px">
+    <div>
+        <h4>🚲 Select In-Stock Bikes (Chassis Barcodes)</h4>
+        <div style="max-height:340px;overflow:auto;border:1px solid var(--border);padding:8px">
+            <?php if ($lbl_bikes): while ($lb = $lbl_bikes->fetch_assoc()): ?>
+            <label style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border);cursor:pointer;font-size:0.82rem">
+                <input type="checkbox" name="bike_ids[]" value="<?= (int) $lb['id'] ?>" checked>
+                <span><strong><?= sanitize($lb['chassis_number']) ?></strong> — <?= sanitize($lb['model_name']) ?> (<?= sanitize($lb['color']) ?>) [<?= sanitize($lb['branch_code'] ?? 'HQ') ?>]</span>
+            </label>
+            <?php endwhile; endif; ?>
+        </div>
+    </div>
+    <div>
+        <h4>🛠️ Select Accessories & Spare Parts (SKU Barcodes)</h4>
+        <div style="max-height:340px;overflow:auto;border:1px solid var(--border);padding:8px">
+            <?php if ($lbl_accs): while ($la = $lbl_accs->fetch_assoc()): ?>
+            <label style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border);cursor:pointer;font-size:0.82rem">
+                <input type="checkbox" name="acc_ids[]" value="<?= (int) $la['id'] ?>">
+                <span><code><?= sanitize($la['sku']) ?></code> — <strong><?= sanitize($la['name']) ?></strong> (<?= fmt_money($la['selling_price']) ?>, Stock: <?= (int) $la['current_stock'] ?>)</span>
+            </label>
+            <?php endwhile; endif; ?>
+        </div>
+    </div>
+</div>
+</form>
+</fieldset>
+
+<?php elseif ($sub_tab === 'audit'):
+    $active_audit_id = (int) ($_GET['audit_id'] ?? 0);
+    $active_audit = $active_audit_id > 0 ? $conn->query("SELECT sa.*, b.name AS branch_title, b.branch_code FROM stock_audits sa LEFT JOIN branches b ON sa.branch_id=b.id WHERE sa.id=$active_audit_id LIMIT 1")->fetch_assoc() : null;
+    $audits_list = $conn->query("SELECT sa.*, b.branch_code, u.username AS auditor_name FROM stock_audits sa LEFT JOIN branches b ON sa.branch_id=b.id LEFT JOIN users u ON sa.conducted_by=u.id WHERE " . branch_where($conn, 'sa') . " ORDER BY sa.id DESC");
+?>
+<?php if (!$active_audit): ?>
+<fieldset class="fieldset no-print" style="margin-bottom:16px"><legend>📋 Start New Branch Physical Stock Verification / Opener Session</legend>
+<form method="POST" action="index.php?page=barcode_audit&sub=audit">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+<input type="hidden" name="start_stock_audit" value="1">
+<div class="form-row" style="align-items:flex-end">
+    <div class="form-group">
+        <label>Branch to Audit</label>
+        <select name="branch_id" required>
+            <?php foreach ($active_branches_list as $ab): ?>
+            <option value="<?= (int) $ab['id'] ?>" <?= get_write_branch_id($conn) === (int) $ab['id'] ? 'selected' : '' ?>><?= sanitize($ab['branch_code'] . ' — ' . $ab['name']) ?></option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+    <div class="form-group"><label>Audit Date</label><input type="date" name="audit_date" value="<?= date('Y-m-d') ?>" required></div>
+    <div class="form-group">
+        <label>Audit Scope</label>
+        <select name="audit_scope">
+            <option value="all">Full Showroom (Bikes + Accessories)</option>
+            <option value="bikes">Electric Bikes (Chassis Verification) Only</option>
+            <option value="accessories">Accessories & Spare Parts Only</option>
+        </select>
+    </div>
+    <div class="form-group"><label>Notes</label><input type="text" name="notes" placeholder="Monthly physical stock audit"></div>
+    <div class="form-group"><button type="submit" class="btn btn-success">🚀 Start Physical Stock Audit</button></div>
+</div>
+</form>
+</fieldset>
+<?php else:
+    $audit_items = $conn->query("SELECT * FROM stock_audit_items WHERE audit_id=" . (int) $active_audit['id'] . " ORDER BY item_type ASC, code_value ASC");
+?>
+<fieldset class="fieldset" style="margin-bottom:16px"><legend>🔫 Active Stock Audit: <?= sanitize($active_audit['audit_no']) ?> — <?= sanitize($active_audit['branch_title']) ?> [<?= strtoupper($active_audit['status']) ?>]</legend>
+<?php if ($active_audit['status'] !== 'reconciled'): ?>
+<form method="POST" action="index.php?page=barcode_audit&sub=audit&audit_id=<?= (int) $active_audit['id'] ?>" style="background:var(--bg2);padding:12px;border:1px solid var(--accent);border-radius:2px;margin-bottom:12px">
+    <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+    <input type="hidden" name="scan_audit_item" value="1">
+    <input type="hidden" name="audit_id" value="<?= (int) $active_audit['id'] ?>">
+    <div class="form-row" style="align-items:flex-end">
+        <div class="form-group" style="flex:3"><label>🔫 Scan Barcode / QR Code (Bike Chassis # or Accessory SKU)</label><input type="text" name="scan_code" autofocus required placeholder="Point scanner here and scan tag..."></div>
+        <div class="form-group"><label>Qty</label><input type="number" name="scan_qty" value="1" min="1"></div>
+        <div class="form-group"><button type="submit" class="btn btn-primary">✅ Verify & Count</button></div>
+    </div>
+</form>
+<?php endif; ?>
+
+<form method="POST" action="index.php?page=barcode_audit&sub=audit&audit_id=<?= (int) $active_audit['id'] ?>">
+<input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+<input type="hidden" name="reconcile_stock_audit" value="1">
+<input type="hidden" name="audit_id" value="<?= (int) $active_audit['id'] ?>">
+<div class="data-table-wrap">
+<table class="data-table no-dt">
+<thead><tr><th>Type</th><th>Chassis # / SKU</th><th>Description</th><th>System Expected</th><th>Physically Counted</th><th>Variance</th><th>Scanned At</th><th>Audit Remarks</th></tr></thead>
+<tbody>
+<?php if ($audit_items): while ($ai = $audit_items->fetch_assoc()):
+    $var = (int) $ai['counted_qty'] - (int) $ai['expected_qty'];
+?>
+<tr class="<?= $var === 0 ? 'row-sold' : 'row-returned' ?>">
+    <td><span class="badge badge-<?= $ai['item_type'] === 'bike' ? 'info' : 'warning' ?>"><?= strtoupper($ai['item_type']) ?></span></td>
+    <td><code><?= sanitize($ai['code_value']) ?></code></td>
+    <td><strong><?= sanitize($ai['item_label']) ?></strong></td>
+    <td><strong><?= (int) $ai['expected_qty'] ?></strong></td>
+    <td><input type="number" name="counted_qty[<?= (int) $ai['id'] ?>]" value="<?= (int) $ai['counted_qty'] ?>" min="0" style="width:80px" <?= $active_audit['status'] === 'reconciled' ? 'readonly' : '' ?>></td>
+    <td style="font-weight:700;color:<?= $var === 0 ? 'var(--success)' : 'var(--danger)' ?>"><?= ($var > 0 ? '+' : '') . $var ?></td>
+    <td><?= $ai['scanned_at'] ? date('H:i:s', strtotime($ai['scanned_at'])) : '-' ?></td>
+    <td><input type="text" name="item_notes[<?= (int) $ai['id'] ?>]" value="<?= sanitize($ai['notes'] ?? '') ?>" placeholder="Remark" <?= $active_audit['status'] === 'reconciled' ? 'readonly' : '' ?>></td>
+</tr>
+<?php endwhile; endif; ?>
+</tbody>
+</table>
+</div>
+<?php if ($active_audit['status'] !== 'reconciled'): ?>
+<div style="margin-top:12px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" name="apply_accessory_adjustments" value="1"> <strong>Sync Accessory Stock Quantities to Physical Count (Stock Opener / Adjustment)</strong></label>
+    <button type="submit" class="btn btn-success">🔒 Finalize & Reconcile Stock Audit</button>
+    <a href="index.php?page=barcode_audit&sub=audit" class="btn btn-default">← Back to Audit Sessions</a>
+</div>
+<?php endif; ?>
+</form>
+</fieldset>
+<?php endif; ?>
+
+<fieldset class="fieldset"><legend>📚 Stock Audit Sessions History</legend>
+<div class="data-table-wrap">
+<table class="data-table">
+<thead><tr><th>Audit #</th><th>Date</th><th>Branch</th><th>Scope</th><th>Bikes (Scanned / Expected)</th><th>Accessories (Counted / Expected)</th><th>Status</th><th>Auditor</th><th class="no-sort">Open</th></tr></thead>
+<tbody>
+<?php if ($audits_list): while ($au = $audits_list->fetch_assoc()): ?>
+<tr>
+    <td><strong><?= sanitize($au['audit_no']) ?></strong></td>
+    <td><?= fmt_date($au['audit_date']) ?></td>
+    <td><?= get_branch_badge($conn, $au['branch_id']) ?></td>
+    <td><?= strtoupper($au['audit_scope']) ?></td>
+    <td><?= (int) $au['scanned_bikes'] ?> / <?= (int) $au['expected_bikes'] ?></td>
+    <td><?= (int) $au['counted_acc_units'] ?> / <?= (int) $au['expected_acc_units'] ?></td>
+    <td><span class="badge badge-<?= $au['status'] === 'reconciled' ? 'success' : 'warning' ?>"><?= strtoupper($au['status']) ?></span></td>
+    <td><?= sanitize($au['auditor_name'] ?? '-') ?></td>
+    <td><a href="index.php?page=barcode_audit&sub=audit&audit_id=<?= (int) $au['id'] ?>" class="btn btn-primary btn-sm">📂 Open Audit</a></td>
+</tr>
+<?php endwhile; endif; ?>
+</tbody>
+</table>
+</div>
+</fieldset>
+<?php endif; ?>
+<?php endif; ?>
+
 <?php
     elseif ($page === 'settings'):
         $s_company = get_setting('company_name') ?? 'BNI Enterprises';
