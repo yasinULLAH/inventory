@@ -95,8 +95,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $params = [];
         if (!empty($_GET['page'])) {
             $params[] = 'page=' . urlencode($_GET['page']);
-            if (!empty($_GET['edit_id'])) {
-                $params[] = 'edit_id=' . urlencode($_GET['edit_id']);
+            foreach (['edit_id', 'edit_lid', 'edit_gid', 'sub', 'cust_id', 'sup_id', 'manage_installment', 'account_payment', 'account_entry', 'account_order', 'edit_payment', 'edit_sale'] as $ctx_key) {
+                if (!empty($_GET[$ctx_key])) {
+                    $params[] = $ctx_key . '=' . urlencode((string) $_GET[$ctx_key]);
+                }
             }
         }
         $params[] = 'err=' . urlencode('Security token missing or expired. Please try again.');
@@ -508,12 +510,22 @@ function accounting_payment_ledger_ids($conn, $p)
     $refs = ['sale' => 'down_payment', 'installment' => 'installment', 'customer_refund' => 'return_refund', 'supplier_refund' => 'supplier_refund'];
     if (!$ref || !isset($refs[$type])) return [];
     $party_type = $type === 'supplier_refund' ? 'supplier' : 'customer';
-    $party_id = (int) $p[$party_type . '_id'];
-    $stmt = $conn->prepare('SELECT id FROM ledger WHERE reference_type=? AND reference_id=? AND party_type=? AND party_id=? AND entry_date=? AND amount=? ORDER BY id FOR UPDATE');
+    $party_id = (int) ($p[$party_type . '_id'] ?? 0);
+    $stmt = $conn->prepare('SELECT id FROM ledger WHERE reference_type=? AND reference_id=? AND party_type=? AND COALESCE(party_id,0)=? AND entry_date=? AND amount=? ORDER BY id FOR UPDATE');
     $stmt->bind_param('sisisd', $refs[$type], $ref, $party_type, $party_id, $p['payment_date'], $p['amount']);
     $stmt->execute();
     $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-    if (count($rows) > 1) throw new Exception('Multiple legacy ledger entries match this payment. Resolve the duplicate entries before changing it.');
+    if (count($rows) > 1) {
+        $same_pay_stmt = $conn->prepare('SELECT id FROM payments WHERE transaction_type=? AND reference_id=? AND payment_date=? AND amount=? ORDER BY id');
+        $same_pay_stmt->bind_param('sisd', $type, $ref, $p['payment_date'], $p['amount']);
+        $same_pay_stmt->execute();
+        $same_pays = array_column($same_pay_stmt->get_result()->fetch_all(MYSQLI_ASSOC), 'id');
+        $idx = array_search($pid, array_map('intval', $same_pays), true);
+        if ($idx !== false && isset($rows[$idx])) {
+            return [(int) $rows[$idx]['id']];
+        }
+        return [(int) $rows[0]['id']];
+    }
     return array_column($rows, 'id');
 }
 
@@ -540,7 +552,7 @@ function accounting_reverse_allocations($conn, $p, $remove_links = true)
         if (!$inst || in_array($p['status'], ['bounced', 'cancelled'], true)) continue;
         $principal = max(0, round($inst['amount_paid'] - $row['principal_amount'], 2));
         $penalty = max(0, round($inst['penalty_paid'] - $row['penalty_amount'], 2));
-        $status = $inst['status'] === 'cancelled' ? 'cancelled' : (($principal >= $inst['installment_amount'] && $penalty >= $inst['penalty_fee']) ? 'paid' : ($inst['due_date'] < date('Y-m-d') ? 'overdue' : 'pending'));
+        $status = $inst['status'] === 'cancelled' ? 'cancelled' : (($principal + 0.0001 >= (float) $inst['installment_amount'] && $penalty + 0.0001 >= (float) $inst['penalty_fee']) ? 'paid' : ($inst['due_date'] < date('Y-m-d') ? 'overdue' : 'pending'));
         $st = $conn->prepare('UPDATE installments SET amount_paid=?, penalty_paid=?, status=? WHERE id=?');
         $st->bind_param('ddsi', $principal, $penalty, $status, $id);
         $st->execute();
@@ -565,9 +577,9 @@ function accounting_allocate_payment($conn, $p, $amount)
         $penalty = min($amount, max(0, $inst['penalty_fee'] - $inst['penalty_paid']));
         $principal = min($amount - $penalty, max(0, $inst['installment_amount'] - $inst['amount_paid']));
         if ($principal + $penalty <= 0) continue;
-        $new_principal = $inst['amount_paid'] + $principal;
-        $new_penalty = $inst['penalty_paid'] + $penalty;
-        $status = ($new_principal >= $inst['installment_amount'] && $new_penalty >= $inst['penalty_fee']) ? 'paid' : ($inst['due_date'] < date('Y-m-d') ? 'overdue' : 'pending');
+        $new_principal = round($inst['amount_paid'] + $principal, 2);
+        $new_penalty = round($inst['penalty_paid'] + $penalty, 2);
+        $status = ($new_principal + 0.0001 >= (float) $inst['installment_amount'] && $new_penalty + 0.0001 >= (float) $inst['penalty_fee']) ? 'paid' : ($inst['due_date'] < date('Y-m-d') ? 'overdue' : 'pending');
         $st = $conn->prepare('UPDATE installments SET amount_paid=?, penalty_paid=?, status=?, payment_id=? WHERE id=?');
         $st->bind_param('ddsii', $new_principal, $new_penalty, $status, $pid, $inst['id']);
         $st->execute();
@@ -609,7 +621,11 @@ function accounting_change_payment($conn, $p, $delete, $input = [])
         $bike = $conn->query("SELECT * FROM bikes WHERE id=$bid FOR UPDATE")->fetch_assoc();
         if (!$bike) throw new Exception('Refund inventory record was not found.');
         if ($p['transaction_type'] === 'customer_refund') {
-            $paid = (float) $conn->query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE COALESCE(status,'cleared') NOT IN ('bounced','cancelled') AND ((transaction_type='sale' AND reference_id=$bid) OR (transaction_type='installment' AND reference_id IN (SELECT id FROM installments WHERE bike_id=$bid)))")->fetch_row()[0];
+            $direct_paid = (float) $conn->query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE COALESCE(status,'cleared') NOT IN ('bounced','cancelled') AND ((transaction_type='sale' AND reference_id=$bid) OR (transaction_type='installment' AND reference_id IN (SELECT id FROM installments WHERE bike_id=$bid)))")->fetch_row()[0];
+            $dp_paid = (float) $conn->query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE COALESCE(status,'cleared') NOT IN ('bounced','cancelled') AND transaction_type='sale' AND reference_id=$bid")->fetch_row()[0];
+            $inst_alloc_paid = (float) $conn->query("SELECT COALESCE(SUM(a.principal_amount + a.penalty_amount),0) FROM installment_payment_allocations a JOIN installments i ON i.id=a.installment_id JOIN payments p2 ON p2.id=a.payment_id WHERE i.bike_id=$bid AND COALESCE(p2.status,'cleared') NOT IN ('bounced','cancelled')")->fetch_row()[0];
+            $inst_col_paid = (float) $conn->query("SELECT COALESCE(SUM(amount_paid + COALESCE(penalty_paid,0)),0) FROM installments WHERE bike_id=$bid")->fetch_row()[0];
+            $paid = max($direct_paid, $dp_paid + max($inst_alloc_paid, $inst_col_paid));
             $cap = min(get_sale_total_for_bike($conn, $bid), $paid);
         } else {
             $sid = (int) $p['supplier_id'];
@@ -633,8 +649,20 @@ function accounting_change_payment($conn, $p, $delete, $input = [])
         $st->bind_param('sddi', $date, $amount, $amount, $lid);
         $st->execute();
     }
-    accounting_allocate_payment($conn, $p, $amount);
-    accounting_sync_refund($conn, $p);
+    $updated_p = array_merge($p, [
+        'payment_date' => $date,
+        'payment_type' => $method,
+        'amount' => $amount,
+        'cheque_number' => $number,
+        'bank_name' => $bank,
+        'cheque_date' => $cheque_date,
+        'notes' => $notes,
+        'status' => $status,
+    ]);
+    if (!in_array($status, ['bounced', 'cancelled'], true)) {
+        accounting_allocate_payment($conn, $updated_p, $amount);
+    }
+    accounting_sync_refund($conn, $updated_p);
 }
 
 function accounting_adjust_down_payment($conn, $p, $new_amount)
@@ -643,16 +671,26 @@ function accounting_adjust_down_payment($conn, $p, $new_amount)
     $bid = (int) $p['reference_id'];
     $delta = round($p['amount'] - $new_amount, 2);
     if (abs($delta) < 0.001) return;
-    $rows = $conn->query("SELECT * FROM installments WHERE bike_id=$bid AND status!='cancelled' ORDER BY due_date DESC,id DESC FOR UPDATE");
+    $bike_chk = $conn->query("SELECT customer_id, status FROM bikes WHERE id=$bid FOR UPDATE")->fetch_assoc();
+    if ($bike_chk && $bike_chk['status'] === 'sold' && empty($bike_chk['customer_id']) && isset($p['id'])) {
+        $sale_total = get_sale_total_for_bike($conn, $bid);
+        if (abs($new_amount - $sale_total) > 0.01) {
+            throw new Exception('Walk-in customer sales must remain paid in full. Use Cancel Sale or Edit Sale instead.');
+        }
+    }
+    $rows = $conn->query("SELECT * FROM installments WHERE bike_id=$bid AND status!='cancelled' ORDER BY due_date DESC,id DESC FOR UPDATE")->fetch_all(MYSQLI_ASSOC);
     foreach ($rows as $inst) {
         $change = $delta > 0 ? $delta : -min(-$delta, max(0, $inst['installment_amount'] - $inst['amount_paid']));
         $due = round($inst['installment_amount'] + $change, 2);
-        $status = ($inst['amount_paid'] >= $due && $inst['penalty_paid'] >= $inst['penalty_fee']) ? 'paid' : ($inst['due_date'] < date('Y-m-d') ? 'overdue' : 'pending');
+        $status = ($inst['amount_paid'] + 0.0001 >= $due && $inst['penalty_paid'] + 0.0001 >= (float) $inst['penalty_fee']) ? 'paid' : ($inst['due_date'] < date('Y-m-d') ? 'overdue' : 'pending');
         $st = $conn->prepare('UPDATE installments SET installment_amount=?,status=? WHERE id=?');
         $st->bind_param('dsi', $due, $status, $inst['id']);
         $st->execute();
         $delta = round($delta - $change, 2);
         if (abs($delta) < 0.001) break;
+    }
+    if (!empty($rows) && abs($delta) > 0.001) {
+        throw new Exception('The adjustment exceeds the remaining unpaid installment principal for this sale.');
     }
 }
 
@@ -945,7 +983,9 @@ function workflow_cancel_sale($conn, $id)
     $conn->query("DELETE FROM sale_money_allocations WHERE bike_id=$id");
     $conn->query("DELETE FROM cheque_register WHERE reference_type='sale' AND reference_id=$id");
     $conn->query("UPDATE quotations SET status='pending' WHERE bike_id=$id AND status='converted'");
-    $tax = 0.0;
+    $basis = $bike['tax_basis'] ?: (get_setting('tax_on') ?? 'purchase_price');
+    $rate = $bike['tax_rate_applied'] !== null ? (float) $bike['tax_rate_applied'] : (float) (get_setting('tax_rate') ?? 0.1);
+    $tax = ($basis === 'selling_price') ? 0.0 : round((float) $bike['purchase_price'] * $rate, 2);
     $st = $conn->prepare("UPDATE bikes SET status='in_stock',selling_price=NULL,selling_date=NULL,customer_id=NULL,tax_amount=?,margin=0,return_date=NULL,return_amount=NULL,return_notes=NULL WHERE id=?");
     $st->bind_param('di', $tax, $id);
     $st->execute();
@@ -984,7 +1024,9 @@ function workflow_store_return_snapshot($conn, $id, $kind, $before)
 function workflow_restore_allocation($conn, $table, $row)
 {
     $columns = $table === 'sale_money_allocations'
-        ? ['id','bike_id','destination_id','amount','allocation_date','notes','created_by','created_at','updated_at']
+        ? (isset($row['branch_id'])
+            ? ['id','branch_id','bike_id','destination_id','amount','allocation_date','notes','created_by','created_at','updated_at']
+            : ['id','bike_id','destination_id','amount','allocation_date','notes','created_by','created_at','updated_at'])
         : ['id','deposit_id','allocation_id','bike_id','amount'];
     if (!in_array($table, ['sale_money_allocations','deposit_allocations'], true)) throw new Exception('Invalid allocation snapshot.');
     if ($table === 'sale_money_allocations' && !empty($row['created_by']) && !$conn->query('SELECT id FROM users WHERE id=' . (int) $row['created_by'])->fetch_assoc()) $row['created_by'] = null;
@@ -1020,6 +1062,13 @@ function workflow_undo_return($conn, $id)
     $before = $snapshot['before'];
     if ($kind === 'sale') {
         foreach ($before['accessories'] as $row) {
+            $acc_chk = $conn->query('SELECT sku, current_stock FROM accessories WHERE id=' . (int) $row['accessory_id'] . ' FOR UPDATE')->fetch_assoc();
+            if ($acc_chk && str_starts_with((string) ($acc_chk['sku'] ?? ''), 'CST-')) {
+                if ((int) $acc_chk['current_stock'] >= (int) $row['quantity']) {
+                    $conn->query('UPDATE accessories SET current_stock=current_stock-' . (int) $row['quantity'] . ' WHERE id=' . (int) $row['accessory_id']);
+                }
+                continue;
+            }
             $st = $conn->prepare('UPDATE accessories SET current_stock=current_stock-? WHERE id=? AND current_stock>=?');
             $st->bind_param('iii', $row['quantity'], $row['accessory_id'], $row['quantity']);
             $st->execute();
@@ -1049,7 +1098,13 @@ function workflow_undo_return($conn, $id)
     foreach (['ledger','payments'] as $table) {
         $old_ids = array_map('intval', array_column($before[$table], 'id'));
         $new_ids = array_diff(array_map('intval', array_column($snapshot['after'][$table], 'id')), $old_ids);
-        if ($new_ids) $conn->query('DELETE FROM ' . $table . ' WHERE id IN (' . implode(',', $new_ids) . ')');
+        if ($new_ids) {
+            if ($table === 'payments') {
+                $id_list = implode(',', $new_ids);
+                $conn->query("DELETE FROM cheque_register WHERE (reference_type='payment' AND reference_id IN ($id_list)) OR (reference_type='return' AND reference_id=$id)");
+            }
+            $conn->query('DELETE FROM ' . $table . ' WHERE id IN (' . implode(',', $new_ids) . ')');
+        }
     }
     foreach ($before['installments'] as $inst) {
         $st = $conn->prepare('UPDATE installments SET status=?,notes=? WHERE id=?');
@@ -1111,7 +1166,7 @@ function workflow_installment_change($conn, $id, $action, $input)
         }
     }
     $bid = (int) $inst['bike_id'];
-    $conn->query("UPDATE installments SET status=CASE WHEN amount_paid>=installment_amount AND penalty_paid>=penalty_fee THEN 'paid' WHEN due_date<CURRENT_DATE THEN 'overdue' ELSE 'pending' END WHERE bike_id=$bid AND status!='cancelled'");
+    $conn->query("UPDATE installments SET status=CASE WHEN amount_paid+0.0001>=installment_amount AND COALESCE(penalty_paid,0)+0.0001>=penalty_fee THEN 'paid' WHEN due_date<CURRENT_DATE THEN 'overdue' ELSE 'pending' END WHERE bike_id=$bid AND status!='cancelled'");
 }
 
 function workflow_management_panel($conn, $page)
@@ -1160,7 +1215,7 @@ function workflow_installment_panel($conn)
     echo '<fieldset class="fieldset"><legend>Installment #' . $id . ' — ' . sanitize($inst['chassis_number']) . '</legend>';
     $bid = (int) $inst['bike_id'];
     $targets = $conn->query("SELECT id,due_date,installment_amount,amount_paid FROM installments WHERE bike_id=$bid AND id!=$id AND status!='cancelled' ORDER BY due_date,id")->fetch_all(MYSQLI_ASSOC);
-    $options = '<option value="0">Select another installment for amount changes</option>';
+    $options = '<option value="">Select another installment for amount changes</option>';
     foreach ($targets as $target) $options .= '<option value="' . (int) $target['id'] . '">#' . (int) $target['id'] . ' — ' . fmt_date($target['due_date']) . ' — ' . fmt_money($target['installment_amount']) . '</option>';
     $hidden = '<input type="hidden" name="csrf_token" value="' . sanitize($_SESSION['csrf_token']) . '"><input type="hidden" name="id" value="' . $id . '">';
     $active = $inst['bike_status'] === 'sold' && $inst['status'] !== 'cancelled';
@@ -1497,6 +1552,15 @@ function sync_purchase_order_totals($conn, $purchase_order_id)
     $stmt = $conn->prepare('UPDATE purchase_orders po SET total_units=(SELECT COUNT(*) FROM bikes WHERE purchase_order_id=po.id), total_amount=(SELECT COALESCE(SUM(purchase_price),0) FROM bikes WHERE purchase_order_id=po.id) WHERE po.id=?');
     $stmt->bind_param('i', $purchase_order_id);
     $stmt->execute();
+    $po_row = $conn->query('SELECT total_units, total_amount FROM purchase_orders WHERE id=' . (int) $purchase_order_id)->fetch_assoc();
+    if ($po_row) {
+        $new_amt = (float) $po_row['total_amount'];
+        $led_upd = $conn->prepare("UPDATE ledger SET amount=?, balance=? WHERE party_type='supplier' AND reference_type='purchase' AND reference_id=?");
+        if ($led_upd) {
+            $led_upd->bind_param('ddi', $new_amt, $new_amt, $purchase_order_id);
+            $led_upd->execute();
+        }
+    }
 }
 
 function delete_bike_cascade($conn, $bike_id)
@@ -1746,9 +1810,15 @@ function sync_customer_payment_names($conn, $customer_id, $old_name, $new_name)
 
     $adv_stmt = $conn->prepare("UPDATE payments
         SET party_name=?
-        WHERE transaction_type IN ('customer_advance','sale') AND customer_id=?");
+        WHERE transaction_type IN ('customer_advance','sale','installment','customer_refund') AND customer_id=?");
     $adv_stmt->bind_param('si', $new_name, $customer_id);
     $adv_stmt->execute();
+
+    if ($old_name !== '') {
+        $leg_stmt = $conn->prepare("UPDATE payments SET party_name=?, customer_id=? WHERE party_name=? AND (customer_id IS NULL OR customer_id=0) AND transaction_type IN ('sale','installment','customer_refund','customer_advance')");
+        $leg_stmt->bind_param('sis', $new_name, $customer_id, $old_name);
+        $leg_stmt->execute();
+    }
 }
 
 function sync_supplier_payment_names($conn, $supplier_id, $old_name, $new_name)
@@ -1773,9 +1843,22 @@ function sync_supplier_payment_names($conn, $supplier_id, $old_name, $new_name)
 
     $standalone_stmt = $conn->prepare("UPDATE payments
         SET party_name=?
-        WHERE transaction_type IN ('supplier_payment','supplier_refund') AND supplier_id=?");
+        WHERE transaction_type IN ('purchase','supplier_payment','supplier_refund') AND supplier_id=?");
     $standalone_stmt->bind_param('si', $new_name, $supplier_id);
     $standalone_stmt->execute();
+
+    $po_purchase_stmt = $conn->prepare("UPDATE payments p
+        JOIN purchase_orders po ON po.id=p.reference_id
+        SET p.party_name=?
+        WHERE p.transaction_type='purchase' AND po.supplier_id=?");
+    $po_purchase_stmt->bind_param('si', $new_name, $supplier_id);
+    $po_purchase_stmt->execute();
+
+    if ($old_name !== '') {
+        $leg_stmt = $conn->prepare("UPDATE payments SET party_name=?, supplier_id=? WHERE party_name=? AND (supplier_id IS NULL OR supplier_id=0) AND transaction_type IN ('purchase','supplier_payment','supplier_refund')");
+        $leg_stmt->bind_param('sis', $new_name, $supplier_id, $old_name);
+        $leg_stmt->execute();
+    }
 }
 
 function replace_deposit_links($conn, $deposit_id, $destination_id, $bike_links)
@@ -2690,7 +2773,13 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         } else {
             $err = 'You are not authorized to switch branches.';
         }
-        $return_url = 'index.php?page=' . urlencode($page) . ($msg ? '&msg=' . urlencode($msg) : '') . ($err ? '&err=' . urlencode($err) : '');
+        $extra_q = '';
+        foreach (['sub', 'cust_id', 'sup_id'] as $keep_k) {
+            if (!empty($_GET[$keep_k])) {
+                $extra_q .= '&' . $keep_k . '=' . urlencode((string) $_GET[$keep_k]);
+            }
+        }
+        $return_url = 'index.php?page=' . urlencode($page) . $extra_q . ($msg ? '&msg=' . urlencode($msg) : '') . ($err ? '&err=' . urlencode($err) : '');
         header('Location: ' . $return_url);
         exit;
     }
@@ -2731,11 +2820,25 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $address = clean_text($_POST['address'] ?? '');
             $is_head_office = isset($_POST['is_head_office']) ? 1 : 0;
             $is_active = isset($_POST['is_active']) ? 1 : 0;
-            if (empty($branch_code) || empty($name)) {
-                $err = 'Branch Code and Branch Name are required.';
+            if ($is_head_office) {
+                $is_active = 1;
+            }
+            if (empty($branch_code) || empty($name) || empty($city)) {
+                $err = 'Branch Code, Branch Name, and City are required.';
             } else {
                 $conn->begin_transaction();
                 try {
+                    if ($id > 0) {
+                        $existing_br = $conn->query("SELECT * FROM branches WHERE id=$id FOR UPDATE")->fetch_assoc();
+                        if (!$existing_br) throw new Exception('Branch record not found.');
+                    }
+                    $dup_st = $conn->prepare("SELECT id FROM branches WHERE branch_code=? AND id!=? LIMIT 1");
+                    $dup_st->bind_param('si', $branch_code, $id);
+                    $dup_st->execute();
+                    if ($dup_st->get_result()->fetch_assoc()) {
+                        throw new Exception("Branch code '$branch_code' is already in use.");
+                    }
+                    $dup_st->close();
                     if ($is_head_office) {
                         $conn->query("UPDATE branches SET is_head_office=0");
                     }
@@ -2752,9 +2855,14 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                         $st->close();
                         $msg = 'New branch created successfully.';
                     }
-                    $ho_chk = (int) $conn->query("SELECT COUNT(*) FROM branches WHERE is_head_office=1")->fetch_row()[0];
+                    $active_cnt = (int) $conn->query("SELECT COUNT(*) FROM branches WHERE is_active=1")->fetch_row()[0];
+                    if ($active_cnt === 0) {
+                        throw new Exception('At least one branch must remain active.');
+                    }
+                    $ho_chk = (int) $conn->query("SELECT COUNT(*) FROM branches WHERE is_head_office=1 AND is_active=1")->fetch_row()[0];
                     if ($ho_chk === 0) {
-                        $conn->query("UPDATE branches SET is_head_office=1 ORDER BY id ASC LIMIT 1");
+                        $conn->query("UPDATE branches SET is_head_office=0");
+                        $conn->query("UPDATE branches SET is_head_office=1 WHERE is_active=1 ORDER BY id ASC LIMIT 1");
                     }
                     $conn->commit();
                 } catch (Throwable $e) {
@@ -2762,7 +2870,8 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     $err = 'Could not save branch: ' . $e->getMessage();
                 }
             }
-            header('Location: index.php?page=branches&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+            $redir = 'index.php?page=branches' . ($err && $id > 0 ? '&edit_id=' . $id : '') . '&msg=' . urlencode($msg) . '&err=' . urlencode($err);
+            header('Location: ' . $redir);
             exit;
         }
         if (isset($_POST['delete_branch'])) {
@@ -2773,12 +2882,33 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $br = $conn->query("SELECT * FROM branches WHERE id=$id FOR UPDATE")->fetch_assoc();
                 if (!$br) throw new Exception('Branch not found.');
                 if ((int) $br['is_head_office'] === 1) throw new Exception('Head Office branch cannot be deleted. Assign another branch as Head Office first.');
-                $bike_cnt = (int) $conn->query("SELECT COUNT(*) FROM bikes WHERE branch_id=$id")->fetch_row()[0];
-                $po_cnt = (int) $conn->query("SELECT COUNT(*) FROM purchase_orders WHERE branch_id=$id")->fetch_row()[0];
-                $pay_cnt = (int) $conn->query("SELECT COUNT(*) FROM payments WHERE branch_id=$id")->fetch_row()[0];
-                $usr_cnt = (int) $conn->query("SELECT COUNT(*) FROM users WHERE branch_id=$id")->fetch_row()[0];
-                if ($bike_cnt > 0 || $po_cnt > 0 || $pay_cnt > 0 || $usr_cnt > 0) {
-                    throw new Exception("Cannot delete branch: It has linked records ($bike_cnt bikes, $po_cnt POs, $pay_cnt payments, $usr_cnt users). Transfer or reassign them first.");
+                $linked_checks = [
+                    'bikes' => "SELECT COUNT(*) FROM bikes WHERE branch_id=$id",
+                    'purchase orders' => "SELECT COUNT(*) FROM purchase_orders WHERE branch_id=$id",
+                    'payments' => "SELECT COUNT(*) FROM payments WHERE branch_id=$id",
+                    'users' => "SELECT COUNT(*) FROM users WHERE branch_id=$id",
+                    'installments' => "SELECT COUNT(*) FROM installments WHERE branch_id=$id",
+                    'ledger entries' => "SELECT COUNT(*) FROM ledger WHERE branch_id=$id",
+                    'income/expense entries' => "SELECT COUNT(*) FROM income_expenses WHERE branch_id=$id",
+                    'accessories' => "SELECT COUNT(*) FROM accessories WHERE branch_id=$id",
+                    'quotations' => "SELECT COUNT(*) FROM quotations WHERE branch_id=$id",
+                    'money destinations' => "SELECT COUNT(*) FROM money_destinations WHERE branch_id=$id",
+                    'money allocations' => "SELECT COUNT(*) FROM sale_money_allocations WHERE branch_id=$id",
+                    'bank deposits' => "SELECT COUNT(*) FROM bank_deposits WHERE branch_id=$id",
+                    'customers' => "SELECT COUNT(*) FROM customers WHERE branch_id=$id",
+                    'suppliers' => "SELECT COUNT(*) FROM suppliers WHERE branch_id=$id",
+                    'stock transfers' => "SELECT COUNT(*) FROM branch_transfers WHERE from_branch_id=$id OR to_branch_id=$id",
+                    'fund transfers' => "SELECT COUNT(*) FROM branch_cash_transfers WHERE from_branch_id=$id OR to_branch_id=$id",
+                ];
+                $non_zero = [];
+                foreach ($linked_checks as $label => $sql_chk) {
+                    $cnt = (int) ($conn->query($sql_chk)->fetch_row()[0] ?? 0);
+                    if ($cnt > 0) {
+                        $non_zero[] = "$cnt $label";
+                    }
+                }
+                if (!empty($non_zero)) {
+                    throw new Exception('Cannot delete branch: It has linked records (' . implode(', ', $non_zero) . '). Transfer or reassign them first.');
                 }
                 $conn->query("DELETE FROM branches WHERE id=$id");
                 if (($_SESSION['active_branch_id'] ?? 0) == $id) {
@@ -2877,10 +3007,11 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 if ($tr['transfer_type'] === 'bike' && $tr['bike_id']) {
                     $bid = (int) $tr['bike_id'];
                     $bk = $conn->query("SELECT * FROM bikes WHERE id=$bid FOR UPDATE")->fetch_assoc();
-                    if ($bk) {
-                        $conn->query("UPDATE bikes SET branch_id=" . (int) $tr['to_branch_id'] . ", status='in_stock' WHERE id=$bid");
-                        record_workflow_history($conn, $bk, 'in_stock', "Received at destination branch " . ($to_b['branch_code'] ?? '') . " (#{$tr['transfer_no']})");
+                    if (!$bk || !in_array($bk['status'], ['reserved', 'in_stock'], true)) {
+                        throw new Exception('Cannot complete transfer: the bike no longer exists or is not in transit/reserved status.');
                     }
+                    $conn->query("UPDATE bikes SET branch_id=" . (int) $tr['to_branch_id'] . ", status='in_stock' WHERE id=$bid");
+                    record_workflow_history($conn, $bk, 'in_stock', "Received at destination branch " . ($to_b['branch_code'] ?? '') . " (#{$tr['transfer_no']})");
                 }
                 $conn->query("UPDATE branch_transfers SET status='completed', received_by=$uid, received_at=NOW() WHERE id=$tr_id");
                 $conn->commit();
@@ -2900,24 +3031,51 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $tr = $conn->query("SELECT * FROM branch_transfers WHERE id=$tr_id FOR UPDATE")->fetch_assoc();
                 if (!$tr || $tr['status'] === 'cancelled') throw new Exception('Transfer not found or already cancelled.');
                 $from_b = get_branch_by_id($conn, (int) $tr['from_branch_id']);
+                $to_b = get_branch_by_id($conn, (int) $tr['to_branch_id']);
                 if ($tr['transfer_type'] === 'bike' && $tr['bike_id']) {
                     $bid = (int) $tr['bike_id'];
                     $bk = $conn->query("SELECT * FROM bikes WHERE id=$bid FOR UPDATE")->fetch_assoc();
-                    if (!$bk || $bk['status'] === 'sold') throw new Exception('Cannot reverse transfer: Bike has already been sold.');
+                    if (!$bk || in_array($bk['status'], ['sold', 'returned_to_supplier', 'damaged_lost'], true)) {
+                        throw new Exception('Cannot reverse transfer: Bike has already been sold, returned to supplier, or marked damaged/lost.');
+                    }
+                    $later_tr = $conn->query("SELECT id FROM branch_transfers WHERE transfer_type='bike' AND bike_id=$bid AND id>$tr_id AND status!='cancelled' LIMIT 1")->fetch_assoc();
+                    if ($later_tr) {
+                        throw new Exception('Cannot reverse this transfer because a newer active transfer exists for this bike. Reverse the latest transfer first.');
+                    }
+                    if ($tr['status'] === 'completed' && (int) $bk['branch_id'] !== (int) $tr['to_branch_id']) {
+                        throw new Exception('Cannot reverse transfer: Bike is no longer located at the destination branch.');
+                    }
                     $conn->query("UPDATE bikes SET branch_id=" . (int) $tr['from_branch_id'] . ", status='in_stock' WHERE id=$bid");
-                    record_workflow_history($conn, $bk, 'in_stock', "Transfer #{$tr['transfer_no']} cancelled; returned to {$from_b['branch_code']}.");
+                    record_workflow_history($conn, $bk, 'in_stock', "Transfer #{$tr['transfer_no']} cancelled; returned to " . ($from_b['branch_code'] ?? 'origin') . ".");
+                    $tr_cost = (float) ($tr['transfer_cost'] ?? 0);
+                    if ($tr_cost > 0 && $from_b && $to_b) {
+                        $exp_ref = "Branch Transfer (" . $from_b['branch_code'] . " -> " . $to_b['branch_code'] . ")";
+                        $exp_row = $conn->query("SELECT id, amount FROM income_expenses WHERE branch_id=" . (int) $tr['from_branch_id'] . " AND entry_date='" . mysqli_real_escape_string($conn, $tr['transfer_date']) . "' AND category='Inter-Branch Logistics' AND reference='" . mysqli_real_escape_string($conn, $exp_ref) . "' ORDER BY id DESC LIMIT 1 FOR UPDATE")->fetch_assoc();
+                        if ($exp_row) {
+                            $rem_exp = round((float) $exp_row['amount'] - $tr_cost, 2);
+                            if ($rem_exp <= 0.009) {
+                                $conn->query("DELETE FROM income_expenses WHERE id=" . (int) $exp_row['id']);
+                            } else {
+                                $conn->query("UPDATE income_expenses SET amount=$rem_exp WHERE id=" . (int) $exp_row['id']);
+                            }
+                        }
+                    }
                 } elseif ($tr['transfer_type'] === 'accessory' && $tr['accessory_id']) {
                     $aid = (int) $tr['accessory_id'];
                     $qty = (int) $tr['quantity'];
                     $src_acc = $conn->query("SELECT * FROM accessories WHERE id=$aid FOR UPDATE")->fetch_assoc();
-                    if ($src_acc) {
-                        $dest_acc = $conn->query("SELECT * FROM accessories WHERE branch_id=" . (int) $tr['to_branch_id'] . " AND (sku='" . mysqli_real_escape_string($conn, $src_acc['sku']) . "' OR name='" . mysqli_real_escape_string($conn, $src_acc['name']) . "') LIMIT 1 FOR UPDATE")->fetch_assoc();
-                        if (!$dest_acc || (int) $dest_acc['current_stock'] < $qty) {
-                            throw new Exception('Destination branch no longer has enough accessory stock to reverse this transfer.');
-                        }
-                        $conn->query("UPDATE accessories SET current_stock = current_stock - $qty WHERE id=" . (int) $dest_acc['id']);
-                        $conn->query("UPDATE accessories SET current_stock = current_stock + $qty WHERE id=$aid");
+                    if (!$src_acc) {
+                        throw new Exception('Origin accessory record no longer exists.');
                     }
+                    $esc_sku = mysqli_real_escape_string($conn, $src_acc['sku']);
+                    $esc_sku_b = mysqli_real_escape_string($conn, $src_acc['sku'] . '-B' . (int) $tr['to_branch_id']);
+                    $esc_name = mysqli_real_escape_string($conn, $src_acc['name']);
+                    $dest_acc = $conn->query("SELECT * FROM accessories WHERE branch_id=" . (int) $tr['to_branch_id'] . " AND (sku='$esc_sku' OR sku LIKE '$esc_sku_b%' OR name='$esc_name') ORDER BY current_stock DESC LIMIT 1 FOR UPDATE")->fetch_assoc();
+                    if (!$dest_acc || (int) $dest_acc['current_stock'] < $qty) {
+                        throw new Exception('Destination branch no longer has enough accessory stock to reverse this transfer.');
+                    }
+                    $conn->query("UPDATE accessories SET current_stock = current_stock - $qty WHERE id=" . (int) $dest_acc['id']);
+                    $conn->query("UPDATE accessories SET current_stock = current_stock + $qty WHERE id=$aid");
                 }
                 $conn->query("UPDATE branch_transfers SET status='cancelled' WHERE id=$tr_id");
                 $conn->commit();
@@ -2946,6 +3104,9 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     $acc = $conn->query("SELECT * FROM accessories WHERE id=$accessory_id FOR UPDATE")->fetch_assoc();
                     if (!$acc || (int) $acc['current_stock'] < $quantity) {
                         throw new Exception('Insufficient accessory stock in source branch.');
+                    }
+                    if ((int) ($acc['branch_id'] ?? 0) !== $from_branch_id) {
+                        throw new Exception('Selected accessory does not belong to the chosen source branch.');
                     }
                     $conn->query("UPDATE accessories SET current_stock = current_stock - $quantity WHERE id=$accessory_id");
                     $dest_sku_base = $acc['sku'] . '-B' . $to_branch_id;
@@ -3018,6 +3179,27 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     $conn->rollback();
                     $err = $e->getMessage();
                 }
+            }
+            header('Location: index.php?page=branch_transfers&sub=funds&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+            exit;
+        }
+        if (isset($_POST['cancel_cash_transfer'])) {
+            require_permission($conn, 'branch_transfers', 'delete');
+            $ftr_id = (int) ($_POST['transfer_id'] ?? 0);
+            $conn->begin_transaction();
+            try {
+                $ftr = $conn->query("SELECT * FROM branch_cash_transfers WHERE id=$ftr_id FOR UPDATE")->fetch_assoc();
+                if (!$ftr || ($ftr['status'] ?? 'completed') === 'cancelled') {
+                    throw new Exception('Fund transfer not found or already cancelled.');
+                }
+                $tr_no_esc = mysqli_real_escape_string($conn, $ftr['transfer_no']);
+                $conn->query("DELETE FROM income_expenses WHERE reference='$tr_no_esc' AND category IN ('Inter-Branch Fund Out','Inter-Branch Fund In')");
+                $conn->query("UPDATE branch_cash_transfers SET status='cancelled' WHERE id=$ftr_id");
+                $conn->commit();
+                $msg = "Fund transfer #{$ftr['transfer_no']} reversed and paired branch income/expense entries removed.";
+            } catch (Throwable $e) {
+                $conn->rollback();
+                $err = $e->getMessage();
             }
             header('Location: index.php?page=branch_transfers&sub=funds&msg=' . urlencode($msg) . '&err=' . urlencode($err));
             exit;
@@ -3142,57 +3324,91 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $err = 'Role name cannot be empty.';
                 goto end_roles_post;
             }
+            if ($id === 1 && !is_administrator($conn)) {
+                $err = 'Only the primary Administrator can edit the Administrator role.';
+                goto end_roles_post;
+            }
             if ($id == 1 && $name !== 'Administrator') {
                 $name = 'Administrator';
             }
-            if ($id) {
-                $stmt = $conn->prepare('UPDATE roles SET name=?, description=? WHERE id=?');
-                $stmt->bind_param('ssi', $name, $desc, $id);
-                $stmt->execute();
-            } else {
-                $stmt = $conn->prepare('INSERT INTO roles (name, description) VALUES (?,?)');
-                $stmt->bind_param('ss', $name, $desc);
-                $stmt->execute();
-                $id = $conn->insert_id;
+            if ($id != 1 && strcasecmp($name, 'Administrator') === 0) {
+                $err = 'The Administrator role name is reserved.';
+                goto end_roles_post;
             }
-            $conn->query("DELETE FROM role_permissions WHERE role_id=$id");
-            $all_pages_perm = ['dashboard', 'branches', 'branch_transfers', 'inventory', 'purchase', 'sale', 'customers', 'suppliers', 'models', 'reports', 'returns', 'payments', 'settings', 'roles', 'users', 'income_expense', 'accessories', 'quotations', 'installments', 'money_destinations', 'money_tracking', 'bank_deposits', 'customer_ledger', 'supplier_ledger', 'landing_page', 'license'];
-            $stmtp = $conn->prepare('INSERT INTO role_permissions (role_id, page, can_view, can_add, can_edit, can_delete) VALUES (?,?,?,?,?,?)');
-            foreach ($all_pages_perm as $p) {
-                $v = isset($_POST['perm'][$p]['view']) ? 1 : 0;
-                $a = isset($_POST['perm'][$p]['add']) ? 1 : 0;
-                $e = isset($_POST['perm'][$p]['edit']) ? 1 : 0;
-                $d = isset($_POST['perm'][$p]['delete']) ? 1 : 0;
-                $stmtp->bind_param('isiiii', $id, $p, $v, $a, $e, $d);
-                $stmtp->execute();
+            $conn->begin_transaction();
+            try {
+                if ($id > 0) {
+                    $r_chk = $conn->query("SELECT id FROM roles WHERE id=$id FOR UPDATE")->fetch_assoc();
+                    if (!$r_chk) throw new Exception('Role not found.');
+                }
+                $dup_r = $conn->prepare('SELECT id FROM roles WHERE name=? AND id!=? LIMIT 1');
+                $dup_r->bind_param('si', $name, $id);
+                $dup_r->execute();
+                if ($dup_r->get_result()->fetch_assoc()) {
+                    throw new Exception('A role with this name already exists.');
+                }
+                $dup_r->close();
+                if ($id) {
+                    $stmt = $conn->prepare('UPDATE roles SET name=?, description=? WHERE id=?');
+                    $stmt->bind_param('ssi', $name, $desc, $id);
+                    $stmt->execute();
+                } else {
+                    $stmt = $conn->prepare('INSERT INTO roles (name, description) VALUES (?,?)');
+                    $stmt->bind_param('ss', $name, $desc);
+                    $stmt->execute();
+                    $id = $conn->insert_id;
+                }
+                $conn->query("DELETE FROM role_permissions WHERE role_id=$id");
+                $all_pages_perm = ['dashboard', 'branches', 'branch_transfers', 'inventory', 'purchase', 'sale', 'customers', 'suppliers', 'models', 'reports', 'returns', 'payments', 'settings', 'roles', 'users', 'income_expense', 'accessories', 'quotations', 'installments', 'money_destinations', 'money_tracking', 'bank_deposits', 'customer_ledger', 'supplier_ledger', 'landing_page', 'license'];
+                $stmtp = $conn->prepare('INSERT INTO role_permissions (role_id, page, can_view, can_add, can_edit, can_delete) VALUES (?,?,?,?,?,?)');
+                foreach ($all_pages_perm as $p) {
+                    $v = ($id == 1 || isset($_POST['perm'][$p]['view'])) ? 1 : 0;
+                    $a = ($id == 1 || isset($_POST['perm'][$p]['add'])) ? 1 : 0;
+                    $e = ($id == 1 || isset($_POST['perm'][$p]['edit'])) ? 1 : 0;
+                    $d = ($id == 1 || isset($_POST['perm'][$p]['delete'])) ? 1 : 0;
+                    $stmtp->bind_param('isiiii', $id, $p, $v, $a, $e, $d);
+                    $stmtp->execute();
+                }
+                $conn->commit();
+                $msg = 'Role and permissions saved successfully.';
+            } catch (Throwable $e) {
+                $conn->rollback();
+                $err = $e->getMessage();
             }
-            $msg = 'Role and permissions saved successfully.';
-            header('Location: index.php?page=roles&msg=' . urlencode($msg));
-            exit;
         }
         if (isset($_POST['delete_role'])) {
             require_permission($conn, 'roles', 'delete');
-            $id = (int) $_POST['id'];
+            $id = (int) ($_POST['id'] ?? 0);
             if ($id == 1) {
                 $err = 'Administrator role cannot be deleted.';
             } else {
-                $stmt_users = $conn->prepare('SELECT COUNT(*) FROM users WHERE role_id = ?');
-                $stmt_users->bind_param('i', $id);
-                $stmt_users->execute();
-                $user_count = $stmt_users->get_result()->fetch_row()[0];
-                if ($user_count > 0) {
-                    $err = 'Cannot delete role: There are users assigned to this role.';
-                } else {
+                $conn->begin_transaction();
+                try {
+                    $r_chk = $conn->query("SELECT id FROM roles WHERE id=$id FOR UPDATE")->fetch_assoc();
+                    if (!$r_chk) throw new Exception('Role not found.');
+                    $stmt_users = $conn->prepare('SELECT COUNT(*) FROM users WHERE role_id = ?');
+                    $stmt_users->bind_param('i', $id);
+                    $stmt_users->execute();
+                    $user_count = (int) $stmt_users->get_result()->fetch_row()[0];
+                    if ($user_count > 0) {
+                        throw new Exception('Cannot delete role: There are users assigned to this role.');
+                    }
+                    $conn->query("DELETE FROM role_permissions WHERE role_id=$id");
                     $stmt = $conn->prepare('DELETE FROM roles WHERE id=?');
                     $stmt->bind_param('i', $id);
                     $stmt->execute();
+                    $conn->commit();
                     $msg = 'Role deleted successfully.';
+                } catch (Throwable $e) {
+                    $conn->rollback();
+                    $err = $e->getMessage();
                 }
             }
-            header('Location: index.php?page=roles&msg=' . urlencode($msg) . '&err=' . urlencode($err));
-            exit;
         }
         end_roles_post:;
+        $edit_q = ($err && !empty($_POST['id']) && isset($_POST['save_role'])) ? '&edit_id=' . (int) $_POST['id'] : '';
+        header('Location: index.php?page=roles' . $edit_q . '&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+        exit;
     }
     if ($page === 'license' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['activate_license'])) {
         require_permission($conn, 'settings', 'edit');
@@ -3221,72 +3437,113 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $can_switch_branch = isset($_POST['can_switch_branch']) ? 1 : 0;
             $is_active = isset($_POST['is_active']) ? 1 : 0;
             $pass = $_POST['password'] ?? '';
+            if ($id === 1) {
+                $role_id = 1;
+                $is_active = 1;
+                $can_switch_branch = 1;
+            }
             if (($id === 1 || $role_id === 1) && !is_administrator($conn)) {
                 $err = 'Only the primary Administrator can manage Administrator accounts or assignments.';
                 goto end_users_post;
             }
-            if (empty($username) || empty($role_id)) {
-                $err = 'Username and Role are required.';
+            if ($id > 0 && $id === (int) $_SESSION['user_id'] && !$is_active) {
+                $err = 'You cannot deactivate your own currently logged-in account.';
+                goto end_users_post;
+            }
+            if (empty($username) || !preg_match('/^[a-zA-Z0-9_]{3,}$/', $username) || empty($role_id)) {
+                $err = 'A valid Username (3+ letters/numbers/underscores) and Role are required.';
                 goto end_users_post;
             }
             if (!validate_password_strength($pass) && !empty($pass)) {
                 $err = 'Password must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, one number, and one special character.';
                 goto end_users_post;
             }
-            if ($id) {
-                $user_q = $conn->prepare('SELECT id FROM users WHERE username = ? AND id != ?');
-                $user_q->bind_param('si', $username, $id);
-                $user_q->execute();
-                if ($user_q->get_result()->num_rows > 0) {
-                    $err = 'Username already exists.';
-                    goto end_users_post;
-                }
-                if ($pass) {
-                    $hash = password_hash($pass, PASSWORD_DEFAULT);
-                    $stmt = $conn->prepare('UPDATE users SET username=?, full_name=?, role_id=?, branch_id=?, can_switch_branch=?, is_active=?, password_hash=? WHERE id=?');
-                    $stmt->bind_param('ssiiiisi', $username, $full_name, $role_id, $user_branch_id, $can_switch_branch, $is_active, $hash, $id);
+            try {
+                if ($id) {
+                    $existing_u = $conn->query("SELECT id, role_id FROM users WHERE id=$id")->fetch_assoc();
+                    if (!$existing_u) {
+                        $err = 'User record not found.';
+                        goto end_users_post;
+                    }
+                    if ((int) $existing_u['role_id'] === 1 && !is_administrator($conn)) {
+                        $err = 'Only the primary Administrator can edit an Administrator account.';
+                        goto end_users_post;
+                    }
+                    $user_q = $conn->prepare('SELECT id FROM users WHERE username = ? AND id != ?');
+                    $user_q->bind_param('si', $username, $id);
+                    $user_q->execute();
+                    if ($user_q->get_result()->num_rows > 0) {
+                        $err = 'Username already exists.';
+                        goto end_users_post;
+                    }
+                    if ($pass) {
+                        $hash = password_hash($pass, PASSWORD_DEFAULT);
+                        $stmt = $conn->prepare('UPDATE users SET username=?, full_name=?, role_id=?, branch_id=?, can_switch_branch=?, is_active=?, password_hash=? WHERE id=?');
+                        $stmt->bind_param('ssiiiisi', $username, $full_name, $role_id, $user_branch_id, $can_switch_branch, $is_active, $hash, $id);
+                    } else {
+                        $stmt = $conn->prepare('UPDATE users SET username=?, full_name=?, role_id=?, branch_id=?, can_switch_branch=?, is_active=? WHERE id=?');
+                        $stmt->bind_param('ssiiiii', $username, $full_name, $role_id, $user_branch_id, $can_switch_branch, $is_active, $id);
+                    }
+                    $stmt->execute();
+                    $msg = 'User updated successfully.';
                 } else {
-                    $stmt = $conn->prepare('UPDATE users SET username=?, full_name=?, role_id=?, branch_id=?, can_switch_branch=?, is_active=? WHERE id=?');
-                    $stmt->bind_param('ssiiiii', $username, $full_name, $role_id, $user_branch_id, $can_switch_branch, $is_active, $id);
+                    if (empty($pass)) {
+                        $err = 'Password is required for new users.';
+                        goto end_users_post;
+                    }
+                    $user_q = $conn->prepare('SELECT id FROM users WHERE username = ?');
+                    $user_q->bind_param('s', $username);
+                    $user_q->execute();
+                    if ($user_q->get_result()->num_rows > 0) {
+                        $err = 'Username already exists.';
+                        goto end_users_post;
+                    }
+                    $hash = password_hash($pass, PASSWORD_DEFAULT);
+                    $stmt = $conn->prepare('INSERT INTO users (username, password_hash, full_name, role_id, branch_id, can_switch_branch, is_active) VALUES (?,?,?,?,?,?,?)');
+                    $stmt->bind_param('sssiiii', $username, $hash, $full_name, $role_id, $user_branch_id, $can_switch_branch, $is_active);
+                    $stmt->execute();
+                    $msg = 'User added successfully.';
                 }
-                $stmt->execute();
-                $msg = 'User updated successfully.';
-            } else {
-                if (empty($pass)) {
-                    $err = 'Password is required for new users.';
-                    goto end_users_post;
-                }
-                $user_q = $conn->prepare('SELECT id FROM users WHERE username = ?');
-                $user_q->bind_param('s', $username);
-                $user_q->execute();
-                if ($user_q->get_result()->num_rows > 0) {
-                    $err = 'Username already exists.';
-                    goto end_users_post;
-                }
-                $hash = password_hash($pass, PASSWORD_DEFAULT);
-                $stmt = $conn->prepare('INSERT INTO users (username, password_hash, full_name, role_id, branch_id, can_switch_branch, is_active) VALUES (?,?,?,?,?,?,?)');
-                $stmt->bind_param('sssiiii', $username, $hash, $full_name, $role_id, $user_branch_id, $can_switch_branch, $is_active);
-                $stmt->execute();
-                $msg = 'User added successfully.';
+            } catch (Throwable $e) {
+                $err = 'Could not save user: ' . $e->getMessage();
             }
-            header('Location: index.php?page=users&msg=' . urlencode($msg) . '&err=' . urlencode($err));
-            exit;
         }
         if (isset($_POST['delete_user'])) {
             require_permission($conn, 'users', 'delete');
-            $id = (int) $_POST['id'];
-            if ($id == 1 || $id == $_SESSION['user_id']) {
+            $id = (int) ($_POST['id'] ?? 0);
+            if ($id <= 1 || $id == (int) $_SESSION['user_id']) {
                 $err = 'Cannot delete administrative or currently logged-in user.';
             } else {
-                $stmt = $conn->prepare('DELETE FROM users WHERE id=?');
-                $stmt->bind_param('i', $id);
-                $stmt->execute();
-                $msg = 'User deleted successfully.';
+                $conn->begin_transaction();
+                try {
+                    $target_u = $conn->query("SELECT id, role_id FROM users WHERE id=$id FOR UPDATE")->fetch_assoc();
+                    if (!$target_u) throw new Exception('User not found.');
+                    if ((int) $target_u['role_id'] === 1 && !is_administrator($conn)) {
+                        throw new Exception('Only the primary Administrator can delete an Administrator user.');
+                    }
+                    $conn->query("DELETE FROM user_themes WHERE user_id=$id");
+                    $conn->query("UPDATE branch_transfers SET initiated_by=NULL WHERE initiated_by=$id");
+                    $conn->query("UPDATE branch_transfers SET received_by=NULL WHERE received_by=$id");
+                    $conn->query("UPDATE branch_cash_transfers SET created_by=NULL WHERE created_by=$id");
+                    $conn->query("UPDATE income_expenses SET created_by=NULL WHERE created_by=$id");
+                    $conn->query("UPDATE quotations SET created_by=NULL WHERE created_by=$id");
+                    $conn->query("UPDATE sale_money_allocations SET created_by=NULL WHERE created_by=$id");
+                    $conn->query("UPDATE bank_deposits SET created_by=NULL WHERE created_by=$id");
+                    $stmt = $conn->prepare('DELETE FROM users WHERE id=?');
+                    $stmt->bind_param('i', $id);
+                    $stmt->execute();
+                    $conn->commit();
+                    $msg = 'User deleted successfully.';
+                } catch (Throwable $e) {
+                    $conn->rollback();
+                    $err = $e->getMessage();
+                }
             }
-            header('Location: index.php?page=users&msg=' . urlencode($msg) . '&err=' . urlencode($err));
-            exit;
         }
         end_users_post:;
+        $edit_q = ($err && !empty($_POST['id']) && isset($_POST['save_user'])) ? '&edit_id=' . (int) $_POST['id'] : '';
+        header('Location: index.php?page=users' . $edit_q . '&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+        exit;
     }
     if ($page === 'income_expense' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if (isset($_POST['save_entry'])) {
@@ -3294,8 +3551,16 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             require_permission($conn, 'income_expense', $id > 0 ? 'edit' : 'add');
             if ($id > 0) {
                 $source_entry = $conn->query("SELECT category,reference FROM income_expenses WHERE id=$id")->fetch_assoc();
-                if ($source_entry && $source_entry['category'] === 'Inventory Loss' && preg_match('/^Bike ID: (\d+) /', $source_entry['reference'] ?? '')) {
+                if (!$source_entry) {
+                    $err = 'Entry not found.';
+                    goto end_income_expense_post;
+                }
+                if ($source_entry['category'] === 'Inventory Loss' && preg_match('/^Bike ID: (\d+) /', $source_entry['reference'] ?? '')) {
                     $err = 'Edit or restore this inventory loss through its item in Inventory so stock and expense stay consistent.';
+                    goto end_income_expense_post;
+                }
+                if (in_array($source_entry['category'], ['Inter-Branch Fund Out', 'Inter-Branch Fund In'], true) && preg_match('/^FTR-/', $source_entry['reference'] ?? '')) {
+                    $err = 'Inter-branch fund transfer entries are managed through Branch Transfers > Inter-Branch Fund Transfers so both branches stay balanced.';
                     goto end_income_expense_post;
                 }
             }
@@ -3312,17 +3577,19 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $err = 'All required fields must be filled and amount must be positive.';
                 goto end_income_expense_post;
             }
-            if ($id) {
-                $stmt = $conn->prepare('UPDATE income_expenses SET branch_id=?, entry_date=?, type=?, category=?, amount=?, payment_method=?, reference=?, notes=? WHERE id=?');
-                $stmt->bind_param('isssdsssi', $entry_branch_id, $entry_date, $type, $category, $amount, $payment_method, $reference, $notes, $id);
-            } else {
-                $stmt = $conn->prepare('INSERT INTO income_expenses (branch_id, entry_date, type, category, amount, payment_method, reference, notes, created_by) VALUES (?,?,?,?,?,?,?,?,?)');
-                $stmt->bind_param('isssdsssi', $entry_branch_id, $entry_date, $type, $category, $amount, $payment_method, $reference, $notes, $created_by);
+            try {
+                if ($id) {
+                    $stmt = $conn->prepare('UPDATE income_expenses SET branch_id=?, entry_date=?, type=?, category=?, amount=?, payment_method=?, reference=?, notes=? WHERE id=?');
+                    $stmt->bind_param('isssdsssi', $entry_branch_id, $entry_date, $type, $category, $amount, $payment_method, $reference, $notes, $id);
+                } else {
+                    $stmt = $conn->prepare('INSERT INTO income_expenses (branch_id, entry_date, type, category, amount, payment_method, reference, notes, created_by) VALUES (?,?,?,?,?,?,?,?,?)');
+                    $stmt->bind_param('isssdsssi', $entry_branch_id, $entry_date, $type, $category, $amount, $payment_method, $reference, $notes, $created_by);
+                }
+                $stmt->execute();
+                $msg = 'Entry saved successfully.';
+            } catch (Throwable $e) {
+                $err = 'Could not save entry: ' . $e->getMessage();
             }
-            $stmt->execute();
-            $msg = 'Entry saved successfully.';
-            header('Location: index.php?page=income_expense&msg=' . urlencode($msg) . '&err=' . urlencode($err));
-            exit;
         }
         if (isset($_POST['delete_entry'])) {
             require_permission($conn, 'income_expense', 'delete');
@@ -3333,6 +3600,15 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 if (!$entry) throw new Exception('Entry not found.');
                 if ($entry['category'] === 'Inventory Loss' && preg_match('/^Bike ID: (\d+) /', $entry['reference'] ?? '', $loss_match)) {
                     throw new Exception('This expense belongs to inventory item #' . $loss_match[1] . '. Restore its status through Inventory > Edit item; that reverses the loss expense together with stock.');
+                }
+                if (in_array($entry['category'], ['Inter-Branch Fund Out', 'Inter-Branch Fund In'], true) && preg_match('/^FTR-/', $entry['reference'] ?? '')) {
+                    $tr_no_esc = mysqli_real_escape_string($conn, $entry['reference']);
+                    $conn->query("UPDATE branch_cash_transfers SET status='cancelled' WHERE transfer_no='$tr_no_esc'");
+                    $conn->query("DELETE FROM income_expenses WHERE reference='$tr_no_esc' AND category IN ('Inter-Branch Fund Out','Inter-Branch Fund In')");
+                    $conn->commit();
+                    $msg = 'Inter-branch fund transfer and both paired branch entries reversed.';
+                    header('Location: index.php?page=income_expense&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+                    exit;
                 }
                 $payments = $conn->query("SELECT id FROM payments WHERE transaction_type='expense_payment' AND reference_id=$id FOR UPDATE")->fetch_all(MYSQLI_ASSOC);
                 if ($payments) require_permission($conn, 'payments', 'delete');
@@ -3345,10 +3621,11 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $conn->rollback();
                 $err = $e->getMessage();
             }
-            header('Location: index.php?page=income_expense&msg=' . urlencode($msg) . '&err=' . urlencode($err));
-            exit;
         }
         end_income_expense_post:;
+        $edit_q = ($err && !empty($_POST['id']) && isset($_POST['save_entry'])) ? '&edit_id=' . (int) $_POST['id'] : '';
+        header('Location: index.php?page=income_expense' . $edit_q . '&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+        exit;
     }
     if (isset($_POST['toggle_theme'])) {
         $new_theme = ($theme === 'dark') ? 'light' : 'dark';
@@ -3408,8 +3685,10 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $discount_type = clean_text($b['discount_type'] ?? 'flat', 10);
                 if (!in_array($discount_type, ['flat', 'percentage'])) $discount_type = 'flat';
                 $discount_label = clean_text($b['discount_label'] ?? '', 255);
-                $discount_start = clean_text($b['discount_start'] ?? '');
-                $discount_end = clean_text($b['discount_end'] ?? '');
+                $discount_start = clean_text($b['discount_start'] ?? '') ?: null;
+                $discount_end = clean_text($b['discount_end'] ?? '') ?: null;
+                if ($discount_start && !valid_date($discount_start)) $discount_start = null;
+                if ($discount_end && !valid_date($discount_end)) $discount_end = null;
                 $display_priority = (int) ($b['display_priority'] ?? 0);
                 if (empty($chassis) || empty($motor) || $model_id <= 0 || empty($color) || $pp <= 0 || empty($safe_notes) || empty($bnotes)) {
                     $errors_list[] = 'All bike fields (Chassis, Motor, Model, Color, Purchase Price, Safeguard Notes, Notes) are required.';
@@ -3457,6 +3736,9 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $bank_name = $pay_type === 'cheque' ? sanitize($p['bank_name'] ?? '') : null;
                 $chq_date = $pay_type === 'cheque' && !empty($p['cheque_date']) ? $p['cheque_date'] : null;
                 if ($pay_amount > 0) {
+                    if ($pay_type === 'cheque' && (empty($chq_num) || empty($bank_name) || empty($chq_date) || !valid_date($chq_date))) {
+                        throw new Exception('Cheque number, bank name, and valid cheque date are required for cheque payments.');
+                    }
                     $payment_status = $pay_type === 'cheque' ? 'pending' : 'cleared';
                     $pay_stmt = $conn->prepare("INSERT INTO payments (branch_id, payment_date, payment_type, amount, cheque_number, bank_name, cheque_date, transaction_type, reference_id, supplier_id, party_name, notes, status) VALUES (?,?,?,?,?,?,?,'supplier_payment',?,?,?,?,?)");
                     $pay_stmt->bind_param('issdsssiisss', $po_branch_id, $order_date, $pay_type, $pay_amount, $chq_num, $bank_name, $chq_date, $po_id, $supplier_id, $party, $po_notes, $payment_status);
@@ -3478,9 +3760,9 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             }
             $err = 'Transaction failed: ' . $e->getMessage();
         }
+        end_purchase_post:;
         header('Location: index.php?page=purchase&msg=' . urlencode($msg) . '&err=' . urlencode($err));
         exit;
-        end_purchase_post:;
     }
     if ($page === 'suppliers' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'add') {
@@ -3492,11 +3774,15 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             if (empty($name)) {
                 $err = 'Supplier name is required.';
             } else {
-                $st = $conn->prepare('INSERT INTO suppliers (branch_id,name,contact,address) VALUES (?,?,?,?)');
-                $st->bind_param('isss', $sup_branch_id, $name, $contact, $address);
-                $st->execute();
-                $st->close();
-                $msg = 'Supplier added successfully.';
+                try {
+                    $st = $conn->prepare('INSERT INTO suppliers (branch_id,name,contact,address) VALUES (?,?,?,?)');
+                    $st->bind_param('isss', $sup_branch_id, $name, $contact, $address);
+                    $st->execute();
+                    $st->close();
+                    $msg = 'Supplier added successfully.';
+                } catch (Throwable $e) {
+                    $err = 'Could not add supplier: ' . $e->getMessage();
+                }
             }
         } elseif ($action === 'edit') {
             require_permission($conn, 'suppliers', 'edit');
@@ -3508,17 +3794,27 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             if (empty($name) || $sid <= 0) {
                 $err = 'Supplier ID and name are required.';
             } else {
-                $old_stmt = $conn->prepare('SELECT name FROM suppliers WHERE id=? LIMIT 1');
-                $old_stmt->bind_param('i', $sid);
-                $old_stmt->execute();
-                $old_row = $old_stmt->get_result()->fetch_assoc();
-                $old_name = $old_row['name'] ?? '';
-                $st = $conn->prepare('UPDATE suppliers SET branch_id=?,name=?,contact=?,address=? WHERE id=?');
-                $st->bind_param('isssi', $sup_branch_id, $name, $contact, $address, $sid);
-                $st->execute();
-                $st->close();
-                sync_supplier_payment_names($conn, $sid, $old_name, $name);
-                $msg = 'Supplier updated successfully.';
+                $conn->begin_transaction();
+                try {
+                    $old_stmt = $conn->prepare('SELECT name FROM suppliers WHERE id=? LIMIT 1 FOR UPDATE');
+                    $old_stmt->bind_param('i', $sid);
+                    $old_stmt->execute();
+                    $old_row = $old_stmt->get_result()->fetch_assoc();
+                    if (!$old_row) {
+                        throw new Exception('Supplier record not found.');
+                    }
+                    $old_name = $old_row['name'] ?? '';
+                    $st = $conn->prepare('UPDATE suppliers SET branch_id=?,name=?,contact=?,address=? WHERE id=?');
+                    $st->bind_param('isssi', $sup_branch_id, $name, $contact, $address, $sid);
+                    $st->execute();
+                    $st->close();
+                    sync_supplier_payment_names($conn, $sid, $old_name, $name);
+                    $conn->commit();
+                    $msg = 'Supplier updated successfully.';
+                } catch (Throwable $e) {
+                    $conn->rollback();
+                    $err = 'Could not update supplier: ' . $e->getMessage();
+                }
             }
         } elseif ($action === 'delete') {
             require_permission($conn, 'suppliers', 'delete');
@@ -3532,7 +3828,8 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $err = $e->getMessage();
             }
         }
-        header('Location: index.php?page=suppliers&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+        $edit_q = ($err && $action === 'edit' && !empty($_POST['id'])) ? '&edit_id=' . (int) $_POST['id'] : '';
+        header('Location: index.php?page=suppliers' . $edit_q . '&msg=' . urlencode($msg) . '&err=' . urlencode($err));
         exit;
     }
     if ($page === 'customers' && $_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -3547,11 +3844,15 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             if (empty($name)) {
                 $err = 'Customer name is required.';
             } else {
-                $st = $conn->prepare('INSERT INTO customers (branch_id,name,phone,cnic,is_filer,address) VALUES (?,?,?,?,?,?)');
-                $st->bind_param('isssis', $cust_branch_id, $name, $phone, $cnic, $is_filer, $address);
-                $st->execute();
-                $st->close();
-                $msg = 'Customer added.';
+                try {
+                    $st = $conn->prepare('INSERT INTO customers (branch_id,name,phone,cnic,is_filer,address) VALUES (?,?,?,?,?,?)');
+                    $st->bind_param('isssis', $cust_branch_id, $name, $phone, $cnic, $is_filer, $address);
+                    $st->execute();
+                    $st->close();
+                    $msg = 'Customer added.';
+                } catch (Throwable $e) {
+                    $err = 'Could not add customer: ' . $e->getMessage();
+                }
             }
         } elseif ($action === 'edit') {
             require_permission($conn, 'customers', 'edit');
@@ -3565,17 +3866,27 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             if (empty($name) || $cid <= 0) {
                 $err = 'Customer ID and name are required.';
             } else {
-                $old_stmt = $conn->prepare('SELECT name FROM customers WHERE id=? LIMIT 1');
-                $old_stmt->bind_param('i', $cid);
-                $old_stmt->execute();
-                $old_row = $old_stmt->get_result()->fetch_assoc();
-                $old_name = $old_row['name'] ?? '';
-                $st = $conn->prepare('UPDATE customers SET branch_id=?,name=?,phone=?,cnic=?,is_filer=?,address=? WHERE id=?');
-                $st->bind_param('isssisi', $cust_branch_id, $name, $phone, $cnic, $is_filer, $address, $cid);
-                $st->execute();
-                $st->close();
-                sync_customer_payment_names($conn, $cid, $old_name, $name);
-                $msg = 'Customer updated.';
+                $conn->begin_transaction();
+                try {
+                    $old_stmt = $conn->prepare('SELECT name FROM customers WHERE id=? LIMIT 1 FOR UPDATE');
+                    $old_stmt->bind_param('i', $cid);
+                    $old_stmt->execute();
+                    $old_row = $old_stmt->get_result()->fetch_assoc();
+                    if (!$old_row) {
+                        throw new Exception('Customer record not found.');
+                    }
+                    $old_name = $old_row['name'] ?? '';
+                    $st = $conn->prepare('UPDATE customers SET branch_id=?,name=?,phone=?,cnic=?,is_filer=?,address=? WHERE id=?');
+                    $st->bind_param('isssisi', $cust_branch_id, $name, $phone, $cnic, $is_filer, $address, $cid);
+                    $st->execute();
+                    $st->close();
+                    sync_customer_payment_names($conn, $cid, $old_name, $name);
+                    $conn->commit();
+                    $msg = 'Customer updated.';
+                } catch (Throwable $e) {
+                    $conn->rollback();
+                    $err = 'Could not update customer: ' . $e->getMessage();
+                }
             }
         } elseif ($action === 'delete') {
             require_permission($conn, 'customers', 'delete');
@@ -3589,7 +3900,8 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $err = $e->getMessage();
             }
         }
-        header('Location: index.php?page=customers&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+        $edit_q = ($err && $action === 'edit' && !empty($_POST['id'])) ? '&edit_id=' . (int) $_POST['id'] : '';
+        header('Location: index.php?page=customers' . $edit_q . '&msg=' . urlencode($msg) . '&err=' . urlencode($err));
         exit;
     }
     if ($page === 'models' && $_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -3606,13 +3918,26 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $img_path = handle_bike_image_upload($_FILES['image']);
             }
             if (empty($mc) || empty($mn) || empty($cat) || empty($sc) || empty($top_speed) || empty($max_range)) {
+                if ($img_path && is_file($img_path)) @unlink($img_path);
                 $err = 'All model fields (Model Code, Model Name, Category, Short Code, Top Speed, Max Range) are required.';
             } else {
-                $st = $conn->prepare('INSERT INTO models (model_code,model_name,category,short_code,image,top_speed,max_range) VALUES (?,?,?,?,?,?,?)');
-                $st->bind_param('sssssss', $mc, $mn, $cat, $sc, $img_path, $top_speed, $max_range);
-                $st->execute();
-                $st->close();
-                $msg = 'Model added.';
+                try {
+                    $dup_m = $conn->prepare('SELECT id FROM models WHERE model_code=? LIMIT 1');
+                    $dup_m->bind_param('s', $mc);
+                    $dup_m->execute();
+                    if ($dup_m->get_result()->fetch_assoc()) {
+                        throw new Exception("Model code '$mc' already exists.");
+                    }
+                    $dup_m->close();
+                    $st = $conn->prepare('INSERT INTO models (model_code,model_name,category,short_code,image,top_speed,max_range) VALUES (?,?,?,?,?,?,?)');
+                    $st->bind_param('sssssss', $mc, $mn, $cat, $sc, $img_path, $top_speed, $max_range);
+                    $st->execute();
+                    $st->close();
+                    $msg = 'Model added.';
+                } catch (Throwable $e) {
+                    if ($img_path && is_file($img_path)) @unlink($img_path);
+                    $err = 'Could not add model: ' . $e->getMessage();
+                }
             }
         } elseif ($action === 'edit') {
             require_permission($conn, 'models', 'edit');
@@ -3628,37 +3953,69 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $img_path = handle_bike_image_upload($_FILES['image']);
             }
             if (empty($mc) || empty($mn) || empty($cat) || empty($sc) || empty($top_speed) || empty($max_range) || $mid <= 0) {
+                if ($img_path && is_file($img_path)) @unlink($img_path);
                 $err = 'All model fields (Model Code, Model Name, Category, Short Code, Top Speed, Max Range) are required.';
             } else {
-                if ($img_path) {
-                    $st = $conn->prepare('UPDATE models SET model_code=?,model_name=?,category=?,short_code=?,image=?,top_speed=?,max_range=? WHERE id=?');
-                    $st->bind_param('sssssssi', $mc, $mn, $cat, $sc, $img_path, $top_speed, $max_range, $mid);
-                } else {
-                    $st = $conn->prepare('UPDATE models SET model_code=?,model_name=?,category=?,short_code=?,top_speed=?,max_range=? WHERE id=?');
-                    $st->bind_param('ssssssi', $mc, $mn, $cat, $sc, $top_speed, $max_range, $mid);
+                try {
+                    $existing_m = $conn->query("SELECT id, image FROM models WHERE id=$mid")->fetch_assoc();
+                    if (!$existing_m) {
+                        throw new Exception('Model record not found.');
+                    }
+                    $dup_m = $conn->prepare('SELECT id FROM models WHERE model_code=? AND id!=? LIMIT 1');
+                    $dup_m->bind_param('si', $mc, $mid);
+                    $dup_m->execute();
+                    if ($dup_m->get_result()->fetch_assoc()) {
+                        throw new Exception("Model code '$mc' is already used by another model.");
+                    }
+                    $dup_m->close();
+                    if ($img_path) {
+                        $st = $conn->prepare('UPDATE models SET model_code=?,model_name=?,category=?,short_code=?,image=?,top_speed=?,max_range=? WHERE id=?');
+                        $st->bind_param('sssssssi', $mc, $mn, $cat, $sc, $img_path, $top_speed, $max_range, $mid);
+                    } else {
+                        $st = $conn->prepare('UPDATE models SET model_code=?,model_name=?,category=?,short_code=?,top_speed=?,max_range=? WHERE id=?');
+                        $st->bind_param('ssssssi', $mc, $mn, $cat, $sc, $top_speed, $max_range, $mid);
+                    }
+                    $st->execute();
+                    $st->close();
+                    if ($img_path && !empty($existing_m['image']) && $existing_m['image'] !== $img_path && is_file($existing_m['image'])) {
+                        @unlink($existing_m['image']);
+                    }
+                    $msg = 'Model updated.';
+                } catch (Throwable $e) {
+                    if ($img_path && is_file($img_path)) @unlink($img_path);
+                    $err = 'Could not update model: ' . $e->getMessage();
                 }
-                $st->execute();
-                $st->close();
-                $msg = 'Model updated.';
             }
         } elseif ($action === 'delete') {
             require_permission($conn, 'models', 'delete');
             $mid = (int) ($_POST['id'] ?? 0);
-            $stmt_check = $conn->prepare('SELECT COUNT(*) FROM bikes WHERE model_id = ?');
-            $stmt_check->bind_param('i', $mid);
-            $stmt_check->execute();
-            $bike_count = $stmt_check->get_result()->fetch_row()[0];
-            if ($bike_count > 0) {
-                $err = 'Cannot delete model: There are associated bikes.';
-            } else {
-                $st = $conn->prepare('DELETE FROM models WHERE id=?');
-                $st->bind_param('i', $mid);
-                $st->execute();
-                $st->close();
-                $msg = 'Model deleted.';
+            try {
+                $existing_m = $conn->query("SELECT id, image FROM models WHERE id=$mid")->fetch_assoc();
+                if (!$existing_m) {
+                    throw new Exception('Model record not found.');
+                }
+                $stmt_check = $conn->prepare('SELECT COUNT(*) FROM bikes WHERE model_id = ?');
+                $stmt_check->bind_param('i', $mid);
+                $stmt_check->execute();
+                $bike_count = (int) $stmt_check->get_result()->fetch_row()[0];
+                if ($bike_count > 0) {
+                    $err = 'Cannot delete model: There are associated bikes.';
+                } else {
+                    $st = $conn->prepare('DELETE FROM models WHERE id=?');
+                    $st->bind_param('i', $mid);
+                    $st->execute();
+                    $st->close();
+                    if (!empty($existing_m['image']) && is_file($existing_m['image'])) {
+                        @unlink($existing_m['image']);
+                    }
+                    $msg = 'Model deleted.';
+                }
+            } catch (Throwable $e) {
+                $err = $e->getMessage();
             }
         }
-        header('Location: index.php?page=models&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+        $edit_q = ($err && $action === 'edit' && !empty($_POST['id'])) ? '&edit_id=' . (int) $_POST['id'] : '';
+        header('Location: index.php?page=models' . $edit_q . '&msg=' . urlencode($msg) . '&err=' . urlencode($err));
         exit;
     }
     if ($page === 'accessories' && $_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -3673,11 +4030,22 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             if (empty($name) || empty($sku) || $purchase_price < 0 || $selling_price < 0 || $current_stock < 0) {
                 $err = 'All fields are required and prices/stock must be non-negative.';
             } else {
-                $st = $conn->prepare('INSERT INTO accessories (branch_id,name,sku,purchase_price,selling_price,current_stock) VALUES (?,?,?,?,?,?)');
-                $st->bind_param('issddi', $acc_branch_id, $name, $sku, $purchase_price, $selling_price, $current_stock);
-                $st->execute();
-                $st->close();
-                $msg = 'Accessory added.';
+                try {
+                    $dup_a = $conn->prepare('SELECT id FROM accessories WHERE sku=? LIMIT 1');
+                    $dup_a->bind_param('s', $sku);
+                    $dup_a->execute();
+                    if ($dup_a->get_result()->fetch_assoc()) {
+                        throw new Exception("SKU '$sku' already exists.");
+                    }
+                    $dup_a->close();
+                    $st = $conn->prepare('INSERT INTO accessories (branch_id,name,sku,purchase_price,selling_price,current_stock) VALUES (?,?,?,?,?,?)');
+                    $st->bind_param('issddi', $acc_branch_id, $name, $sku, $purchase_price, $selling_price, $current_stock);
+                    $st->execute();
+                    $st->close();
+                    $msg = 'Accessory added.';
+                } catch (Throwable $e) {
+                    $err = 'Could not add accessory: ' . $e->getMessage();
+                }
             }
         } elseif ($action === 'edit') {
             require_permission($conn, 'accessories', 'edit');
@@ -3691,30 +4059,61 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             if (empty($name) || empty($sku) || $purchase_price < 0 || $selling_price < 0 || $current_stock < 0 || $acc_id <= 0) {
                 $err = 'All fields are required and prices/stock must be non-negative.';
             } else {
-                $st = $conn->prepare('UPDATE accessories SET branch_id=?,name=?,sku=?,purchase_price=?,selling_price=?,current_stock=? WHERE id=?');
-                $st->bind_param('issddii', $acc_branch_id, $name, $sku, $purchase_price, $selling_price, $current_stock, $acc_id);
-                $st->execute();
-                $st->close();
-                $msg = 'Accessory updated.';
+                try {
+                    $existing_a = $conn->query("SELECT id FROM accessories WHERE id=$acc_id")->fetch_assoc();
+                    if (!$existing_a) {
+                        throw new Exception('Accessory record not found.');
+                    }
+                    $dup_a = $conn->prepare('SELECT id FROM accessories WHERE sku=? AND id!=? LIMIT 1');
+                    $dup_a->bind_param('si', $sku, $acc_id);
+                    $dup_a->execute();
+                    if ($dup_a->get_result()->fetch_assoc()) {
+                        throw new Exception("SKU '$sku' is already used by another accessory.");
+                    }
+                    $dup_a->close();
+                    $st = $conn->prepare('UPDATE accessories SET branch_id=?,name=?,sku=?,purchase_price=?,selling_price=?,current_stock=? WHERE id=?');
+                    $st->bind_param('issddii', $acc_branch_id, $name, $sku, $purchase_price, $selling_price, $current_stock, $acc_id);
+                    $st->execute();
+                    $st->close();
+                    $msg = 'Accessory updated.';
+                } catch (Throwable $e) {
+                    $err = 'Could not update accessory: ' . $e->getMessage();
+                }
             }
         } elseif ($action === 'delete') {
             require_permission($conn, 'accessories', 'delete');
             $acc_id = (int) ($_POST['id'] ?? 0);
-            $stmt_check = $conn->prepare('SELECT COUNT(*) FROM sale_accessories WHERE accessory_id = ?');
-            $stmt_check->bind_param('i', $acc_id);
-            $stmt_check->execute();
-            $sale_count = $stmt_check->get_result()->fetch_row()[0];
-            if ($sale_count > 0) {
-                $err = 'Cannot delete accessory: It has been sold with bikes.';
-            } else {
-                $st = $conn->prepare('DELETE FROM accessories WHERE id=?');
-                $st->bind_param('i', $acc_id);
-                $st->execute();
-                $st->close();
-                $msg = 'Accessory deleted.';
+            try {
+                $existing_a = $conn->query("SELECT id FROM accessories WHERE id=$acc_id")->fetch_assoc();
+                if (!$existing_a) {
+                    throw new Exception('Accessory record not found.');
+                }
+                $stmt_check = $conn->prepare('SELECT COUNT(*) FROM sale_accessories WHERE accessory_id = ?');
+                $stmt_check->bind_param('i', $acc_id);
+                $stmt_check->execute();
+                $sale_count = (int) $stmt_check->get_result()->fetch_row()[0];
+                $tr_check = $conn->prepare("SELECT COUNT(*) FROM branch_transfers WHERE transfer_type='accessory' AND accessory_id=? AND status!='cancelled'");
+                $tr_check->bind_param('i', $acc_id);
+                $tr_check->execute();
+                $tr_count = (int) $tr_check->get_result()->fetch_row()[0];
+                if ($sale_count > 0) {
+                    $err = 'Cannot delete accessory: It has been sold with bikes.';
+                } elseif ($tr_count > 0) {
+                    $err = 'Cannot delete accessory: It has active inter-branch transfer records.';
+                } else {
+                    $conn->query("DELETE FROM branch_transfers WHERE transfer_type='accessory' AND accessory_id=$acc_id AND status='cancelled'");
+                    $st = $conn->prepare('DELETE FROM accessories WHERE id=?');
+                    $st->bind_param('i', $acc_id);
+                    $st->execute();
+                    $st->close();
+                    $msg = 'Accessory deleted.';
+                }
+            } catch (Throwable $e) {
+                $err = $e->getMessage();
             }
         }
-        header('Location: index.php?page=accessories&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+        $edit_q = ($err && $action === 'edit' && !empty($_POST['id'])) ? '&edit_id=' . (int) $_POST['id'] : '';
+        header('Location: index.php?page=accessories' . $edit_q . '&msg=' . urlencode($msg) . '&err=' . urlencode($err));
         exit;
     }
     if ($page === 'quotations' && $_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -3726,34 +4125,67 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $bike_id = (int) ($_POST['bike_id'] ?? 0);
             $quoted_price = (float) ($_POST['quoted_price'] ?? 0);
             $is_installment = isset($_POST['is_installment']) ? 1 : 0;
-            $down_payment = (float) ($_POST['down_payment'] ?? 0);
-            $total_installments = (int) ($_POST['total_installments'] ?? 0);
-            $installment_amount = (float) ($_POST['installment_amount'] ?? 0);
+            $down_payment = $is_installment ? (float) ($_POST['down_payment'] ?? 0) : 0.0;
+            $total_installments = $is_installment ? (int) ($_POST['total_installments'] ?? 0) : 0;
+            $installment_amount = $is_installment ? (float) ($_POST['installment_amount'] ?? 0) : 0.0;
             $valid_until = clean_text($_POST['valid_until'] ?? '');
             $notes = clean_text($_POST['notes'] ?? '');
-            $accessories_data = $_POST['accessories'] ?? [];
+            $accessories_data = isset($_POST['accessories']) && is_array($_POST['accessories']) ? $_POST['accessories'] : [];
             $quote_branch_id = get_write_branch_id($conn, (int) ($_POST['branch_id'] ?? 0));
-            $created_by = $_SESSION['user_id'];
+            $created_by = (int) $_SESSION['user_id'];
             if (empty($quote_date) || $customer_id <= 0 || $bike_id <= 0 || $quoted_price <= 0 || empty($valid_until)) {
                 $err = 'All required fields must be filled.';
                 goto end_quotations_post;
+            }
+            $quote_acc_total = 0.0;
+            foreach ($accessories_data as &$q_acc_row) {
+                $q_qty = max(1, (int) ($q_acc_row['quantity'] ?? 1));
+                $q_up = max(0, round((float) ($q_acc_row['unit_price'] ?? 0), 2));
+                $q_disc = max(0, round((float) ($q_acc_row['discount'] ?? 0), 2));
+                $q_fp = max(0, round(($q_qty * $q_up) - $q_disc, 2));
+                $q_acc_row['quantity'] = $q_qty;
+                $q_acc_row['unit_price'] = $q_up;
+                $q_acc_row['discount'] = $q_disc;
+                $q_acc_row['final_price'] = $q_fp;
+                $quote_acc_total += $q_fp;
+            }
+            unset($q_acc_row);
+            $quote_grand_total = $quoted_price + $quote_acc_total;
+            if ($is_installment) {
+                if ($total_installments <= 0 || $down_payment < 0 || $down_payment > $quote_grand_total + 0.001) {
+                    $err = 'For installment quotations, enter at least 1 month and a down payment not exceeding the quotation total.';
+                    goto end_quotations_post;
+                }
+                $installment_amount = round(max(0, $quote_grand_total - $down_payment) / $total_installments, 2);
             }
             if (!valid_date($quote_date) || !valid_date($valid_until) || $valid_until < $quote_date || $down_payment < 0 || $total_installments < 0 || $installment_amount < 0) {
                 $err = 'Quotation dates, payment amounts, or installment details are invalid.';
                 goto end_quotations_post;
             }
             $accessories_json = json_encode($accessories_data);
-            if ($id) {
-                $stmt = $conn->prepare('UPDATE quotations SET branch_id=?, quote_date=?, customer_id=?, bike_id=?, accessories_json=?, quoted_price=?, is_installment=?, down_payment=?, total_installments=?, installment_amount=?, valid_until=?, notes=? WHERE id=?');
-                $stmt->bind_param('isiisdididsis', $quote_branch_id, $quote_date, $customer_id, $bike_id, $accessories_json, $quoted_price, $is_installment, $down_payment, $total_installments, $installment_amount, $valid_until, $notes, $id);
-            } else {
-                $stmt = $conn->prepare('INSERT INTO quotations (branch_id, quote_date, customer_id, bike_id, accessories_json, quoted_price, is_installment, down_payment, total_installments, installment_amount, valid_until, notes, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)');
-                $stmt->bind_param('isiisdididsis', $quote_branch_id, $quote_date, $customer_id, $bike_id, $accessories_json, $quoted_price, $is_installment, $down_payment, $total_installments, $installment_amount, $valid_until, $notes, $created_by);
+            $conn->begin_transaction();
+            try {
+                if ($id) {
+                    $existing_q = $conn->query("SELECT status FROM quotations WHERE id=$id FOR UPDATE")->fetch_assoc();
+                    if (!$existing_q) {
+                        throw new Exception('Quotation record not found.');
+                    }
+                    if ($existing_q['status'] === 'converted') {
+                        throw new Exception('Converted quotations cannot be edited. Cancel the sale first if needed.');
+                    }
+                    $stmt = $conn->prepare('UPDATE quotations SET branch_id=?, quote_date=?, customer_id=?, bike_id=?, accessories_json=?, quoted_price=?, is_installment=?, down_payment=?, total_installments=?, installment_amount=?, valid_until=?, notes=? WHERE id=?');
+                    $stmt->bind_param('isiisdididssi', $quote_branch_id, $quote_date, $customer_id, $bike_id, $accessories_json, $quoted_price, $is_installment, $down_payment, $total_installments, $installment_amount, $valid_until, $notes, $id);
+                } else {
+                    $stmt = $conn->prepare('INSERT INTO quotations (branch_id, quote_date, customer_id, bike_id, accessories_json, quoted_price, is_installment, down_payment, total_installments, installment_amount, valid_until, notes, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)');
+                    $stmt->bind_param('isiisdididssi', $quote_branch_id, $quote_date, $customer_id, $bike_id, $accessories_json, $quoted_price, $is_installment, $down_payment, $total_installments, $installment_amount, $valid_until, $notes, $created_by);
+                }
+                $stmt->execute();
+                $conn->commit();
+                $msg = 'Quotation saved successfully.';
+            } catch (Throwable $e) {
+                $conn->rollback();
+                $err = $e->getMessage();
             }
-            $stmt->execute();
-            $msg = 'Quotation saved successfully.';
-            header('Location: index.php?page=quotations&msg=' . urlencode($msg) . '&err=' . urlencode($err));
-            exit;
         }
         if (isset($_POST['convert_quote_to_sale'])) {
             require_permission($conn, 'quotations', 'edit');
@@ -3858,15 +4290,23 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         }
         if (isset($_POST['delete_quote'])) {
             require_permission($conn, 'quotations', 'delete');
-            $id = (int) $_POST['id'];
-            $stmt = $conn->prepare('DELETE FROM quotations WHERE id=?');
-            $stmt->bind_param('i', $id);
-            $stmt->execute();
-            $msg = 'Quotation deleted successfully.';
-            header('Location: index.php?page=quotations&msg=' . urlencode($msg) . '&err=' . urlencode($err));
-            exit;
+            $id = (int) ($_POST['id'] ?? 0);
+            try {
+                $stmt = $conn->prepare('DELETE FROM quotations WHERE id=?');
+                $stmt->bind_param('i', $id);
+                $stmt->execute();
+                if ($stmt->affected_rows === 0) {
+                    throw new Exception('Quotation not found.');
+                }
+                $msg = 'Quotation deleted successfully.';
+            } catch (Throwable $e) {
+                $err = $e->getMessage();
+            }
         }
         end_quotations_post:;
+        $edit_q = ($err && !empty($_POST['id']) && isset($_POST['save_quote'])) ? '&edit_id=' . (int) $_POST['id'] : '';
+        header('Location: index.php?page=quotations' . $edit_q . '&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+        exit;
     }
     if ($page === 'sale' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_sale'])) {
         require_permission($conn, 'sale', 'add');
@@ -3926,6 +4366,9 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 assert_valid_payment_method($payment_method_dp);
                 $payment_notes = 'Down Payment for Chassis: ' . $bike['chassis_number'];
                 if ($down_payment > 0) {
+                    if ($payment_method_dp === 'cheque' && (empty($cheque_number_dp) || empty($bank_name_dp) || empty($cheque_date_dp) || !valid_date($cheque_date_dp))) {
+                        throw new Exception('Cheque number, bank name, and valid cheque date are required for cheque down payments.');
+                    }
                     $payment_status = $payment_method_dp === 'cheque' ? 'pending' : 'cleared';
                     $pay_st = $conn->prepare("INSERT INTO payments (branch_id, payment_date, payment_type, amount, cheque_number, bank_name, cheque_date, transaction_type, reference_id, customer_id, party_name, notes, status) VALUES (?,?,?,?,?,?,?,'sale',?,?,?,?,?)");
                     $pay_st->bind_param('issdsssiisss', $sale_branch_id, $selling_date, $payment_method_dp, $down_payment, $cheque_number_dp, $bank_name_dp, $cheque_date_dp, $bike_id, $customer_id, $party_name, $payment_notes, $payment_status);
@@ -4024,8 +4467,8 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $err = 'Please fill all required fields correctly.';
                 goto end_returns_post;
             }
-            if ($refund_method === 'cheque' && (empty($cheque_number) || empty($bank_name))) {
-                $err = 'Cheque number and bank name are required for cheque refunds.';
+            if ($refund_method === 'cheque' && $return_amount > 0 && (empty($cheque_number) || empty($bank_name) || empty($cheque_date) || !valid_date($cheque_date))) {
+                $err = 'Cheque number, bank name, and valid cheque date are required for cheque refunds.';
                 goto end_returns_post;
             }
             $conn->begin_transaction();
@@ -4041,7 +4484,8 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 if ($return_amount - $full_reversal_amount > 0.0001) {
                     throw new Exception('Supplier refund cannot exceed the original bike purchase value.');
                 }
-                $paid_to_supplier = $conn->query("SELECT COALESCE(SUM(p.amount),0) FROM payments p JOIN purchase_orders po ON po.id=p.reference_id WHERE p.transaction_type='supplier_payment' AND po.supplier_id={$bike_info['supplier_id']} AND COALESCE(p.status,'cleared') NOT IN ('bounced','cancelled')")->fetch_row()[0];
+                $sid = (int) ($bike_info['supplier_id'] ?? 0);
+                $paid_to_supplier = (float) $conn->query("SELECT COALESCE(SUM(CASE WHEN p.transaction_type='supplier_refund' THEN -p.amount ELSE p.amount END),0) FROM payments p WHERE p.transaction_type IN ('supplier_payment','purchase','supplier_refund') AND COALESCE(p.status,'cleared') NOT IN ('bounced','cancelled') AND (p.supplier_id=$sid OR (p.transaction_type IN ('supplier_payment','purchase') AND p.reference_id IN (SELECT po2.id FROM purchase_orders po2 WHERE po2.supplier_id=$sid)) OR (p.transaction_type='supplier_refund' AND p.reference_id IN (SELECT b2.id FROM bikes b2 JOIN purchase_orders po3 ON po3.id=b2.purchase_order_id WHERE po3.supplier_id=$sid)))")->fetch_row()[0];
                 $actual_refundable = min($full_reversal_amount, (float) $paid_to_supplier);
                 if ($return_amount - $actual_refundable > 0.0001) {
                     throw new Exception('Supplier refund cannot exceed the amount actually paid for this purchase.');
@@ -4102,8 +4546,8 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $err = 'Please fill all required fields correctly.';
             goto end_returns_post;
         }
-        if ($refund_method === 'cheque' && (empty($cheque_number) || empty($bank_name))) {
-            $err = 'Cheque number and bank name are required for cheque refunds.';
+        if ($refund_method === 'cheque' && $return_amount > 0 && (empty($cheque_number) || empty($bank_name) || empty($cheque_date) || !valid_date($cheque_date))) {
+            $err = 'Cheque number, bank name, and valid cheque date are required for cheque refunds.';
             goto end_returns_post;
         }
         $conn->begin_transaction();
@@ -4118,8 +4562,10 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $acc_q = $conn->query("SELECT SUM(final_price) as total_acc FROM sale_accessories WHERE bike_id=$bike_id");
             $acc_total = $acc_q ? (float) ($acc_q->fetch_assoc()['total_acc'] ?? 0) : 0;
             $full_reversal_amount = $bike_info['selling_price'] + $acc_total;
-            $paid_q = $conn->query("SELECT COALESCE(SUM(p.amount),0) AS paid_total FROM payments p WHERE COALESCE(p.status,'cleared') NOT IN ('bounced','cancelled') AND ((p.transaction_type='sale' AND p.reference_id=$bike_id) OR (p.transaction_type='installment' AND p.reference_id IN (SELECT id FROM installments WHERE bike_id=$bike_id)))");
-            $paid_total = (float) ($paid_q->fetch_assoc()['paid_total'] ?? 0);
+            $direct_paid = (float) ($conn->query("SELECT COALESCE(SUM(p.amount),0) AS paid_total FROM payments p WHERE COALESCE(p.status,'cleared') NOT IN ('bounced','cancelled') AND ((p.transaction_type='sale' AND p.reference_id=$bike_id) OR (p.transaction_type='installment' AND p.reference_id IN (SELECT id FROM installments WHERE bike_id=$bike_id)))")->fetch_assoc()['paid_total'] ?? 0);
+            $dp_paid = (float) ($conn->query("SELECT COALESCE(SUM(p.amount),0) FROM payments p WHERE COALESCE(p.status,'cleared') NOT IN ('bounced','cancelled') AND p.transaction_type='sale' AND p.reference_id=$bike_id")->fetch_row()[0] ?? 0);
+            $inst_col_paid = (float) ($conn->query("SELECT COALESCE(SUM(amount_paid + COALESCE(penalty_paid,0)),0) FROM installments WHERE bike_id=$bike_id")->fetch_row()[0] ?? 0);
+            $paid_total = max($direct_paid, $dp_paid + $inst_col_paid);
             if ($return_amount - min($full_reversal_amount, $paid_total) > 0.0001) {
                 throw new Exception('Customer refund cannot exceed the amount actually collected for this sale.');
             }
@@ -4163,7 +4609,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $acc_restore = $conn->query("SELECT accessory_id, quantity FROM sale_accessories WHERE bike_id=$bike_id");
             if ($acc_restore) {
                 while ($ar = $acc_restore->fetch_assoc()) {
-                    $conn->query("UPDATE accessories SET current_stock = current_stock + {$ar['quantity']} WHERE id={$ar['accessory_id']}");
+                    $conn->query("UPDATE accessories SET current_stock = current_stock + " . (int) $ar['quantity'] . " WHERE id=" . (int) $ar['accessory_id'] . " AND sku NOT LIKE 'CST-%'");
                 }
             }
             $conn->query("DELETE FROM deposit_allocations WHERE bike_id=$bike_id");
@@ -4175,9 +4621,10 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $conn->rollback();
             $err = 'Return transaction failed: ' . $e->getMessage();
         }
-        header('Location: index.php?page=returns&msg=' . urlencode($msg) . '&err=' . urlencode($err));
-        exit;
         end_returns_post:;
+        $ret_sub = isset($_POST['save_purchase_return']) ? '&sub=purchase' : '';
+        header('Location: index.php?page=returns' . $ret_sub . '&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+        exit;
     }
     if ($page === 'payments' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'status') {
@@ -4205,9 +4652,9 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $err = $e->getMessage();
             }
         }
+        end_payments_post:;
         header('Location: index.php?page=payments&msg=' . urlencode($msg) . '&err=' . urlencode($err));
         exit;
-        end_payments_post:;
     }
     if ($page === 'installments' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         require_permission($conn, 'installments', 'edit');
@@ -4238,24 +4685,28 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 if (!valid_date($payment_date) || $penalty_fee < 0) {
                     throw new Exception('Payment date or penalty amount is invalid.');
                 }
+                if ($payment_type === 'cheque' && (empty($cheque_number) || empty($bank_name) || empty($cheque_date) || !valid_date($cheque_date))) {
+                    throw new Exception('Cheque number, bank name, and valid cheque date are required for cheque payments.');
+                }
                 $principal_remaining = round((float) $inst['installment_amount'] - (float) $inst['amount_paid'], 2);
                 if ($amount_paid - $principal_remaining > 0.0001) {
                     throw new Exception('Principal payment exceeds the remaining installment balance.');
                 }
                 $inst_branch_id = (int) ($inst['branch_id'] ?? get_write_branch_id($conn));
-                $total_payment = $amount_paid + $penalty_fee;
+                $total_payment = round($amount_paid + $penalty_fee, 2);
                 $payment_notes = 'Installment payment for Chassis ' . $inst['chassis_number'] . " (ID: $installment_id)";
                 $payment_status = $payment_type === 'cheque' ? 'pending' : 'cleared';
                 $pay_st = $conn->prepare("INSERT INTO payments (branch_id, payment_date, payment_type, amount, cheque_number, bank_name, cheque_date, transaction_type, reference_id, customer_id, party_name, notes, status) VALUES (?,?,?,?,?,?,?,'installment',?,?,?,?,?)");
                 $pay_st->bind_param('issdsssiisss', $inst_branch_id, $payment_date, $payment_type, $total_payment, $cheque_number, $bank_name, $cheque_date, $installment_id, $inst['customer_id'], $inst['cust_name'], $payment_notes, $payment_status);
                 $pay_st->execute();
                 $payment_id = $conn->insert_id;
-                $new_amount_paid = $inst['amount_paid'] + $amount_paid;
+                $new_amount_paid = round($inst['amount_paid'] + $amount_paid, 2);
                 $existing_penalty_due = max(0, (float) $inst['penalty_fee'] - (float) $inst['penalty_paid']);
-                $new_penalty_assessment = max(0, $penalty_fee - $existing_penalty_due);
-                $new_penalty_fee = (float) $inst['penalty_fee'] + $new_penalty_assessment;
-                $new_penalty_paid = $inst['penalty_paid'] + $penalty_fee;
-                $new_status = ($new_amount_paid >= $inst['installment_amount'] && $new_penalty_paid >= $new_penalty_fee) ? 'paid' : 'pending';
+                $new_penalty_assessment = max(0, round($penalty_fee - $existing_penalty_due, 2));
+                $new_penalty_fee = round((float) $inst['penalty_fee'] + $new_penalty_assessment, 2);
+                $new_penalty_paid = round($inst['penalty_paid'] + $penalty_fee, 2);
+                $inst_due_date = $conn->query("SELECT due_date FROM installments WHERE id=$installment_id")->fetch_row()[0] ?? date('Y-m-d');
+                $new_status = ($new_amount_paid + 0.0001 >= (float) $inst['installment_amount'] && $new_penalty_paid + 0.0001 >= $new_penalty_fee) ? 'paid' : ($inst_due_date < date('Y-m-d') ? 'overdue' : 'pending');
                 $upd_inst_stmt = $conn->prepare('UPDATE installments SET amount_paid=?, penalty_fee=?, penalty_paid=?, status=?, payment_id=? WHERE id=?');
                 $upd_inst_stmt->bind_param('dddsii', $new_amount_paid, $new_penalty_fee, $new_penalty_paid, $new_status, $payment_id, $installment_id);
                 $upd_inst_stmt->execute();
@@ -4278,10 +4729,10 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $conn->rollback();
                 $err = 'Installment payment failed: ' . $e->getMessage();
             }
-            header('Location: index.php?page=installments&msg=' . urlencode($msg) . '&err=' . urlencode($err));
-            exit;
         }
         end_installments_post:;
+        header('Location: index.php?page=installments&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+        exit;
     }
     if ($page === 'money_destinations' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if (isset($_POST['save_destination'])) {
@@ -4299,46 +4750,67 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $dest_branch_id = get_write_branch_id($conn, (int) ($_POST['branch_id'] ?? 0));
             $is_active = isset($_POST['is_active']) ? 1 : 0;
             if (empty($name) || !in_array($type, ['bank', 'person', 'wallet'], true) || $opening_balance < 0) {
-                $err = 'Name and Type are required.';
+                $err = 'Name, valid Type, and non-negative Opening Balance are required.';
                 goto end_money_dest_post;
             }
-            if ($id) {
-                $stmt = $conn->prepare('UPDATE money_destinations SET branch_id=?, type=?, name=?, details=?, account_title=?, account_no=?, branch=?, opening_balance=?, contact_person=?, contact_phone=?, is_active=? WHERE id=?');
-                $stmt->bind_param('issssssdssii', $dest_branch_id, $type, $name, $details, $account_title, $account_no, $branch, $opening_balance, $contact_person, $contact_phone, $is_active, $id);
-                $stmt->execute();
-                $msg = 'Destination updated successfully.';
-            } else {
-                $stmt = $conn->prepare('INSERT INTO money_destinations (branch_id, type, name, details, account_title, account_no, branch, opening_balance, contact_person, contact_phone, is_active) VALUES (?,?,?,?,?,?,?,?,?,?,?)');
-                $stmt->bind_param('issssssdssi', $dest_branch_id, $type, $name, $details, $account_title, $account_no, $branch, $opening_balance, $contact_person, $contact_phone, $is_active);
-                $stmt->execute();
-                $msg = 'Destination added successfully.';
+            try {
+                if ($id) {
+                    $existing_d = $conn->query("SELECT id, type FROM money_destinations WHERE id=$id")->fetch_assoc();
+                    if (!$existing_d) {
+                        throw new Exception('Destination record not found.');
+                    }
+                    if ($existing_d['type'] === 'bank' && $type !== 'bank') {
+                        $dep_cnt = (int) $conn->query("SELECT COUNT(*) FROM bank_deposits WHERE destination_id=$id")->fetch_row()[0];
+                        if ($dep_cnt > 0) {
+                            throw new Exception('Cannot change destination type from Bank because bank deposits are linked to it.');
+                        }
+                    }
+                    $stmt = $conn->prepare('UPDATE money_destinations SET branch_id=?, type=?, name=?, details=?, account_title=?, account_no=?, branch=?, opening_balance=?, contact_person=?, contact_phone=?, is_active=? WHERE id=?');
+                    $stmt->bind_param('issssssdssii', $dest_branch_id, $type, $name, $details, $account_title, $account_no, $branch, $opening_balance, $contact_person, $contact_phone, $is_active, $id);
+                    $stmt->execute();
+                    $msg = 'Destination updated successfully.';
+                } else {
+                    $stmt = $conn->prepare('INSERT INTO money_destinations (branch_id, type, name, details, account_title, account_no, branch, opening_balance, contact_person, contact_phone, is_active) VALUES (?,?,?,?,?,?,?,?,?,?,?)');
+                    $stmt->bind_param('issssssdssi', $dest_branch_id, $type, $name, $details, $account_title, $account_no, $branch, $opening_balance, $contact_person, $contact_phone, $is_active);
+                    $stmt->execute();
+                    $msg = 'Destination added successfully.';
+                }
+            } catch (Throwable $e) {
+                $err = $e->getMessage();
             }
-            header('Location: index.php?page=money_destinations&msg=' . urlencode($msg));
-            exit;
         }
         if (isset($_POST['delete_destination'])) {
             require_permission($conn, 'money_destinations', 'delete');
-            $id = (int) $_POST['id'];
-            $chk = $conn->prepare('SELECT COUNT(*) FROM sale_money_allocations WHERE destination_id = ?');
-            $chk->bind_param('i', $id);
-            $chk->execute();
-            $alloc_count = $chk->get_result()->fetch_row()[0];
-            $dep_chk = $conn->prepare('SELECT COUNT(*) FROM bank_deposits WHERE destination_id = ?');
-            $dep_chk->bind_param('i', $id);
-            $dep_chk->execute();
-            $deposit_count = $dep_chk->get_result()->fetch_row()[0];
-            if ($alloc_count > 0 || $deposit_count > 0) {
-                $err = 'Cannot delete: This destination has ' . $alloc_count . ' allocation(s) and ' . $deposit_count . ' bank deposit(s) linked to it.';
-            } else {
-                $stmt = $conn->prepare('DELETE FROM money_destinations WHERE id=?');
-                $stmt->bind_param('i', $id);
-                $stmt->execute();
-                $msg = 'Destination deleted successfully.';
+            $id = (int) ($_POST['id'] ?? 0);
+            try {
+                $existing_d = $conn->query("SELECT id FROM money_destinations WHERE id=$id")->fetch_assoc();
+                if (!$existing_d) {
+                    throw new Exception('Destination record not found.');
+                }
+                $chk = $conn->prepare('SELECT COUNT(*) FROM sale_money_allocations WHERE destination_id = ?');
+                $chk->bind_param('i', $id);
+                $chk->execute();
+                $alloc_count = (int) $chk->get_result()->fetch_row()[0];
+                $dep_chk = $conn->prepare('SELECT COUNT(*) FROM bank_deposits WHERE destination_id = ?');
+                $dep_chk->bind_param('i', $id);
+                $dep_chk->execute();
+                $deposit_count = (int) $dep_chk->get_result()->fetch_row()[0];
+                if ($alloc_count > 0 || $deposit_count > 0) {
+                    $err = 'Cannot delete: This destination has ' . $alloc_count . ' allocation(s) and ' . $deposit_count . ' bank deposit(s) linked to it.';
+                } else {
+                    $stmt = $conn->prepare('DELETE FROM money_destinations WHERE id=?');
+                    $stmt->bind_param('i', $id);
+                    $stmt->execute();
+                    $msg = 'Destination deleted successfully.';
+                }
+            } catch (Throwable $e) {
+                $err = $e->getMessage();
             }
-            header('Location: index.php?page=money_destinations&msg=' . urlencode($msg) . '&err=' . urlencode($err));
-            exit;
         }
         end_money_dest_post:;
+        $edit_q = ($err && !empty($_POST['id']) && isset($_POST['save_destination'])) ? '&edit_id=' . (int) $_POST['id'] : '';
+        header('Location: index.php?page=money_destinations' . $edit_q . '&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+        exit;
     }
     if ($page === 'money_tracking' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if (isset($_POST['save_allocation'])) {
@@ -4404,29 +4876,37 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 $msg = 'Allocation recorded successfully.';
             }
             $conn->commit();
-            header('Location: index.php?page=money_tracking&msg=' . urlencode($msg));
-            exit;
         }
         if (isset($_POST['delete_allocation'])) {
             require_permission($conn, 'money_tracking', 'delete');
-            $id = (int) $_POST['id'];
-            $dep_chk = $conn->prepare('SELECT COUNT(*) FROM deposit_allocations WHERE allocation_id=?');
-            $dep_chk->bind_param('i', $id);
-            $dep_chk->execute();
-            $dep_count = (int) $dep_chk->get_result()->fetch_row()[0];
-            if ($dep_count > 0) {
-                $err = 'Allocation cannot be deleted because bank deposits are already linked to it.';
-                header('Location: index.php?page=money_tracking&err=' . urlencode($err));
-                exit;
+            $id = (int) ($_POST['id'] ?? 0);
+            $conn->begin_transaction();
+            try {
+                $existing_al = $conn->query("SELECT id FROM sale_money_allocations WHERE id=$id FOR UPDATE")->fetch_assoc();
+                if (!$existing_al) {
+                    throw new Exception('Allocation record not found.');
+                }
+                $dep_chk = $conn->prepare('SELECT COUNT(*) FROM deposit_allocations WHERE allocation_id=?');
+                $dep_chk->bind_param('i', $id);
+                $dep_chk->execute();
+                $dep_count = (int) $dep_chk->get_result()->fetch_row()[0];
+                if ($dep_count > 0) {
+                    throw new Exception('Allocation cannot be deleted because bank deposits are already linked to it. Unlink or delete the deposit first.');
+                }
+                $stmt = $conn->prepare('DELETE FROM sale_money_allocations WHERE id=?');
+                $stmt->bind_param('i', $id);
+                $stmt->execute();
+                $conn->commit();
+                $msg = 'Allocation deleted successfully.';
+            } catch (Throwable $e) {
+                $conn->rollback();
+                $err = $e->getMessage();
             }
-            $stmt = $conn->prepare('DELETE FROM sale_money_allocations WHERE id=?');
-            $stmt->bind_param('i', $id);
-            $stmt->execute();
-            $msg = 'Allocation deleted successfully.';
-            header('Location: index.php?page=money_tracking&msg=' . urlencode($msg));
-            exit;
         }
         end_money_track_post:;
+        $edit_q = ($err && !empty($_POST['id']) && isset($_POST['save_allocation'])) ? '&edit_id=' . (int) $_POST['id'] : '';
+        header('Location: index.php?page=money_tracking' . $edit_q . '&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+        exit;
     }
     if ($page === 'bank_deposits' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if (isset($_POST['save_deposit'])) {
@@ -4468,19 +4948,31 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $conn->begin_transaction();
             try {
                 if ($id) {
-                    $dep_stmt = $conn->prepare('SELECT destination_id FROM bank_deposits WHERE id=? LIMIT 1 FOR UPDATE');
+                    $dep_stmt = $conn->prepare('SELECT destination_id, receipt_image FROM bank_deposits WHERE id=? LIMIT 1 FOR UPDATE');
                     $dep_stmt->bind_param('i', $id);
                     $dep_stmt->execute();
                     $dep_row = $dep_stmt->get_result()->fetch_assoc();
                     if (!$dep_row) {
                         throw new Exception('Deposit record not found.');
                     }
-                    $linked_total = get_total_linked_deposit_amount($conn, $id);
-                    if ($linked_total - $amount > 0.0001) {
-                        throw new Exception('Deposit amount cannot be less than the total amount already linked to bike allocations.');
-                    }
-                    if ($linked_total > 0 && (int) $dep_row['destination_id'] !== $destination_id) {
-                        throw new Exception('Destination cannot be changed after bike allocations have been linked to this deposit.');
+                    $links_submitted = !empty($_POST['bike_links_submitted']) || isset($_POST['bike_link']);
+                    if ($links_submitted) {
+                        $linked_amount = 0.0;
+                        foreach ($bike_links as $link) {
+                            $linked_amount += max(0, (float) ($link['amount'] ?? 0));
+                        }
+                        if ($linked_amount - $amount > 0.0001) {
+                            throw new Exception('Linked bike amounts cannot exceed the deposit amount.');
+                        }
+                        replace_deposit_links($conn, $id, $destination_id, $bike_links);
+                    } else {
+                        $linked_total = get_total_linked_deposit_amount($conn, $id);
+                        if ($linked_total - $amount > 0.0001) {
+                            throw new Exception('Deposit amount cannot be less than the total amount already linked to bike allocations.');
+                        }
+                        if ($linked_total > 0 && (int) $dep_row['destination_id'] !== $destination_id) {
+                            throw new Exception('Destination cannot be changed after bike allocations have been linked to this deposit.');
+                        }
                     }
                     if ($receipt_path) {
                         $stmt = $conn->prepare('UPDATE bank_deposits SET branch_id=?, destination_id=?, deposit_date=?, amount=?, deposit_type=?, reference_no=?, receipt_image=?, deposited_by=?, notes=? WHERE id=?');
@@ -4490,15 +4982,9 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                         $stmt->bind_param('iisdssssi', $dep_branch_id, $destination_id, $deposit_date, $amount, $deposit_type, $reference_no, $deposited_by, $notes, $id);
                     }
                     $stmt->execute();
-                    if (isset($_POST['bike_link']) && is_array($_POST['bike_link'])) {
-                        $linked_amount = 0.0;
-                        foreach ($bike_links as $link) {
-                            $linked_amount += max(0, (float) ($link['amount'] ?? 0));
-                        }
-                        if ($linked_amount - $amount > 0.0001) {
-                            throw new Exception('Linked bike amounts cannot exceed the deposit amount.');
-                        }
-                        replace_deposit_links($conn, $id, $destination_id, $bike_links);
+                    $conn->commit();
+                    if ($receipt_path && !empty($dep_row['receipt_image']) && $dep_row['receipt_image'] !== $receipt_path && is_file($dep_row['receipt_image'])) {
+                        @unlink($dep_row['receipt_image']);
                     }
                     $msg = 'Deposit updated successfully.';
                 } else {
@@ -4520,33 +5006,48 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     if (!empty($bike_links)) {
                         replace_deposit_links($conn, $deposit_id, $destination_id, $bike_links);
                     }
+                    $conn->commit();
                 }
-                $conn->commit();
-            } catch (Exception $e) {
+            } catch (Throwable $e) {
                 $conn->rollback();
                 if ($receipt_path && is_file($receipt_path)) {
                     @unlink($receipt_path);
                 }
                 $err = 'Deposit transaction failed: ' . $e->getMessage();
             }
-            header('Location: index.php?page=bank_deposits&msg=' . urlencode($msg) . '&err=' . urlencode($err));
-            exit;
         }
         if (isset($_POST['delete_deposit'])) {
             require_permission($conn, 'bank_deposits', 'delete');
-            $id = (int) $_POST['id'];
-            $dep = $conn->query("SELECT receipt_image FROM bank_deposits WHERE id=$id")->fetch_assoc();
-            $stmt = $conn->prepare('DELETE FROM bank_deposits WHERE id=?');
-            $stmt->bind_param('i', $id);
-            $stmt->execute();
-            if ($dep && $dep['receipt_image'] && file_exists($dep['receipt_image'])) {
-                unlink($dep['receipt_image']);
+            $id = (int) ($_POST['id'] ?? 0);
+            $conn->begin_transaction();
+            try {
+                $dep = $conn->query("SELECT id, receipt_image FROM bank_deposits WHERE id=$id FOR UPDATE")->fetch_assoc();
+                if (!$dep) {
+                    throw new Exception('Deposit record not found.');
+                }
+                $del_links = $conn->prepare('DELETE FROM deposit_allocations WHERE deposit_id=?');
+                $del_links->bind_param('i', $id);
+                $del_links->execute();
+                $stmt = $conn->prepare('DELETE FROM bank_deposits WHERE id=?');
+                $stmt->bind_param('i', $id);
+                $stmt->execute();
+                $conn->commit();
+                if (!empty($dep['receipt_image']) && file_exists($dep['receipt_image'])) {
+                    @unlink($dep['receipt_image']);
+                }
+                $msg = 'Deposit and its bike allocation links deleted successfully.';
+            } catch (Throwable $e) {
+                $conn->rollback();
+                $err = 'Could not delete deposit: ' . $e->getMessage();
             }
-            $msg = 'Deposit deleted successfully.';
-            header('Location: index.php?page=bank_deposits&msg=' . urlencode($msg));
-            exit;
         }
         end_bank_deposits_post:;
+        if ($err && isset($receipt_path) && $receipt_path && is_file($receipt_path)) {
+            @unlink($receipt_path);
+        }
+        $edit_q = ($err && !empty($_POST['id']) && isset($_POST['save_deposit'])) ? '&edit_id=' . (int) $_POST['id'] : '';
+        header('Location: index.php?page=bank_deposits' . $edit_q . '&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+        exit;
     }
     if ($page === 'inventory' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'delete') {
@@ -4585,8 +5086,8 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $discount_type = clean_text($_POST['discount_type'] ?? 'flat', 10);
             if (!in_array($discount_type, ['flat', 'percentage'])) $discount_type = 'flat';
             $discount_label = clean_text($_POST['discount_label'] ?? '', 255);
-            $discount_start = clean_text($_POST['discount_start'] ?? '');
-            $discount_end = clean_text($_POST['discount_end'] ?? '');
+            $discount_start = clean_text($_POST['discount_start'] ?? '') ?: null;
+            $discount_end = clean_text($_POST['discount_end'] ?? '') ?: null;
             $display_priority = (int) ($_POST['display_priority'] ?? 0);
             $img_path = null;
             $img_err = '';
@@ -4599,93 +5100,111 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                     $img_err = 'Upload failed (max size ' . ini_get('upload_max_filesize') . ' exceeded). ';
                 }
             }
+            if ($discount_amount < 0 || ($discount_type === 'percentage' && $discount_amount > 100) || ($discount_start && !valid_date($discount_start)) || ($discount_end && !valid_date($discount_end)) || ($discount_start && $discount_end && $discount_end < $discount_start)) {
+                if ($img_path && is_file($img_path)) @unlink($img_path);
+                $err = 'Discount amount or discount date range is invalid.';
+                goto end_inventory_post;
+            }
             if ($bid <= 0 || $model_id <= 0 || $pp <= 0 || empty($color) || empty($chassis_number) || empty($motor_number) || !valid_date($order_date) || !valid_date($inventory_date) || empty($status) || empty($safe) || empty($notes) || !in_array($status, ['in_stock', 'reserved', 'damaged_lost', 'sold', 'returned', 'returned_to_supplier'], true)) {
+                if ($img_path && is_file($img_path)) @unlink($img_path);
                 $err = 'All bike fields (Model, Color, Chassis Number, Motor Number, Order Date, Inventory Date, Purchase Price, Status, Safeguard Notes, Notes) are required.';
             } else {
-                $old_bike_q = $conn->query("SELECT status, chassis_number, selling_price, purchase_order_id, tax_rate_applied, tax_basis, branch_id FROM bikes WHERE id=$bid");
-                $old_bike = $old_bike_q ? $old_bike_q->fetch_assoc() : null;
-                if (!$old_bike) {
-                    $err = 'Bike record not found.';
-                    goto end_inventory_post;
-                }
-                if ($chassis_number !== '' && $chassis_number !== $old_bike['chassis_number']) {
-                    $chk = $conn->query("SELECT id FROM bikes WHERE chassis_number='" . mysqli_real_escape_string($conn, $chassis_number) . "' AND id != $bid");
-                    if ($chk && $chk->num_rows > 0) {
-                        $err = 'Chassis number "' . sanitize($chassis_number) . '" already exists in the system.';
-                        goto end_inventory_post;
-                    }
-                }
-                $old_status = $old_bike['status'] ?? '';
-                try {
-                    assert_valid_bike_status_transition($old_status, $status);
-                } catch (Throwable $e) {
-                    $err = $e->getMessage();
-                    goto end_inventory_post;
-                }
                 $conn->begin_transaction();
                 try {
-                $recalc_tax = !empty($_POST['recalc_tax']);
-                if ($recalc_tax) {
-                    $use_tax_basis = $tax_on;
-                    $use_tax_rate = $tax_rate;
-                } else {
-                    $use_tax_basis = $old_bike['tax_basis'] ?: $tax_on;
-                    $use_tax_rate = $old_bike['tax_rate_applied'] !== null ? (float) $old_bike['tax_rate_applied'] : $tax_rate;
-                }
-                $base_tax = ($use_tax_basis === 'selling_price') ? (float) ($old_bike['selling_price'] ?: $pp) : $pp;
-                $tax_amount = ($base_tax * $use_tax_rate);
-                $margin = $old_bike['status'] === 'sold' ? (get_sale_total_for_bike($conn, $bid) - $pp - get_sale_accessory_cost_for_bike($conn, $bid) - $tax_amount) : 0;
-                if ($img_path) {
-                    $stmt = $conn->prepare('UPDATE bikes SET branch_id=?, model_id=?, color=?, purchase_price=?, tax_amount=?, margin=?, status=?, notes=?, safeguard_notes=?, image=?, order_date=?, inventory_date=?, chassis_number=?, motor_number=?, is_featured=?, discount_amount=?, discount_type=?, discount_label=?, discount_start=?, discount_end=?, display_priority=?' . ($recalc_tax ? ', tax_rate_applied=?, tax_basis=?' : '') . ' WHERE id=?');
-                    if ($recalc_tax) {
-                        $stmt->bind_param('iisdddssssssssidssssidsi', $edit_branch_id, $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $img_path, $order_date, $inventory_date, $chassis_number, $motor_number, $is_featured, $discount_amount, $discount_type, $discount_label, $discount_start, $discount_end, $display_priority, $use_tax_rate, $use_tax_basis, $bid);
-                    } else {
-                        $stmt->bind_param('iisdddssssssssidssssii', $edit_branch_id, $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $img_path, $order_date, $inventory_date, $chassis_number, $motor_number, $is_featured, $discount_amount, $discount_type, $discount_label, $discount_start, $discount_end, $display_priority, $bid);
+                    $old_bike_q = $conn->query("SELECT status, chassis_number, selling_price, purchase_order_id, tax_rate_applied, tax_basis, branch_id, image FROM bikes WHERE id=$bid FOR UPDATE");
+                    $old_bike = $old_bike_q ? $old_bike_q->fetch_assoc() : null;
+                    if (!$old_bike) {
+                        throw new Exception('Bike record not found.');
                     }
-                } else {
-                    $stmt = $conn->prepare('UPDATE bikes SET branch_id=?, model_id=?, color=?, purchase_price=?, tax_amount=?, margin=?, status=?, notes=?, safeguard_notes=?, order_date=?, inventory_date=?, chassis_number=?, motor_number=?, is_featured=?, discount_amount=?, discount_type=?, discount_label=?, discount_start=?, discount_end=?, display_priority=?' . ($recalc_tax ? ', tax_rate_applied=?, tax_basis=?' : '') . ' WHERE id=?');
-                    if ($recalc_tax) {
-                        $stmt->bind_param('iisdddsssssssidssssidsi', $edit_branch_id, $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $order_date, $inventory_date, $chassis_number, $motor_number, $is_featured, $discount_amount, $discount_type, $discount_label, $discount_start, $discount_end, $display_priority, $use_tax_rate, $use_tax_basis, $bid);
-                    } else {
-                        $stmt->bind_param('iisdddsssssssidssssii', $edit_branch_id, $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $order_date, $inventory_date, $chassis_number, $motor_number, $is_featured, $discount_amount, $discount_type, $discount_label, $discount_start, $discount_end, $display_priority, $bid);
+                    if ($chassis_number !== '' && $chassis_number !== $old_bike['chassis_number']) {
+                        $chk = $conn->query("SELECT id FROM bikes WHERE chassis_number='" . mysqli_real_escape_string($conn, $chassis_number) . "' AND id != $bid");
+                        if ($chk && $chk->num_rows > 0) {
+                            throw new Exception('Chassis number "' . sanitize($chassis_number) . '" already exists in the system.');
+                        }
                     }
-                }
-                $stmt->execute();
-                sync_purchase_order_totals($conn, (int) ($old_bike['purchase_order_id'] ?? 0));
-                if ($old_status !== $status) {
-                    $history_stmt = $conn->prepare('INSERT INTO inventory_status_history (bike_id, chassis_number, old_status, new_status, changed_by, change_reason) VALUES (?,?,?,?,?,?)');
-                    $change_reason = $notes !== '' ? $notes : 'Inventory edit';
-                    $changed_by = (int) $_SESSION['user_id'];
-                    $history_stmt->bind_param('isssis', $bid, $old_bike['chassis_number'], $old_status, $status, $changed_by, $change_reason);
-                    $history_stmt->execute();
-                }
-                if ($old_status !== 'damaged_lost' && $status === 'damaged_lost') {
-                    $entry_date = date('Y-m-d');
-                    $category = 'Inventory Loss';
-                    $reference = 'Bike ID: ' . $bid . ' (' . $chassis_number . ')';
-                    $exp_notes = 'Automated expense for Damaged/Lost bike.';
-                    $created_by = $_SESSION['user_id'];
-                    $exp_stmt = $conn->prepare("INSERT INTO income_expenses (branch_id, entry_date, type, category, amount, payment_method, reference, notes, created_by) VALUES (?,?,'expense',?,?, 'other', ?, ?, ?)");
-                    $exp_stmt->bind_param('issdssi', $edit_branch_id, $entry_date, $category, $pp, $reference, $exp_notes, $created_by);
-                    $exp_stmt->execute();
-                } elseif ($old_status === 'damaged_lost' && $status !== 'damaged_lost') {
-                    $reference = 'Bike ID: ' . $bid . ' (%';
-                    $del_exp = $conn->prepare("DELETE FROM income_expenses WHERE category='Inventory Loss' AND reference LIKE ?");
-                    $del_exp->bind_param('s', $reference);
-                    $del_exp->execute();
-                } elseif ($old_status === 'damaged_lost' && $status === 'damaged_lost') {
-                    $reference = 'Bike ID: ' . $bid . ' (%';
-                    $new_reference = 'Bike ID: ' . $bid . ' (' . $chassis_number . ')';
-                    $upd_exp = $conn->prepare("UPDATE income_expenses SET amount=?,reference=? WHERE category='Inventory Loss' AND reference LIKE ?");
-                    $upd_exp->bind_param('dss', $pp, $new_reference, $reference);
-                    $upd_exp->execute();
-                }
-                $msg = 'Bike updated. ' . $img_err;
-                if ($img_err)
-                    $err = trim($img_err);
+                    $old_status = $old_bike['status'] ?? '';
+                    assert_valid_bike_status_transition($old_status, $status);
+                    $in_transit_tr = $conn->query("SELECT transfer_no FROM branch_transfers WHERE transfer_type='bike' AND bike_id=$bid AND status='in_transit' LIMIT 1")->fetch_assoc();
+                    if ($in_transit_tr && ($old_status !== $status || (int) ($old_bike['branch_id'] ?? 1) !== $edit_branch_id)) {
+                        throw new Exception("This bike is currently in transit (Challan #{$in_transit_tr['transfer_no']}). Complete or reverse the branch transfer before changing its branch or status.");
+                    }
+                    $recalc_tax = !empty($_POST['recalc_tax']);
+                    if ($recalc_tax) {
+                        $use_tax_basis = $tax_on;
+                        $use_tax_rate = $tax_rate;
+                    } else {
+                        $use_tax_basis = $old_bike['tax_basis'] ?: $tax_on;
+                        $use_tax_rate = $old_bike['tax_rate_applied'] !== null ? (float) $old_bike['tax_rate_applied'] : $tax_rate;
+                    }
+                    $is_restocking_return = ($old_status === 'returned' && $status === 'in_stock');
+                    $effective_selling_price = $is_restocking_return ? 0.0 : (float) ($old_bike['selling_price'] ?: 0);
+                    $base_tax = ($use_tax_basis === 'selling_price') ? ($status === 'sold' ? $effective_selling_price : 0.0) : $pp;
+                    $tax_amount = round($base_tax * $use_tax_rate, 2);
+                    $margin = $status === 'sold' ? round(get_sale_total_for_bike($conn, $bid) - $pp - get_sale_accessory_cost_for_bike($conn, $bid) - $tax_amount, 2) : 0.0;
+                    if ($img_path) {
+                        $stmt = $conn->prepare('UPDATE bikes SET branch_id=?, model_id=?, color=?, purchase_price=?, tax_amount=?, margin=?, status=?, notes=?, safeguard_notes=?, image=?, order_date=?, inventory_date=?, chassis_number=?, motor_number=?, is_featured=?, discount_amount=?, discount_type=?, discount_label=?, discount_start=?, discount_end=?, display_priority=?' . ($recalc_tax ? ', tax_rate_applied=?, tax_basis=?' : '') . ' WHERE id=?');
+                        if ($recalc_tax) {
+                            $stmt->bind_param('iisdddssssssssidssssidsi', $edit_branch_id, $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $img_path, $order_date, $inventory_date, $chassis_number, $motor_number, $is_featured, $discount_amount, $discount_type, $discount_label, $discount_start, $discount_end, $display_priority, $use_tax_rate, $use_tax_basis, $bid);
+                        } else {
+                            $stmt->bind_param('iisdddssssssssidssssii', $edit_branch_id, $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $img_path, $order_date, $inventory_date, $chassis_number, $motor_number, $is_featured, $discount_amount, $discount_type, $discount_label, $discount_start, $discount_end, $display_priority, $bid);
+                        }
+                    } else {
+                        $stmt = $conn->prepare('UPDATE bikes SET branch_id=?, model_id=?, color=?, purchase_price=?, tax_amount=?, margin=?, status=?, notes=?, safeguard_notes=?, order_date=?, inventory_date=?, chassis_number=?, motor_number=?, is_featured=?, discount_amount=?, discount_type=?, discount_label=?, discount_start=?, discount_end=?, display_priority=?' . ($recalc_tax ? ', tax_rate_applied=?, tax_basis=?' : '') . ' WHERE id=?');
+                        if ($recalc_tax) {
+                            $stmt->bind_param('iisdddsssssssidssssidsi', $edit_branch_id, $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $order_date, $inventory_date, $chassis_number, $motor_number, $is_featured, $discount_amount, $discount_type, $discount_label, $discount_start, $discount_end, $display_priority, $use_tax_rate, $use_tax_basis, $bid);
+                        } else {
+                            $stmt->bind_param('iisdddsssssssidssssii', $edit_branch_id, $model_id, $color, $pp, $tax_amount, $margin, $status, $notes, $safe, $order_date, $inventory_date, $chassis_number, $motor_number, $is_featured, $discount_amount, $discount_type, $discount_label, $discount_start, $discount_end, $display_priority, $bid);
+                        }
+                    }
+                    $stmt->execute();
+                    if ($is_restocking_return) {
+                        $conn->query("UPDATE bikes SET selling_price=NULL, selling_date=NULL, customer_id=NULL, return_date=NULL, return_amount=NULL, return_notes=NULL, margin=0 WHERE id=$bid");
+                        $conn->query("DELETE FROM settings WHERE setting_key='workflow_return_sale_$bid'");
+                    }
+                    if ($chassis_number !== $old_bike['chassis_number']) {
+                        $ch_st = $conn->prepare('UPDATE inventory_status_history SET chassis_number=? WHERE bike_id=?');
+                        $ch_st->bind_param('si', $chassis_number, $bid);
+                        $ch_st->execute();
+                    }
+                    sync_purchase_order_totals($conn, (int) ($old_bike['purchase_order_id'] ?? 0));
+                    if ($old_status !== $status) {
+                        $history_stmt = $conn->prepare('INSERT INTO inventory_status_history (bike_id, chassis_number, old_status, new_status, changed_by, change_reason) VALUES (?,?,?,?,?,?)');
+                        $change_reason = $notes !== '' ? $notes : 'Inventory edit';
+                        $changed_by = (int) $_SESSION['user_id'];
+                        $history_stmt->bind_param('isssis', $bid, $chassis_number, $old_status, $status, $changed_by, $change_reason);
+                        $history_stmt->execute();
+                    }
+                    if ($old_status !== 'damaged_lost' && $status === 'damaged_lost') {
+                        $entry_date = date('Y-m-d');
+                        $category = 'Inventory Loss';
+                        $reference = 'Bike ID: ' . $bid . ' (' . $chassis_number . ')';
+                        $exp_notes = 'Automated expense for Damaged/Lost bike.';
+                        $created_by = $_SESSION['user_id'];
+                        $exp_stmt = $conn->prepare("INSERT INTO income_expenses (branch_id, entry_date, type, category, amount, payment_method, reference, notes, created_by) VALUES (?,?,'expense',?,?, 'other', ?, ?, ?)");
+                        $exp_stmt->bind_param('issdssi', $edit_branch_id, $entry_date, $category, $pp, $reference, $exp_notes, $created_by);
+                        $exp_stmt->execute();
+                    } elseif ($old_status === 'damaged_lost' && $status !== 'damaged_lost') {
+                        $reference = 'Bike ID: ' . $bid . ' (%';
+                        $del_exp = $conn->prepare("DELETE FROM income_expenses WHERE category='Inventory Loss' AND reference LIKE ?");
+                        $del_exp->bind_param('s', $reference);
+                        $del_exp->execute();
+                    } elseif ($old_status === 'damaged_lost' && $status === 'damaged_lost') {
+                        $reference = 'Bike ID: ' . $bid . ' (%';
+                        $new_reference = 'Bike ID: ' . $bid . ' (' . $chassis_number . ')';
+                        $upd_exp = $conn->prepare("UPDATE income_expenses SET branch_id=?, amount=?, reference=? WHERE category='Inventory Loss' AND reference LIKE ?");
+                        $upd_exp->bind_param('idss', $edit_branch_id, $pp, $new_reference, $reference);
+                        $upd_exp->execute();
+                    }
                     $conn->commit();
+                    if ($img_path && !empty($old_bike['image']) && $old_bike['image'] !== $img_path && is_file($old_bike['image'])) {
+                        @unlink($old_bike['image']);
+                    }
+                    $msg = 'Bike updated. ' . $img_err;
+                    if ($img_err)
+                        $err = trim($img_err);
                 } catch (Throwable $e) {
                     $conn->rollback();
+                    if ($img_path && is_file($img_path)) @unlink($img_path);
                     $err = 'Bike update failed: ' . $e->getMessage();
                 }
             }
@@ -4693,7 +5212,7 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         if ($action === 'bulk_delete') {
             require_permission($conn, 'inventory', 'delete');
             $ids = $_POST['selected_bikes'] ?? [];
-            $ids = array_values(array_unique(array_map('intval', $ids)));
+            $ids = array_values(array_unique(array_map('intval', is_array($ids) ? $ids : [])));
             $ids = array_filter($ids, function ($v) {
                 return $v > 0;
             });
@@ -4717,7 +5236,10 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         }
         if ($action === 'bulk_export') {
             $ids = $_POST['selected_bikes'] ?? [];
-            $ids = array_map('intval', $ids);
+            $ids = array_values(array_unique(array_map('intval', is_array($ids) ? $ids : [])));
+            $ids = array_filter($ids, function ($v) {
+                return $v > 0;
+            });
             if (!empty($ids)) {
                 $id_str = implode(',', $ids);
                 $er = $conn->query("SELECT b.*, m.model_name, m.model_code, br.branch_code FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN branches br ON b.branch_id=br.id WHERE b.id IN ($id_str)");
@@ -4731,11 +5253,14 @@ if ($db_exists && isset($_SESSION['user_id'])) {
                 }
                 fclose($out);
                 exit;
+            } else {
+                $err = 'No bikes selected for export.';
             }
         }
-        header('Location: index.php?page=inventory&msg=' . urlencode($msg) . '&err=' . urlencode($err));
-        exit;
         end_inventory_post:;
+        $edit_q = ($err && $action === 'edit' && !empty($_POST['id'])) ? '&edit_id=' . (int) $_POST['id'] : '';
+        header('Location: index.php?page=inventory' . $edit_q . '&msg=' . urlencode($msg) . '&err=' . urlencode($err));
+        exit;
     }
     if ($page === 'settings' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_ui_theme'])) {
         $uid = (int) $_SESSION['user_id'];
@@ -4816,9 +5341,9 @@ if ($db_exists && isset($_SESSION['user_id'])) {
         }
         $st->close();
         $msg .= 'Settings saved.';
+        end_settings_post:;
         header('Location: index.php?page=settings&msg=' . urlencode($msg) . '&err=' . urlencode($err));
         exit;
-        end_settings_post:;
     }
     if ($page === 'settings' && isset($_GET['action']) && $_GET['action'] === 'backup') {
         if (!is_administrator($conn)) {
@@ -4952,31 +5477,60 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $msg_text = clean_text($_POST['message'] ?? '');
             $sort = (int) ($_POST['sort_order'] ?? 0);
             $img_path = null;
-            if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-                $img_path = handle_image_upload($_FILES['image']);
-            }
-            if ($lid) {
-                if ($img_path) {
-                    $st = $conn->prepare('UPDATE leadership SET name=?, position=?, message=?, sort_order=?, image=? WHERE id=?');
-                    $st->bind_param('sssisi', $name, $pos, $msg_text, $sort, $img_path, $lid);
-                } else {
-                    $st = $conn->prepare('UPDATE leadership SET name=?, position=?, message=?, sort_order=? WHERE id=?');
-                    $st->bind_param('sssii', $name, $pos, $msg_text, $sort, $lid);
+            if (isset($_FILES['image']) && !empty($_FILES['image']['name'])) {
+                if ($_FILES['image']['error'] === UPLOAD_ERR_OK) {
+                    $img_path = handle_image_upload($_FILES['image']);
                 }
-                $st->execute();
-                $msg = 'Leadership entry updated.';
-            } else {
-                $st = $conn->prepare('INSERT INTO leadership (name, position, message, sort_order, image) VALUES (?,?,?,?,?)');
-                $st->bind_param('sssis', $name, $pos, $msg_text, $sort, $img_path);
-                $st->execute();
-                $msg = 'Leadership entry added.';
+                if (!$img_path) {
+                    $err = 'Invalid leadership image file.';
+                }
+            }
+            if (!$err && empty($name)) {
+                if ($img_path && is_file($img_path)) @unlink($img_path);
+                $err = 'Leader name is required.';
+            }
+            if (!$err) {
+                try {
+                    if ($lid) {
+                        $old_l = $conn->query("SELECT id, image FROM leadership WHERE id=$lid")->fetch_assoc();
+                        if (!$old_l) throw new Exception('Leadership entry not found.');
+                        if ($img_path) {
+                            $st = $conn->prepare('UPDATE leadership SET name=?, position=?, message=?, sort_order=?, image=? WHERE id=?');
+                            $st->bind_param('sssisi', $name, $pos, $msg_text, $sort, $img_path, $lid);
+                        } else {
+                            $st = $conn->prepare('UPDATE leadership SET name=?, position=?, message=?, sort_order=? WHERE id=?');
+                            $st->bind_param('sssii', $name, $pos, $msg_text, $sort, $lid);
+                        }
+                        $st->execute();
+                        if ($img_path && !empty($old_l['image']) && $old_l['image'] !== $img_path && is_file($old_l['image'])) {
+                            @unlink($old_l['image']);
+                        }
+                        $msg = 'Leadership entry updated.';
+                    } else {
+                        $st = $conn->prepare('INSERT INTO leadership (name, position, message, sort_order, image) VALUES (?,?,?,?,?)');
+                        $st->bind_param('sssis', $name, $pos, $msg_text, $sort, $img_path);
+                        $st->execute();
+                        $msg = 'Leadership entry added.';
+                    }
+                } catch (Throwable $e) {
+                    if ($img_path && is_file($img_path)) @unlink($img_path);
+                    $err = $e->getMessage();
+                }
             }
         }
         if (isset($_POST['delete_leadership'])) {
             require_permission($conn, 'landing_page', 'delete');
-            $lid = (int) $_POST['id'];
-            $conn->query("DELETE FROM leadership WHERE id=$lid");
-            $msg = 'Leadership entry deleted.';
+            $lid = (int) ($_POST['id'] ?? 0);
+            $old_l = $conn->query("SELECT id, image FROM leadership WHERE id=$lid")->fetch_assoc();
+            if (!$old_l) {
+                $err = 'Leadership entry not found.';
+            } else {
+                $conn->query("DELETE FROM leadership WHERE id=$lid");
+                if (!empty($old_l['image']) && is_file($old_l['image'])) {
+                    @unlink($old_l['image']);
+                }
+                $msg = 'Leadership entry deleted.';
+            }
         }
         if (isset($_POST['save_gallery'])) {
             $gid = (int) ($_POST['id'] ?? 0);
@@ -4985,52 +5539,88 @@ if ($db_exists && isset($_SESSION['user_id'])) {
             $desc = clean_text($_POST['description'] ?? '');
             $sort = (int) ($_POST['sort_order'] ?? 0);
             $img_path = null;
-            if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-                $img_path = handle_image_upload($_FILES['image']);
-            }
-            if ($gid) {
-                if ($img_path) {
-                    $st = $conn->prepare('UPDATE gallery SET title=?, description=?, sort_order=?, image=? WHERE id=?');
-                    $st->bind_param('ssisi', $title, $desc, $sort, $img_path, $gid);
-                } else {
-                    $st = $conn->prepare('UPDATE gallery SET title=?, description=?, sort_order=? WHERE id=?');
-                    $st->bind_param('ssii', $title, $desc, $sort, $gid);
+            if (isset($_FILES['image']) && !empty($_FILES['image']['name'])) {
+                if ($_FILES['image']['error'] === UPLOAD_ERR_OK) {
+                    $img_path = handle_image_upload($_FILES['image']);
                 }
-                $st->execute();
-                $msg = 'Gallery item updated.';
-            } else {
-                $st = $conn->prepare('INSERT INTO gallery (title, description, sort_order, image) VALUES (?,?,?,?)');
-                $st->bind_param('ssis', $title, $desc, $sort, $img_path);
-                $st->execute();
-                $msg = 'Gallery item added.';
+                if (!$img_path) {
+                    $err = 'Invalid gallery image file.';
+                }
+            }
+            if (!$err && !$gid && !$img_path) {
+                $err = 'An image is required when adding a new gallery item.';
+            }
+            if (!$err) {
+                try {
+                    if ($gid) {
+                        $old_g = $conn->query("SELECT id, image FROM gallery WHERE id=$gid")->fetch_assoc();
+                        if (!$old_g) throw new Exception('Gallery item not found.');
+                        if ($img_path) {
+                            $st = $conn->prepare('UPDATE gallery SET title=?, description=?, sort_order=?, image=? WHERE id=?');
+                            $st->bind_param('ssisi', $title, $desc, $sort, $img_path, $gid);
+                        } else {
+                            $st = $conn->prepare('UPDATE gallery SET title=?, description=?, sort_order=? WHERE id=?');
+                            $st->bind_param('ssii', $title, $desc, $sort, $gid);
+                        }
+                        $st->execute();
+                        if ($img_path && !empty($old_g['image']) && $old_g['image'] !== $img_path && is_file($old_g['image'])) {
+                            @unlink($old_g['image']);
+                        }
+                        $msg = 'Gallery item updated.';
+                    } else {
+                        $st = $conn->prepare('INSERT INTO gallery (title, description, sort_order, image) VALUES (?,?,?,?)');
+                        $st->bind_param('ssis', $title, $desc, $sort, $img_path);
+                        $st->execute();
+                        $msg = 'Gallery item added.';
+                    }
+                } catch (Throwable $e) {
+                    if ($img_path && is_file($img_path)) @unlink($img_path);
+                    $err = $e->getMessage();
+                }
             }
         }
         if (isset($_POST['delete_gallery'])) {
             require_permission($conn, 'landing_page', 'delete');
-            $gid = (int) $_POST['id'];
-            $conn->query("DELETE FROM gallery WHERE id=$gid");
-            $msg = 'Gallery item deleted.';
+            $gid = (int) ($_POST['id'] ?? 0);
+            $old_g = $conn->query("SELECT id, image FROM gallery WHERE id=$gid")->fetch_assoc();
+            if (!$old_g) {
+                $err = 'Gallery item not found.';
+            } else {
+                $conn->query("DELETE FROM gallery WHERE id=$gid");
+                if (!empty($old_g['image']) && is_file($old_g['image'])) {
+                    @unlink($old_g['image']);
+                }
+                $msg = 'Gallery item deleted.';
+            }
         }
         if (isset($_POST['update_request_status'])) {
             require_permission($conn, 'landing_page', 'edit');
-            $rid = (int) $_POST['id'];
-            $type = $_POST['type'];
-            $status = clean_text($_POST['status']);
+            $rid = (int) ($_POST['id'] ?? 0);
+            $type = (string) ($_POST['type'] ?? '');
+            $status = clean_text($_POST['status'] ?? '');
             $allowed_tables = ['bike' => 'bike_requests', 'quote' => 'quote_requests'];
             $allowed_statuses = [
                 'bike' => ['pending', 'contacted', 'fulfilled', 'cancelled'],
                 'quote' => ['pending', 'sent', 'accepted', 'rejected'],
             ];
             $table = $allowed_tables[$type] ?? null;
-            if ($table && in_array($status, $allowed_statuses[$type], true)) {
+            if ($rid > 0 && $table && in_array($status, $allowed_statuses[$type], true)) {
                 $rq_stmt = $conn->prepare("UPDATE $table SET status=? WHERE id=?");
                 $rq_stmt->bind_param('si', $status, $rid);
                 $rq_stmt->execute();
                 $rq_stmt->close();
+                $msg = 'Request status updated.';
+            } else {
+                $err = 'Invalid request or status.';
             }
-            $msg = 'Request status updated.';
         }
-        header('Location: index.php?page=landing_page&sub=' . ($_POST['sub'] ?? 'general') . '&msg=' . urlencode($msg));
+        $lp_sub = clean_text($_POST['sub'] ?? 'general', 30);
+        $lp_edit_q = '';
+        if ($err && !empty($_POST['id'])) {
+            if (isset($_POST['save_leadership'])) $lp_edit_q = '&edit_lid=' . (int) $_POST['id'];
+            elseif (isset($_POST['save_gallery'])) $lp_edit_q = '&edit_gid=' . (int) $_POST['id'];
+        }
+        header('Location: index.php?page=landing_page&sub=' . urlencode($lp_sub) . $lp_edit_q . '&msg=' . urlencode($msg) . '&err=' . urlencode($err));
         exit;
     }
     if ($page === 'inventory' && isset($_GET['export_csv']) && $_GET['export_csv'] == 1) {
@@ -5642,8 +6232,12 @@ document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('#sidebarToggle .toggle-label').forEach(function(el) { el.style.display = ''; });
     }
     const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('msg')) Toast.fire({ icon: 'success', title: urlParams.get('msg') });
-    if (urlParams.get('err')) Swal.fire({ title: 'Error!', text: urlParams.get('err'), icon: 'error', confirmButtonColor: '#d33' });
+    const fallbackMsg = <?= json_encode($msg ?? '') ?>;
+    const fallbackErr = <?= json_encode($err ?? '') ?>;
+    const activeMsg = urlParams.get('msg') || fallbackMsg;
+    const activeErr = urlParams.get('err') || fallbackErr;
+    if (activeMsg) Toast.fire({ icon: 'success', title: activeMsg });
+    if (activeErr) Swal.fire({ title: 'Error!', text: activeErr, icon: 'error', confirmButtonColor: '#d33' });
     if (urlParams.has('msg') || urlParams.has('err')) {
         urlParams.delete('msg');
         urlParams.delete('err');
@@ -5750,144 +6344,187 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     };
-    var forms = document.querySelectorAll('form');
-    forms.forEach(function(form) {
-        if (!form.hasAttribute('novalidate') && !form.classList.contains('no-validate')) { 
-            var validator = new JustValidate(form, {
-                errorFieldCssClass: 'just-validate-error-field',
-                errorLabelCssClass: 'just-validate-error-label',
-                focusInvalidField: true,
-                lockForm: true,
-            });
-            form.querySelectorAll('input[required], select[required], textarea[required]').forEach(function(input) {
-                validator.addField(input, [{ rule: 'required', errorMessage: 'This field is required' }]);
-            });
-            form.querySelectorAll('input[type="email"]').forEach(function(input) {
-                validator.addField(input, [{ rule: 'email', errorMessage: 'Enter a valid email' }]);
-            });
-            form.querySelectorAll('input[type="number"]').forEach(function(input) {
-                validator.addField(input, [{ rule: 'number', errorMessage: 'Must be a number' }]);
-                if (input.min) validator.addField(input, [{ rule: 'minNumber', value: parseFloat(input.min), errorMessage: 'Must be at least ' + input.min }]);
-                if (input.max) validator.addField(input, [{ rule: 'maxNumber', value: parseFloat(input.max), errorMessage: 'Must be at most ' + input.max }]);
-            });
-            form.querySelectorAll('input[minlength]').forEach(function(input) {
-                validator.addField(input, [{ rule: 'minLength', value: parseInt(input.minlength), errorMessage: 'Minimum ' + input.minlength + ' characters' }]);
-            });
-            form.querySelectorAll('input[maxlength]').forEach(function(input) {
-                validator.addField(input, [{ rule: 'maxLength', value: parseInt(input.maxlength), errorMessage: 'Maximum ' + input.maxlength + ' characters' }]);
-            });
-            if (form.querySelector('input[name="password"]') || form.querySelector('input[name="new_password"]')) {
-                validator.addField(form.querySelector('input[name="password"]') || form.querySelector('input[name="new_password"]'), [
-                    { rule: 'minLength', value: 8, errorMessage: 'Minimum 8 characters' },
-                    { rule: 'customRegexp', value: /^(?=.*[!@#$%^&*-])(?=.*[0-9])(?=.*[A-Za-z]).{8,}$/, errorMessage: 'Must include uppercase, lowercase, number, and special character' }
-                ]);
-            }
-            validator.onSuccess((event) => {
-                const form = event.target;
-                if (form.id === 'purchaseForm') {
-                    let missing = false;
-                    form.querySelectorAll('#bikesList input[required], #bikesList select[required], #bikesList textarea[required]').forEach(function(inp) {
-                        if (!inp.value || !inp.value.trim()) {
-                            missing = true;
-                            inp.classList.add('just-validate-error-field');
-                        } else {
-                            inp.classList.remove('just-validate-error-field');
+    function upgradeConfirmations(root) {
+        (root || document).querySelectorAll('[onclick*="return confirm"]').forEach(button => {
+            if (button.dataset.confirmUpgraded === '1') return;
+            let attr = button.getAttribute('onclick') || '';
+            let match = attr.match(/confirm\(['"]([^'"]+)['"]\)/);
+            let message = match ? match[1] : 'Are you sure?';
+            button.dataset.confirmUpgraded = '1';
+            button.removeAttribute('onclick');
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                Swal.fire({
+                    title: 'Confirm Action',
+                    text: message,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    cancelButtonColor: '#3085d6',
+                    confirmButtonText: 'Yes, proceed!',
+                    customClass: { popup: 'animate__animated animate__shakeX animate__faster' }
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        let form = button.closest('form');
+                        if (form) {
+                            if (button.name && !form.querySelector('input[name="' + button.name + '"]')) {
+                                let hidden = document.createElement('input');
+                                hidden.type = 'hidden';
+                                hidden.name = button.name;
+                                hidden.value = button.value || '1';
+                                form.appendChild(hidden);
+                            }
+                            if (!form.querySelector('input[name="csrf_token"]')) {
+                                let csrfInput = document.createElement('input');
+                                csrfInput.type = 'hidden';
+                                csrfInput.name = 'csrf_token';
+                                csrfInput.value = csrfToken;
+                                form.appendChild(csrfInput);
+                            }
+                            form.submit();
+                        } else if (button.tagName === 'A') {
+                            window.location.href = button.href;
                         }
-                    });
-                    if (missing) {
-                        Swal.fire('Error', 'Please fill all required bike fields.', 'error');
-                        return;
                     }
-                }
-                const btn = event.submitter;
-                if (btn && btn.name && !form.querySelector('input[name="' + btn.name + '"]')) {
-                    const hidden = document.createElement('input');
-                    hidden.type = 'hidden';
-                    hidden.name = btn.name;
-                    hidden.value = btn.value || '1';
-                    form.appendChild(hidden);
-                }
-                if (!form.querySelector('input[name="csrf_token"]')) {
-                    const csrfInput = document.createElement('input');
-                    csrfInput.type = 'hidden';
-                    csrfInput.name = 'csrf_token';
-                    csrfInput.value = csrfToken;
-                    form.appendChild(csrfInput);
-                }
-                if (form.classList.contains('ajax-form')) {
-                    const enteredNameInput = form.querySelector('[name="name"]') || form.querySelector('[name="model_name"]');
-                    const enteredName = enteredNameInput ? enteredNameInput.value : null;
-                    $.ajax({
-                        type: form.method || 'POST',
-                        url: form.action,
-                        data: new FormData(form),
-                        processData: false,
-                        contentType: false,
-                        success: function() {
-                            if (form.id === 'supplierForm') closeSupplierModal(enteredName);
-                            else if (form.id === 'modelForm') closeModelModal(enteredName);
-                            else if (form.id === 'customerForm') closeCustomerModal(enteredName);
-                            form.reset();
-                            Toast.fire({ icon: 'success', title: 'Added successfully!' });
-                        },
-                        error: function() {
-                            Swal.fire('Error', 'Failed to add. Please try again.', 'error');
-                        }
-                    });
-                } else {
-                    form.submit();
-                }
-            });
-        }
-    });
-    document.querySelectorAll('[onclick*="return confirm"]').forEach(button => {
-        let match = button.getAttribute('onclick').match(/confirm\(['"]([^'"]+)['"]\)/);
-        let message = match ? match[1] : 'Are you sure?';
-        button.removeAttribute('onclick');
-        button.addEventListener('click', function(e) {
-            e.preventDefault();
-            Swal.fire({
-                title: 'Confirm Action',
-                text: message,
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#d33',
-                cancelButtonColor: '#3085d6',
-                confirmButtonText: 'Yes, proceed!',
-                customClass: { popup: 'animate__animated animate__shakeX animate__faster' }
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    let form = button.closest('form');
-                    if (form) {
-                        if (button.name) {
-                            let hidden = document.createElement('input');
-                            hidden.type = 'hidden';
-                            hidden.name = button.name;
-                            hidden.value = button.value || '1';
-                            form.appendChild(hidden);
-                        }
-                        if (!form.querySelector('input[name="csrf_token"]')) {
-                            let csrfInput = document.createElement('input');
-                            csrfInput.type = 'hidden';
-                            csrfInput.name = 'csrf_token';
-                            csrfInput.value = csrfToken;
-                            form.appendChild(csrfInput);
-                        }
-                        form.submit();
-                    } else if (button.tagName === 'A') {
-                        window.location.href = button.href;
-                    }
-                }
+                });
             });
         });
-    });
-    document.querySelectorAll('form[onsubmit*="confirm"], form[data-confirm-message]').forEach(form => {
-        if (!form.dataset.confirmMessage) {
-            const attr = form.getAttribute('onsubmit') || '';
-            const match = attr.match(/confirm\(['"]([^'"]+)['"]\)/);
-            form.dataset.confirmMessage = match ? match[1] : 'Are you sure?';
-        }
-        form.removeAttribute('onsubmit');
+        (root || document).querySelectorAll('form[onsubmit*="confirm"], form[data-confirm-message]').forEach(form => {
+            if (!form.dataset.confirmMessage) {
+                const attr = form.getAttribute('onsubmit') || '';
+                const match = attr.match(/confirm\(([\s\S]*)\)/);
+                let extracted = 'Are you sure?';
+                if (match && match[1]) {
+                    try {
+                        extracted = JSON.parse(match[1]);
+                    } catch (err) {
+                        const m2 = attr.match(/confirm\(['"]([^'"]+)['"]\)/);
+                        if (m2) extracted = m2[1];
+                    }
+                }
+                form.dataset.confirmMessage = extracted;
+            }
+            form.removeAttribute('onsubmit');
+        });
+    }
+    upgradeConfirmations(document);
+    $(document).on('draw.dt responsive-display.dt', function() { upgradeConfirmations(document); });
+
+    var forms = document.querySelectorAll('form');
+    forms.forEach(function(form) {
+        if (form.id === 'loginForm') return;
+        if ((form.method || 'GET').toUpperCase() !== 'POST') return;
+        if (form.hasAttribute('novalidate') || form.classList.contains('no-validate') || form.dataset.confirmMessage) return;
+        const editableInputs = form.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]), select, textarea');
+        if (editableInputs.length === 0) return;
+
+        var validator = new JustValidate(form, {
+            errorFieldCssClass: 'just-validate-error-field',
+            errorLabelCssClass: 'just-validate-error-label',
+            focusInvalidField: true,
+            lockForm: false,
+        });
+        editableInputs.forEach(function(input) {
+            if (input.name === 'backup_file') return;
+            var rules = [];
+            var isPasswordField = (input.name === 'password' || input.name === 'new_password');
+            if (input.required) {
+                rules.push({
+                    rule: 'required',
+                    errorMessage: 'This field is required'
+                });
+            }
+            if (input.type === 'email') {
+                rules.push({ rule: 'email', errorMessage: 'Enter a valid email' });
+            }
+            if (input.type === 'number') {
+                rules.push({ rule: 'number', errorMessage: 'Must be a number' });
+                var minAttr = input.getAttribute('min');
+                var maxAttr = input.getAttribute('max');
+                if (minAttr !== null && minAttr !== '' && !isNaN(parseFloat(minAttr))) {
+                    rules.push({ rule: 'minNumber', value: parseFloat(minAttr), errorMessage: 'Must be at least ' + minAttr });
+                }
+                if (maxAttr !== null && maxAttr !== '' && !isNaN(parseFloat(maxAttr))) {
+                    rules.push({ rule: 'maxNumber', value: parseFloat(maxAttr), errorMessage: 'Must be at most ' + maxAttr });
+                }
+            }
+            var minLenAttr = input.getAttribute('minlength');
+            if (minLenAttr !== null && minLenAttr !== '' && !isNaN(parseInt(minLenAttr, 10)) && !isPasswordField) {
+                rules.push({ rule: 'minLength', value: parseInt(minLenAttr, 10), errorMessage: 'Minimum ' + minLenAttr + ' characters' });
+            }
+            var maxLenAttr = input.getAttribute('maxlength');
+            if (maxLenAttr !== null && maxLenAttr !== '' && !isNaN(parseInt(maxLenAttr, 10))) {
+                rules.push({ rule: 'maxLength', value: parseInt(maxLenAttr, 10), errorMessage: 'Maximum ' + maxLenAttr + ' characters' });
+            }
+            if (isPasswordField) {
+                rules.push({
+                    validator: function(value) {
+                        if (!value && !input.required) return true;
+                        return /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*\-]).{8,}$/.test(value || '');
+                    },
+                    errorMessage: 'Min 8 chars with uppercase, lowercase, number, and special character'
+                });
+            }
+            if (rules.length > 0) {
+                validator.addField(input, rules);
+            }
+        });
+        validator.onSuccess((event) => {
+            const targetForm = (event && event.target) ? event.target : form;
+            if (targetForm.id === 'purchaseForm') {
+                let missing = false;
+                targetForm.querySelectorAll('#bikesList input[required], #bikesList select[required], #bikesList textarea[required]').forEach(function(inp) {
+                    if (!inp.value || !inp.value.trim()) {
+                        missing = true;
+                        inp.classList.add('just-validate-error-field');
+                    } else {
+                        inp.classList.remove('just-validate-error-field');
+                    }
+                });
+                if (missing) {
+                    Swal.fire('Error', 'Please fill all required bike fields.', 'error');
+                    return;
+                }
+            }
+            const btn = event ? event.submitter : null;
+            if (btn && btn.name && !targetForm.querySelector('input[name="' + btn.name + '"]')) {
+                const hidden = document.createElement('input');
+                hidden.type = 'hidden';
+                hidden.name = btn.name;
+                hidden.value = btn.value || '1';
+                targetForm.appendChild(hidden);
+            }
+            if (!targetForm.querySelector('input[name="csrf_token"]')) {
+                const csrfInput = document.createElement('input');
+                csrfInput.type = 'hidden';
+                csrfInput.name = 'csrf_token';
+                csrfInput.value = csrfToken;
+                targetForm.appendChild(csrfInput);
+            }
+            if (targetForm.classList.contains('ajax-form')) {
+                const enteredNameInput = targetForm.querySelector('[name="name"]') || targetForm.querySelector('[name="model_name"]');
+                const enteredName = enteredNameInput ? enteredNameInput.value : null;
+                $.ajax({
+                    type: targetForm.method || 'POST',
+                    url: targetForm.action,
+                    data: new FormData(targetForm),
+                    processData: false,
+                    contentType: false,
+                    success: function() {
+                        if (targetForm.id === 'supplierForm') closeSupplierModal(enteredName);
+                        else if (targetForm.id === 'modelForm') closeModelModal(enteredName);
+                        else if (targetForm.id === 'customerForm') closeCustomerModal(enteredName);
+                        targetForm.reset();
+                        Toast.fire({ icon: 'success', title: 'Added successfully!' });
+                    },
+                    error: function() {
+                        Swal.fire('Error', 'Failed to add. Please try again.', 'error');
+                    }
+                });
+            } else {
+                targetForm.submit();
+            }
+        });
     });
     const pendingConfirmations = new WeakSet();
     const confirmedSubmissions = new WeakSet();
@@ -6412,7 +7049,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <thead><tr><th>Date</th><th>Branch</th><th>Chassis</th><th>Model</th><th>Price</th><th>Margin</th></tr></thead>
 <tbody>
 <?php
-        $recent_sales = $conn->query("SELECT b.chassis_number, b.selling_date, b.selling_price, b.margin, b.branch_id, m.model_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.selling_date IS NOT NULL $b_and_b ORDER BY b.selling_date DESC LIMIT 10");
+        $recent_sales = $conn->query("SELECT b.chassis_number, b.selling_date, b.selling_price, b.margin, b.branch_id, m.model_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.status='sold' AND b.selling_date IS NOT NULL $b_and_b ORDER BY b.selling_date DESC LIMIT 10");
         while ($rs = $recent_sales->fetch_assoc()):
             ?>
 <tr class="row-sold">
@@ -6468,7 +7105,7 @@ document.addEventListener('DOMContentLoaded', function() {
 ?>
 <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap" class="no-print animate__animated animate__fadeInLeft">
     <?php if (has_permission($conn, 'branches', 'add')): ?>
-    <button class="btn btn-success" onclick="document.getElementById('branchFormBox').style.display='block';document.getElementById('branchFormBox').scrollIntoView()">+ Add New Branch</button>
+    <button class="btn btn-success" onclick="<?= $edit_br ? "window.location.href='index.php?page=branches'" : "document.getElementById('branchFormBox').style.display='block';document.getElementById('branchFormBox').scrollIntoView()" ?>">+ Add New Branch</button>
     <?php endif; ?>
     <?php if (has_permission($conn, 'branch_transfers', 'view')): ?>
     <a href="index.php?page=branch_transfers" class="btn btn-primary">🔄 Inter-Branch Stock & Fund Transfers</a>
@@ -6500,7 +7137,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 <div style="display:flex;gap:8px">
     <button type="submit" class="btn btn-primary">💾 Save Branch</button>
-    <button type="button" class="btn btn-default" onclick="document.getElementById('branchFormBox').style.display='none'">Cancel</button>
+    <button type="button" class="btn btn-default" onclick="<?= $edit_br ? "window.location.href='index.php?page=branches'" : "document.getElementById('branchFormBox').style.display='none'" ?>">Cancel</button>
 </div>
 </form>
 </fieldset>
@@ -6894,11 +7531,12 @@ function loadSourceBranchBikes(branchId) {
 <fieldset class="fieldset animate__animated animate__fadeInUp"><legend>📋 Inter-Branch Fund Transfer Register</legend>
 <div class="data-table-wrap">
 <table class="data-table">
-<thead><tr><th>Ref #</th><th>Date</th><th>From Branch</th><th>To Branch</th><th>Amount</th><th>Method</th><th>Bank/Txn Ref</th><th>Notes</th></tr></thead>
+<thead><tr><th>Ref #</th><th>Date</th><th>From Branch</th><th>To Branch</th><th>Amount</th><th>Method</th><th>Bank/Txn Ref</th><th>Status</th><th>Notes</th><th class="no-sort">Actions</th></tr></thead>
 <tbody>
 <?php
         $f_trs = $conn->query("SELECT bct.*, fb.branch_code AS from_code, fb.name AS from_name, tb.branch_code AS to_code, tb.name AS to_name FROM branch_cash_transfers bct LEFT JOIN branches fb ON bct.from_branch_id=fb.id LEFT JOIN branches tb ON bct.to_branch_id=tb.id ORDER BY bct.id DESC");
         while ($ftr = $f_trs->fetch_assoc()):
+            $ftr_status = $ftr['status'] ?? 'completed';
 ?>
 <tr>
 <td><code><?= sanitize($ftr['transfer_no']) ?></code></td>
@@ -6908,7 +7546,21 @@ function loadSourceBranchBikes(branchId) {
 <td><strong><?= fmt_money($ftr['amount']) ?></strong></td>
 <td><?= strtoupper(str_replace('_', ' ', sanitize($ftr['payment_method']))) ?></td>
 <td><?= sanitize($ftr['reference_no'] ?: '-') ?></td>
+<td><span class="badge badge-<?= $ftr_status === 'completed' ? 'success' : 'danger' ?>"><?= strtoupper(sanitize($ftr_status)) ?></span></td>
 <td><?= sanitize($ftr['notes'] ?: '-') ?></td>
+<td class="no-print">
+    <?php if ($ftr_status !== 'cancelled' && has_permission($conn, 'branch_transfers', 'delete')): ?>
+    <form method="POST" action="index.php?page=branch_transfers" style="display:inline" data-confirm-message="Reverse this inter-branch fund transfer and remove its paired income/expense entries?">
+        <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+        <input type="hidden" name="cancel_cash_transfer" value="1">
+        <input type="hidden" name="sub" value="funds">
+        <input type="hidden" name="transfer_id" value="<?= (int) $ftr['id'] ?>">
+        <button type="submit" class="btn btn-danger btn-sm">↩ Reverse</button>
+    </form>
+    <?php else: ?>
+    <span style="color:var(--text3)">—</span>
+    <?php endif; ?>
+</td>
 </tr>
 <?php endwhile; ?>
 </tbody>
@@ -8264,7 +8916,7 @@ function calculateAccessoryPrice(index) {
     var quantity = parseInt(document.querySelector(`#accessoryRow_${index} input[name="selected_accessories[${index}][quantity]"]`).value) || 0;
     var unitPrice = parseFloat(document.querySelector(`#accessoryRow_${index} input[name="selected_accessories[${index}][unit_price]"]`).value) || 0;
     var discount = parseFloat(document.querySelector(`#accessoryRow_${index} input[name="selected_accessories[${index}][discount]"]`).value) || 0;
-    var finalPrice = (quantity * unitPrice) - discount;
+    var finalPrice = Math.max(0, (quantity * unitPrice) - discount);
     document.querySelector(`#accessoryRow_${index} input[name="selected_accessories[${index}][final_price]"]`).value = finalPrice.toFixed(2);
     calcRemainingBalance();
 }
@@ -9341,7 +9993,7 @@ while ($d = $dest_q->fetch_assoc()):
 </fieldset>
 <?php
         elseif ($sub === 'sold'):
-            $sold_bikes_r = $conn->query("SELECT b.*, m.model_name, m.short_code, c.name as cust_name, COALESCE((SELECT SUM(sa.final_price) FROM sale_accessories sa WHERE sa.bike_id=b.id),0) AS acc_total FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id WHERE b.selling_date IS NOT NULL $rep_b_and_b AND b.selling_date BETWEEN '" . mysqli_real_escape_string($conn, $rep_from) . "' AND '" . mysqli_real_escape_string($conn, $rep_to) . "' ORDER BY b.selling_date DESC");
+            $sold_bikes_r = $conn->query("SELECT b.*, m.model_name, m.short_code, c.name as cust_name, COALESCE((SELECT SUM(sa.final_price) FROM sale_accessories sa WHERE sa.bike_id=b.id),0) AS acc_total FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id WHERE b.status='sold' AND b.selling_date IS NOT NULL $rep_b_and_b AND b.selling_date BETWEEN '" . mysqli_real_escape_string($conn, $rep_from) . "' AND '" . mysqli_real_escape_string($conn, $rep_to) . "' ORDER BY b.selling_date DESC");
             $sold_total_sp = 0;
             $sold_total_pp = 0;
             $sold_total_mg = 0;
@@ -9433,7 +10085,7 @@ while ($d = $dest_q->fetch_assoc()):
 </tr>
 <?php endwhile; ?>
 </tbody>
-<tfoot><tr><td><strong>TOTAL</strong></td><td colspan="3"><strong><?= $mw_t[0] ?></strong></td><td><strong><?= $mw_t[1] ?></strong></td><td><strong><?= $mw_t[2] ?></strong></td><td><strong><?= $mw_t[3] ?></strong></td><td><strong><?= $mw_t[7] ?? 0 ?></strong></td><td><strong><?= fmt_money($mw_t[4]) ?></strong></td><td><strong><?= fmt_money($mw_t[5]) ?></strong></td><td style="color:var(--success)"><strong><?= fmt_money($mw_t[6]) ?></strong></td></tr></tfoot>
+<tfoot><tr><td colspan="3"><strong>TOTAL</strong></td><td><strong><?= $mw_t[0] ?></strong></td><td><strong><?= $mw_t[1] ?></strong></td><td><strong><?= $mw_t[2] ?></strong></td><td><strong><?= $mw_t[3] ?></strong></td><td><strong><?= $mw_t[7] ?? 0 ?></strong></td><td><strong><?= fmt_money($mw_t[4]) ?></strong></td><td><strong><?= fmt_money($mw_t[5]) ?></strong></td><td style="color:var(--success)"><strong><?= fmt_money($mw_t[6]) ?></strong></td></tr></tfoot>
 </table>
 </div>
 </fieldset>
@@ -9589,7 +10241,7 @@ while ($d = $dest_q->fetch_assoc()):
 <?php
         elseif ($sub === 'daily'):
             $daily_date = valid_date($_GET['daily_date'] ?? '', true) && !empty($_GET['daily_date']) ? $_GET['daily_date'] : date('Y-m-d');
-            $daily_sales = $conn->query("SELECT b.*, m.model_name, c.name as cust_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id WHERE b.selling_date='" . mysqli_real_escape_string($conn, $daily_date) . "' AND b.selling_date IS NOT NULL $rep_b_and_b");
+            $daily_sales = $conn->query("SELECT b.*, m.model_name, c.name as cust_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id WHERE b.status='sold' AND b.selling_date='" . mysqli_real_escape_string($conn, $daily_date) . "' $rep_b_and_b");
             $daily_purch = $conn->query("SELECT b.*, m.model_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.inventory_date='" . mysqli_real_escape_string($conn, $daily_date) . "' $rep_b_and_b");
             $daily_expenses = $conn->query("SELECT * FROM income_expenses WHERE entry_date='" . mysqli_real_escape_string($conn, $daily_date) . "' AND type='expense' $rep_b_and_plain");
             $daily_income_other = $conn->query("SELECT * FROM income_expenses WHERE entry_date='" . mysqli_real_escape_string($conn, $daily_date) . "' AND type='income' $rep_b_and_plain");
@@ -9869,7 +10521,7 @@ while ($d = $dest_q->fetch_assoc()):
                 FROM bikes b
                 LEFT JOIN models m ON b.model_id=m.id
                 LEFT JOIN customers c ON b.customer_id=c.id
-                WHERE b.selling_date IS NOT NULL $rep_b_and_b AND b.selling_date BETWEEN '" . mysqli_real_escape_string($conn, $rep_from) . "' AND '" . mysqli_real_escape_string($conn, $rep_to) . "'
+                WHERE b.status='sold' AND b.selling_date IS NOT NULL $rep_b_and_b AND b.selling_date BETWEEN '" . mysqli_real_escape_string($conn, $rep_from) . "' AND '" . mysqli_real_escape_string($conn, $rep_to) . "'
                 ORDER BY b.selling_date DESC");
 ?>
 <fieldset class="fieldset animate__animated animate__fadeInUp"><legend>🧾 Money by Sale (<?= fmt_date($rep_from) ?> - <?= fmt_date($rep_to) ?>)</legend>
@@ -9921,7 +10573,7 @@ while ($d = $dest_q->fetch_assoc()):
                 FROM bikes b
                 LEFT JOIN models m ON b.model_id=m.id
                 LEFT JOIN customers c ON b.customer_id=c.id
-                WHERE b.selling_date IS NOT NULL $rep_b_and_b
+                WHERE b.status='sold' AND b.selling_date IS NOT NULL $rep_b_and_b
                 HAVING (b.selling_price + acc_total) > total_allocated
                 ORDER BY (b.selling_price + acc_total - total_allocated) DESC");
             $mu_total_gap = 0;
@@ -10083,7 +10735,7 @@ while ($d = $dest_q->fetch_assoc()):
         ?>
 <div style="display:flex;gap:8px;margin-bottom:10px" class="no-print animate__animated animate__fadeInLeft">
 <?php if (has_permission($conn, 'models', 'add')): ?>
-<button class="btn btn-success" onclick="document.getElementById('addModelFormArea').style.display='block';document.getElementById('addModelFormArea').scrollIntoView()">+ Add Model</button>
+<button class="btn btn-success" onclick="<?= $edit_model ? "window.location.href='index.php?page=models'" : "document.getElementById('addModelFormArea').style.display='block';document.getElementById('addModelFormArea').scrollIntoView()" ?>">+ Add Model</button>
 <?php endif; ?>
 </div>
 <div id="addModelFormArea" style="display:<?= $edit_model ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
@@ -10103,7 +10755,7 @@ while ($d = $dest_q->fetch_assoc()):
 <div class="form-group"><label>Image (Optional)</label><input type="file" name="image" accept="image/*" style="padding:4px"></div>
 </div>
 <button type="submit" class="btn btn-primary">💾 Save</button>
-<button type="button" class="btn btn-default" onclick="document.getElementById('addModelFormArea').style.display='none'">Cancel</button>
+<button type="button" class="btn btn-default" onclick="<?= $edit_model ? "window.location.href='index.php?page=models'" : "document.getElementById('addModelFormArea').style.display='none'" ?>">Cancel</button>
 </form>
 </fieldset>
 </div>
@@ -10197,7 +10849,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 <div style="display:flex;gap:8px;margin-bottom:10px" class="no-print animate__animated animate__fadeInLeft">
 <?php if (has_permission($conn, 'accessories', 'add')): ?>
-<button class="btn btn-success" onclick="document.getElementById('addAccFormArea').style.display='block';document.getElementById('addAccFormArea').scrollIntoView()">+ Add Accessory</button>
+<button class="btn btn-success" onclick="<?= $edit_acc ? "window.location.href='index.php?page=accessories'" : "document.getElementById('addAccFormArea').style.display='block';document.getElementById('addAccFormArea').scrollIntoView()" ?>">+ Add Accessory</button>
 <?php endif; ?>
 <?php if (has_permission($conn, 'branch_transfers', 'add')): ?>
 <a href="index.php?page=branch_transfers&sub=accessories" class="btn btn-info">🔄 Transfer Accessory Stock</a>
@@ -10225,7 +10877,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <div class="form-group"><label>Current Stock <span class="req">*</span></label><input type="number" name="current_stock" min="0" value="<?= $edit_acc['current_stock'] ?? '0' ?>" required></div>
 </div>
 <button type="submit" class="btn btn-primary">💾 Save</button>
-<button type="button" class="btn btn-default" onclick="document.getElementById('addAccFormArea').style.display='none'">Cancel</button>
+<button type="button" class="btn btn-default" onclick="<?= $edit_acc ? "window.location.href='index.php?page=accessories'" : "document.getElementById('addAccFormArea').style.display='none'" ?>">Cancel</button>
 </form>
 </fieldset>
 </div>
@@ -10269,14 +10921,15 @@ document.addEventListener('DOMContentLoaded', function() {
             $eq = $conn->query("SELECT * FROM quotations WHERE id=$edit_quote_id");
             $edit_quote = $eq ? $eq->fetch_assoc() : null;
         }
+        $edit_quote_bike_id = (int) ($edit_quote['bike_id'] ?? 0);
         $customers_list_q = $conn->query('SELECT id, name, phone, cnic, is_filer, address FROM customers ORDER BY name');
-        $bikes_list_q = $conn->query("SELECT b.id, b.chassis_number, m.model_name, b.color, b.purchase_price, m.category FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.status='in_stock' $b_and_b ORDER BY b.chassis_number");
-        $accessories_list_q = $conn->query("SELECT id, name, selling_price, current_stock FROM accessories WHERE current_stock > 0 $b_and_plain ORDER BY name");
+        $bikes_list_q = $conn->query("SELECT b.id, b.chassis_number, m.model_name, b.color, b.purchase_price, m.category FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE (b.status IN ('in_stock','returned') $b_and_b)" . ($edit_quote_bike_id > 0 ? " OR b.id=$edit_quote_bike_id" : "") . " ORDER BY b.chassis_number");
+        $accessories_list_q = $conn->query("SELECT id, name, selling_price, current_stock FROM accessories WHERE 1=1 $b_and_plain ORDER BY name");
         $default_quote_branch = (int) ($edit_quote['branch_id'] ?? get_write_branch_id($conn));
 ?>
 <div style="display:flex;gap:8px;margin-bottom:10px" class="no-print animate__animated animate__fadeInLeft">
 <?php if (has_permission($conn, 'quotations', 'add')): ?>
-<button class="btn btn-success" onclick="document.getElementById('addQuoteFormArea').style.display='block';document.getElementById('addQuoteFormArea').scrollIntoView()">+ Create Quotation</button>
+<button class="btn btn-success" onclick="<?= $edit_quote ? "window.location.href='index.php?page=quotations'" : "document.getElementById('addQuoteFormArea').style.display='block';document.getElementById('addQuoteFormArea').scrollIntoView()" ?>">+ Create Quotation</button>
 <?php endif; ?>
 </div>
 <div id="addQuoteFormArea" style="display:<?= $edit_quote ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
@@ -10354,12 +11007,21 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="form-group" style="flex:2"><label>Accessory <span class="req">*</span></label>
                         <select name="accessories[<?= $q_acc_count ?>][id]" required class="select2-enable" onchange="updateQuoteAccessoryDetails(this, <?= $q_acc_count ?>)">
                             <option value="">-- Select Accessory --</option>
-                            <?php $accessories_list_q->data_seek(0);
-                            while ($acc_opt = $accessories_list_q->fetch_assoc()): ?>
-                                <option value="<?= $acc_opt['id'] ?>" data-price="<?= $acc_opt['selling_price'] ?>" data-stock="<?= $acc_opt['current_stock'] ?>" <?= ($selected_acc_id == $acc_opt['id']) ? 'selected' : '' ?>>
+                            <?php
+                            $accessories_list_q->data_seek(0);
+                            $found_q_acc = false;
+                            while ($acc_opt = $accessories_list_q->fetch_assoc()):
+                                $is_sel_acc = ((string) $selected_acc_id !== '' && (string) $selected_acc_id === (string) $acc_opt['id']);
+                                if ($is_sel_acc) $found_q_acc = true;
+                                if ((int) $acc_opt['current_stock'] <= 0 && !$is_sel_acc) continue;
+                            ?>
+                                <option value="<?= $acc_opt['id'] ?>" data-price="<?= $acc_opt['selling_price'] ?>" data-stock="<?= $acc_opt['current_stock'] ?>" <?= $is_sel_acc ? 'selected' : '' ?>>
                                     <?= sanitize($acc_opt['name']) ?> (Stock: <?= $acc_opt['current_stock'] ?>)
                                 </option>
-                            <?php endwhile; ?>
+                            <?php endwhile;
+                            if (!$found_q_acc && (string) $selected_acc_id !== ''): ?>
+                                <option value="<?= sanitize($selected_acc_id) ?>" data-price="<?= (float) $unit_p ?>" data-stock="0" selected><?= sanitize($selected_acc_id) ?> (Custom)</option>
+                            <?php endif; ?>
                         </select>
                         <span id="quoteAccStock_<?= $q_acc_count ?>" style="font-size:0.75rem;color:var(--text3)"></span>
                     </div>
@@ -10378,7 +11040,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </fieldset>
 <div class="form-group"><label>Notes</label><textarea name="notes" rows="2"><?= sanitize($edit_quote['notes'] ?? '') ?></textarea></div>
 <button type="submit" class="btn btn-primary">💾 Save Quotation</button>
-<button type="button" class="btn btn-default" onclick="document.getElementById('addQuoteFormArea').style.display='none'">Cancel</button>
+<button type="button" class="btn btn-default" onclick="<?= $edit_quote ? "window.location.href='index.php?page=quotations'" : "document.getElementById('addQuoteFormArea').style.display='none'" ?>">Cancel</button>
 </form>
 </fieldset>
 </div>
@@ -10610,7 +11272,7 @@ function calculateQuoteAccessoryPrice(index) {
     var quantity = parseInt(document.querySelector(`#quoteAccessoryRow_${index} input[name="accessories[${index}][quantity]"]`).value) || 0;
     var unitPrice = parseFloat(document.querySelector(`#quoteAccessoryRow_${index} input[name="accessories[${index}][unit_price]"]`).value) || 0;
     var discount = parseFloat(document.querySelector(`#quoteAccessoryRow_${index} input[name="accessories[${index}][discount]"]`).value) || 0;
-    var finalPrice = (quantity * unitPrice) - discount;
+    var finalPrice = Math.max(0, (quantity * unitPrice) - discount);
     document.querySelector(`#quoteAccessoryRow_${index} input[name="accessories[${index}][final_price]"]`).value = finalPrice.toFixed(2);
     calcQuoteInstallment();
 }
@@ -10703,7 +11365,7 @@ function showQuoteBikeDetails(sel) {
 <button type="submit" class="btn btn-default btn-sm">🔍</button>
 </form>
 <?php if (has_permission($conn, 'customers', 'add')): ?>
-<button class="btn btn-success" onclick="document.getElementById('addCustFormArea').style.display='block';document.getElementById('addCustFormArea').scrollIntoView()">+ Add Customer</button>
+<button class="btn btn-success" onclick="<?= $edit_cust ? "window.location.href='index.php?page=customers'" : "document.getElementById('addCustFormArea').style.display='block';document.getElementById('addCustFormArea').scrollIntoView()" ?>">+ Add Customer</button>
 <?php endif; ?>
 </div>
 <div id="addCustFormArea" style="display:<?= $edit_cust ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
@@ -10730,7 +11392,7 @@ function showQuoteBikeDetails(sel) {
 <div class="form-group"><label>Address</label><textarea name="address" rows="2"><?= sanitize($edit_cust['address'] ?? '') ?></textarea></div>
 </div>
 <button type="submit" class="btn btn-primary">💾 Save</button>
-<button type="button" class="btn btn-default" onclick="document.getElementById('addCustFormArea').style.display='none'">Cancel</button>
+<button type="button" class="btn btn-default" onclick="<?= $edit_cust ? "window.location.href='index.php?page=customers'" : "document.getElementById('addCustFormArea').style.display='none'" ?>">Cancel</button>
 </form>
 </fieldset>
 </div>
@@ -10781,7 +11443,7 @@ function showQuoteBikeDetails(sel) {
 ?>
 <div style="display:flex;gap:8px;margin-bottom:10px" class="no-print animate__animated animate__fadeInLeft">
 <?php if (has_permission($conn, 'suppliers', 'add')): ?>
-<button class="btn btn-success" onclick="document.getElementById('addSupFormArea').style.display='block';document.getElementById('addSupFormArea').scrollIntoView()">+ Add Supplier</button>
+<button class="btn btn-success" onclick="<?= $edit_sup ? "window.location.href='index.php?page=suppliers'" : "document.getElementById('addSupFormArea').style.display='block';document.getElementById('addSupFormArea').scrollIntoView()" ?>">+ Add Supplier</button>
 <?php endif; ?>
 </div>
 <div id="addSupFormArea" style="display:<?= $edit_sup ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
@@ -10804,7 +11466,7 @@ function showQuoteBikeDetails(sel) {
 <div class="form-group"><label>Address</label><textarea name="address" rows="2"><?= sanitize($edit_sup['address'] ?? '') ?></textarea></div>
 </div>
 <button type="submit" class="btn btn-primary">💾 Save</button>
-<button type="button" class="btn btn-default" onclick="document.getElementById('addSupFormArea').style.display='none'">Cancel</button>
+<button type="button" class="btn btn-default" onclick="<?= $edit_sup ? "window.location.href='index.php?page=suppliers'" : "document.getElementById('addSupFormArea').style.display='none'" ?>">Cancel</button>
 </form>
 </fieldset>
 </div>
@@ -10867,12 +11529,12 @@ function showQuoteBikeDetails(sel) {
 ?>
 <div style="display:flex;gap:8px;margin-bottom:10px" class="no-print animate__animated animate__fadeInLeft">
     <?php if (has_permission($conn, 'roles', 'add')): ?>
-    <button class="btn btn-success" onclick="document.getElementById('roleForm').style.display='block';document.getElementById('roleForm').scrollIntoView()">+ Add Role</button>
+    <button class="btn btn-success" onclick="<?= $edit_role ? "window.location.href='index.php?page=roles'" : "document.getElementById('roleForm').style.display='block';document.getElementById('roleForm').scrollIntoView()" ?>">+ Add Role</button>
     <?php endif; ?>
 </div>
 <div id="roleForm" style="display:<?= $edit_role ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
 <fieldset class="fieldset"><legend><?= $edit_role ? '✏ Edit Role' : ' + Add New Role' ?></legend>
-<form id="editRoleForm" method="POST">
+<form id="editRoleForm" method="POST" action="index.php?page=roles">
 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="id" value="<?= $edit_role['id'] ?? 0 ?>">
 <input type="hidden" name="save_role" value="1">
@@ -10899,7 +11561,7 @@ function showQuoteBikeDetails(sel) {
 </table>
 </div>
 <button type="submit" class="btn btn-primary" style="margin-top:10px">💾 Save Role</button>
-<button type="button" class="btn btn-default" onclick="document.getElementById('roleForm').style.display='none'">Cancel</button>
+<button type="button" class="btn btn-default" onclick="<?= $edit_role ? "window.location.href='index.php?page=roles'" : "document.getElementById('roleForm').style.display='none'" ?>">Cancel</button>
 </form>
 </fieldset>
 </div>
@@ -10945,12 +11607,12 @@ function showQuoteBikeDetails(sel) {
 ?>
 <div style="display:flex;gap:8px;margin-bottom:10px" class="no-print animate__animated animate__fadeInLeft">
     <?php if (has_permission($conn, 'users', 'add')): ?>
-    <button class="btn btn-success" onclick="document.getElementById('userForm').style.display='block';document.getElementById('userForm').scrollIntoView()">+ Add User</button>
+    <button class="btn btn-success" onclick="<?= $edit_user ? "window.location.href='index.php?page=users'" : "document.getElementById('userForm').style.display='block';document.getElementById('userForm').scrollIntoView()" ?>">+ Add User</button>
     <?php endif; ?>
 </div>
 <div id="userForm" style="display:<?= $edit_user ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
 <fieldset class="fieldset"><legend><?= $edit_user ? '✏ Edit User' : ' + Add New User' ?></legend>
-<form id="editUserForm" method="POST">
+<form id="editUserForm" method="POST" action="index.php?page=users">
 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="id" value="<?= $edit_user['id'] ?? 0 ?>">
 <input type="hidden" name="save_user" value="1">
@@ -10981,7 +11643,7 @@ function showQuoteBikeDetails(sel) {
 </div>
 <div style="font-size:0.78rem;color:var(--text2)">Strong password: min 8 chars, must include at least one uppercase letter, one lowercase letter, one number, and one special character. Leave empty to keep the current password unchanged.</div>
 <button type="submit" class="btn btn-primary" style="margin-top:10px">💾 Save User</button>
-<button type="button" class="btn btn-default" onclick="document.getElementById('userForm').style.display='none'">Cancel</button>
+<button type="button" class="btn btn-default" onclick="<?= $edit_user ? "window.location.href='index.php?page=users'" : "document.getElementById('userForm').style.display='none'" ?>">Cancel</button>
 </form>
 </fieldset>
 </div>
@@ -11178,7 +11840,7 @@ function showQuoteBikeDetails(sel) {
     <a href="index.php?page=income_expense" class="btn btn-default">Reset</a>
     </form>
     <?php if (has_permission($conn, 'income_expense', 'add')): ?>
-    <button class="btn btn-success" onclick="document.getElementById('ieForm').style.display='block';document.getElementById('ieForm').scrollIntoView()">+ Add Entry</button>
+    <button class="btn btn-success" onclick="<?= $edit_entry ? "window.location.href='index.php?page=income_expense'" : "document.getElementById('ieForm').style.display='block';document.getElementById('ieForm').scrollIntoView()" ?>">+ Add Entry</button>
     <?php endif; ?>
 </div>
 <?php if ($include_sales): ?>
@@ -11238,7 +11900,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 <div id="ieForm" style="display:<?= $edit_entry ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
 <fieldset class="fieldset"><legend><?= $edit_entry ? '✏ Edit' : ' + Add' ?> Income/Expense</legend>
-<form id="ieEntryForm" method="POST">
+<form id="ieEntryForm" method="POST" action="index.php?page=income_expense">
 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="id" value="<?= $edit_entry['id'] ?? 0 ?>">
 <input type="hidden" name="save_entry" value="1">
@@ -11267,7 +11929,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 <div class="form-row"><div class="form-group"><label>Notes</label><textarea name="notes" rows="2"><?= sanitize($edit_entry['notes'] ?? '') ?></textarea></div></div>
 <button type="submit" class="btn btn-primary">💾 Save</button>
-<button type="button" class="btn btn-default" onclick="document.getElementById('ieForm').style.display='none'">Cancel</button>
+<button type="button" class="btn btn-default" onclick="<?= $edit_entry ? "window.location.href='index.php?page=income_expense'" : "document.getElementById('ieForm').style.display='none'" ?>">Cancel</button>
 </form>
 </fieldset>
 </div>
@@ -11384,7 +12046,7 @@ document.addEventListener('DOMContentLoaded', function() {
 ?>
 <div id="leadershipFormArea" style="display:<?= $edit_l ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
 <fieldset class="fieldset"><legend><?= $edit_l ? '✏ Edit Leadership' : '+ Add Leader' ?></legend>
-<form method="POST" enctype="multipart/form-data">
+<form method="POST" action="index.php?page=landing_page&sub=leadership" enctype="multipart/form-data">
 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="save_leadership" value="1">
 <input type="hidden" name="sub" value="leadership">
@@ -11399,11 +12061,11 @@ document.addEventListener('DOMContentLoaded', function() {
 <div class="form-group"><label>Image (Optional)</label><input type="file" name="image" accept="image/*"></div>
 </div>
 <button type="submit" class="btn btn-primary">💾 Save</button>
-<button type="button" class="btn btn-default" onclick="document.getElementById('leadershipFormArea').style.display='none'">Cancel</button>
+<button type="button" class="btn btn-default" onclick="<?= $edit_l ? "window.location.href='index.php?page=landing_page&sub=leadership'" : "document.getElementById('leadershipFormArea').style.display='none'" ?>">Cancel</button>
 </form>
 </fieldset>
 </div>
-<div style="margin-bottom:10px" class="no-print"><button class="btn btn-success" onclick="document.getElementById('leadershipFormArea').style.display='block'">+ Add Leader</button></div>
+<div style="margin-bottom:10px" class="no-print"><button class="btn btn-success" onclick="<?= $edit_l ? "window.location.href='index.php?page=landing_page&sub=leadership'" : "document.getElementById('leadershipFormArea').style.display='block'" ?>">+ Add Leader</button></div>
 <div class="data-table-wrap">
 <table class="data-table">
 <thead><tr><th>Sort</th><th>Image</th><th>Name</th><th>Position</th><th>Message</th><th class="no-sort">Actions</th></tr></thead>
@@ -11437,7 +12099,7 @@ document.addEventListener('DOMContentLoaded', function() {
 ?>
 <div id="galleryFormArea" style="display:<?= $edit_g ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
 <fieldset class="fieldset"><legend><?= $edit_g ? '✏ Edit Gallery Item' : '+ Add Gallery Item' ?></legend>
-<form method="POST" enctype="multipart/form-data">
+<form method="POST" action="index.php?page=landing_page&sub=gallery" enctype="multipart/form-data">
 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 <input type="hidden" name="save_gallery" value="1">
 <input type="hidden" name="sub" value="gallery">
@@ -11451,11 +12113,11 @@ document.addEventListener('DOMContentLoaded', function() {
 <div class="form-group"><label>Image *</label><input type="file" name="image" accept="image/*" <?= $edit_g ? '' : 'required' ?>></div>
 </div>
 <button type="submit" class="btn btn-primary">💾 Save</button>
-<button type="button" class="btn btn-default" onclick="document.getElementById('galleryFormArea').style.display='none'">Cancel</button>
+<button type="button" class="btn btn-default" onclick="<?= $edit_g ? "window.location.href='index.php?page=landing_page&sub=gallery'" : "document.getElementById('galleryFormArea').style.display='none'" ?>">Cancel</button>
 </form>
 </fieldset>
 </div>
-<div style="margin-bottom:10px" class="no-print"><button class="btn btn-success" onclick="document.getElementById('galleryFormArea').style.display='block'">+ Add Item</button></div>
+<div style="margin-bottom:10px" class="no-print"><button class="btn btn-success" onclick="<?= $edit_g ? "window.location.href='index.php?page=landing_page&sub=gallery'" : "document.getElementById('galleryFormArea').style.display='block'" ?>">+ Add Item</button></div>
 <div class="card-grid">
 <?php while ($g = $gallery->fetch_assoc()): ?>
 <div class="card" style="flex-direction:column;align-items:flex-start;gap:8px;padding:10px">
@@ -11544,7 +12206,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 <div style="display:flex;gap:8px;margin-bottom:10px" class="no-print animate__animated animate__fadeInLeft">
 <?php if (has_permission($conn, 'money_destinations', 'add')): ?>
-<button class="btn btn-success" onclick="document.getElementById('addDestFormArea').style.display='block';document.getElementById('addDestFormArea').scrollIntoView()">+ Add Destination</button>
+<button class="btn btn-success" onclick="<?= $edit_dest ? "window.location.href='index.php?page=money_destinations'" : "document.getElementById('addDestFormArea').style.display='block';document.getElementById('addDestFormArea').scrollIntoView()" ?>">+ Add Destination</button>
 <?php endif; ?>
 </div>
 <div id="addDestFormArea" style="display:<?= $edit_dest ? 'block' : 'none' ?>;margin-bottom:14px" class="animate__animated animate__fadeIn">
@@ -11584,7 +12246,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <div class="form-group"><label>Active</label><label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" name="is_active" <?= ($edit_dest['is_active'] ?? 1) ? 'checked' : '' ?>> Active</label></div>
 </div>
 <button type="submit" name="save_destination" class="btn btn-primary">💾 Save</button>
-<button type="button" class="btn btn-default" onclick="document.getElementById('addDestFormArea').style.display='none'">Cancel</button>
+<button type="button" class="btn btn-default" onclick="<?= $edit_dest ? "window.location.href='index.php?page=money_destinations'" : "document.getElementById('addDestFormArea').style.display='none'" ?>">Cancel</button>
 </form>
 </fieldset>
 </div>
@@ -11637,25 +12299,33 @@ function toggleBankFields(sel) {
 </div>
 <?php
     elseif ($page === 'money_tracking'):
-        $sold_bikes = $conn->query("SELECT b.id, b.chassis_number, b.selling_price, b.selling_date, m.model_name, c.name as cust_name,
-            COALESCE((SELECT SUM(amount) FROM sale_money_allocations WHERE bike_id=b.id),0) as allocated,
-            COALESCE((SELECT SUM(sa2.final_price) FROM sale_accessories sa2 WHERE sa2.bike_id=b.id),0) as acc_total
-            FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id
-            WHERE b.selling_date IS NOT NULL $b_and_b
-            HAVING (b.selling_price + COALESCE((SELECT SUM(sa2.final_price) FROM sale_accessories sa2 WHERE sa2.bike_id=b.id),0)) > allocated
-            ORDER BY b.selling_date DESC");
-        $sold_bikes_arr = [];
-        while ($sb = $sold_bikes->fetch_assoc())
-            $sold_bikes_arr[] = $sb;
-        $active_dests = $conn->query("SELECT id, type, name FROM money_destinations WHERE is_active=1 $b_and_plain ORDER BY type, name");
-        $active_dests_arr = [];
-        while ($ad = $active_dests->fetch_assoc())
-            $active_dests_arr[] = $ad;
         $edit_alloc_id = (int) ($_GET['edit_id'] ?? 0);
         $edit_alloc = null;
         if ($edit_alloc_id) {
             $ea = $conn->query("SELECT * FROM sale_money_allocations WHERE id=$edit_alloc_id");
             $edit_alloc = $ea ? $ea->fetch_assoc() : null;
+        }
+        $edit_alloc_bike_id = (int) ($edit_alloc['bike_id'] ?? 0);
+        $edit_alloc_dest_id = (int) ($edit_alloc['destination_id'] ?? 0);
+        $all_sold_bikes_q = $conn->query("SELECT b.id, b.chassis_number, m.model_name FROM bikes b LEFT JOIN models m ON b.model_id=m.id WHERE b.status='sold' $b_and_b ORDER BY b.selling_date DESC, b.id DESC");
+        $all_sold_bikes_arr = $all_sold_bikes_q ? $all_sold_bikes_q->fetch_all(MYSQLI_ASSOC) : [];
+        $sold_bikes = $conn->query("SELECT b.id, b.chassis_number, b.selling_price, b.selling_date, m.model_name, c.name as cust_name,
+            COALESCE((SELECT SUM(amount) FROM sale_money_allocations WHERE bike_id=b.id" . ($edit_alloc_id > 0 ? " AND id!=$edit_alloc_id" : "") . "),0) as allocated,
+            COALESCE((SELECT SUM(sa2.final_price) FROM sale_accessories sa2 WHERE sa2.bike_id=b.id),0) as acc_total
+            FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id
+            WHERE (b.status='sold' $b_and_b)" . ($edit_alloc_bike_id > 0 ? " OR b.id=$edit_alloc_bike_id" : "") . "
+            HAVING (b.selling_price + acc_total) > allocated" . ($edit_alloc_bike_id > 0 ? " OR b.id=$edit_alloc_bike_id" : "") . "
+            ORDER BY b.selling_date DESC");
+        $sold_bikes_arr = [];
+        if ($sold_bikes) {
+            while ($sb = $sold_bikes->fetch_assoc())
+                $sold_bikes_arr[] = $sb;
+        }
+        $active_dests = $conn->query("SELECT id, type, name FROM money_destinations WHERE (is_active=1 $b_and_plain)" . ($edit_alloc_dest_id > 0 ? " OR id=$edit_alloc_dest_id" : "") . " ORDER BY type, name");
+        $active_dests_arr = [];
+        if ($active_dests) {
+            while ($ad = $active_dests->fetch_assoc())
+                $active_dests_arr[] = $ad;
         }
         $filter_bike = (int) ($_GET['filter_bike'] ?? 0);
         $filter_dest = (int) ($_GET['filter_dest'] ?? 0);
@@ -11685,7 +12355,7 @@ function toggleBankFields(sel) {
 </div>
 <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap" class="no-print animate__animated animate__fadeInLeft">
 <?php if (has_permission($conn, 'money_tracking', 'add')): ?>
-<button class="btn btn-success" onclick="document.getElementById('addAllocFormArea').style.display='block';document.getElementById('addAllocFormArea').scrollIntoView()">+ Add Allocation</button>
+<button class="btn btn-success" onclick="<?= $edit_alloc ? "window.location.href='index.php?page=money_tracking'" : "document.getElementById('addAllocFormArea').style.display='block';document.getElementById('addAllocFormArea').scrollIntoView()" ?>">+ Add Allocation</button>
 <?php endif; ?>
 </div>
 <div class="filter-bar no-print animate__animated animate__fadeInLeft" style="margin-bottom:10px">
@@ -11693,7 +12363,7 @@ function toggleBankFields(sel) {
 <input type="hidden" name="page" value="money_tracking">
 <div class="form-group"><label>Filter by Sale</label>
 <select name="filter_bike"><option value="0">-- All Sales --</option>
-<?php foreach ($sold_bikes_arr as $sb): ?>
+<?php foreach ($all_sold_bikes_arr as $sb): ?>
 <option value="<?= $sb['id'] ?>" <?= $filter_bike == $sb['id'] ? 'selected' : '' ?>><?= sanitize($sb['chassis_number']) ?> | <?= sanitize($sb['model_name']) ?></option>
 <?php endforeach; ?>
 </select></div>
@@ -11714,7 +12384,7 @@ function toggleBankFields(sel) {
 <?php if ($edit_alloc): ?><input type="hidden" name="id" value="<?= $edit_alloc['id'] ?>"><?php endif; ?>
 <div class="form-row">
 <div class="form-group" style="flex:2"><label>Sold Bike <span class="req">*</span></label>
-<select name="bike_id" id="allocBikeSelect" required onchange="updateAllocRemaining()">
+<select name="bike_id" id="allocBikeSelect" required onchange="updateAllocRemaining(true)">
 <option value="">-- Select Sold Bike --</option>
 <?php
         foreach ($sold_bikes_arr as $sb):
@@ -11746,28 +12416,29 @@ function toggleBankFields(sel) {
 </div>
 <div id="allocRemainingInfo" style="margin-bottom:8px;font-size:0.82rem;color:var(--text2)"></div>
 <button type="submit" name="save_allocation" class="btn btn-primary">💾 Save Allocation</button>
-<button type="button" class="btn btn-default" onclick="document.getElementById('addAllocFormArea').style.display='none'">Cancel</button>
+<button type="button" class="btn btn-default" onclick="<?= $edit_alloc ? "window.location.href='index.php?page=money_tracking'" : "document.getElementById('addAllocFormArea').style.display='none'" ?>">Cancel</button>
 </form>
 </fieldset>
 </div>
 <script>
-function updateAllocRemaining() {
+var isEditingAllocation = <?= $edit_alloc ? 'true' : 'false' ?>;
+function updateAllocRemaining(fillAmount) {
     var sel = document.getElementById('allocBikeSelect');
-    var opt = sel.options[sel.selectedIndex];
+    var opt = sel ? sel.options[sel.selectedIndex] : null;
     var info = document.getElementById('allocRemainingInfo');
-    var amtInput = document.querySelector('input[name="amount"]');
+    var amtInput = document.querySelector('#addAllocFormArea input[name="amount"]');
     if (opt && opt.value) {
         var total = parseFloat(opt.dataset.total||0);
         var allocated = parseFloat(opt.dataset.allocated||0);
         var remaining = parseFloat(opt.dataset.remaining||0);
-        info.innerHTML = '<strong>Sale Total:</strong> <?= $currency ?> '+total.toLocaleString()+' | <strong>Already Allocated:</strong> <?= $currency ?> '+allocated.toLocaleString()+' | <strong style="color:'+(remaining>0?'var(--warning)':'var(--success)')+'">Remaining:</strong> <?= $currency ?> '+remaining.toLocaleString();
-        if (amtInput) amtInput.value = remaining.toFixed(2);
+        info.innerHTML = '<strong>Sale Total:</strong> <?= $currency ?> '+total.toLocaleString()+' | <strong>Other Allocations:</strong> <?= $currency ?> '+allocated.toLocaleString()+' | <strong style="color:'+(remaining>0?'var(--warning)':'var(--success)')+'">Available to Allocate:</strong> <?= $currency ?> '+remaining.toLocaleString();
+        if (amtInput && (fillAmount || !isEditingAllocation)) amtInput.value = remaining.toFixed(2);
     } else {
         info.innerHTML = '';
-        if (amtInput) amtInput.value = '';
+        if (amtInput && fillAmount) amtInput.value = '';
     }
 }
-updateAllocRemaining();
+updateAllocRemaining(false);
 </script>
 <div class="data-table-wrap animate__animated animate__fadeInUp">
 <table class="data-table">
@@ -11818,23 +12489,33 @@ updateAllocRemaining();
 </div>
 <?php
     elseif ($page === 'bank_deposits'):
-        $bank_dests = $conn->query("SELECT id, name, account_title, account_no FROM money_destinations WHERE type='bank' AND is_active=1 $b_and_plain ORDER BY name");
-        $sold_bikes_deps = $conn->query("SELECT b.id, b.chassis_number, b.selling_price, b.selling_date, m.model_name, c.name as cust_name,
-            COALESCE((SELECT SUM(sa2.final_price) FROM sale_accessories sa2 WHERE sa2.bike_id=b.id),0) as acc_total,
-            COALESCE((SELECT SUM(sma.amount) FROM sale_money_allocations sma WHERE sma.bike_id=b.id),0) as total_allocated,
-            COALESCE((SELECT SUM(da.amount) FROM deposit_allocations da WHERE da.bike_id=b.id),0) as total_deposited
-            FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id
-            WHERE b.selling_date IS NOT NULL $b_and_b
-            HAVING total_allocated > total_deposited
-            ORDER BY b.selling_date DESC");
-        $sold_bikes_deps_arr = [];
-        while ($sbd = $sold_bikes_deps->fetch_assoc())
-            $sold_bikes_deps_arr[] = $sbd;
         $edit_dep_id = (int) ($_GET['edit_id'] ?? 0);
         $edit_dep = null;
+        $edit_dep_links = [];
         if ($edit_dep_id) {
             $ed = $conn->query("SELECT * FROM bank_deposits WHERE id=$edit_dep_id");
             $edit_dep = $ed ? $ed->fetch_assoc() : null;
+            if ($edit_dep) {
+                $edl_q = $conn->query("SELECT bike_id, SUM(amount) AS amount FROM deposit_allocations WHERE deposit_id=$edit_dep_id GROUP BY bike_id ORDER BY MIN(id) ASC");
+                if ($edl_q) {
+                    $edit_dep_links = $edl_q->fetch_all(MYSQLI_ASSOC);
+                }
+            }
+        }
+        $edit_dep_dest_id = (int) ($edit_dep['destination_id'] ?? 0);
+        $bank_dests = $conn->query("SELECT id, name, account_title, account_no FROM money_destinations WHERE type='bank' AND ((is_active=1 $b_and_plain)" . ($edit_dep_dest_id > 0 ? " OR id=$edit_dep_dest_id" : "") . ") ORDER BY name");
+        $sold_bikes_deps = $conn->query("SELECT b.id, b.chassis_number, b.selling_price, b.selling_date, m.model_name, c.name as cust_name,
+            COALESCE((SELECT SUM(sa2.final_price) FROM sale_accessories sa2 WHERE sa2.bike_id=b.id),0) as acc_total,
+            COALESCE((SELECT SUM(sma.amount) FROM sale_money_allocations sma WHERE sma.bike_id=b.id),0) as total_allocated,
+            COALESCE((SELECT SUM(da.amount) FROM deposit_allocations da WHERE da.bike_id=b.id" . ($edit_dep_id > 0 ? " AND da.deposit_id!=$edit_dep_id" : "") . "),0) as total_deposited
+            FROM bikes b LEFT JOIN models m ON b.model_id=m.id LEFT JOIN customers c ON b.customer_id=c.id
+            WHERE b.status='sold' $b_and_b" . ($edit_dep_id > 0 ? " OR b.id IN (SELECT bike_id FROM deposit_allocations WHERE deposit_id=$edit_dep_id)" : "") . "
+            HAVING total_allocated > total_deposited" . ($edit_dep_id > 0 ? " OR b.id IN (SELECT bike_id FROM deposit_allocations WHERE deposit_id=$edit_dep_id)" : "") . "
+            ORDER BY b.selling_date DESC");
+        $sold_bikes_deps_arr = [];
+        if ($sold_bikes_deps) {
+            while ($sbd = $sold_bikes_deps->fetch_assoc())
+                $sold_bikes_deps_arr[] = $sbd;
         }
         $prefill_alloc_id = (int) ($_GET['prefill_alloc'] ?? 0);
         $prefill_alloc = null;
@@ -11875,7 +12556,7 @@ updateAllocRemaining();
 </div>
 <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap" class="no-print animate__animated animate__fadeInLeft">
 <?php if (has_permission($conn, 'bank_deposits', 'add')): ?>
-<button class="btn btn-success" onclick="document.getElementById('addDepFormArea').style.display='block';document.getElementById('addDepFormArea').scrollIntoView()">+ New Bank Deposit</button>
+<button class="btn btn-success" onclick="<?= $edit_dep ? "window.location.href='index.php?page=bank_deposits'" : "document.getElementById('addDepFormArea').style.display='block';document.getElementById('addDepFormArea').scrollIntoView()" ?>">+ New Bank Deposit</button>
 <?php endif; ?>
 </div>
 <div class="filter-bar no-print animate__animated animate__fadeInLeft" style="margin-bottom:10px">
@@ -11945,36 +12626,38 @@ updateAllocRemaining();
 </div>
 <div class="form-group" style="flex:3"><label>Notes</label><input type="text" name="deposit_notes" value="<?= $edit_dep ? sanitize($edit_dep['notes'] ?? '') : ($prefill_alloc ? sanitize($prefill_alloc['notes'] ?? '') : '') ?>" placeholder="Optional note"></div>
 </div>
-<?php if (!$edit_dep): ?>
+<input type="hidden" name="bike_links_submitted" value="1">
 <fieldset class="fieldset" style="border-color:var(--accent);background:var(--surface);margin-bottom:10px">
 <legend style="cursor:pointer" onclick="document.getElementById('depBikeLinkArea').style.display=document.getElementById('depBikeLinkArea').style.display==='none'?'block':'none'">🔗 Link to Bike Sales <small style="color:var(--text3)">(Optional — click to expand)</small></legend>
-<div id="depBikeLinkArea" style="display:<?= $prefill_alloc ? 'block' : 'none' ?>">
+<div id="depBikeLinkArea" style="display:<?= ($prefill_alloc || !empty($edit_dep_links)) ? 'block' : 'none' ?>">
 <div id="depBikeLinkRows"></div>
 <button type="button" class="btn btn-default btn-sm" onclick="addDepBikeLinkRow()" style="margin-top:6px">+ Add Bike</button>
 </div>
 </fieldset>
-<?php endif; ?>
 <button type="submit" name="save_deposit" class="btn btn-primary">💾 Save Deposit</button>
-<button type="button" class="btn btn-default" onclick="document.getElementById('addDepFormArea').style.display='none'">Cancel</button>
+<button type="button" class="btn btn-default" onclick="<?= $edit_dep ? "window.location.href='index.php?page=bank_deposits'" : "document.getElementById('addDepFormArea').style.display='none'" ?>">Cancel</button>
 </form>
 </fieldset>
 </div>
 <script>
 var depBikeOptions = <?= json_encode($sold_bikes_deps_arr) ?>;
+var editDepLinks = <?= json_encode($edit_dep_links) ?>;
 var depBikeIdx = 0;
 <?php if ($prefill_alloc): ?>var prefillBikeId = <?= (int) $prefill_alloc['bike_id'] ?>;
 var prefillAmount = <?= $prefill_remaining_amount ?>;
 <?php else: ?>var prefillBikeId = 0;
 var prefillAmount = 0;
 <?php endif; ?>
-function addDepBikeLinkRow() {
+function addDepBikeLinkRow(initBikeId, initAmount) {
     var container = document.getElementById('depBikeLinkRows');
     var idx = depBikeIdx++;
     var opts = '<option value="">-- Select Sold Bike --</option>';
     depBikeOptions.forEach(function(b) {
         var saleTotal = parseFloat(b.selling_price) + parseFloat(b.acc_total || 0);
-        var rem = saleTotal - parseFloat(b.total_deposited || 0);
-        opts += '<option value="'+b.id+'" data-total="'+saleTotal+'" data-deposited="'+(b.total_deposited||0)+'" data-remaining="'+rem+'">'+b.chassis_number+' | '+b.model_name+' | Sale: '+saleTotal.toLocaleString()+' | Rem: '+rem.toLocaleString()+'</option>';
+        var allocTotal = parseFloat(b.total_allocated || 0);
+        var rem = Math.max(0, allocTotal - parseFloat(b.total_deposited || 0));
+        var selAttr = (initBikeId && parseInt(b.id) === parseInt(initBikeId)) ? ' selected' : '';
+        opts += '<option value="'+b.id+'" data-total="'+saleTotal+'" data-allocated="'+allocTotal+'" data-deposited="'+(b.total_deposited||0)+'" data-remaining="'+rem+'"'+selAttr+'>'+b.chassis_number+' | '+b.model_name+' | Alloc: '+allocTotal.toLocaleString()+' | Rem: '+rem.toLocaleString()+'</option>';
     });
     var row = document.createElement('div');
     row.className = 'form-row';
@@ -12017,7 +12700,24 @@ function updateDepBikeRemFromAmount(input, idx) {
         updateDepBikeRem(select, idx, true);
     }
 }
-if (prefillBikeId > 0) {
+if (Array.isArray(editDepLinks) && editDepLinks.length > 0) {
+    editDepLinks.forEach(function(lnk, i) {
+        addDepBikeLinkRow(lnk.bike_id, lnk.amount);
+        setTimeout(function() {
+            var row = document.getElementById('depBikeLinkRow_' + i);
+            if (row) {
+                var select = row.querySelector('select[name$="[bike_id]"]');
+                var amtInput = row.querySelector('input[name$="[amount]"]');
+                if (amtInput) {
+                    amtInput.value = parseFloat(lnk.amount || 0).toFixed(2);
+                }
+                if (select) {
+                    updateDepBikeRem(select, i, true);
+                }
+            }
+        }, 100);
+    });
+} else if (prefillBikeId > 0) {
     addDepBikeLinkRow();
     setTimeout(function() {
         var container = document.getElementById('depBikeLinkRows');
